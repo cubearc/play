@@ -79,6 +79,7 @@ mod tests {
                 parameters: Vec::new(),
                 timeout_ms: TIMEOUT_MS,
                 max_output_bytes: MAX_OUTPUT,
+                retain_result: true,
             },
             input,
             other: None,

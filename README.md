@@ -72,6 +72,9 @@ Do not share session links. Stop the application with Ctrl+C.
 Readiness is available at `http://127.0.0.1:7331/healthz`; `/api/health` requires the
 local session. A plain browser visit without the session link shows recovery guidance.
 
+Open an image with **Open visual Lab** for Core-backed pixel values, histograms,
+channel previews and exact transformations. See the [visual Lab guide](docs/visual-lab.md).
+
 ## Docker development
 
 Docker Engine/Desktop and Docker Compose v2 are optional for native development and

@@ -366,6 +366,11 @@ async fn job(
             .map_err(|_| Error::invalid())?,
     };
     let id = request.id;
+    if !request.retain_result {
+        let bytes = output.data.bytes(MAX_OUTPUT)?;
+        let record = storage.record(id, output, provenance, &bytes)?;
+        return response(record, &bytes, false);
+    }
     {
         let mut active = app.lab.active.lock().map_err(|_| Error::storage())?;
         if *cancellation.borrow() {
@@ -378,13 +383,13 @@ async fn job(
     tokio::task::spawn_blocking(move || {
         let record = storage.save(id, output, provenance)?;
         let (_, bytes) = storage.load(id)?;
-        response(record, &bytes)
+        response(record, &bytes, true)
     })
     .await
     .map_err(|_| Error::storage())?
 }
-fn response(record: Record, bytes: &[u8]) -> Result<Value> {
-    let inline = if bytes.len() <= INLINE_RESULT {
+fn response(record: Record, bytes: &[u8], retained: bool) -> Result<Value> {
+    let inline = if !retained || bytes.len() <= INLINE_RESULT {
         Some(match record.representation {
             Representation::Text => {
                 json!({"type":"text","data":std::str::from_utf8(bytes).map_err(|_|Error::storage())?})
@@ -398,7 +403,7 @@ fn response(record: Record, bytes: &[u8]) -> Result<Value> {
         None
     };
     Ok(
-        json!({"schema_version":1,"content_url":format!("/api/lab/results/{}/content",record.id),"result":record,"inline":inline}),
+        json!({"schema_version":1,"retained":retained,"content_url":retained.then(||format!("/api/lab/results/{}/content",record.id)),"result":record,"inline":inline}),
     )
 }
 async fn result(
@@ -410,7 +415,7 @@ async fn result(
     let storage = app.lab.storage(&app).await?;
     let value = tokio::task::spawn_blocking(move || {
         let (record, data) = storage.load(id)?;
-        response(record, &data)
+        response(record, &data, true)
     })
     .await
     .map_err(|_| Error::storage())??;

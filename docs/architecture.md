@@ -105,3 +105,7 @@ Current Core JSON recipes are not stage manifests or a full `.cube` DSL. Finaliz
 minimal versioned compatibility/security contract before challenge import. Free Lab
 must work independently of challenges. Cloud services, remote execution, collaboration
 and speculative synchronization frameworks are outside the local MVP.
+
+The [visual Lab](visual-lab.md) consumes typed Core responses. Canvas 2D only
+draws a bounded viewport; ECharts plots returned counts. Transient pixel/histogram/
+comparison probes use the existing worker without allocating permanent result bundles.

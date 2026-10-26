@@ -64,6 +64,17 @@ pub fn validate(request: &Request) -> Result<Vec<Binding>> {
     {
         return Err(Error::limit());
     }
+    if !request.retain_result
+        && !matches!(
+            request.operation.as_str(),
+            "image.pixels.read" | "image.histogram" | "image.compare"
+        )
+    {
+        return Err(Error::new(
+            "invalid_input",
+            "Only pixel, histogram and comparison probes may omit result retention.",
+        ));
+    }
     let descriptor = descriptor(&request.operation)?;
     let version = if direct(descriptor.id) {
         Some(ADAPTER_API)

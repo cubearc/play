@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   type Inspection,
   inspectFile,
@@ -6,7 +6,10 @@ import {
   type Store,
 } from "./workspace-api";
 
+const VisualLab = lazy(() => import("./VisualLab"));
+
 export function FileInspector({ store, path }: { store: Store; path: string }) {
+  const [labOpen, setLabOpen] = useState(false);
   const [request, setRequest] = useState({ offset: 0 });
   const offset = request.offset;
   const [result, setResult] = useState<Inspection | null>(null);
@@ -182,6 +185,23 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
               />
             </details>
           )}
+          {(result.preview.kind === "image" ||
+            result.entry.category === "image") &&
+            (labOpen ? (
+              <Suspense
+                fallback={<p role="status">Loading visual controls…</p>}
+              >
+                <VisualLab store={store} path={path} />
+              </Suspense>
+            ) : (
+              <button
+                type="button"
+                className="button"
+                onClick={() => setLabOpen(true)}
+              >
+                Open visual Lab
+              </button>
+            ))}
           <section aria-label="Byte inspection">
             <div className="bytes-heading">
               <h3>Original bytes</h3>

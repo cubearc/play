@@ -31,8 +31,16 @@ export default async function setup() {
     resolve(source, "unknown.xyz"),
     Buffer.from([0, 255, 17, 42]),
   );
-  for (const name of ["sample.png", "sample.mp4", "sample.wav"])
+  for (const name of ["sample.png", "indexed.png", "sample.mp4", "sample.wav"])
     await copyFile(resolve("../tests/fixtures", name), resolve(source, name));
+  await writeFile(
+    resolve(source, "malformed.png"),
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]),
+  );
+  await writeFile(
+    resolve(source, "over-limit.png"),
+    Buffer.alloc(4 * 1024 * 1024 + 1),
+  );
   await mkdir(resolve(source, "empty"));
   const workspace = resolve(directory, "workspace.json");
   await writeFile(

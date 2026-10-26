@@ -3,7 +3,7 @@
 The Lab calls the versioned Rust Core directly. It never parses terminal output or
 executes scripts. These endpoints require the same local session cookie and exact
 Host/Origin as other workspace APIs. Files/results stay local; no network operation,
-telemetry or upload is added. Visual controls are a separate capability.
+telemetry or upload is added. See [the visual Lab](visual-lab.md) for interactive controls.
 
 ## Discover and execute
 
@@ -69,7 +69,14 @@ while the stored image content is PNG.
 
 ## Results and provenance
 
-Each successful response contains a `result` record and an authenticated relative
+Pixel, histogram and comparison probes may set `retain_result: false`. They use
+exactly the same Core worker, authorization and processing limits, return
+`retained: false`, a null `content_url` and bounded inline content, and do not create
+an artifact or consume its quota. Their IDs cannot be reopened or reused as inputs.
+The default remains `true`; other operations require retention. Successful retained
+responses include `retained: true`. Inspecting pixels must not exhaust persistent storage.
+
+Each retained response contains a `result` record and an authenticated relative
 `content_url`. Values up to 16 KiB also appear in `inline`, explicitly tagged as
 text, bytes or structured JSON. Larger values use the result reference. Image
 content is a Core-encoded PNG, structured content is JSON and binary content is

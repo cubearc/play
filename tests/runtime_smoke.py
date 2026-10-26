@@ -259,6 +259,12 @@ fn main(){
                     self.assertEqual(response.status, 206)
                     self.assertEqual(response.read(), image[:12])
                 self.assertEqual((source / "sample.png").read_bytes(), image)
+                (source / "indexed.png").write_bytes((ROOT / "tests/fixtures/indexed.png").read_bytes())
+                (source / "malformed.png").write_bytes(bytes([137, 80, 78, 71, 13, 10, 26, 10, 0]))
+                (source / "over-limit.png").write_bytes(bytes(4 * 1024 * 1024 + 1))
+                if (ROOT / "frontend/node_modules/.bin/playwright").exists():
+                    subprocess.run(["npm", "exec", "--", "playwright", "test", "lab.spec.ts"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url}, timeout=240, check=True)
+
                 self.assertTrue(all(authenticate(value)[1]["workspace"]["id"] == workspace_id for value in urls))
                 self.assertEqual(inspect(name)["Id"], first["Id"])
                 second_source = base / "second workspace"

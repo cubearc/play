@@ -212,6 +212,24 @@ impl Storage {
         }
         Ok((record, data))
     }
+    pub fn record(
+        &self,
+        id: Uuid,
+        output: WorkerOutput,
+        provenance: Provenance,
+        data: &[u8],
+    ) -> Result<Record> {
+        Ok(Record {
+            id,
+            workspace_id: self.workspace,
+            representation: output.data.representation,
+            semantic_type: output.data.semantic_type,
+            byte_size: data.len(),
+            sha256: cube_core::hashing::sha256(data),
+            metadata: output.data.metadata,
+            provenance,
+        })
+    }
     pub fn save(&self, id: Uuid, output: WorkerOutput, provenance: Provenance) -> Result<Record> {
         let data = output.data.bytes(MAX_OUTPUT)?;
         let mut count = 0;
@@ -242,16 +260,7 @@ impl Storage {
                 "Lab storage reached 64 results or 64 MiB. Preserve results before starting a new investigation.",
             ));
         }
-        let record = Record {
-            id,
-            workspace_id: self.workspace,
-            representation: output.data.representation,
-            semantic_type: output.data.semantic_type,
-            byte_size: data.len(),
-            sha256: cube_core::hashing::sha256(&data),
-            metadata: output.data.metadata,
-            provenance,
-        };
+        let record = self.record(id, output, provenance, &data)?;
         let encoded = json_bytes(&record, MAX_RECORD)?;
         let name = id.to_string();
         if self.root.symlink_metadata(&name).is_ok() {

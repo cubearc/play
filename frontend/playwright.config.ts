@@ -10,7 +10,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:17331",
+    baseURL: process.env.CUBE_PLAY_DOCKER_TEST_URL
+      ? new URL(process.env.CUBE_PLAY_DOCKER_TEST_URL).origin
+      : "http://127.0.0.1:17331",
     screenshot: "only-on-failure",
     trace: "off",
   },

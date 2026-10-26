@@ -440,3 +440,43 @@ fn worker_stdio_uses_a_bounded_typed_contract() {
         "invalid_input"
     );
 }
+
+#[tokio::test]
+async fn transient_probes_do_not_consume_artifact_quota_or_create_reusable_ids() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    std::fs::write(
+        directory.path().join("source/image.png"),
+        include_bytes!("../../../tests/fixtures/sample.png"),
+    )
+    .unwrap();
+    let image = json!({"type":"file","store":"source","path":"image.png","representation":"image"});
+    for _ in 0..65 {
+        let id = Uuid::new_v4();
+        let (status, probe) = server.api("POST", "/api/lab/execute", json!({"id":id,"operation":"image.histogram","version":1,"input":image,"parameters":[{"name":"channels","value":{"text_list":["red"]}}],"retain_result":false})).await;
+        assert_eq!(status, 200, "{probe}");
+        assert_eq!(probe["retained"], false);
+        assert!(probe["content_url"].is_null());
+        assert_eq!(probe["inline"]["data"]["pixels"], 4);
+        assert_eq!(
+            server
+                .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+                .await
+                .0,
+            404
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(directory.path().join("artifacts/lab"))
+            .unwrap()
+            .count(),
+        0
+    );
+    let (status, retained) = server
+        .execute("image.invert", image.clone(), json!([]))
+        .await;
+    assert_eq!(status, 200, "{retained}");
+    assert_eq!(retained["retained"], true);
+    let (status, failure) = server.api("POST", "/api/lab/execute", json!({"id":Uuid::new_v4(),"operation":"image.invert","version":1,"input":image,"retain_result":false})).await;
+    assert_eq!(status, 400, "{failure}");
+}

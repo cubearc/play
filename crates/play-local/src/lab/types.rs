@@ -170,6 +170,11 @@ pub struct Request {
     pub timeout_ms: u64,
     #[serde(default = "default_output")]
     pub max_output_bytes: usize,
+    #[serde(default = "default_retain")]
+    pub retain_result: bool,
+}
+fn default_retain() -> bool {
+    true
 }
 fn default_timeout() -> u64 {
     TIMEOUT_MS

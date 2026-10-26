@@ -86,6 +86,8 @@ Play executable to additionally exercise the real cross-repository CLI handoff.
 With frontend dependencies and Chromium installed, the Docker suite also runs
 `npm run test:runner` against its real two-container workspace on desktop/mobile.
 It checks known-answer CLI output, errors, PTY resizing, accessibility and closure.
+The same suite runs the real visual Lab with RGB/palette samples, histogram counts,
+channels, transforms, comparison and bounded error cases on desktop/mobile.
 The ordinary browser suite reports these container-only cases as skipped.
 
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
