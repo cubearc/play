@@ -46,7 +46,7 @@ fn workspace(state: &AppState) -> Result<Arc<Workspace>> {
             "Open a local directory with cube play to browse or import files.",
         ))
 }
-async fn permit(workspace: &Workspace) -> Result<OwnedSemaphorePermit> {
+pub(crate) async fn permit(workspace: &Workspace) -> Result<OwnedSemaphorePermit> {
     let busy = || {
         FileError(
             StatusCode::TOO_MANY_REQUESTS,

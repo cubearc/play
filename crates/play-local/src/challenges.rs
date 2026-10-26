@@ -196,11 +196,7 @@ async fn import(State(app): State<AppState>, Json(input): Json<Import>) -> Resul
         .map_err(|e| *e)?
         .clone()
         .ok_or_else(invalid)?;
-    let _permit = workspace
-        .slots
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| workspace::limit())?;
+    let _permit = workspace::permit(&workspace).await?;
     let imports = input.store == Store::Imports;
     let definition = tokio::task::spawn_blocking(move || -> Result<Definition> {
         let mut bytes = Vec::new();

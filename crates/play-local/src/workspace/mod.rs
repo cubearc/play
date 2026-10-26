@@ -14,7 +14,7 @@ use tokio::sync::Semaphore;
 
 use crate::{config::Config, security};
 
-pub(crate) use http::{files, import, inspection, media};
+pub(crate) use http::{files, import, inspection, media, permit};
 pub const MAX_ENTRIES: usize = 4096;
 pub const PAGE_SIZE: usize = 128;
 pub const MAX_IMPORT: u64 = 32 * 1024 * 1024;

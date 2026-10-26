@@ -166,6 +166,12 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     ).body(),
   ).toEqual(source);
   expect(external).toEqual([]);
+  if (process.env.CUBE_PLAY_CAPTURE_UI === "1") {
+    await restored.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: info.outputPath("private-stage-candidate.png"),
+    });
+  }
   expect(
     (
       await new AxeBuilder({ page })

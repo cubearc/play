@@ -91,7 +91,8 @@ export function ChallengePanel({
         <p role="alert">{error} No challenge definition was executed.</p>
       )}
       {busy && <p role="status">Validating local challenge…</p>}
-      {!active && (
+      {!state && !error && <p role="status">Restoring local challenges…</p>}
+      {state && !active && (
         <p>No active challenge. Free Lab and notes work without one.</p>
       )}
       {state && state.challenges.length > 0 && (

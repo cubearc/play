@@ -103,7 +103,7 @@ it("retains direct-file selection without hiding siblings and never executes cha
   expect(
     screen.getByRole("button", { name: "Inspect other.txt" }),
   ).toBeVisible();
-  expect(screen.getByText(/no challenge content is executed/)).toBeVisible();
+  expect(screen.getByText(/Imported content is never executed/)).toBeVisible();
 });
 
 it("navigates directories and bounded pages, then refreshes after a transient failure", async () => {

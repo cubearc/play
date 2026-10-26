@@ -634,9 +634,13 @@ fn configured_storage_cannot_alias_or_create_directories_in_the_source() {
 #[tokio::test]
 async fn canceled_uploads_remove_temporary_files_and_release_their_slot() {
     let fixture = Fixture::new();
+    let (body_started, body_received) = tokio::sync::oneshot::channel();
     let body = Body::from_stream(
-        futures_util::stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(b"partial"))])
-            .chain(futures_util::stream::pending()),
+        futures_util::stream::once(async move {
+            let _ = body_started.send(());
+            Ok::<_, std::io::Error>(Bytes::from_static(b"partial"))
+        })
+        .chain(futures_util::stream::pending()),
     );
     let application = fixture.app.clone();
     let task = tokio::spawn(async move {
@@ -650,14 +654,12 @@ async fn canceled_uploads_remove_temporary_files_and_release_their_slot() {
             )
             .await
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    while fs::read_dir(&fixture.imports).unwrap().count() == 0 {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "import did not create its private temporary file"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    // File creation runs on a blocking worker. Observe body consumption so the
+    // request owns its cleanup guard before asserting synchronous cancellation.
+    tokio::time::timeout(std::time::Duration::from_secs(3), body_received)
+        .await
+        .unwrap()
+        .unwrap();
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
     assert_eq!(fs::read_dir(&fixture.imports).unwrap().count(), 0);
@@ -748,4 +750,64 @@ async fn image_budget_boundaries_and_unconfigured_roots_fail_clearly() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(!fixture.source.join("denied.txt").exists());
+}
+
+#[tokio::test]
+async fn challenge_import_waits_for_preview_capacity_instead_of_claiming_a_size_error() {
+    let fixture = Fixture::new();
+    assert_eq!(fixture.get("/api/investigation").await.0, StatusCode::OK);
+    fs::write(fixture.source.join("audio.wav"), wave()).unwrap();
+    fs::write(fixture.source.join("wait.cube"),json!({"kind":"cube-play-challenge","format_version":1,"id":"wait","title":"Wait for previews","stages":[{"id":"one","title":"Inspect","instructions":"Read local evidence."}]}).to_string()).unwrap();
+    let first = fixture
+        .app
+        .clone()
+        .oneshot(
+            request("/api/workspace/media?path=audio.wav")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let second = fixture
+        .app
+        .clone()
+        .oneshot(
+            request("/api/workspace/media?path=audio.wav")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    assert_eq!(second.status(), StatusCode::OK);
+    let app = fixture.app.clone();
+    let mut pending = tokio::spawn(async move {
+        app.oneshot(
+            request("/api/challenges/import")
+                .method("POST")
+                .header(header::ORIGIN, "http://127.0.0.1:7331")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({"store":"source","path":"wait.cube"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), &mut pending)
+            .await
+            .is_err()
+    );
+    drop(first);
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), pending)
+            .await
+            .unwrap()
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+    drop(second);
 }

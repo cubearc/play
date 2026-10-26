@@ -22,6 +22,7 @@ export function ArtifactLibrary() {
   );
 }
 function LoadedLibrary({ refresh }: { refresh: () => void }) {
+  const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<Saved[]>([]),
     [history, setHistory] = useState<Record<string, unknown>[]>([]),
     [selected, setSelected] = useState<LabResult | null>(null),
@@ -32,12 +33,16 @@ function LoadedLibrary({ refresh }: { refresh: () => void }) {
     [comparison, setComparison] = useState<unknown>(null);
   useEffect(() => {
     const controller = new AbortController();
-    library(controller.signal).then(setEntries, (error) => {
-      if (!controller.signal.aborted)
-        setError(
-          error instanceof Error ? error.message : "Artifacts unavailable.",
-        );
-    });
+    library(controller.signal)
+      .then(setEntries, (error) => {
+        if (!controller.signal.aborted)
+          setError(
+            error instanceof Error ? error.message : "Artifacts unavailable.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, []);
   async function open(id: string) {
@@ -99,7 +104,8 @@ function LoadedLibrary({ refresh }: { refresh: () => void }) {
           Load operation history
         </button>
       </div>
-      {!entries.length && (
+      {loading && <p role="status">Restoring artifact library…</p>}
+      {!loading && !entries.length && (
         <p>
           No named artifacts yet. Select a Lab result and save it with a name.
         </p>

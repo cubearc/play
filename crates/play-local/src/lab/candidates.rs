@@ -113,7 +113,7 @@ async fn select(
     }
     let answer = stage.answer_type;
     let storage = app.lab.storage(&app).await?;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     let result_id = candidate.result_id;
     let selection = candidate.selection.clone();
     let revision = candidate.revision + 1;
@@ -144,7 +144,7 @@ async fn snapshot(app: &AppState, key: &str, stage: &str) -> Result<Value> {
     if let Some(record) = records.first() {
         let storage = app.lab.storage(app).await?;
         let record = record.clone();
-        let _permit = read_permit(app)?;
+        let _permit = read_permit(app).await?;
         let checked = tokio::task::spawn_blocking(move || -> Result<()> {
             let id: Uuid = serde_json::from_value(record["result_id"].clone())
                 .map_err(|_| Error::storage())?;

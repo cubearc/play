@@ -118,7 +118,18 @@ async fn rejects_missing_invalid_and_ambiguous_sessions() {
 
 #[tokio::test]
 async fn rejects_dns_rebinding_and_cross_origin_requests_on_every_surface() {
-    for path in ["/", "/healthz", "/api/health", "/api/session"] {
+    for path in [
+        "/",
+        "/healthz",
+        "/api/health",
+        "/api/session",
+        "/api/lab/library",
+        "/api/lab/history",
+        "/api/challenges",
+        "/api/challenges/import",
+        "/api/challenges/stage",
+        "/api/challenges/candidates",
+    ] {
         for (name, value) in [
             ("host", "attacker.example:7331"),
             ("origin", "http://attacker.example"),
@@ -248,4 +259,37 @@ fn fresh_sessions_use_distinct_random_capabilities() {
     let second = play_local::session_secret();
     assert_ne!(first, second);
     assert_eq!(uuid::Uuid::parse_str(&first).unwrap().get_version_num(), 4);
+}
+
+#[tokio::test]
+async fn notebook_challenge_and_candidate_mutations_require_session_and_origin() {
+    for (method, path) in [
+        ("PUT", "/api/investigation/notes"),
+        ("PUT", "/api/lab/library"),
+        ("POST", "/api/challenges/import"),
+        ("PUT", "/api/challenges/stage"),
+        ("PUT", "/api/challenges/progress"),
+        ("PUT", "/api/challenges/candidates"),
+    ] {
+        let unsigned = request(path)
+            .method(method)
+            .header(header::ORIGIN, ORIGIN)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{} "))
+            .unwrap();
+        assert_eq!(
+            application().oneshot(unsigned).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let originless = request(path)
+            .method(method)
+            .header(header::COOKIE, format!("cube_play_session_7331={SECRET}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{} "))
+            .unwrap();
+        assert_eq!(
+            application().oneshot(originless).await.unwrap().status(),
+            StatusCode::FORBIDDEN
+        );
+    }
 }

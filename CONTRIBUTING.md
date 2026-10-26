@@ -83,12 +83,13 @@ isolation, browser readiness, stop and recreation with persistent test volumes.
 Only fixture-owned containers and temporary test volumes are removed. Set
 `CUBE_PLAY_CUBE` to a trusted built Cube executable and `CUBE_PLAY_LAUNCHER` to the
 Play executable to additionally exercise the real cross-repository CLI handoff.
-With frontend dependencies and Chromium installed, the Docker suite also runs
-`npm run test:runner` against its real two-container workspace on desktop/mobile.
-It checks known-answer CLI output, errors, PTY resizing, accessibility and closure.
-The same suite runs the real visual Lab with RGB/palette samples, histogram counts,
-channels, transforms, comparison and bounded error cases on desktop/mobile.
-The ordinary browser suite reports these container-only cases as skipped.
+With frontend dependencies and Chromium installed, the Docker suite runs the full
+Playwright suite against the real two-container workspace on desktop/mobile. It
+checks known-answer CLI output, errors, PTY resizing/closure, accessibility, previews,
+notes/conflicts, exports, RGB/palette counts, transforms/comparison, challenge import,
+progress and candidate association. It then recreates the containers and checks
+named artifacts, candidate revisions and SQLite recovery. Source hashes must remain
+unchanged. The native browser suite intentionally skips its two container-only PTY cases.
 
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
 exercise PTY sessions, read isolation, output exhaustion and process cleanup.
@@ -137,3 +138,29 @@ duplicate metadata catalogs. Use existing tools instead of custom quality wrappe
 Keep planning in GitHub Issues and CubeArc Roadmap. After authorized delivery,
 verify remote commits and CI. Close an issue only after its acceptance criteria pass
 and the work is integrated into the target branch; keep incomplete work open.
+
+## Integrated MVP verification
+
+Run the commands above against the final source before release. The runtime suite
+uses real Cube CLI delegation when `CUBE_PLAY_CUBE` names the trusted executable;
+set it explicitly for full cross-repository verification. Use Rustup's `rustc` on
+PATH for the launcher browser-readiness fixture.
+
+| User journey | Reproducible coverage |
+| --- | --- |
+| Empty/current directory, files, explicit file and browser readiness | Launcher integration and Docker runtime tests |
+| Image and MP4 preview or metadata fallback | `workspace.spec.ts`, `lab.spec.ts` |
+| Real PTY Cube command and cleanup | `runner.spec.ts`, Linux Runner tests |
+| Generate, name, reopen and compare artifacts | `lab.spec.ts`, `notebook.spec.ts`, real Lab API tests |
+| Private notes, rapid updates and conflicting tabs | Notebook component/API/browser tests |
+| Restart, recreation and crash recovery | Persistence/Lab API tests and Docker runtime tests |
+| Non-executable challenge import and local stage progress | `challenges.spec.ts`, real challenge API tests |
+| Byte/text/structured-field candidates and retained lineage | `candidates.spec.ts`, real candidate API tests |
+| Session, Host/Origin, paths, symlinks, quotas and failed writes | HTTP/workspace/persistence tests and Docker/Runner checks |
+
+The CI matrix includes native Rust tests on Linux, macOS and Windows, plus Linux
+quality/coverage, frontend and Docker jobs. Local macOS tests and Linux containers
+do not establish native Windows/WSL/Desktop validation. A hosted run that never
+starts because billing or private-source access is unavailable is not passing
+validation. Record actual commit/run evidence and remaining platform gaps in the
+GitHub milestone; never replace them with fabricated badges or lowered gates.

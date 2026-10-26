@@ -29,6 +29,9 @@ test("opens a launcher challenge, navigates authorized artifacts and restores pr
       exact: true,
     }),
   ).toBeVisible();
+  await panel
+    .getByRole("button", { name: "Inspect evidence", exact: true })
+    .click();
   await expect(panel.getByText(/window.challengeExecuted/)).toBeVisible();
   expect(await page.evaluate(() => "challengeExecuted" in window)).toBe(false);
   await panel.getByText("Hint 1", { exact: true }).click();

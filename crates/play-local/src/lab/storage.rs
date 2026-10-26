@@ -226,6 +226,13 @@ impl Storage {
             }
             let entry = entry.map_err(|_| Error::storage())?;
             let name = entry.file_name();
+            if let Some(pending) = name.to_str().and_then(|name| name.strip_prefix("pending-")) {
+                let id = Uuid::parse_str(pending).map_err(|_| Error::storage())?;
+                if id.get_version_num() != 4 {
+                    return Err(Error::storage());
+                }
+                continue;
+            }
             let id = Uuid::parse_str(name.to_str().ok_or_else(Error::storage)?)
                 .map_err(|_| Error::storage())?;
             records.push(self.load(id)?.0);
@@ -409,6 +416,7 @@ mod tests {
             .join(format!("artifacts/lab/pending-{}", Uuid::new_v4()));
         std::fs::create_dir(&pending).unwrap();
         std::fs::write(pending.join("value.bin"), b"interrupted").unwrap();
+        assert_eq!(store.history().unwrap().len(), 1);
         drop(store);
         let store = Storage::open(&config).unwrap();
         assert!(!pending.exists());

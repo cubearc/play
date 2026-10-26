@@ -24,7 +24,7 @@ async fn database(app: &AppState) -> Result<std::sync::Arc<crate::persistence::D
 async fn list(State(app): State<AppState>) -> Result<Json<Value>> {
     let entries = database(&app).await?.saved_results().await?;
     let storage = app.lab.storage(&app).await?;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     let values = tokio::task::spawn_blocking(move || {
         entries
             .into_iter()
@@ -41,7 +41,7 @@ async fn list(State(app): State<AppState>) -> Result<Json<Value>> {
 async fn save(State(app): State<AppState>, Json(entry): Json<SavedResult>) -> Result<Json<Value>> {
     let storage = app.lab.storage(&app).await?;
     let id = entry.id;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     tokio::task::spawn_blocking(move || storage.load(id))
         .await
         .map_err(|_| Error::storage())??;
@@ -50,7 +50,7 @@ async fn save(State(app): State<AppState>, Json(entry): Json<SavedResult>) -> Re
 }
 async fn history(State(app): State<AppState>) -> Result<Json<Value>> {
     let storage = app.lab.storage(&app).await?;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     let records = tokio::task::spawn_blocking(move || storage.history())
         .await
         .map_err(|_| Error::storage())??;
@@ -77,7 +77,7 @@ async fn export(
     }
     let id = reference_id(&id)?;
     let storage = app.lab.storage(&app).await?;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     let (_, bytes) = tokio::task::spawn_blocking(move || storage.load(id))
         .await
         .map_err(|_| Error::storage())??;

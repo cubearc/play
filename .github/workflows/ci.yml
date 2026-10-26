@@ -131,6 +131,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: cargo build --locked -p play-launcher
+      - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
@@ -141,3 +142,6 @@ jobs:
       - run: docker build --target runner-tests --build-context cube_engine=../cube .
       - run: docker build --target lab-tests --build-context cube_engine=../cube .
       - run: python3 tests/runtime_smoke.py
+        env:
+          CUBE_PLAY_CUBE: ${{ github.workspace }}/cube/target/debug/cube
+          CUBE_PLAY_LAUNCHER: ${{ github.workspace }}/play/target/debug/cube-play

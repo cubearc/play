@@ -115,7 +115,7 @@ pixel, sample, palette and result-count limits.
 | Worker wall / CPU time | Five seconds / four CPU seconds on Unix |
 | Worker address space | 128 MiB in Linux runtime; container also retains its memory limit |
 | Retained payloads | 64 results / 64 MiB, plus bounded metadata |
-| Concurrent content/file reads | Two, shared with workspace previews |
+| Concurrent content/file reads | Two, shared with workspace previews; bounded two-second acquisition wait |
 
 Conservative Core pipeline output/work estimates can reject a request before its
 actual output would reach the byte limit. Native development retains byte/work,

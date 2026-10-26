@@ -87,6 +87,7 @@ export function StageCandidate({
         Refresh stage candidate
       </button>
       {error && <p role="alert">{error}</p>}
+      {!state && !error && <p role="status">Restoring private candidate…</p>}
       {state && <CandidateDetails state={state} />}
     </section>
   );

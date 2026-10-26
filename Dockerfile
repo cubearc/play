@@ -37,7 +37,7 @@ COPY tests/fixtures/ ./tests/fixtures/
 RUN --mount=type=cache,id=cube-play-cargo-registry,sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cube-play-target-r4,sharing=locked,target=/build/target \
     find crates/play-local -type f -name '*.rs' -exec touch {} + && \
-    cargo +${RUST_VERSION} test --locked -p play-local --lib --test lab
+    cargo +${RUST_VERSION} test --locked -p play-local --lib --tests
 
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 ARG CUBE_PLAY_UID=65532

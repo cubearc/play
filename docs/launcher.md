@@ -6,7 +6,8 @@ Run `cube play [path]` after [source installation](../README.md#start-an-investi
 The optional path defaults to the calling directory. An empty directory opens normally.
 A regular file opens its containing directory and passes a file selection to the UI.
 `.cube` files carry a challenge intent; this launcher does not parse or execute their
-contents. Stage import and validation belong to the challenge capability.
+contents. The application validates and imports the [non-executable local manifest](challenges.md)
+after its authorized session opens; the launcher never runs it.
 
 ```sh
 cube play

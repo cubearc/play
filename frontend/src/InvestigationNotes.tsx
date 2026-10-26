@@ -133,7 +133,7 @@ export function InvestigationNotes({ target }: { target: Target }) {
         <button
           type="button"
           className="button secondary"
-          disabled={dirty && active !== null}
+          disabled={status === "Loading notes…" || (dirty && active !== null)}
           onClick={() => {
             const note: Note = {
               id: crypto.randomUUID(),

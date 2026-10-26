@@ -415,7 +415,7 @@ async fn result(
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
     let id = reference_id(&id)?;
-    let _permit = read_permit(&app)?;
+    let _permit = read_permit(&app).await?;
     let storage = app.lab.storage(&app).await?;
     let value = tokio::task::spawn_blocking(move || {
         let (record, data) = storage.load(id)?;
@@ -427,7 +427,7 @@ async fn result(
 }
 async fn content(AxumState(app): AxumState<AppState>, Path(id): Path<String>) -> Result<Response> {
     let id = reference_id(&id)?;
-    let permit = read_permit(&app)?;
+    let permit = read_permit(&app).await?;
     let storage = app.lab.storage(&app).await?;
     let (record, bytes) = tokio::task::spawn_blocking(move || storage.load(id))
         .await
@@ -455,21 +455,16 @@ async fn content(AxumState(app): AxumState<AppState>, Path(id): Path<String>) ->
         .into_response())
 }
 
-fn read_permit(app: &AppState) -> Result<tokio::sync::OwnedSemaphorePermit> {
-    app.workspace
+async fn read_permit(app: &AppState) -> Result<tokio::sync::OwnedSemaphorePermit> {
+    let workspace = app
+        .workspace
         .as_ref()
         .map_err(|e| Error::from(*e))?
         .as_ref()
-        .ok_or_else(Error::invalid)?
-        .slots
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| {
-            Error::new(
-                "busy",
-                "Two file reads are already active. Close a preview or retry shortly.",
-            )
-        })
+        .ok_or_else(Error::invalid)?;
+    crate::workspace::permit(workspace)
+        .await
+        .map_err(Error::from)
 }
 
 fn reference_id(value: &str) -> Result<Uuid> {

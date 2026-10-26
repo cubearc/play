@@ -400,9 +400,8 @@ export function FileWorkspace({
       </section>
       {initialSelection?.intent === "challenge" && (
         <p className="file-notice">
-          Challenge definitions are inspected as data here. Stage import and
-          navigation are provided by the separate challenge capability; no
-          challenge content is executed.
+          Challenge files are inert data. Use Import selected challenge above to
+          open local stages. Imported content is never executed.
         </p>
       )}
     </section>

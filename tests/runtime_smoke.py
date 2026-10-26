@@ -1,5 +1,6 @@
 """Exercise the real Compose image without mounting or changing host investigations."""
 
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -235,7 +236,8 @@ fn main(){
                 subprocess.run(["docker", "exec", name, "sh", "-c", "printf retained > /var/lib/cube-play/test-marker && printf derived > /var/lib/cube-play/artifacts/result.bin"], check=True)
                 for filename, intent in [("sample 空.mp4", "file"), ("rabbit.cube", "challenge")]:
                     selected = source / filename
-                    selected.write_bytes(b"original local fixture; never execute")
+                    original = (ROOT / "tests/fixtures/rabbit.cube").read_bytes() if filename == "rabbit.cube" else b"original local fixture; never execute"
+                    selected.write_bytes(original)
                     if os.name != "nt":
                         selected.chmod(0o600)
                     selected_url = launch(selected)
@@ -243,8 +245,8 @@ fn main(){
                     self.assertEqual(values["file"], [filename])
                     self.assertEqual(values["intent"], [intent])
                     self.assertEqual(inspect(name)["Id"], first["Id"])
-                    self.assertEqual(selected.read_bytes(), b"original local fixture; never execute")
-                    self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", f"/workspace/source/{filename}"]), b"original local fixture; never execute")
+                    self.assertEqual(selected.read_bytes(), original)
+                    self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", f"/workspace/source/{filename}"]), original)
                     if os.name != "nt":
                         self.assertEqual(selected.stat().st_mode & 0o777, 0o600)
                         self.assertEqual(source.stat().st_mode & 0o777, 0o700)
@@ -260,10 +262,30 @@ fn main(){
                     self.assertEqual(response.read(), image[:12])
                 self.assertEqual((source / "sample.png").read_bytes(), image)
                 (source / "indexed.png").write_bytes((ROOT / "tests/fixtures/indexed.png").read_bytes())
+                for fixture in ["sample.mp4", "sample.wav"]:
+                    (source / fixture).write_bytes((ROOT / "tests/fixtures" / fixture).read_bytes())
+                (source / "notes.txt").write_text("<script>window.fixtureExecuted = true</script>\nPrivate original notes.")
+                (source / "unknown.xyz").write_bytes(bytes([0, 255, 17, 42]))
+                (source / "nested").mkdir()
+                (source / "nested/single.txt").write_text("One compatible file opens automatically.")
+                (source / "empty").mkdir()
+
                 (source / "malformed.png").write_bytes(bytes([137, 80, 78, 71, 13, 10, 26, 10, 0]))
                 (source / "over-limit.png").write_bytes(bytes(4 * 1024 * 1024 + 1))
+                source_hashes = {str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}
                 if (ROOT / "frontend/node_modules/.bin/playwright").exists():
-                    subprocess.run(["npm", "exec", "--", "playwright", "test", "lab.spec.ts"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url}, timeout=240, check=True)
+                    subprocess.run(["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url}, timeout=360, check=True)
+                snapshot = files_api(origin, "/api/investigation")
+                save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
+                save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
+                named_before = files_api(origin, "/api/lab/library")
+                challenge_before = files_api(origin, "/api/challenges")
+                challenge_key = challenge_before["active"]["definition"]["key"]
+                candidate_path = "/api/challenges/candidates?" + urllib.parse.urlencode({"key": challenge_key, "stage": "record"})
+                candidate_before = files_api(origin, candidate_path)
+                self.assertIsNotNone(candidate_before["candidate"])
+                self.assertEqual(candidate_before["candidate"]["status"], "private_unverified")
+                self.assertTrue(named_before["entries"])
 
                 self.assertTrue(all(authenticate(value)[1]["workspace"]["id"] == workspace_id for value in urls))
                 self.assertEqual(inspect(name)["Id"], first["Id"])
@@ -293,16 +315,20 @@ fn main(){
                 self.assertEqual(recovered["id"], investigation["id"])
                 self.assertEqual(recovered["title"], "Persistent case")
                 self.assertEqual(recovered["view"], saved_view)
+                self.assertEqual(files_api(recovered_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(recovered_origin, "/api/challenges"), challenge_before)
+                self.assertEqual(files_api(recovered_origin, candidate_path), candidate_before)
+
                 self.assertNotEqual(recovered["session_id"], investigation["session_id"])
                 self.assertEqual(recovered["interrupted_sessions"], 0)
                 self.assertEqual(files_api(recovered_origin, "/api/investigation/notes")[0]["id"], note_id)
-                self.assertEqual(files_api(recovered_origin, "/api/investigation/progress")[0]["local_status"], "in_progress")
+                self.assertEqual(next(item for item in files_api(recovered_origin, "/api/investigation/progress") if item["challenge_key"] == "local-fixture")["local_status"], "in_progress")
                 self.assertEqual(files_api(recovered_origin, "/api/investigation/artifacts")[0]["id"], artifact["id"])
                 self.assertTrue(any(session["status"] == "closed" for session in files_api(recovered_origin, "/api/investigation/sessions")))
                 self.assertNotEqual(inspect(name)["Id"], first["Id"])
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/test-marker"]), b"retained")
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/artifacts/result.bin"]), b"derived")
-                self.assertEqual((source / "rabbit.cube").read_bytes(), b"original local fixture; never execute")
+                self.assertEqual((source / "rabbit.cube").read_bytes(), (ROOT / "tests/fixtures/rabbit.cube").read_bytes())
                 # Exercise actual ungraceful termination and SQLite WAL recovery.
                 subprocess.run(["docker", "kill", "--signal", "KILL", name], check=True, capture_output=True)
                 crash_url = launch()
@@ -311,6 +337,10 @@ fn main(){
                 self.assertEqual(after_crash["id"], investigation["id"])
                 self.assertEqual(after_crash["interrupted_sessions"], 1)
                 self.assertEqual(after_crash["view"], saved_view)
+                self.assertEqual(files_api(crash_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(crash_origin, candidate_path), candidate_before)
+                self.assertEqual({str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}, source_hashes)
+
                 self.assertEqual(files_api(crash_origin, "/api/investigation/notes")[0]["body"], "Retained across real container recreation")
             finally:
                 registry_file = home / "workspaces.json"

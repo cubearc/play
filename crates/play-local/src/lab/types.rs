@@ -104,7 +104,7 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = match self.code.as_str() {
             "resource_limit" => StatusCode::PAYLOAD_TOO_LARGE,
-            "busy" => StatusCode::TOO_MANY_REQUESTS,
+            "busy" | "workspace_busy" => StatusCode::TOO_MANY_REQUESTS,
             "challenge_missing" | "unknown_operation" | "result_missing" => StatusCode::NOT_FOUND,
             "path_denied" | "symlink_denied" => StatusCode::FORBIDDEN,
             "artifact_not_saved"

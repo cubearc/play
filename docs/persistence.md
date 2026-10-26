@@ -96,4 +96,5 @@ Revision `0` creates a note/progress record; subsequent writes use the returned
 revision. Navigation has its own revision, independent of investigation metadata.
 The API body limit is 512 KiB with smaller field limits. Progress remains private
 local state and never represents official verification. The [notebook](notebook.md) provides the note editor and named derived artifacts.
-Challenge formats and candidate association are separate capabilities.
+[Local challenges and private candidate association](challenges.md) share the same
+database and retain their referenced Lab bundles.

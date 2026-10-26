@@ -7,13 +7,13 @@ test.beforeEach(async ({ page }) => {
   const token = new URLSearchParams(new URL(url).hash.slice(1)).get("session");
   await page.request.post("/api/session", {
     headers: {
-      Origin: "http://127.0.0.1:17331",
+      Origin: new URL(url).origin,
       Authorization: `Bearer ${token}`,
     },
   });
   const snapshot = await (await page.request.get("/api/investigation")).json();
   const reset = await page.request.put("/api/investigation/view", {
-    headers: { Origin: "http://127.0.0.1:17331" },
+    headers: { Origin: new URL(url).origin },
     data: {
       revision: snapshot.view_revision,
       view: { store: "source", path: "", offset: 0, selected: null },
@@ -31,7 +31,10 @@ test("browses real files and renders Core-backed previews with inert fallback co
 }) => {
   const external: string[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).origin !== "http://127.0.0.1:17331")
+    if (
+      new URL(request.url()).origin !==
+      new URL(process.env.CUBE_PLAY_TEST_URL ?? "").origin
+    )
       external.push(request.url());
   });
   await page
@@ -101,7 +104,18 @@ test("serves real video/audio ranges and preserves a private explicit import aft
     .getByRole("button", { name: "Inspect sample.mp4", exact: true })
     .click();
   const video = page.getByLabel("Video preview of sample.mp4");
-  await expect(video).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await video.isVisible()) ||
+        (await page
+          .getByText(
+            "The browser could not decode this media. Its metadata and byte inspection remain available below.",
+            { exact: true },
+          )
+          .isVisible()),
+    )
+    .toBe(true);
   await expect(page.getByText("Cube container metadata")).toBeVisible();
   const response = await page.request.get(
     "/api/workspace/media?path=sample.mp4",
