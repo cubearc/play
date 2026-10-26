@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { connect, type Health, SessionError, takeLaunchLink } from "./api";
+import { CubeTerminal } from "./CubeTerminal";
 import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
 type Connection =
@@ -152,6 +153,9 @@ export default function App() {
           <InvestigationWorkspace
             initialSelection={connectionRequest.selection}
           />
+        )}
+        {connection.state === "ready" && connection.health.workspace && (
+          <CubeTerminal />
         )}
         <section className="session-panel" aria-labelledby="session-title">
           <div>

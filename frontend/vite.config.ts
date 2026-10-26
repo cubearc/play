@@ -9,8 +9,16 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      "/api": { target: "http://127.0.0.1:7331", changeOrigin: false },
-      "/healthz": { target: "http://127.0.0.1:7331", changeOrigin: false },
+      "/api": {
+        target: "http://127.0.0.1:7331",
+        changeOrigin: false,
+        ws: true,
+      },
+      "/healthz": {
+        target: "http://127.0.0.1:7331",
+        changeOrigin: false,
+        ws: true,
+      },
     },
   },
   test: {

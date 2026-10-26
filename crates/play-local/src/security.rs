@@ -64,11 +64,15 @@ pub async fn boundary(State(state): State<AppState>, request: Request, next: Nex
     } else {
         next.run(request).await
     };
+    let policy = format!(
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self' ws://{}; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'",
+        state.config.authority()
+    );
+    response.headers_mut().insert(
+        "content-security-policy",
+        HeaderValue::from_str(&policy).expect("Validated loopback origin forms a header"),
+    );
     for (name, value) in [
-        (
-            "content-security-policy",
-            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'",
-        ),
         ("x-content-type-options", "nosniff"),
         ("referrer-policy", "no-referrer"),
         ("cache-control", "no-store"),

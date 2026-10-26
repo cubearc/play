@@ -197,11 +197,7 @@ fn run(args: &Args, cancelled: Arc<AtomicBool>) -> Result<()> {
     state::private_directory(&directory)?;
     let _lock = state::lock(&directory.join("startup.lock"), &cancelled)?;
     if args.stop {
-        if let Some(container) = docker.inspect(&workspace)?
-            && container.state.running
-        {
-            docker.stop(&container)?;
-        }
+        docker.stop_workspace(&workspace)?;
         println!("Cube Play workspace stopped. Investigation data was preserved.");
         return Ok(());
     }
@@ -231,6 +227,7 @@ fn run(args: &Args, cancelled: Arc<AtomicBool>) -> Result<()> {
             }
         }
     };
+    docker.runner_support(&image)?;
     let context = directory.join("workspace.json");
     let expected = serde_json::json!({"id":workspace.id,"name":workspace.name});
     match fs::symlink_metadata(&context) {
@@ -261,7 +258,7 @@ fn run(args: &Args, cancelled: Arc<AtomicBool>) -> Result<()> {
     let runtime = docker.start(&workspace, &directory, &image)?;
     if cancelled.load(Ordering::Relaxed) {
         if !runtime.reused {
-            docker.stop(&runtime.container)?;
+            docker.stop_workspace(&workspace)?;
         }
         return Err(Error::cancelled());
     }
@@ -269,7 +266,7 @@ fn run(args: &Args, cancelled: Arc<AtomicBool>) -> Result<()> {
         Ok(url) => url,
         Err(error) => {
             if !runtime.reused {
-                docker.stop(&runtime.container)?;
+                docker.stop_workspace(&workspace)?;
             }
             return Err(error);
         }

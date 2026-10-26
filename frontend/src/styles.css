@@ -710,3 +710,62 @@ summary:focus-visible {
 .investigation-state p {
   margin-top: 0.75rem;
 }
+
+.terminal-panel {
+  margin-block: 2rem;
+  padding: 1.25rem;
+  border: 1px solid #a8b5ad;
+  border-radius: 12px;
+}
+.terminal-heading,
+.terminal-controls,
+.terminal-session-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.terminal-panel p {
+  margin-block: 0.75rem;
+}
+.terminal-controls label {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+.terminal-controls input,
+.terminal-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #88958d;
+  border-radius: 6px;
+  background: transparent;
+}
+.terminal-limits,
+.terminal-help {
+  font-size: 0.85rem;
+}
+.terminal-screen {
+  height: 22rem;
+  padding: 0.75rem;
+  background: #14251e;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.terminal-screen .xterm {
+  height: 100%;
+}
+.terminal-screen .xterm-viewport {
+  border-radius: 6px;
+}
+.terminal-session {
+  min-width: 0;
+}
+.terminal-session-bar p {
+  flex: 1;
+  min-width: 0;
+}

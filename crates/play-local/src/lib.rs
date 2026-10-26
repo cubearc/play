@@ -2,6 +2,7 @@
 pub mod config;
 mod persistence;
 mod security;
+mod terminal;
 pub use persistence::PersistenceHandle;
 pub mod workspace;
 
@@ -64,6 +65,7 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
         .route("/workspace/media", get(workspace::media))
         .route("/workspace/import", post(workspace::import))
         .merge(persistence::routes())
+        .merge(terminal::routes())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             security::require_session,
@@ -87,6 +89,9 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
 
 async fn health(State(state): State<AppState>) -> Result<Json<Health>, workspace::FileError> {
     state.database().await?;
+    if state.config.runner_socket.is_some() {
+        terminal::probe(&state.config).await?;
+    }
     Ok(Json(Health {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),

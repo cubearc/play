@@ -7,15 +7,17 @@ The host launcher opens local directories or files in a protected browser applic
 Browse files, preview supported media/text, inspect original bytes and explicitly
 import private copies without changing the source. Investigation names and file
 navigation persist in a private local SQLite database. See [local persistence](docs/persistence.md)
-for storage limits, migrations and recovery. The Cube terminal, visual Lab, full
+for storage limits, migrations and recovery. The [isolated Cube terminal](docs/terminal.md)
+executes real CLI commands. Visual Lab, full
 notes/artifact workflows and structured challenges remain tracked in
 [GitHub Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).
 
 ## Start an investigation
 
-Install Docker Engine/Desktop with Linux containers and Compose v2, and start the
-local engine. For source installation, use Rust stable through rustup. With Cube
+Install a Landlock-capable Docker Engine with Compose v2, or Docker Desktop 4.94.0+
+with Linux containers, and start the local engine. For source installation, use
+Rust stable through rustup. With Cube
 and Play checked out side by side, run from this repository:
 
 ```sh
@@ -26,8 +28,8 @@ cube play
 
 Native builds depend directly on the sibling Cube workspace's `cube-core = 0.18.0`;
 the library is not yet published on crates.io. Keep that trusted checkout available
-for builds. Docker receives only its workspace manifest and library sources through
-a named context; algorithms stay in Core and deploy keys stay on the host.
+for builds. Docker receives the required Cube build sources through a named
+context; algorithms stay in Core and deploy keys stay on the host.
 
 The first launch builds a local runtime image from the trusted Play checkout;
 setup can download pinned base images and locked dependencies. Keep the checkout
@@ -43,8 +45,8 @@ cube play --stop ./investigation
 
 The browser opens after readiness. Empty directories work, source mounts are read-only,
 and separate local volumes survive shutdown/recreation. Direct files select their
-parent workspace and open an inspector. Challenge stages and the terminal are
-delivered separately; selecting `.cube` never executes it. Read the
+parent workspace and open an inspector. Challenge stages remain a separate
+capability; selecting `.cube` never executes it. Read the
 [workspace guide](docs/workspace.md) for previews, explicit imports and limits.
 Use `--no-browser` to print a private session link or `--offline` to require an
 already installed runtime without setup downloads. See the [launcher guide](docs/launcher.md)
@@ -83,8 +85,9 @@ docker compose down
 Open the session link in the logs. Set `CUBE_PLAY_PORT` to change the host port.
 Compose publishes only on loopback and runs the application non-root with a read-only
 filesystem and bounded resources. No user directories or Docker socket are mounted.
-The current runtime starts Play Local; Cube Runner arrives with the isolated
-terminal capability. The host launcher manages ordinary-user startup and shutdown.
+The runtime starts Play Local and a network-disabled Cube Runner with private
+Unix transport. A Landlock-capable engine is required; use Docker Desktop 4.94.0 or
+newer. The host launcher manages ordinary-user startup and shutdown.
 
 See [CONTRIBUTING](CONTRIBUTING.md) for development and quality commands,
 [Architecture](docs/architecture.md) for boundaries, and [SECURITY](SECURITY.md)

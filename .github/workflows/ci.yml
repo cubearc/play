@@ -35,11 +35,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          ref: 96bd2b335a00f8a5f29a485e29272b128477ea43
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo test --workspace --all-features --locked
 
   rust-quality:
@@ -54,7 +55,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          ref: 96bd2b335a00f8a5f29a485e29272b128477ea43
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -62,9 +63,10 @@ jobs:
         with:
           components: rustfmt, clippy, llvm-tools-preview
       - run: cargo fmt --all -- --check
-      - run: rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs
+      - run: rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-runner/tests/support/resource_probe.rs
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo install cargo-llvm-cov --version 0.9.1 --locked
+      - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 80 --ignore-filename-regex '/tests/'
       - run: cargo llvm-cov report --lcov --output-path lcov.info --ignore-filename-regex '/tests/'
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -88,7 +90,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          ref: 96bd2b335a00f8a5f29a485e29272b128477ea43
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -123,10 +125,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          ref: 96bd2b335a00f8a5f29a485e29272b128477ea43
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: cargo build --locked -p play-launcher
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: play/frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: cd frontend && npx playwright install --with-deps chromium
+      - run: docker build --target runner-tests --build-context cube_engine=../cube .
       - run: python3 tests/runtime_smoke.py

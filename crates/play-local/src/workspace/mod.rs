@@ -122,39 +122,11 @@ fn hint(name: &str) -> (Category, &'static str) {
 }
 
 pub fn validate(path: &str, allow_root: bool) -> Result<()> {
-    if path.is_empty() {
-        return if allow_root { Ok(()) } else { Err(invalid()) };
+    if play_runner::protocol::valid_path(path, allow_root) {
+        Ok(())
+    } else {
+        Err(invalid())
     }
-    if path.len() > 4096 || path.split('/').count() > 32 {
-        return Err(invalid());
-    }
-    for name in path.split('/') {
-        let stem = name.split('.').next().unwrap_or("").to_uppercase();
-        let device = matches!(
-            stem.as_str(),
-            "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-        ) || ["COM", "LPT"].iter().any(|prefix| {
-            stem.strip_prefix(prefix).is_some_and(|suffix| {
-                matches!(
-                    suffix,
-                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                )
-            })
-        });
-        if name.is_empty()
-            || name == "."
-            || name == ".."
-            || name.len() > 255
-            || name.ends_with(['.', ' '])
-            || name.chars().any(|c| {
-                c.is_control() || matches!(c, '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-            })
-            || device
-        {
-            return Err(invalid());
-        }
-    }
-    Ok(())
 }
 
 pub struct Workspace {

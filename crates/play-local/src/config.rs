@@ -53,6 +53,7 @@ pub struct Config {
     pub source_dir: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
     pub state_dir: Option<PathBuf>,
+    pub runner_socket: Option<PathBuf>,
 }
 
 impl Config {
@@ -99,6 +100,15 @@ impl Config {
             }
             config.state_dir = Some(path);
         }
+        if let Some(path) = std::env::var_os("CUBE_PLAY_RUNNER_SOCKET") {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() || path.file_name().is_none() {
+                return Err(
+                    "CUBE_PLAY_RUNNER_SOCKET requires an absolute private socket path".into(),
+                );
+            }
+            config.runner_socket = Some(path);
+        }
         Ok(config)
     }
 
@@ -134,6 +144,7 @@ impl Config {
             source_dir: None,
             data_dir: None,
             state_dir: None,
+            runner_socket: None,
         })
     }
 

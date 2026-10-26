@@ -52,7 +52,8 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 3 includes file discovery/import APIs and local SQLite state. An
+Runtime revision 4 adds the PTY runner and private terminal transport to the local
+SQLite/file workspace. An
 older cached foundation image cannot silently satisfy that contract. The Cube invocation protocol remains 1.
 An already-running older image returns explicit stop/restart guidance; its workspace
 identity and volumes are preserved.
@@ -60,7 +61,7 @@ identity and volumes are preserved.
 Source builds consume a trusted sibling Cube 0.18.0 checkout. Set
 `CUBE_PLAY_CORE_SOURCE` to another absolute checkout for Docker builds if needed;
 native Cargo development uses the documented sibling layout. The build context
-includes only workspace metadata and Core sources, with no deploy key or Docker
+includes only workspace metadata and the required Rust build sources, with no deploy key or Docker
 socket passed into containers. A missing engine checkout fails with setup guidance.
 
 `CUBE_PLAY_HOME` optionally selects an absolute private launcher-state directory.
@@ -110,7 +111,9 @@ kills owned host-command groups (Unix) or jobs (Windows), and stops a newly star
 owned runtime when necessary. Canceling reuse does not stop an existing investigation.
 An explicit `--stop` affects only the registered workspace and preserves its volumes.
 
-The launcher currently orchestrates Play Local. The actual Cube Runner service and its
-network-disabled private transport belong to [the isolated terminal](https://github.com/cubearc/play/issues/5).
-No idle Runner is created merely to fill a service slot. Final two-container product
-journeys remain part of [integrated MVP validation](https://github.com/cubearc/play/issues/11).
+The launcher starts/stops both owned containers and checks Runner privileges,
+network isolation, private mounts and health before reusing them. Runtime setup
+requires a Landlock-capable engine; see [terminal requirements](terminal.md).
+The capability probe uses no host mounts and returns actionable upgrade guidance.
+Full Lab/challenge journeys remain part of
+[integrated MVP validation](https://github.com/cubearc/play/issues/11).

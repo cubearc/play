@@ -83,12 +83,18 @@ fn main() {
         println!("2.23.3");
         return;
     }
+    if args.first().is_some_and(|arg| arg == "run") {
+        if mode == "no-landlock" {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.first().is_some_and(|arg| arg == "image") {
         if mode == "missing-image" && !home.join("built").exists() {
             std::process::exit(1);
         }
         emit(
-            &json!([{"Id":image(&mode),"Config":{"User":env::var("CUBE_PLAY_FIXTURE_USER").unwrap(),"Labels":{"org.cubearc.play.protocol":if mode=="bad-image"{"99"}else{"1"},"org.cubearc.play.version":"0.1.0","org.cubearc.play.runtime-revision":if mode=="old-runtime"{"1"}else{"3"}}}}]),
+            &json!([{"Id":image(&mode),"Config":{"User":env::var("CUBE_PLAY_FIXTURE_USER").unwrap(),"Labels":{"org.cubearc.play.protocol":if mode=="bad-image"{"99"}else{"1"},"org.cubearc.play.version":"0.1.0","org.cubearc.play.runtime-revision":if mode=="old-runtime"{"1"}else{"4"}}}}]),
         );
         return;
     }
@@ -121,37 +127,36 @@ fn main() {
         let project =
             args[args.iter().position(|arg| arg == "--project-name").unwrap() + 1].clone();
         let value: Value = serde_json::from_slice(&fs::read(&args[file + 1]).unwrap()).unwrap();
-        let service = &value["services"]["play-local"];
         if mode == "startup-failure" {
             std::process::exit(1);
         }
-        let container_name = service["container_name"].as_str().unwrap();
-        let mut labels = service["labels"].clone();
-        labels["com.docker.compose.project"] = json!(project);
-        let mounts:Vec<_>=service["volumes"].as_array().unwrap().iter().map(|mount|{
-            let kind=mount["type"].as_str().unwrap();
-            let source=mount["source"].as_str().unwrap().replace("$$","$");
-            json!({"Type":kind,"Source":source,"Destination":mount["target"],"RW":mount["read_only"]!=true,
-                "Name":if kind=="volume" {value["volumes"][&source]["name"].clone()}else{Value::Null}})
+        for (role, service) in value["services"].as_object().unwrap() {
+            let runner = role == "cube-runner";
+            let container_name = service["container_name"].as_str().unwrap();
+            let mut labels = service["labels"].clone();
+            labels["com.docker.compose.project"] = json!(project);
+            let mounts:Vec<_>=service["volumes"].as_array().unwrap().iter().map(|mount|{
+            let kind=mount["type"].as_str().unwrap();let source=mount["source"].as_str().unwrap().replace("$$","$");
+            json!({"Type":kind,"Source":source,"Destination":mount["target"],"RW":mount["read_only"]!=true,"Name":if kind=="volume"{value["volumes"][&source]["name"].clone()}else{Value::Null}})
         }).collect();
-        let environment: Vec<_> = service["environment"]
-            .as_object()
-            .unwrap()
-            .iter()
-            .map(|(key, value)| format!("{key}={}", value.as_str().unwrap()))
-            .collect();
-        let data = json!({"Id":container_name,"Image":service["image"],
-            "Config":{"Labels":labels,"User":service["user"],"Env":environment},
-            "State":{"Running":true,"Health":{"Status":"healthy"}},
-            "HostConfig":{"Privileged":false,"ReadonlyRootfs":service["read_only"],"CapDrop":service["cap_drop"],"CapAdd":[],"Devices":[],"PidMode":"","NetworkMode":format!("{project}_default"),
-                "SecurityOpt":service["security_opt"],"Memory":268435456,"NanoCpus":1000000000,"PidsLimit":service["pids_limit"],
-                "PortBindings":{"7331/tcp":[{"HostIp":service["ports"][0]["host_ip"],"HostPort":service["ports"][0]["published"]}]}},
-            "Mounts":mounts});
-        fs::write(
-            home.join(format!("{container_name}.json")),
-            data.to_string(),
-        )
-        .unwrap();
+            let environment: Vec<_> = service["environment"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(key, value)| format!("{key}={}", value.as_str().unwrap()))
+                .collect();
+            let ports = if runner {
+                Value::Null
+            } else {
+                json!({"7331/tcp":[{"HostIp":service["ports"][0]["host_ip"],"HostPort":service["ports"][0]["published"]}]})
+            };
+            let data = json!({"Id":container_name,"Image":service["image"],"Config":{"Labels":labels,"User":service["user"],"Env":environment,"Entrypoint":if runner{json!(["/usr/local/bin/cube-runner"])}else{json!(["play-local"])}},"State":{"Running":true,"Health":{"Status":"healthy"}},"HostConfig":{"Privileged":false,"ReadonlyRootfs":true,"CapDrop":["ALL"],"CapAdd":[],"Devices":[],"PidMode":"","NetworkMode":if runner{"none".to_string()}else{format!("{project}_default")},"SecurityOpt":["no-new-privileges:true"],"Memory":if runner{536870912}else{268435456},"NanoCpus":1000000000,"PidsLimit":service["pids_limit"],"PortBindings":ports},"Mounts":mounts});
+            fs::write(
+                home.join(format!("{container_name}.json")),
+                data.to_string(),
+            )
+            .unwrap();
+        }
         if mode == "cancel-after-start" {
             std::thread::sleep(std::time::Duration::from_secs(10));
         }
@@ -178,7 +183,7 @@ fn main() {
                     "host-pids" => data["HostConfig"]["PidMode"] = json!("host"),
                     "capabilities" => data["HostConfig"]["CapAdd"] = json!(["SYS_ADMIN"]),
                     "writable-source" => data["Mounts"][0]["RW"] = json!(true),
-                    "wrong-port" => {
+                    "wrong-port" if !name.ends_with("-runner") => {
                         data["HostConfig"]["PortBindings"]["7331/tcp"][0]["HostIp"] =
                             json!("0.0.0.0")
                     }

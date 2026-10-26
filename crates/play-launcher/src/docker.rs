@@ -36,7 +36,7 @@ pub fn runtime_user() -> Result<String> {
 
 pub fn default_image() -> Result<String> {
     Ok(format!(
-        "cube-play-local:{}-r3-{}",
+        "cube-play-local:{}-r4-{}",
         env!("CARGO_PKG_VERSION"),
         runtime_user()?.replace(':', "-")
     ))
@@ -74,6 +74,8 @@ pub struct ContainerConfig {
     pub labels: HashMap<String, String>,
     pub user: String,
     pub env: Vec<String>,
+    #[serde(default)]
+    pub entrypoint: Vec<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -100,7 +102,7 @@ pub struct HostConfig {
     pub memory: u64,
     pub nano_cpus: u64,
     pub pids_limit: Option<i64>,
-    pub port_bindings: HashMap<String, Vec<PortBinding>>,
+    pub port_bindings: Option<HashMap<String, Vec<PortBinding>>>,
 }
 #[derive(Deserialize)]
 pub struct PortBinding {
@@ -142,17 +144,20 @@ pub fn configuration(
     let project = project(workspace);
     let source = escaped(&state::docker_path(&workspace.root)?);
     let context = escaped(&state::docker_path(&directory.join("workspace.json"))?);
+    let runner = crate::runner::configuration(workspace, &source, image)?;
     Ok(json!({
-        "services": { "play-local": {
+        "services": { "cube-runner":runner, "play-local": {
             "image":image, "container_name":container_name(workspace),
             "labels":{"org.cubearc.play.workspace":workspace.id.to_string(),"org.cubearc.play.protocol":"1"},
-            "environment":{"CUBE_PLAY_ORIGIN":format!("http://127.0.0.1:{port}"),"CUBE_PLAY_WORKSPACE":"/run/cube-play/workspace.json","CUBE_PLAY_SOURCE":"/workspace/source"},
+            "environment":{"CUBE_PLAY_ORIGIN":format!("http://127.0.0.1:{port}"),"CUBE_PLAY_WORKSPACE":"/run/cube-play/workspace.json","CUBE_PLAY_SOURCE":"/workspace/source","CUBE_PLAY_RUNNER_SOCKET":crate::runner::SOCKET},
+            "depends_on":{"cube-runner":{"condition":"service_healthy"}},
             "ports":[{"target":7331,"published":port.to_string(),"host_ip":"127.0.0.1","protocol":"tcp"}],
             "volumes":[
                 {"type":"bind","source":source,"target":"/workspace/source","read_only":true,"bind":{"create_host_path":false}},
                 {"type":"bind","source":context,"target":"/run/cube-play/workspace.json","read_only":true,"bind":{"create_host_path":false}},
                 {"type":"volume","source":"data","target":"/var/lib/cube-play"},
-                {"type":"volume","source":"artifacts","target":"/var/lib/cube-play/artifacts"}
+                {"type":"volume","source":"artifacts","target":"/var/lib/cube-play/artifacts"},
+                {"type":"volume","source":"terminal","target":"/run/cube-play/terminal","read_only":true}
             ],
             "user":runtime_user()?,"read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],
             "init":true,"pids_limit":128,"mem_limit":"256m","cpus":1,
@@ -160,7 +165,8 @@ pub fn configuration(
         }},
         "volumes": {
             "data":{"name":format!("{project}-data"),"labels":{"org.cubearc.play.workspace":workspace.id.to_string()}},
-            "artifacts":{"name":format!("{project}-artifacts"),"labels":{"org.cubearc.play.workspace":workspace.id.to_string()}}
+            "artifacts":{"name":format!("{project}-artifacts"),"labels":{"org.cubearc.play.workspace":workspace.id.to_string()}},
+            "terminal":{"name":format!("{project}-terminal"),"labels":{"org.cubearc.play.workspace":workspace.id.to_string()}}
         }
     }))
 }
@@ -293,7 +299,7 @@ impl Docker {
             || image
                 .pointer("/Config/Labels/org.cubearc.play.runtime-revision")
                 .and_then(Value::as_str)
-                != Some("3")
+                != Some("4")
             || image
                 .pointer("/Config/Labels/org.cubearc.play.version")
                 .and_then(Value::as_str)
@@ -372,8 +378,40 @@ impl Docker {
         })
     }
 
+    pub fn runner_support(&self, image: &str) -> Result<()> {
+        let probe = self.run(
+            &[
+                "run",
+                "--rm",
+                "--pull",
+                "never",
+                "--network",
+                "none",
+                "--read-only",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges:true",
+                "--entrypoint",
+                "/usr/local/bin/cube-runner",
+                image,
+                "--sandbox-check",
+            ],
+            SHORT,
+        )?;
+        if !probe.success {
+            return Err(Error::new(
+                "unsupported_isolation",
+                "Cube Runner requires Landlock ABI 3 with its LSM enabled. Use Docker Desktop 4.94.0 or newer, or a compatible local Linux engine. No unrestricted terminal was started",
+            ));
+        }
+        Ok(())
+    }
     pub fn inspect(&self, workspace: &Workspace) -> Result<Option<Container>> {
-        let output = self.run(&["container", "inspect", &container_name(workspace)], SHORT)?;
+        self.inspect_named(workspace, &container_name(workspace))
+    }
+    fn inspect_named(&self, workspace: &Workspace, name: &str) -> Result<Option<Container>> {
+        let output = self.run(&["container", "inspect", name], SHORT)?;
         if !output.success {
             if !self
                 .run(&["info", "--format", "{{.OSType}}"], SHORT)?
@@ -469,13 +507,43 @@ impl Docker {
         Ok(())
     }
 
+    pub fn stop_workspace(&self, workspace: &Workspace) -> Result<()> {
+        for name in [container_name(workspace), crate::runner::name(workspace)] {
+            if let Some(container) = self.inspect_named(workspace, &name)?
+                && container.state.running
+            {
+                self.stop(&container)?;
+            }
+        }
+        Ok(())
+    }
+    fn ready_runner(&self, workspace: &Workspace, image: &str) -> Result<()> {
+        let container = self
+            .inspect_named(workspace, &crate::runner::name(workspace))?
+            .ok_or_else(|| {
+                Error::new(
+                    "runtime_unhealthy",
+                    "The isolated runner is missing; stop this workspace and restart it",
+                )
+            })?;
+        crate::runner::validate(&container, workspace, image)?;
+        if !container.state.running
+            || container.state.health.as_ref().map(|h| h.status.as_str()) != Some("healthy")
+        {
+            return Err(Error::new(
+                "runtime_unhealthy",
+                "The isolated runner is not healthy; stop this workspace and restart it",
+            ));
+        }
+        Ok(())
+    }
     pub fn start(
         &self,
         workspace: &Workspace,
         directory: &Path,
         image: &str,
     ) -> Result<ReadyRuntime> {
-        for suffix in ["data", "artifacts"] {
+        for suffix in ["data", "artifacts", "terminal"] {
             let output = self.run(
                 &[
                     "volume",
@@ -501,10 +569,16 @@ impl Docker {
                 }
             }
         }
+        if let Some(runner) = self.inspect_named(workspace, &crate::runner::name(workspace))?
+            && runner.state.running
+        {
+            crate::runner::validate(&runner, workspace, image)?;
+        }
         if let Some(container) = self.inspect(workspace)?
             && container.state.running
         {
             let port = validate(&container, workspace, directory, image)?;
+            self.ready_runner(workspace, image)?;
             if container
                 .state
                 .health
@@ -553,7 +627,7 @@ impl Docker {
                     let actual = match validate(&container, workspace, directory, image) {
                         Ok(port) => port,
                         Err(error) => {
-                            self.stop(&container)?;
+                            self.stop_workspace(workspace)?;
                             return Err(error);
                         }
                     };
@@ -566,11 +640,15 @@ impl Docker {
                             .map(|health| health.status.as_str())
                             != Some("healthy")
                     {
-                        self.stop(&container)?;
+                        self.stop_workspace(workspace)?;
                         return Err(Error::new(
                             "runtime_unhealthy",
                             "The runtime did not pass readiness checks",
                         ));
+                    }
+                    if let Err(error) = self.ready_runner(workspace, image) {
+                        self.stop_workspace(workspace)?;
+                        return Err(error);
                     }
                     return Ok(ReadyRuntime {
                         container,
@@ -587,13 +665,13 @@ impl Docker {
                         home: self.home.clone(),
                     };
                     let existing = cleanup.inspect(workspace)?;
+                    cleanup.stop_workspace(workspace)?;
                     let occupied =
                         TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).is_err();
-                    if let Some(container) = existing
+                    if existing
                         .as_ref()
-                        .filter(|container| container.state.running)
+                        .is_some_and(|container| container.state.running)
                     {
-                        cleanup.stop(container)?;
                         return Err(error);
                     }
                     if error.code == "cancelled" || !occupied {
@@ -689,7 +767,7 @@ pub fn validate(
                 .iter()
                 .any(|value| value == "no-new-privileges:true" || value == "no-new-privileges")
         })
-        || host.port_bindings.len() != 1
+        || host.port_bindings.as_ref().map_or(0, HashMap::len) != 1
     {
         return Err(Error::new(
             "unsafe_runtime",
@@ -698,6 +776,8 @@ pub fn validate(
     }
     let binding = host
         .port_bindings
+        .as_ref()
+        .ok_or_else(failure)?
         .get("7331/tcp")
         .filter(|values| values.len() == 1)
         .map(|values| &values[0])
@@ -748,7 +828,7 @@ pub fn validate(
         .filter(|mount| mount.kind == "volume")
         .collect();
     let project = project(workspace);
-    if volumes.len() != 2
+    if volumes.len() != 3
         || !volumes.iter().any(|mount| {
             mount.destination == "/var/lib/cube-play"
                 && mount.writable
@@ -758,6 +838,11 @@ pub fn validate(
             mount.destination == "/var/lib/cube-play/artifacts"
                 && mount.writable
                 && mount.name.as_deref() == Some(&format!("{project}-artifacts"))
+        })
+        || !volumes.iter().any(|mount| {
+            mount.destination == "/run/cube-play/terminal"
+                && !mount.writable
+                && mount.name.as_deref() == Some(&format!("{project}-terminal"))
         })
         || container
             .mounts
@@ -772,7 +857,7 @@ pub fn validate(
     Ok(port)
 }
 
-fn mount_source_matches(actual: &str, expected: &Path) -> bool {
+pub(crate) fn mount_source_matches(actual: &str, expected: &Path) -> bool {
     let Ok(expected) = state::docker_path(expected) else {
         return false;
     };
@@ -851,7 +936,9 @@ mod tests {
                 .unwrap()
                 .replace('$', "$$")
         );
-        assert_eq!(value["services"].as_object().unwrap().len(), 1);
+        assert_eq!(value["services"].as_object().unwrap().len(), 2);
+        assert_eq!(value["services"]["cube-runner"]["network_mode"], "none");
+        assert!(value["services"]["cube-runner"]["ports"].is_null());
         assert_eq!(
             value["services"]["play-local"]["ports"][0]["host_ip"],
             "127.0.0.1"

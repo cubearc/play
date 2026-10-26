@@ -95,6 +95,7 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         ("old-compose", "compose_unavailable"),
         ("bad-image", "incompatible_runtime"),
         ("old-runtime", "incompatible_runtime"),
+        ("no-landlock", "unsupported_isolation"),
     ]
     .into_iter()
     .chain(if cfg!(unix) {

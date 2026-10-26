@@ -2,6 +2,9 @@
 
 Use Rust stable through rustup, Node.js 24 and npm. Docker Compose v2 and Python 3.11+
 are required for container tests. Start with the [README quick start](README.md#developer-quick-start).
+The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
+4.94.0 or newer on macOS/Windows. Unsupported isolation fails before starting a
+terminal. See [terminal boundaries](docs/terminal.md).
 Keep a trusted Cube 0.18.0 checkout at `../cube`; Cargo consumes its exact-version
 library directly. CI checks out a pinned Cube revision beside Play. While Core is
 private, hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
@@ -36,8 +39,9 @@ From the root:
 
 ```sh
 cargo fmt --all -- --check
-rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs
+rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-runner/tests/support/resource_probe.rs
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
 cargo test --workspace --all-features --locked
 npm ci --prefix frontend
 npm run check --prefix frontend
@@ -66,6 +70,7 @@ Test the real Compose image and runtime from the root:
 
 ```sh
 python3 tests/runtime_smoke.py
+docker build --target runner-tests --build-context cube_engine=../cube .
 ```
 
 The suite uses unique Compose projects and available loopback ports, builds the
@@ -75,6 +80,18 @@ isolation, browser readiness, stop and recreation with persistent test volumes.
 Only fixture-owned containers and temporary test volumes are removed. Set
 `CUBE_PLAY_CUBE` to a trusted built Cube executable and `CUBE_PLAY_LAUNCHER` to the
 Play executable to additionally exercise the real cross-repository CLI handoff.
+With frontend dependencies and Chromium installed, the Docker suite also runs
+`npm run test:runner` against its real two-container workspace on desktop/mobile.
+It checks known-answer CLI output, errors, PTY resizing, accessibility and closure.
+The ordinary browser suite reports these container-only cases as skipped.
+
+Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
+exercise PTY sessions, read isolation, output exhaustion and process cleanup.
+A test-only executable probes inherited CPU/process/file limits with lower soft
+limits after asserting the production values; memory and descriptor exhaustion
+are also checked. It runs without a shell and never ships in the runtime image. The Docker `runner-tests`
+target reproduces them on macOS/Windows. Native API development does not start a
+host terminal; configure a private Linux runner socket explicitly when needed.
 
 Rust integration tests also use a controlled Docker CLI fixture for unavailable
 engines, incompatible images, unsafe reuse, ownership failures, bounded output and

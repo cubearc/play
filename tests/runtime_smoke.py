@@ -94,7 +94,6 @@ class RuntimeSmoke(unittest.TestCase):
         self.assertEqual(host["PidsLimit"], 128)
         self.assertEqual(host["Memory"], 256 * 1024 * 1024)
         self.assertEqual(host["NanoCpus"], 1000000000)
-        self.assertFalse(host["Binds"])
         self.assertFalse(any(mount["Type"] == "bind" for mount in data["Mounts"]))
         self.assertEqual(host["PortBindings"]["7331/tcp"][0]["HostIp"], "127.0.0.1")
         self.assertEqual(data["State"]["Health"]["Status"], "healthy")
@@ -192,10 +191,25 @@ fn main(){
                 save_record(origin, "/api/investigation/progress", {"challenge_key": "local-fixture", "stage_key": "stage-one", "local_status": "in_progress", "revision": 0})
                 artifact = files_api(origin, "/api/investigation/artifacts")[0]
                 self.assertEqual(artifact["status"], "ready")
+                if (ROOT / "frontend/node_modules/.bin/playwright").exists():
+                    subprocess.run(["npm", "run", "test:runner"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url}, timeout=180, check=True)
                 registry = json.loads((home / "workspaces.json").read_text())
                 workspace_id = registry["workspaces"][0]["id"]
                 name = f"cube-play-{workspace_id.replace('-', '')}-local"
                 first = inspect(name)
+                runner_name = name.removesuffix("-local") + "-runner"
+                runner = inspect(runner_name)
+                self.assertEqual(runner["HostConfig"]["NetworkMode"], "none")
+                self.assertFalse(runner["HostConfig"]["Privileged"])
+                self.assertTrue(runner["HostConfig"]["ReadonlyRootfs"])
+                self.assertEqual(runner["HostConfig"]["Memory"], 512 * 1024 * 1024)
+                self.assertEqual(runner["HostConfig"]["PidsLimit"], 64)
+                self.assertFalse(runner["HostConfig"].get("PortBindings"))
+                self.assertFalse(any("docker.sock" in mount["Source"] for mount in runner["Mounts"]))
+                self.assertEqual(runner["Config"]["User"], self.runtime_user)
+                for destination in ["/workspace/source", "/workspace/data"]:
+                    self.assertTrue(any(mount["Destination"] == destination and not mount["RW"] for mount in runner["Mounts"]))
+
                 bindings = [mount for mount in first["Mounts"] if mount["Type"] == "bind"]
                 self.assertEqual(len(bindings), 2)
                 self.assertTrue(all(not mount["RW"] for mount in bindings))
@@ -255,6 +269,7 @@ fn main(){
                 stopped = subprocess.run([*binary, "--stop"], cwd=source, env=environment, capture_output=True, timeout=60)
                 self.assertEqual(stopped.returncode, 0)
                 self.assertFalse(inspect(name)["State"]["Running"])
+                self.assertFalse(inspect(runner_name)["State"]["Running"])
                 self.assertTrue(inspect(f"cube-play-{second_health['workspace']['id'].replace('-', '')}-local")["State"]["Running"])
                 subprocess.run(["docker", "container", "rm", name], check=True, capture_output=True)
                 restarted = launch()
