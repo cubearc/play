@@ -3,11 +3,42 @@
 A local-first investigation workspace powered by the [Cube Rust engine](https://github.com/cubearc/cube).
 Free Lab is the general workspace; structured challenges are optional.
 
-The application foundation serves a React interface and a protected local Rust API.
-Workspace exploration, the Cube terminal, visual analysis, persistence and challenges
+The host launcher opens local directories or files in a protected browser application.
+Workspace exploration, the Cube terminal, visual analysis, investigation persistence and challenges
 are tracked in [GitHub Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).
-The `cube play [path]` launcher is tracked in [#2](https://github.com/cubearc/play/issues/2).
+
+## Start an investigation
+
+Install Docker Engine/Desktop with Linux containers and Compose v2, and start the
+local engine. For source installation, use Rust stable through rustup. With Cube
+and Play checked out side by side, run from this repository:
+
+```sh
+cargo install --locked --path ../cube/crates/cube-cli
+cargo install --locked --path crates/play-launcher
+cube play
+```
+
+The first launch builds a local runtime image from the trusted Play checkout;
+setup can download pinned base images and locked dependencies. Keep the checkout
+available until setup finishes, or specify its absolute path with
+`CUBE_PLAY_RUNTIME_SOURCE`. No application image is assumed to be published.
+
+```sh
+cube play ./investigation
+cube play sample.mp4
+cube play rabbit.cube
+cube play --stop ./investigation
+```
+
+The browser opens after readiness. Empty directories work, source mounts are read-only,
+and separate local volumes survive shutdown/recreation. Direct files select their
+parent workspace and pass a selection hint. Challenge import, inspectors and the
+terminal are delivered by their separate issues; selecting `.cube` never executes it.
+Use `--no-browser` to print a private session link or `--offline` to require an
+already installed runtime without setup downloads. See the [launcher guide](docs/launcher.md)
+for platform support, recovery and the invocation contract.
 
 ## Developer quick start
 
@@ -42,8 +73,8 @@ docker compose down
 Open the session link in the logs. Set `CUBE_PLAY_PORT` to change the host port.
 Compose publishes only on loopback and runs the application non-root with a read-only
 filesystem and bounded resources. No user directories or Docker socket are mounted.
-The current foundation starts Play Local; Cube Runner arrives with the isolated
-terminal capability. Ordinary-user Docker lifecycle belongs to the upcoming launcher.
+The current runtime starts Play Local; Cube Runner arrives with the isolated
+terminal capability. The host launcher manages ordinary-user startup and shutdown.
 
 See [CONTRIBUTING](CONTRIBUTING.md) for development and quality commands,
 [Architecture](docs/architecture.md) for boundaries, and [SECURITY](SECURITY.md)

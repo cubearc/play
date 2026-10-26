@@ -8,6 +8,55 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
+it.each(["file", "challenge"])(
+  "shows the launcher's workspace and selected %s",
+  async (intent) => {
+    window.history.replaceState(
+      null,
+      "",
+      `/#session=private&file=sample.cube&intent=${intent}`,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        .mockResolvedValueOnce(
+          Response.json({
+            status: "ok",
+            version: "0.1.0",
+            workspace: { id: "local-id", name: "Investigation 空" },
+          }),
+        ),
+    );
+    render(<App />);
+    expect(
+      await screen.findByRole("heading", { name: "Investigation 空" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        intent === "challenge" ? "Selected challenge:" : "Selected file:",
+      ),
+    ).toBeVisible();
+    expect(window.location.hash).toBe("");
+  },
+);
+
+it("shows a launched workspace without pretending discovery has selected a file", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      Response.json({
+        status: "ok",
+        version: "0.1.0",
+        workspace: { id: "local-id", name: "Investigation" },
+      }),
+    ),
+  );
+  render(<App />);
+  expect(await screen.findByText("No file is selected.")).toBeVisible();
+});
+
 it("shows the real connection and version without external requests", async () => {
   const fetcher = vi
     .fn()

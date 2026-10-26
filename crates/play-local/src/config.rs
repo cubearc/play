@@ -1,6 +1,47 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    io::Read,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 use axum::http::Uri;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceContext {
+    pub id: uuid::Uuid,
+    pub name: String,
+}
+
+impl WorkspaceContext {
+    fn load(path: &Path) -> Result<Self, String> {
+        let metadata =
+            std::fs::symlink_metadata(path).map_err(|_| "Workspace context is unavailable")?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 8192 {
+            return Err("Workspace context must be a bounded regular file".into());
+        }
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|_| "Workspace context is unavailable")?
+            .take(8193)
+            .read_to_end(&mut bytes)
+            .map_err(|_| "Could not read workspace context")?;
+        if bytes.len() > 8192 {
+            return Err("Workspace context exceeds its size limit".into());
+        }
+        let context: Self = serde_json::from_slice(&bytes)
+            .map_err(|_| "Workspace context is invalid or unsupported")?;
+        if context.id.get_version_num() != 4
+            || context.name.is_empty()
+            || context.name.len() > 4096
+            || context.name.contains('\0')
+        {
+            return Err("Workspace context identity or display name is invalid".into());
+        }
+        Ok(context)
+    }
+}
 
 /// Trusted process configuration. User workspaces are not served as static assets.
 #[derive(Clone, Debug)]
@@ -8,18 +49,41 @@ pub struct Config {
     pub bind: SocketAddr,
     pub origin: String,
     pub frontend_dir: PathBuf,
+    pub workspace: Option<WorkspaceContext>,
+    pub source_dir: Option<PathBuf>,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self, String> {
-        Self::parse(
+        let mut config = Self::parse(
             &std::env::var("CUBE_PLAY_BIND").unwrap_or_else(|_| "127.0.0.1:7331".into()),
             &std::env::var("CUBE_PLAY_ORIGIN").unwrap_or_else(|_| "http://127.0.0.1:7331".into()),
             std::env::var_os("CUBE_PLAY_FRONTEND_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| "frontend/dist".into()),
             std::env::var("CUBE_PLAY_CONTAINER").as_deref() == Ok("1"),
-        )
+        )?;
+        match (
+            std::env::var_os("CUBE_PLAY_WORKSPACE"),
+            std::env::var_os("CUBE_PLAY_SOURCE"),
+        ) {
+            (None, None) => {}
+            (Some(context), Some(source)) => {
+                let source = PathBuf::from(source);
+                if !source.is_absolute() || !source.is_dir() || source.parent().is_none() {
+                    return Err("Workspace source must be an authorized local directory".into());
+                }
+                config.workspace = Some(WorkspaceContext::load(Path::new(&context))?);
+                std::fs::read_dir(&source).map_err(|_|"Workspace source is not readable by the non-root runtime; check Docker file sharing and UID/GID mapping")?;
+                config.source_dir = Some(
+                    source
+                        .canonicalize()
+                        .map_err(|_| "Workspace source is unavailable")?,
+                );
+            }
+            _ => return Err("Workspace context and source must be configured together".into()),
+        }
+        Ok(config)
     }
 
     pub fn parse(
@@ -50,17 +114,54 @@ impl Config {
             bind,
             origin: origin.into(),
             frontend_dir,
+            workspace: None,
+            source_dir: None,
         })
     }
 
     pub fn authority(&self) -> &str {
         self.origin.trim_start_matches("http://")
     }
+
+    pub fn session_cookie(&self) -> String {
+        format!(
+            "cube_play_session_{}",
+            self.origin.rsplit(':').next().unwrap_or("invalid")
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Config;
+    use super::{Config, WorkspaceContext};
+    #[test]
+    fn validates_bounded_workspace_context_without_private_host_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("workspace.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec(
+                &serde_json::json!({"id":uuid::Uuid::new_v4(),"name":"Investigation 空"}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            WorkspaceContext::load(&path).unwrap().name,
+            "Investigation 空"
+        );
+        for value in [
+            serde_json::json!({"id":uuid::Uuid::nil(),"name":"name"}),
+            serde_json::json!({"id":uuid::Uuid::new_v4(),"name":""}),
+            serde_json::json!({"id":uuid::Uuid::new_v4(),"name":"name","root":"private"}),
+        ] {
+            std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+            assert!(WorkspaceContext::load(&path).is_err());
+        }
+        std::fs::write(&path, vec![b' '; 8193]).unwrap();
+        assert!(WorkspaceContext::load(&path).is_err());
+        assert!(WorkspaceContext::load(directory.path()).is_err());
+    }
 
     #[test]
     fn requires_loopback_and_explicit_container_binding() {

@@ -14,6 +14,10 @@ COPY crates/ ./crates/
 RUN cargo +${RUST_VERSION} build --release --locked -p play-local
 
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+ARG CUBE_PLAY_UID=65532
+ARG CUBE_PLAY_GID=65532
+LABEL org.cubearc.play.protocol="1" org.cubearc.play.version="0.1.0"
+RUN test "${CUBE_PLAY_UID}" -gt 0 && mkdir -p /var/lib/cube-play/artifacts /run/cube-play /workspace/source && chown -R "${CUBE_PLAY_UID}:${CUBE_PLAY_GID}" /var/lib/cube-play
 WORKDIR /app
 COPY --from=backend /build/target/release/play-local /usr/local/bin/play-local
 COPY --from=frontend /build/frontend/dist ./frontend
@@ -21,7 +25,7 @@ ENV CUBE_PLAY_BIND=0.0.0.0:7331 \
     CUBE_PLAY_ORIGIN=http://127.0.0.1:7331 \
     CUBE_PLAY_FRONTEND_DIR=/app/frontend \
     CUBE_PLAY_CONTAINER=1
-USER 65532:65532
+USER ${CUBE_PLAY_UID}:${CUBE_PLAY_GID}
 EXPOSE 7331
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=6 CMD ["play-local", "--healthcheck"]
 ENTRYPOINT ["play-local"]

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { connect, type Health, SessionError, takeSessionLink } from "./api";
+import { connect, type Health, SessionError, takeLaunchLink } from "./api";
 
 type Connection =
   | { state: "connecting" }
@@ -29,9 +29,7 @@ function CubeMark({ large = false }: { large?: boolean }) {
 }
 
 export default function App() {
-  const [connectionRequest, setConnectionRequest] = useState(() => ({
-    session: takeSessionLink(),
-  }));
+  const [connectionRequest, setConnectionRequest] = useState(takeLaunchLink);
   const [connection, setConnection] = useState<Connection>({
     state: "connecting",
   });
@@ -93,31 +91,60 @@ export default function App() {
                 : "Connecting"}
           </span>
         </div>
-        <section className="welcome-panel" aria-labelledby="welcome-title">
-          <div className="illustration" aria-hidden="true">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="cube-tile">
-              <CubeMark large />
+        {connection.state === "ready" && connection.health.workspace ? (
+          <section
+            className="session-panel workspace-context"
+            aria-label="Open workspace"
+          >
+            <div>
+              <p className="eyebrow">READ-ONLY SOURCE</p>
+              <h2>{connection.health.workspace.name}</h2>
+              <p>
+                Source files remain unchanged. Generated results use separate
+                local storage.
+              </p>
+              {connectionRequest.selection ? (
+                <p className="selected-file">
+                  <strong>
+                    {connectionRequest.selection.intent === "challenge"
+                      ? "Selected challenge"
+                      : "Selected file"}
+                    :
+                  </strong>{" "}
+                  {connectionRequest.selection.name}
+                </p>
+              ) : (
+                <p className="selected-file">No file is selected.</p>
+              )}
             </div>
-            <span className="coordinate coordinate-top">01 / LOCAL</span>
-            <span className="coordinate coordinate-bottom">CUBE · PLAY</span>
-          </div>
-          <div className="welcome-copy">
-            <span className="section-label">
-              A SPACE TO FOLLOW THE EVIDENCE
-            </span>
-            <h2 id="welcome-title">
-              Stay curious.
-              <br />
-              <span>Keep it local.</span>
-            </h2>
-            <p>
-              A private workspace for investigating files, exploring ideas, and
-              keeping discoveries together.
-            </p>
-          </div>
-        </section>
+          </section>
+        ) : (
+          <section className="welcome-panel" aria-labelledby="welcome-title">
+            <div className="illustration" aria-hidden="true">
+              <div className="orbit orbit-one" />
+              <div className="orbit orbit-two" />
+              <div className="cube-tile">
+                <CubeMark large />
+              </div>
+              <span className="coordinate coordinate-top">01 / LOCAL</span>
+              <span className="coordinate coordinate-bottom">CUBE · PLAY</span>
+            </div>
+            <div className="welcome-copy">
+              <span className="section-label">
+                A SPACE TO FOLLOW THE EVIDENCE
+              </span>
+              <h2 id="welcome-title">
+                Stay curious.
+                <br />
+                <span>Keep it local.</span>
+              </h2>
+              <p>
+                A private workspace for investigating files, exploring ideas,
+                and keeping discoveries together.
+              </p>
+            </div>
+          </section>
+        )}
         <section className="session-panel" aria-labelledby="session-title">
           <div>
             <p className="eyebrow">LOCAL SESSION</p>

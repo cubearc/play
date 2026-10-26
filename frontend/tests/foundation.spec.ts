@@ -13,14 +13,19 @@ test("connects the real UI to the local Rust server and survives refresh", async
   });
   const sessionUrl = process.env.CUBE_PLAY_TEST_URL;
   if (!sessionUrl) throw new Error("Local session was not initialized");
-  await page.goto(sessionUrl);
+  await page.goto(`${sessionUrl}&file=sample+%E7%A9%BA.mp4&intent=file`);
   await expect(
     page.getByRole("heading", { name: "Your connection is ready" }),
   ).toBeVisible();
   await expect(page).toHaveURL("http://127.0.0.1:17331/");
   await expect(page.getByText("Connected locally")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Browser smoke workspace" }),
+  ).toBeVisible();
+  await expect(page.getByText("Selected file:")).toBeVisible();
+  await expect(page.getByText("sample 空.mp4")).toBeVisible();
   const cookie = (await page.context().cookies()).find(
-    (value) => value.name === "cube_play_session",
+    (value) => value.name === "cube_play_session_17331",
   );
   expect(cookie?.httpOnly).toBe(true);
   expect(cookie?.sameSite).toBe("Strict");

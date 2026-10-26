@@ -24,11 +24,20 @@ The session link grants access to that local process; do not share it or include
 in diagnostics. A restart rotates the credential. Session cookies use HTTP on loopback;
 they are not a remote-access or multi-user authentication system.
 
-The runtime is non-root, read-only and resource-bounded, with no privileged mode,
-host paths or Docker socket. Docker isolation is defense in depth, not an absolute
-security boundary. The foundation does not open investigation files or execute
-imported content. Future filesystem, terminal and challenge changes must preserve
-the [documented boundaries](docs/architecture.md).
+The host launcher may control a local Docker daemon. Application containers never
+receive its socket or equivalent privileges. The launcher rejects remote Docker
+endpoints and source roots containing the active or standard Docker socket paths.
+Only the selected source directory and minimal workspace metadata are mounted,
+read-only. Generated data and artifacts use separate named volumes.
+
+The runtime is non-root, read-only and resource-bounded, without privileged mode.
+On Unix it uses the invoking user's UID/GID so private sources remain readable
+without changing their permissions; running the launcher as root is rejected.
+Unsupported Docker file sharing or user mappings fail explicitly. Docker isolation
+is defense in depth, not an absolute security boundary. File discovery, previews,
+terminal execution and challenge validation remain separate implementation work;
+passing a challenge path currently selects it without executing or importing it.
+Future changes must preserve the [documented boundaries](docs/architecture.md).
 
 There are no implicit telemetry calls, uploads or Cloud services. Dependency/image
 downloads occur during setup and builds. Structured diagnostics must omit session

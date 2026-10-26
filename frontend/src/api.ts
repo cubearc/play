@@ -1,19 +1,43 @@
-export type Health = { status: "ok"; version: string };
+export type Health = {
+  status: "ok";
+  version: string;
+  workspace?: { id: string; name: string };
+};
+export type LaunchLink = {
+  session: string | null;
+  selection: { name: string; intent: "file" | "challenge" } | null;
+};
 
 export class SessionError extends Error {}
 
-export function takeSessionLink(): string | null {
-  const session = new URLSearchParams(window.location.hash.slice(1)).get(
-    "session",
-  );
-  if (session !== null) {
+export function takeLaunchLink(): LaunchLink {
+  const hash = window.location.hash.slice(1);
+  if (hash) {
     window.history.replaceState(
       null,
       "",
       window.location.pathname + window.location.search,
     );
   }
-  return session;
+  if (hash.length > 16384) return { session: null, selection: null };
+  const parameters = new URLSearchParams(hash);
+  const name = parameters.get("file");
+  const selection =
+    name &&
+    name.length <= 4096 &&
+    name !== "." &&
+    name !== ".." &&
+    !name.includes("/") &&
+    !name.includes("\0")
+      ? {
+          name,
+          intent:
+            parameters.get("intent") === "challenge"
+              ? ("challenge" as const)
+              : ("file" as const),
+        }
+      : null;
+  return { session: parameters.get("session"), selection };
 }
 
 export async function connect(
@@ -51,5 +75,28 @@ export async function connect(
   ) {
     throw new Error("The local application returned an unexpected response.");
   }
-  return { status: "ok", version: data.version };
+  let workspace: Health["workspace"];
+  if ("workspace" in data) {
+    const value = data.workspace;
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("id" in value) ||
+      typeof value.id !== "string" ||
+      !("name" in value) ||
+      typeof value.name !== "string" ||
+      !value.name ||
+      value.name.length > 4096
+    ) {
+      throw new Error(
+        "The local application returned an unexpected workspace context.",
+      );
+    }
+    workspace = { id: value.id, name: value.name };
+  }
+  return {
+    status: "ok",
+    version: data.version,
+    ...(workspace ? { workspace } : {}),
+  };
 }

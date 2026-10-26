@@ -10,8 +10,6 @@ use subtle::ConstantTimeEq;
 
 use crate::AppState;
 
-pub const SESSION_COOKIE: &str = "cube_play_session";
-
 #[derive(Serialize)]
 struct ErrorBody {
     code: &'static str,
@@ -88,7 +86,7 @@ pub async fn require_session(
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(';'))
         .filter_map(|cookie| cookie.trim().split_once('='))
-        .filter(|(name, _)| *name == SESSION_COOKIE)
+        .filter(|(name, _)| *name == state.config.session_cookie())
         .collect();
     if cookies.len() != 1 || !matches_secret(cookies[0].1, &state.secret) {
         return error(
@@ -116,7 +114,8 @@ pub async fn open_session(State(state): State<AppState>, request: Request) -> Re
     }
     let mut response = StatusCode::NO_CONTENT.into_response();
     let cookie = format!(
-        "{SESSION_COOKIE}={}; HttpOnly; SameSite=Strict; Path=/api",
+        "{}={}; HttpOnly; SameSite=Strict; Path=/api",
+        state.config.session_cookie(),
         state.secret
     );
     response.headers_mut().insert(

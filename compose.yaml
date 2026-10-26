@@ -1,12 +1,16 @@
 services:
   play-local:
-    build: .
+    build:
+      context: .
+      args:
+        CUBE_PLAY_UID: "${CUBE_PLAY_UID:-65532}"
+        CUBE_PLAY_GID: "${CUBE_PLAY_GID:-65532}"
     ports:
       - "127.0.0.1:${CUBE_PLAY_PORT:-7331}:7331"
     environment:
       CUBE_PLAY_ORIGIN: "http://127.0.0.1:${CUBE_PLAY_PORT:-7331}"
     read_only: true
-    user: "65532:65532"
+    user: "${CUBE_PLAY_UID:-65532}:${CUBE_PLAY_GID:-65532}"
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     init: true

@@ -250,6 +250,20 @@ h1 {
   white-space: nowrap;
   font-family: monospace;
 }
+.workspace-context {
+  margin-top: 0;
+  min-height: 220px;
+  background: #edf2ed;
+}
+.workspace-context p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #55685b;
+}
+.workspace-context .selected-file {
+  margin-top: 20px;
+  overflow-wrap: anywhere;
+}
 .button {
   background: var(--color-accent);
   color: #fff;

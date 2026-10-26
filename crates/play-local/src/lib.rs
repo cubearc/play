@@ -5,7 +5,9 @@ mod security;
 use std::sync::Arc;
 
 use axum::{
-    Json, Router, middleware,
+    Json, Router,
+    extract::State,
+    middleware,
     routing::{get, post},
 };
 use serde::Serialize;
@@ -36,13 +38,12 @@ pub fn app(config: Config, secret: String) -> Router {
         config: Arc::new(config),
         secret: secret.into(),
     };
-    let api =
-        Router::new()
-            .route("/health", get(health))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                security::require_session,
-            ));
+    let api = Router::new()
+        .route("/health", get(workspace_health))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            security::require_session,
+        ));
     Router::new()
         .nest("/api", api)
         .route("/api/session", post(security::open_session))
@@ -60,5 +61,23 @@ async fn health() -> Json<Health> {
     Json(Health {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+#[derive(Serialize)]
+struct WorkspaceHealth {
+    #[serde(flatten)]
+    health: Health,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace: Option<config::WorkspaceContext>,
+}
+
+async fn workspace_health(State(state): State<AppState>) -> Json<WorkspaceHealth> {
+    Json(WorkspaceHealth {
+        health: Health {
+            status: "ok",
+            version: env!("CARGO_PKG_VERSION"),
+        },
+        workspace: state.config.workspace.clone(),
     })
 }

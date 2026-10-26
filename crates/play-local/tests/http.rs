@@ -24,7 +24,7 @@ fn request(path: &str) -> axum::http::request::Builder {
 
 fn authenticated(path: &str) -> Request<Body> {
     request(path)
-        .header(header::COOKIE, format!("cube_play_session={SECRET}"))
+        .header(header::COOKIE, format!("cube_play_session_7331={SECRET}"))
         .body(Body::empty())
         .unwrap()
 }
@@ -82,9 +82,9 @@ async fn exchanges_fragment_capability_for_httponly_same_site_cookie() {
 async fn rejects_missing_invalid_and_ambiguous_sessions() {
     for cookie in [
         None,
-        Some("cube_play_session=wrong".into()),
+        Some("cube_play_session_7331=wrong".into()),
         Some(format!(
-            "cube_play_session={SECRET}; cube_play_session={SECRET}"
+            "cube_play_session_7331={SECRET}; cube_play_session_7331={SECRET}"
         )),
         Some("other=value".into()),
     ] {

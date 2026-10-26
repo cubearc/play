@@ -1,7 +1,8 @@
 # Architecture
 
 Cube Play is a local application with one Rust API and one React interface.
-The foundation contains `crates/play-local` and `frontend`; it has no database,
+The application contains `crates/play-local`, the host-side `crates/play-launcher`
+and `frontend`; it has no database,
 operation registry, challenge parser or idle execution service.
 
 ## Request boundary
@@ -15,6 +16,9 @@ forwarded-host headers are rejected. There is no CORS allowance.
 A random per-process capability appears only in the explicit startup URL fragment.
 The frontend removes it before sending requests, exchanges it in an Authorization
 header and receives an HttpOnly, SameSite=Strict session cookie scoped to `/api`.
+Cookie names include the local port so simultaneous workspaces do not overwrite
+each other's sessions. Authenticated health includes bounded UUID/name context;
+public readiness never includes workspace metadata or host paths.
 Credential comparison is constant-time. No token is stored in browser persistent
 storage; refresh uses the cookie, and process restart invalidates it. This protects
 the local browser boundary, not an attacker controlling the host account.
@@ -40,7 +44,10 @@ socket or equivalent host control. Runner networking must be disabled by default
 its private session transport must work within that constraint, such as a constrained
 Unix socket. No runner port is published.
 
-The Compose foundation publishes Play Local only on `127.0.0.1`, runs UID/GID 65532
+The Compose development default uses UID/GID 65532; the host launcher builds Unix
+runtime images for the calling user's UID/GID so private source files remain readable
+without chmod or root. Windows uses an unprivileged UID with Desktop sharing. Generated
+Compose configuration publishes Play Local only on `127.0.0.1`
 with dropped capabilities/no-new-privileges, a read-only root filesystem, bounded
 CPU/memory/processes and a Compose bridge network. Play Local needs a reachable
 loopback-published HTTP port; Docker Desktop versions can make internal-only bridges
@@ -50,6 +57,14 @@ Runner will use its separate network-disabled boundary. Container wildcard bindi
 explicit process configuration; never pair it with non-loopback host publication.
 Images and build dependencies are pinned by verified digest/lockfile. Docker is
 defense in depth, not an absolute sandbox.
+
+The [launcher contract](launcher.md) defines installation, path resolution, stable
+workspace IDs, bounded host commands, locking, reuse, cancellation and platform limits.
+Local host JSON configuration authorizes roots and identifies runtime resources;
+investigation records remain the responsibility of SQLite. The source is read-only,
+data/artifacts use separate named volumes, and no shutdown removes them. Ownership
+labels and runtime configuration are checked before reuse. Remote Docker contexts
+and source roots containing Docker control sockets are rejected.
 
 ## Core and storage boundaries
 

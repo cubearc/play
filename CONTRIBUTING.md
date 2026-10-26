@@ -24,6 +24,7 @@ From the root:
 
 ```sh
 cargo fmt --all -- --check
+rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --locked
 npm ci --prefix frontend
@@ -52,9 +53,20 @@ Test the real Compose image and runtime from the root:
 python3 tests/runtime_smoke.py
 ```
 
-The test uses a unique Compose project and an available loopback port, builds and
-starts the image, checks HTTP/security/container settings and always removes its
-own containers. It does not stop unrelated containers or remove user data.
+The suite uses unique Compose projects and available loopback ports, builds the
+image, checks HTTP/security/container settings and exercises the real launcher with
+empty/private sources, literal paths, concurrent reuse, two workspaces, session
+isolation, browser readiness, stop and recreation with persistent test volumes.
+Only fixture-owned containers and temporary test volumes are removed. Set
+`CUBE_PLAY_CUBE` to a trusted built Cube executable and `CUBE_PLAY_LAUNCHER` to the
+Play executable to additionally exercise the real cross-repository CLI handoff.
+
+Rust integration tests also use a controlled Docker CLI fixture for unavailable
+engines, incompatible images, unsafe reuse, ownership failures, bounded output and
+process cleanup. These do not substitute for the real Docker suite. The fixture
+is compiled by rustc during tests and formatted separately because it is not a
+runtime binary target. Native Rust tests run on Linux, macOS and Windows; real
+Docker integration runs on Linux CI and can be reproduced on Docker Desktop.
 
 ## Coverage
 
