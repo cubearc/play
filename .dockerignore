@@ -1,0 +1,10 @@
+.git
+.env
+target
+coverage
+lcov.info
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/test-results
+frontend/playwright-report

@@ -1,0 +1,348 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --color-ink: #192b28;
+  --color-muted: #65716b;
+  --color-accent: #216853;
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: #f7f8fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid #337c65;
+  outline-offset: 5px;
+  border-radius: 6px;
+}
+.app-header {
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 44px;
+  border-bottom: 1px solid #e2e7e5;
+  background: #fff;
+}
+.brand {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  color: var(--color-ink);
+  text-decoration: none;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.9px;
+}
+.brand-light {
+  font-weight: 400;
+  margin-left: 4px;
+  color: #52635d;
+}
+.cube-mark {
+  width: 35px;
+  height: 35px;
+  color: var(--color-accent);
+}
+.privacy-badge {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: #52635d;
+}
+.privacy-icon {
+  font-size: 27px;
+  color: var(--color-accent);
+}
+.workspace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  font-weight: 650;
+  color: #586d61;
+  margin: 0 0 11px;
+}
+h1 {
+  font-size: clamp(24px, 3.5vw, 31px);
+  font-weight: 550;
+  line-height: 1.2;
+  letter-spacing: -1.1px;
+  margin: 0;
+}
+.connection-badge {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: #6a715f;
+  border: 1px solid #dfe5df;
+  border-radius: 30px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+.connection-badge.connected {
+  color: #25644f;
+  background: #edf5ef;
+  border-color: #dce9df;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.welcome-panel {
+  min-height: 378px;
+  background: #edf2ed;
+  border: 1px solid #e0e7df;
+  border-radius: 13px;
+  display: grid;
+  grid-template-columns: 44% 56%;
+  align-items: center;
+  overflow: hidden;
+}
+.illustration {
+  height: 100%;
+  min-height: 378px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background-image: radial-gradient(#cdd8cd 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 18%,
+    #000 82%,
+    transparent
+  );
+}
+.cube-tile {
+  width: 130px;
+  height: 130px;
+  background: #fbfdf9;
+  border: 1px solid #ccd9ca;
+  border-radius: 27px;
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 16px 48px #425c4310,
+    0 2px 2px #425c4308;
+  transform: rotate(-9deg);
+  z-index: 1;
+}
+.cube-mark.large {
+  width: 65px;
+  height: 65px;
+  transform: rotate(9deg);
+  color: #386952;
+}
+.orbit {
+  position: absolute;
+  border: 1px solid #cdd9cc;
+  border-radius: 50%;
+  width: 240px;
+  height: 240px;
+}
+.orbit-two {
+  width: 300px;
+  height: 300px;
+  border-style: dashed;
+  opacity: 0.7;
+}
+.coordinate {
+  position: absolute;
+  font-size: 8px;
+  font-family: monospace;
+  letter-spacing: 0.1em;
+  color: #778f79;
+}
+.coordinate-top {
+  top: 49px;
+  left: 25%;
+}
+.coordinate-bottom {
+  bottom: 47px;
+  right: 22%;
+}
+.welcome-copy {
+  padding: 40px 55px 40px 20px;
+}
+.section-label {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  font-weight: 650;
+  color: #506c56;
+}
+.welcome-copy h2 {
+  font-weight: 450;
+  font-size: clamp(35px, 4.8vw, 52px);
+  line-height: 1.13;
+  letter-spacing: -2px;
+  margin: 19px 0;
+}
+.welcome-copy h2 span {
+  color: #6a876a;
+}
+.welcome-copy p {
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 355px;
+  color: #55685b;
+  margin: 0;
+}
+.session-panel {
+  border: 1px solid #e0e5e3;
+  border-radius: 11px;
+  padding: 28px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  background: #fff;
+  margin-top: 22px;
+}
+.session-panel .eyebrow {
+  font-size: 9px;
+  margin-bottom: 9px;
+}
+.session-panel h2 {
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.3px;
+  margin: 0 0 8px;
+}
+.session-panel p[role="status"] {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+  color: #69766e;
+  max-width: 580px;
+}
+.session-detail {
+  font-size: 11px;
+  color: #5d7062;
+  white-space: nowrap;
+  font-family: monospace;
+}
+.button {
+  background: var(--color-accent);
+  color: #fff;
+  border: 1px solid var(--color-accent);
+  border-radius: 7px;
+  padding: 10px 15px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.button:hover {
+  background: #184f40;
+}
+.workspace-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 29px;
+  color: #5e7065;
+  font-size: 10px;
+}
+.workspace-footer span:last-child {
+  font-size: 8px;
+  letter-spacing: 0.15em;
+}
+@media (max-width: 640px) {
+  .app-header {
+    height: 72px;
+    padding: 0 24px;
+  }
+  .privacy-badge {
+    font-size: 10px;
+  }
+  .brand {
+    font-size: 21px;
+    gap: 9px;
+  }
+  .workspace-heading {
+    flex-wrap: wrap;
+    gap: 17px;
+  }
+  .connection-badge {
+    font-size: 10px;
+  }
+  .welcome-panel {
+    grid-template-columns: 1fr;
+  }
+  .illustration {
+    min-height: 235px;
+  }
+  .orbit {
+    width: 175px;
+    height: 175px;
+  }
+  .orbit-two {
+    width: 215px;
+    height: 215px;
+  }
+  .cube-tile {
+    width: 105px;
+    height: 105px;
+  }
+  .coordinate-top {
+    top: 22px;
+  }
+  .coordinate-bottom {
+    bottom: 22px;
+  }
+  .welcome-copy {
+    padding: 15px 28px 32px;
+  }
+  .welcome-copy h2 {
+    font-size: 40px;
+  }
+  .session-panel {
+    padding: 23px;
+    flex-direction: column;
+    align-items: start;
+    gap: 18px;
+  }
+  .workspace-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+  }
+}

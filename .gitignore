@@ -1,0 +1,10 @@
+/target/
+/coverage/
+/lcov.info
+/frontend/node_modules/
+/frontend/dist/
+/frontend/coverage/
+/frontend/playwright-report/
+/frontend/test-results/
+.env
+.DS_Store

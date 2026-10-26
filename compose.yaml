@@ -1,0 +1,18 @@
+services:
+  play-local:
+    build: .
+    ports:
+      - "127.0.0.1:${CUBE_PLAY_PORT:-7331}:7331"
+    environment:
+      CUBE_PLAY_ORIGIN: "http://127.0.0.1:${CUBE_PLAY_PORT:-7331}"
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 1
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    stop_grace_period: 10s
