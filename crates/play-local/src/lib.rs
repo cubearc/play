@@ -1,4 +1,5 @@
 //! Local application boundary. Cube Core owns investigation algorithms.
+mod challenges;
 pub mod config;
 pub mod lab;
 mod persistence;
@@ -68,6 +69,7 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
         .route("/workspace/media", get(workspace::media))
         .route("/workspace/import", post(workspace::import))
         .merge(persistence::routes())
+        .merge(challenges::routes())
         .merge(terminal::routes())
         .merge(lab::routes())
         .route_layer(middleware::from_fn_with_state(

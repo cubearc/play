@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { ArtifactLibrary, TextLab } from "./ArtifactLibrary";
+import { ChallengePanel, type FileSelection } from "./ChallengePanel";
 import { FileWorkspace } from "./FileWorkspace";
 import { InvestigationNotes } from "./InvestigationNotes";
 import {
@@ -89,6 +90,8 @@ function SavedWorkspace({
   reload: () => void;
 }) {
   const [title, setTitle] = useState(investigation.title);
+  const [requestedSelection, setRequestedSelection] =
+    useState<FileSelection | null>(null);
   const [selection, setSelection] = useState<View["selected"]>(
     initialSelection
       ? { store: "source", path: initialSelection.name }
@@ -216,7 +219,13 @@ function SavedWorkspace({
           <p role="status">{status}</p>
         )}
       </section>
+      <ChallengePanel
+        selected={selection}
+        launch={initialSelection}
+        onOpen={setRequestedSelection}
+      />
       <FileWorkspace
+        requestedSelection={requestedSelection}
         initialSelection={initialSelection}
         initialView={initialSelection ? undefined : investigation.view}
         onViewChange={saveView}

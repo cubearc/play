@@ -1,4 +1,5 @@
 //! One local investigation per authorized workspace; binary content stays on disk.
+mod challenges;
 mod http;
 pub(crate) mod library;
 mod paths;
@@ -23,7 +24,7 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 pub(crate) use http::routes;
-pub(crate) use records::View;
+pub(crate) use records::{LocalStatus, Progress, View};
 static MIGRATIONS: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 const APPLICATION_ID: i64 = 1129335897;
 

@@ -921,3 +921,8 @@ summary:focus-visible {
   background: white;
   color: var(--color-ink);
 }
+
+.inert-instructions {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

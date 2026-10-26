@@ -100,9 +100,9 @@ and mount them read-only by default. Output storage is separate; exports require
 explicit non-destructive destination authorization. Resolve symlinks, reject traversal
 and bound discovery, parsing and operations before processing untrusted files.
 
-Challenge definitions are non-executable data, separate from private progress/answers.
-Current Core JSON recipes are not stage manifests or a full `.cube` DSL. Finalize a
-minimal versioned compatibility/security contract before challenge import. Free Lab
+[Local challenge definitions](challenges.md) are bounded non-executable JSON data,
+separate from private progress/answers. Current Core JSON recipes are not stage
+manifests or a full `.cube` DSL. Import never invokes an executor or fetches assets. Free Lab
 must work independently of challenges. Cloud services, remote execution, collaboration
 and speculative synchronization frameworks are outside the local MVP.
 

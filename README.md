@@ -75,6 +75,9 @@ local session. A plain browser visit without the session link shows recovery gui
 Open an image with **Open visual Lab** for Core-backed pixel values, histograms,
 channel previews and exact transformations. See the [visual Lab guide](docs/visual-lab.md).
 
+Import a selected `.cube` JSON manifest or run `cube play rabbit.cube` for optional
+[local challenge stages](docs/challenges.md). Workspaces remain usable without a challenge.
+
 ## Docker development
 
 Docker Engine/Desktop and Docker Compose v2 are optional for native development and

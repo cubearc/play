@@ -13,9 +13,11 @@ type Selected = { store: Store; path: string };
 
 export function FileWorkspace({
   initialSelection,
+  requestedSelection,
   initialView,
   onViewChange,
 }: {
+  requestedSelection?: Selected | null;
   initialView?: View | undefined;
   onViewChange?: (view: View) => void;
   initialSelection: { name: string; intent: "file" | "challenge" } | null;
@@ -41,6 +43,12 @@ export function FileWorkspace({
       ? { store: "source", path: initialSelection.name }
       : (initialView?.selected ?? null),
   );
+  useEffect(() => {
+    if (!requestedSelection) return;
+    const parent = requestedSelection.path.split("/").slice(0, -1).join("/");
+    setSelected(requestedSelection);
+    setQuery({ store: requestedSelection.store, path: parent, offset: 0 });
+  }, [requestedSelection]);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [importing, setImporting] = useState(false);

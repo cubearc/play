@@ -587,3 +587,181 @@ async fn notebook_names_history_exports_conflicts_and_missing_references_survive
         503
     );
 }
+
+fn challenge_manifest() -> Value {
+    json!({"kind":"cube-play-challenge","format_version":1,"id":"original","title":"Original local challenge","description":"No private answer or executable content.","artifacts":[{"id":"image","path":"sample.png"}],"stages":[{"id":"first","title":"Inspect","instructions":"<script>never execute</script>","steps":[{"id":"read","instructions":"Read the image."}],"hints":["Try the green channel."],"artifacts":["image"],"answer_type":"bytes"},{"id":"second","title":"Record","instructions":"Keep a local hypothesis."}]})
+}
+#[tokio::test]
+async fn non_executable_challenge_validation_navigation_and_resume() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let source = directory.path().join("source");
+    std::fs::write(
+        source.join("sample.png"),
+        include_bytes!("../../../tests/fixtures/sample.png"),
+    )
+    .unwrap();
+    let manifest = challenge_manifest();
+    std::fs::write(source.join("rabbit.cube"), manifest.to_string()).unwrap();
+    let import = json!({"store":"source","path":"rabbit.cube"});
+    let (status, state) = server
+        .api("POST", "/api/challenges/import", import.clone())
+        .await;
+    assert_eq!(status, 200, "{state}");
+    let key = state["active"]["definition"]["key"].as_str().unwrap();
+    assert_eq!(state["active"]["artifacts"][0]["path"], "sample.png");
+    assert_eq!(state["active"]["stage"], "first");
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/challenges/stage",
+                json!({"key":key,"stage":"second","revision":1})
+            )
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/challenges/stage",
+                json!({"key":key,"stage":"first","revision":1})
+            )
+            .await
+            .0,
+        409
+    );
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/challenges/stage",
+                json!({"key":key,"stage":"missing","revision":2})
+            )
+            .await
+            .0,
+        404
+    );
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/challenges/progress",
+                json!({"key":key,"stage":"second","revision":0,"status":"in_progress"})
+            )
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/challenges/progress",
+                json!({"key":key,"stage":"missing","revision":0,"status":"completed"})
+            )
+            .await
+            .0,
+        400
+    );
+    let mut cases = Vec::new();
+    for field in ["script", "commands", "answers"] {
+        let mut bad = manifest.clone();
+        bad[field] = json!("never execute");
+        cases.push(bad);
+    }
+    let mut bad = manifest.clone();
+    bad["format_version"] = json!(2);
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["stages"][1]["id"] = json!("first");
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["artifacts"][0]["path"] = json!("../outside");
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["artifacts"][0]["path"] = json!("missing.png");
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["stages"][0]["artifacts"] = json!(["absent"]);
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["stages"][0]["hints"] = json!(["x".repeat(8193)]);
+    cases.push(bad);
+    let mut bad = manifest.clone();
+    bad["stages"] = json!([]);
+    cases.push(bad);
+    for bad in cases {
+        std::fs::write(source.join("bad.cube"), bad.to_string()).unwrap();
+        assert_ne!(
+            server
+                .api(
+                    "POST",
+                    "/api/challenges/import",
+                    json!({"store":"source","path":"bad.cube"})
+                )
+                .await
+                .0,
+            200
+        );
+    }
+    for bad in [
+        "{\"kind\":\"x\",\"kind\":\"cube-play-challenge\"}".to_owned(),
+        "[".repeat(32),
+        " ".repeat(256 * 1024 + 1),
+    ] {
+        std::fs::write(source.join("bad.cube"), bad).unwrap();
+        assert_ne!(
+            server
+                .api(
+                    "POST",
+                    "/api/challenges/import",
+                    json!({"store":"source","path":"bad.cube"})
+                )
+                .await
+                .0,
+            200
+        );
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("/etc/passwd", source.join("escape")).unwrap();
+        let mut bad = manifest.clone();
+        bad["artifacts"][0]["path"] = json!("escape");
+        std::fs::write(source.join("bad.cube"), bad.to_string()).unwrap();
+        assert_eq!(
+            server
+                .api(
+                    "POST",
+                    "/api/challenges/import",
+                    json!({"store":"source","path":"bad.cube"})
+                )
+                .await
+                .0,
+            403
+        );
+    }
+    assert_eq!(
+        server.api("GET", "/api/challenges", Value::Null).await.1["challenges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (status, state) = server.api("POST", "/api/challenges/import", import).await;
+    assert_eq!(status, 200, "{state}");
+    assert_eq!(state["active"]["stage"], "second");
+    assert_eq!(
+        state["active"]["progress"][0]["local_status"],
+        "in_progress"
+    );
+    assert_eq!(
+        std::fs::read_to_string(source.join("rabbit.cube")).unwrap(),
+        manifest.to_string()
+    );
+}

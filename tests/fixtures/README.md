@@ -28,3 +28,7 @@ std::fs::write("indexed.png", image.encode_png()?)?;
 
 Its native index histogram is 0→1, 1→2, 2→1; expanded pixel (1, 0)
 is RGBA [40, 50, 60, 128]. No browser rendering is used to establish these values.
+
+`rabbit.cube` is an original version-1 public challenge fixture referencing
+`sample.png`. Its hostile-looking instruction is inert text used to verify that
+challenge import never evaluates scripts or requires private answers.

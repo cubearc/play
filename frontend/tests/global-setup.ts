@@ -31,7 +31,13 @@ export default async function setup() {
     resolve(source, "unknown.xyz"),
     Buffer.from([0, 255, 17, 42]),
   );
-  for (const name of ["sample.png", "indexed.png", "sample.mp4", "sample.wav"])
+  for (const name of [
+    "sample.png",
+    "indexed.png",
+    "sample.mp4",
+    "sample.wav",
+    "rabbit.cube",
+  ])
     await copyFile(resolve("../tests/fixtures", name), resolve(source, name));
   await writeFile(
     resolve(source, "malformed.png"),

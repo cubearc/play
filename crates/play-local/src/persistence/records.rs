@@ -57,7 +57,7 @@ pub(super) struct Note {
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Progress {
+pub(crate) struct Progress {
     pub challenge_key: String,
     pub stage_key: String,
     pub revision: i64,
@@ -65,7 +65,7 @@ pub(super) struct Progress {
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum LocalStatus {
+pub(crate) enum LocalStatus {
     Unstarted,
     InProgress,
     Completed,
@@ -192,11 +192,11 @@ impl Database {
         transaction.commit().await?;
         Ok(value.revision + 1)
     }
-    pub(super) async fn progress(&self) -> Result<Vec<serde_json::Value>> {
+    pub(crate) async fn progress(&self) -> Result<Vec<serde_json::Value>> {
         let rows=sqlx::query("SELECT challenge_key,stage_key,revision,local_status FROM progress ORDER BY challenge_key,stage_key LIMIT 1000").fetch_all(&self.pool).await?;
         rows.into_iter().map(|row|Ok(serde_json::json!({"challenge_key":row.try_get::<String,_>("challenge_key")?,"stage_key":row.try_get::<String,_>("stage_key")?,"revision":row.try_get::<i64,_>("revision")?,"local_status":row.try_get::<String,_>("local_status")?}))).collect()
     }
-    pub(super) async fn save_progress(&self, value: Progress) -> Result<i64> {
+    pub(crate) async fn save_progress(&self, value: Progress) -> Result<i64> {
         if !bounded(&value.challenge_key, 128)
             || !bounded(&value.stage_key, 128)
             || value.revision < 0
