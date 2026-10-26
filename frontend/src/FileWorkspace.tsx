@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { FileInspector } from "./FileInspector";
+import type { View } from "./investigation-api";
 import {
   importFile,
   type Listing,
@@ -12,19 +13,33 @@ type Selected = { store: Store; path: string };
 
 export function FileWorkspace({
   initialSelection,
+  initialView,
+  onViewChange,
 }: {
+  initialView?: View | undefined;
+  onViewChange?: (view: View) => void;
   initialSelection: { name: string; intent: "file" | "challenge" } | null;
 }) {
   const [query, setQuery] = useState<{
     store: Store;
     path: string;
     offset: number;
-  }>({ store: "source", path: "", offset: 0 });
+  }>(() =>
+    initialView
+      ? {
+          store: initialView.store,
+          path: initialView.path,
+          offset: initialView.offset,
+        }
+      : { store: "source", path: "", offset: 0 },
+  );
   const { store, path, offset } = query;
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected | null>(() =>
-    initialSelection ? { store: "source", path: initialSelection.name } : null,
+    initialSelection
+      ? { store: "source", path: initialSelection.name }
+      : (initialView?.selected ?? null),
   );
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
@@ -72,6 +87,9 @@ export function FileWorkspace({
     return () => controller.abort();
   }, [query]);
   useEffect(() => () => upload.current?.abort(), []);
+  useEffect(() => {
+    onViewChange?.({ ...query, selected });
+  }, [query, selected, onViewChange]);
 
   function navigate(nextStore: Store, nextPath: string) {
     setQuery({ store: nextStore, path: nextPath, offset: 0 });

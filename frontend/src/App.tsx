@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { connect, type Health, SessionError, takeLaunchLink } from "./api";
-import { FileWorkspace } from "./FileWorkspace";
+import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
 type Connection =
   | { state: "connecting" }
@@ -149,7 +149,9 @@ export default function App() {
           </section>
         )}
         {connection.state === "ready" && connection.health.workspace && (
-          <FileWorkspace initialSelection={connectionRequest.selection} />
+          <InvestigationWorkspace
+            initialSelection={connectionRequest.selection}
+          />
         )}
         <section className="session-panel" aria-labelledby="session-title">
           <div>

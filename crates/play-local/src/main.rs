@@ -38,9 +38,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let secret = play_local::session_secret();
     println!("Open Cube Play: {}/#session={secret}", config.origin);
     tracing::info!("Local application is ready");
-    axum::serve(listener, play_local::app(config, secret))
+    let (application, persistence) = play_local::application(config, secret);
+    axum::serve(listener, application)
         .with_graceful_shutdown(shutdown())
         .await?;
+    persistence
+        .close()
+        .await
+        .map_err(|error| std::io::Error::other(error.2))?;
     Ok(())
 }
 

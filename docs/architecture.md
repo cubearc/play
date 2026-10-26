@@ -2,8 +2,8 @@
 
 Cube Play is a local application with one Rust API and one React interface.
 The application contains `crates/play-local`, the host-side `crates/play-launcher`
-and `frontend`; it has no database,
-operation registry, challenge parser or idle execution service.
+and `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
+no second operation registry, challenge parser or idle execution service.
 
 ## Request boundary
 
@@ -86,8 +86,9 @@ image/media operations can use direct typed APIs. Preserve explicit binary/text
 representations, stable IDs and engine/adapter compatibility versions. Do not parse
 human terminal output into Lab results or copy algorithms into TypeScript.
 
-The persistence capability will add SQLx/SQLite with versioned migrations for local
-metadata, notes, history, progress and references. Large binary artifacts live in
+The [persistence foundation](persistence.md) uses SQLx/SQLite with versioned migrations
+for local metadata, notes, sessions, progress, saved navigation and imported-file
+references. Large binary artifacts live in
 separate filesystem storage on persistent volumes. Authorize source roots explicitly
 and mount them read-only by default. Output storage is separate; exports require
 explicit non-destructive destination authorization. Resolve symlinks, reject traversal

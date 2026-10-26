@@ -52,6 +52,7 @@ pub struct Config {
     pub workspace: Option<WorkspaceContext>,
     pub source_dir: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
+    pub state_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -91,6 +92,13 @@ impl Config {
             }
             config.data_dir = Some(path);
         }
+        if let Some(path) = std::env::var_os("CUBE_PLAY_STATE") {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() || path.parent().is_none() {
+                return Err("CUBE_PLAY_STATE must be an absolute private directory".into());
+            }
+            config.state_dir = Some(path);
+        }
         Ok(config)
     }
 
@@ -125,6 +133,7 @@ impl Config {
             workspace: None,
             source_dir: None,
             data_dir: None,
+            state_dir: None,
         })
     }
 

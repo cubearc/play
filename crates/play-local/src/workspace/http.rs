@@ -80,15 +80,29 @@ pub(crate) async fn files(
     selection: std::result::Result<Query<Selection>, QueryRejection>,
 ) -> Result<Json<super::Listing>> {
     let selection = query(selection)?;
+    let database = state.database().await?;
     let workspace = workspace(&state)?;
     let permit = permit(&workspace).await?;
     let offset = selection.offset.try_into().map_err(|_| super::invalid())?;
-    let result = tokio::task::spawn_blocking(move || {
+    let mut result = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         workspace.listing(selection.store, &selection.path, offset)
     })
     .await
     .map_err(|_| failed())??;
+    if selection.store == Store::Imports
+        && let Some(database) = database
+    {
+        for entry in &mut result.entries {
+            if let Some(path) = &entry.path {
+                match database.authorize_import(path).await {
+                    Ok(()) => {}
+                    Err(error) if error.1 == "artifact_unavailable" => entry.accessible = false,
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+    }
     Ok(Json(result))
 }
 
@@ -97,8 +111,14 @@ pub(crate) async fn inspection(
     selection: std::result::Result<Query<Selection>, QueryRejection>,
 ) -> Result<Json<super::inspect::Inspection>> {
     let selection = query(selection)?;
+    let database = state.database().await?;
     let workspace = workspace(&state)?;
     let permit = permit(&workspace).await?;
+    if selection.store == Store::Imports
+        && let Some(database) = database
+    {
+        database.authorize_import(&selection.path).await?;
+    }
     let result = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         workspace.inspect(selection.store, &selection.path, selection.offset)
@@ -157,8 +177,14 @@ pub(crate) async fn media(
     if selection.offset != 0 {
         return Err(super::invalid());
     }
+    let database = state.database().await?;
     let workspace = workspace(&state)?;
     let permit = permit(&workspace).await?;
+    if selection.store == Store::Imports
+        && let Some(database) = database
+    {
+        database.authorize_import(&selection.path).await?;
+    }
     let prepared =
         tokio::task::spawn_blocking(move || workspace.media(selection.store, &selection.path))
             .await
@@ -241,6 +267,7 @@ pub(crate) async fn import(
     request: Request,
 ) -> Result<Response> {
     let selection = query(selection)?;
+    let database = state.database().await?;
     let workspace = workspace(&state)?;
     let permit = permit(&workspace).await?;
     let import_workspace = workspace.clone();
@@ -250,7 +277,7 @@ pub(crate) async fn import(
         .map_err(|_| failed())??;
     let mut file = tokio::fs::File::from_std(file);
     let mut body = request.into_body().into_data_stream();
-    tokio::time::timeout(Duration::from_secs(30),async {
+    let length=tokio::time::timeout(Duration::from_secs(30),async {
         let mut length=0u64;
         while let Some(chunk)=body.next().await {
             let chunk=chunk.map_err(|_|FileError(StatusCode::BAD_REQUEST,"upload_interrupted","The import was interrupted or exceeded its body limit; no completed file was created."))?;
@@ -259,17 +286,40 @@ pub(crate) async fn import(
             file.write_all(&chunk).await?;
         }
         file.sync_all().await?;
-        Ok::<_,FileError>(())
+        Ok::<_,FileError>(length)
     }).await.map_err(|_|FileError(StatusCode::REQUEST_TIMEOUT,"upload_timeout","The import exceeded 30 seconds. Its temporary file was removed; retry with a smaller file."))??;
     drop(file);
-    tokio::task::spawn_blocking(move || {
-        pending.commit()?;
-        drop(pending);
+    let reservation = if let Some(database) = &database {
+        Some(
+            database
+                .reserve_import(&selection.name, &pending.temporary, length)
+                .await?,
+        )
+    } else {
+        None
+    };
+    // Finish filesystem/DB publication even if the HTTP client disconnects.
+    tokio::spawn(async move {
+        let committed = tokio::task::spawn_blocking(move || {
+            pending.commit()?;
+            drop(pending);
+            Ok::<_, FileError>(())
+        })
+        .await
+        .map_err(|_| failed())?;
+        if let (Some(database), Some(id)) = (&database, &reservation) {
+            if committed.is_ok() {
+                database.finish_import(id).await?;
+            } else {
+                database.cancel_import(id).await?;
+            }
+        }
+        committed?;
+        drop(permit);
         Ok::<_, FileError>(())
     })
     .await
     .map_err(|_| failed())??;
-    drop(permit);
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({"store":"imports","path":selection.name})),

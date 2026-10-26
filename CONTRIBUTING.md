@@ -25,7 +25,9 @@ To test production serving, build the frontend and start the backend without the
 development origin override.
 To exercise files, use the launcher or configure both `CUBE_PLAY_SOURCE` and
 `CUBE_PLAY_WORKSPACE` (a regular JSON file with a v4 UUID `id` and display `name`).
-Set `CUBE_PLAY_DATA` separately for imports. The browser harness manages its own
+Set `CUBE_PLAY_DATA` to enable the persisted file workspace and imports; SQLite uses its sibling `state/`
+directory, or an explicit `CUBE_PLAY_STATE` override. See [local persistence](docs/persistence.md)
+for private directory permissions, migration rules and recovery. The browser harness manages its own
 temporary fixtures automatically.
 
 ## Quality checks
@@ -56,7 +58,8 @@ production frontend. It checks the real session/API flow, refresh, browser error
 responsive overflow and external requests. No application API is mocked in these
 tests. Browser traces are disabled to avoid capturing session capabilities.
 It also tests Core-backed previews, inert hostile text, unsupported media, single-file
-selection, navigation, byte ranges and explicit imports.
+selection, navigation, byte ranges, imports, saved-state restoration and conflicting
+tabs. Browser cases run serially because the real server owns one investigation.
 On Linux, Playwright may require `npx playwright install --with-deps chromium`.
 
 Test the real Compose image and runtime from the root:

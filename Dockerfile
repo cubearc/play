@@ -19,7 +19,7 @@ RUN cargo +${RUST_VERSION} build --release --locked -p play-local
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 ARG CUBE_PLAY_UID=65532
 ARG CUBE_PLAY_GID=65532
-LABEL org.cubearc.play.protocol="1" org.cubearc.play.version="0.1.0" org.cubearc.play.runtime-revision="2"
+LABEL org.cubearc.play.protocol="1" org.cubearc.play.version="0.1.0" org.cubearc.play.runtime-revision="3"
 RUN test "${CUBE_PLAY_UID}" -gt 0 && mkdir -p /var/lib/cube-play/artifacts /run/cube-play /workspace/source && chown -R "${CUBE_PLAY_UID}:${CUBE_PLAY_GID}" /var/lib/cube-play
 WORKDIR /app
 COPY --from=backend /build/target/release/play-local /usr/local/bin/play-local

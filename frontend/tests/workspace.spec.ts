@@ -4,6 +4,22 @@ import { expect, test } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
+  const token = new URLSearchParams(new URL(url).hash.slice(1)).get("session");
+  await page.request.post("/api/session", {
+    headers: {
+      Origin: "http://127.0.0.1:17331",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const snapshot = await (await page.request.get("/api/investigation")).json();
+  const reset = await page.request.put("/api/investigation/view", {
+    headers: { Origin: "http://127.0.0.1:17331" },
+    data: {
+      revision: snapshot.view_revision,
+      view: { store: "source", path: "", offset: 0, selected: null },
+    },
+  });
+  expect(reset.ok()).toBe(true);
   await page.goto(url);
   await expect(
     page.getByRole("button", { name: "Inspect sample.png", exact: true }),
@@ -127,4 +143,63 @@ test("serves real video/audio ranges and preserves a private explicit import aft
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("restores investigation name and file selection across browser reload", async ({
+  page,
+}) => {
+  const name = `Case ${test.info().project.name}`;
+  await page.getByLabel("Investigation name").fill(name);
+  const renamed = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/investigation") &&
+      response.request().method() === "PUT",
+  );
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  expect((await renamed).ok()).toBe(true);
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/investigation/view") &&
+      response.request().method() === "PUT",
+  );
+  await page
+    .getByRole("button", { name: "Inspect sample.png", exact: true })
+    .click();
+  expect((await saved).ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByLabel("Investigation name")).toHaveValue(name);
+  await expect(
+    page.getByRole("img", { name: "Preview of sample.png" }),
+  ).toBeVisible();
+});
+
+test("prevents another tab from silently replacing saved navigation", async ({
+  page,
+  context,
+}) => {
+  const second = await context.newPage();
+  await second.goto("/");
+  await expect(
+    second.getByRole("button", { name: "Inspect sample.png", exact: true }),
+  ).toBeVisible();
+  const firstSaved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/investigation/view") &&
+      response.request().method() === "PUT",
+  );
+  await page
+    .getByRole("button", { name: "Inspect sample.png", exact: true })
+    .click();
+  expect((await firstSaved).ok()).toBe(true);
+  await second
+    .getByRole("button", { name: "Inspect notes.txt", exact: true })
+    .click();
+  await expect(second.getByRole("alert")).toContainText(
+    "changed in another request",
+  );
+  await second.getByRole("button", { name: "Reload investigation" }).click();
+  await expect(
+    second.getByRole("img", { name: "Preview of sample.png" }),
+  ).toBeVisible();
+  await second.close();
 });

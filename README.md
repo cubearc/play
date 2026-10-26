@@ -5,9 +5,11 @@ Free Lab is the general workspace; structured challenges are optional.
 
 The host launcher opens local directories or files in a protected browser application.
 Browse files, preview supported media/text, inspect original bytes and explicitly
-import private copies without changing the source. The Cube terminal, visual Lab,
-investigation persistence and structured challenges
-are tracked in [GitHub Issues](https://github.com/cubearc/play/issues) and
+import private copies without changing the source. Investigation names and file
+navigation persist in a private local SQLite database. See [local persistence](docs/persistence.md)
+for storage limits, migrations and recovery. The Cube terminal, visual Lab, full
+notes/artifact workflows and structured challenges remain tracked in
+[GitHub Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).
 
 ## Start an investigation

@@ -165,6 +165,11 @@ fn main(){
                 with opener.open(origin + path, timeout=10) as response:
                     return json.load(response)
 
+            def save_record(origin, endpoint, payload):
+                request = urllib.request.Request(origin + endpoint, data=json.dumps(payload).encode(), method="PUT", headers={"Origin": origin, "Content-Type": "application/json"})
+                with opener.open(request, timeout=10) as response:
+                    return json.load(response)
+
             try:
                 url = launch()
                 origin, health = authenticate(url)
@@ -178,6 +183,15 @@ fn main(){
                     self.assertEqual(response.status, 201)
                 self.assertFalse((source / "private-notes.txt").exists())
                 self.assertEqual(files_api(origin, "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
+                investigation = files_api(origin, "/api/investigation")
+                saved_view = {"store": "imports", "path": "", "offset": 0, "selected": {"store": "imports", "path": "private-notes.txt"}}
+                self.assertEqual(save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": investigation["revision"]})["revision"], 2)
+                save_record(origin, "/api/investigation/view", {"revision": investigation["view_revision"], "view": saved_view})
+                note_id = str(uuid.uuid4())
+                save_record(origin, "/api/investigation/notes", {"id": note_id, "title": "Private hypothesis", "body": "Retained across real container recreation", "revision": 0})
+                save_record(origin, "/api/investigation/progress", {"challenge_key": "local-fixture", "stage_key": "stage-one", "local_status": "in_progress", "revision": 0})
+                artifact = files_api(origin, "/api/investigation/artifacts")[0]
+                self.assertEqual(artifact["status"], "ready")
                 registry = json.loads((home / "workspaces.json").read_text())
                 workspace_id = registry["workspaces"][0]["id"]
                 name = f"cube-play-{workspace_id.replace('-', '')}-local"
@@ -246,10 +260,30 @@ fn main(){
                 restarted = launch()
                 self.assertEqual(authenticate(restarted)[1]["workspace"]["id"], workspace_id)
                 self.assertEqual(files_api(urllib.parse.urlsplit(restarted)._replace(path="", query="", fragment="").geturl(), "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
+                recovered_origin, _ = authenticate(restarted)
+                recovered = files_api(recovered_origin, "/api/investigation")
+                self.assertEqual(recovered["id"], investigation["id"])
+                self.assertEqual(recovered["title"], "Persistent case")
+                self.assertEqual(recovered["view"], saved_view)
+                self.assertNotEqual(recovered["session_id"], investigation["session_id"])
+                self.assertEqual(recovered["interrupted_sessions"], 0)
+                self.assertEqual(files_api(recovered_origin, "/api/investigation/notes")[0]["id"], note_id)
+                self.assertEqual(files_api(recovered_origin, "/api/investigation/progress")[0]["local_status"], "in_progress")
+                self.assertEqual(files_api(recovered_origin, "/api/investigation/artifacts")[0]["id"], artifact["id"])
+                self.assertTrue(any(session["status"] == "closed" for session in files_api(recovered_origin, "/api/investigation/sessions")))
                 self.assertNotEqual(inspect(name)["Id"], first["Id"])
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/test-marker"]), b"retained")
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/artifacts/result.bin"]), b"derived")
                 self.assertEqual((source / "rabbit.cube").read_bytes(), b"original local fixture; never execute")
+                # Exercise actual ungraceful termination and SQLite WAL recovery.
+                subprocess.run(["docker", "kill", "--signal", "KILL", name], check=True, capture_output=True)
+                crash_url = launch()
+                crash_origin, _ = authenticate(crash_url)
+                after_crash = files_api(crash_origin, "/api/investigation")
+                self.assertEqual(after_crash["id"], investigation["id"])
+                self.assertEqual(after_crash["interrupted_sessions"], 1)
+                self.assertEqual(after_crash["view"], saved_view)
+                self.assertEqual(files_api(crash_origin, "/api/investigation/notes")[0]["body"], "Retained across real container recreation")
             finally:
                 registry_file = home / "workspaces.json"
                 if registry_file.exists():

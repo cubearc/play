@@ -20,7 +20,7 @@ pub const PAGE_SIZE: usize = 128;
 pub const MAX_IMPORT: u64 = 32 * 1024 * 1024;
 pub const MAX_MEDIA: u64 = 256 * 1024 * 1024;
 pub const MAX_IMAGE: u64 = 16 * 1024 * 1024;
-const TEMP_PREFIX: &str = ".cube-play-import-";
+pub(crate) const TEMP_PREFIX: &str = ".cube-play-import-";
 
 #[derive(Clone, Copy, Debug)]
 pub struct FileError(pub StatusCode, pub &'static str, pub &'static str);
@@ -376,13 +376,15 @@ impl Workspace {
 
 pub struct PendingImport {
     root: Arc<Dir>,
-    temporary: String,
+    pub(crate) temporary: String,
     target: String,
 }
 impl PendingImport {
     pub fn commit(&self) -> Result<()> {
         self.root
             .hard_link(&self.temporary, &self.root, &self.target)?;
+        #[cfg(unix)]
+        self.root.open(".")?.sync_all()?;
         Ok(())
     }
 }

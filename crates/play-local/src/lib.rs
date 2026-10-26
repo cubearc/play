@@ -1,6 +1,8 @@
 //! Local application boundary. Cube Core owns investigation algorithms.
 pub mod config;
+mod persistence;
 mod security;
+pub use persistence::PersistenceHandle;
 pub mod workspace;
 
 use std::sync::Arc;
@@ -18,9 +20,17 @@ use config::Config;
 
 #[derive(Clone)]
 struct AppState {
+    persistence: PersistenceHandle,
     config: Arc<Config>,
     secret: Arc<str>,
     workspace: workspace::Result<Option<Arc<workspace::Workspace>>>,
+}
+
+impl AppState {
+    async fn database(&self) -> workspace::Result<Option<Arc<persistence::Database>>> {
+        let workspace = self.workspace.as_ref().map_err(|error| *error)?;
+        self.persistence.get(&self.config, workspace.as_ref()).await
+    }
 }
 
 #[derive(Serialize)]
@@ -35,8 +45,14 @@ pub fn session_secret() -> String {
 }
 
 pub fn app(config: Config, secret: String) -> Router {
+    application(config, secret).0
+}
+
+pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle) {
     let frontend = ServeDir::new(&config.frontend_dir);
+    let persistence = PersistenceHandle::default();
     let state = AppState {
+        persistence: persistence.clone(),
         workspace: workspace::Workspace::open(&config),
         config: Arc::new(config),
         secret: secret.into(),
@@ -47,11 +63,12 @@ pub fn app(config: Config, secret: String) -> Router {
         .route("/workspace/inspect", get(workspace::inspection))
         .route("/workspace/media", get(workspace::media))
         .route("/workspace/import", post(workspace::import))
+        .merge(persistence::routes())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             security::require_session,
         ));
-    Router::new()
+    let router = Router::new()
         .nest("/api", api)
         .route(
             "/api/session",
@@ -64,11 +81,12 @@ pub fn app(config: Config, secret: String) -> Router {
             state.clone(),
             security::boundary,
         ))
-        .with_state(state)
+        .with_state(state);
+    (router, persistence)
 }
 
 async fn health(State(state): State<AppState>) -> Result<Json<Health>, workspace::FileError> {
-    state.workspace.as_ref().map_err(|error| *error)?;
+    state.database().await?;
     Ok(Json(Health {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -83,12 +101,15 @@ struct WorkspaceHealth {
     workspace: Option<config::WorkspaceContext>,
 }
 
-async fn workspace_health(State(state): State<AppState>) -> Json<WorkspaceHealth> {
-    Json(WorkspaceHealth {
+async fn workspace_health(
+    State(state): State<AppState>,
+) -> workspace::Result<Json<WorkspaceHealth>> {
+    state.database().await?;
+    Ok(Json(WorkspaceHealth {
         health: Health {
             status: "ok",
             version: env!("CARGO_PKG_VERSION"),
         },
         workspace: state.config.workspace.clone(),
-    })
+    }))
 }

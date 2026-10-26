@@ -52,8 +52,8 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 2 includes file discovery/import APIs; an older cached foundation
-image cannot silently satisfy that contract. The Cube invocation protocol remains 1.
+Runtime revision 3 includes file discovery/import APIs and local SQLite state. An
+older cached foundation image cannot silently satisfy that contract. The Cube invocation protocol remains 1.
 An already-running older image returns explicit stop/restart guidance; its workspace
 identity and volumes are preserved.
 

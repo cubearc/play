@@ -685,3 +685,28 @@ summary:focus-visible {
   resize: vertical;
   font-family: monospace;
 }
+
+.investigation-state {
+  margin-block: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border, #d8ddd8);
+  border-radius: 12px;
+}
+.investigation-state form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.investigation-state input {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #88958d;
+  border-radius: 6px;
+  background: transparent;
+}
+.investigation-state p {
+  margin-top: 0.75rem;
+}

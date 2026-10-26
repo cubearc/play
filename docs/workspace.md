@@ -21,10 +21,13 @@ text/control bytes use byte inspection without silently converting original data
 Choose a file, review **Save as**, then select **Import into workspace**. Selection
 alone sends no bytes. Imports go into private data-volume storage, never the source.
 Existing names are rejected; choose another name rather than overwriting them.
-Imports survive restart/recreation. Notes/history remain a SQLite capability.
+Imports survive restart/recreation with stable SQLite references. See
+[local persistence](persistence.md) for saved navigation and missing-file recovery.
 
 A private temporary file is flushed and linked into its final name exclusively.
-Interrupted requests remove temporary files; partial imports are hidden. Canceling
+Interrupted streams remove temporary files; publication already started finishes
+independently of the browser request. Process crashes may leave hidden temporary
+files for manual recovery. Partial imports are unavailable until reconciled. Canceling
 after the commit point may leave a completed file: refresh before retrying. No
 normal operation deletes completed imports. Atomic commit requires filesystem
 hard-link support; unsupported storage fails explicitly.
@@ -63,7 +66,7 @@ Authenticated routes under `/api/workspace` are `/files`, `/inspect`, `/media` a
 boundaries apply. No host absolute paths are returned. Only supported media MIME
 types are served inline; HTML/SVG cannot become executable same-origin documents.
 
-Native `CUBE_PLAY_DATA` optionally names a private directory with an existing parent,
-separate from the source. The launcher configures it automatically. Unsafe/missing
+For the native persisted UI, set `CUBE_PLAY_DATA` to a private directory with an
+existing parent, separate from the source. The launcher configures it automatically. Unsafe/missing
 storage fails without falling back to source writes. Challenge data remains inert
 until the dedicated challenge importer is implemented.
