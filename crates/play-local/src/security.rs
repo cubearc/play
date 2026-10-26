@@ -40,7 +40,17 @@ pub async fn boundary(State(state): State<AppState>, request: Request, next: Nex
     let forwarded = ["forwarded", "x-forwarded-host", "x-forwarded-proto"]
         .iter()
         .any(|name| headers.contains_key(*name));
-    let mut response = if !host_valid
+    let mut response = if request
+        .uri()
+        .path_and_query()
+        .is_some_and(|value| value.as_str().len() > 16384)
+    {
+        error(
+            StatusCode::URI_TOO_LONG,
+            "request_limit",
+            "The local request exceeds its path/query limit",
+        )
+    } else if !host_valid
         || !origin_valid
         || (needs_origin && origin.is_none())
         || cross_site
@@ -57,7 +67,7 @@ pub async fn boundary(State(state): State<AppState>, request: Request, next: Nex
     for (name, value) in [
         (
             "content-security-policy",
-            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'",
+            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'",
         ),
         ("x-content-type-options", "nosniff"),
         ("referrer-policy", "no-referrer"),

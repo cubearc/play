@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { connect, type Health, SessionError, takeLaunchLink } from "./api";
+import { FileWorkspace } from "./FileWorkspace";
 
 type Connection =
   | { state: "connecting" }
@@ -107,14 +108,16 @@ export default function App() {
                 <p className="selected-file">
                   <strong>
                     {connectionRequest.selection.intent === "challenge"
-                      ? "Selected challenge"
-                      : "Selected file"}
+                      ? "Opened challenge"
+                      : "Opened file"}
                     :
                   </strong>{" "}
                   {connectionRequest.selection.name}
                 </p>
               ) : (
-                <p className="selected-file">No file is selected.</p>
+                <p className="selected-file">
+                  Choose a file below, or import a private copy to begin.
+                </p>
               )}
             </div>
           </section>
@@ -144,6 +147,9 @@ export default function App() {
               </p>
             </div>
           </section>
+        )}
+        {connection.state === "ready" && connection.health.workspace && (
+          <FileWorkspace initialSelection={connectionRequest.selection} />
         )}
         <section className="session-panel" aria-labelledby="session-title">
           <div>

@@ -39,7 +39,7 @@ After an image update, stop that workspace explicitly before restarting it.
 
 ## Install and work offline
 
-The default image is local to the launcher version and runtime UID/GID. First use builds
+The default image is local to the launcher version, runtime revision and UID/GID. First use builds
 it from the source location recorded when the launcher was compiled. To prepare it
 explicitly or use another trusted checkout:
 
@@ -52,6 +52,16 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
+Runtime revision 2 includes file discovery/import APIs; an older cached foundation
+image cannot silently satisfy that contract. The Cube invocation protocol remains 1.
+An already-running older image returns explicit stop/restart guidance; its workspace
+identity and volumes are preserved.
+
+Source builds consume a trusted sibling Cube 0.18.0 checkout. Set
+`CUBE_PLAY_CORE_SOURCE` to another absolute checkout for Docker builds if needed;
+native Cargo development uses the documented sibling layout. The build context
+includes only workspace metadata and Core sources, with no deploy key or Docker
+socket passed into containers. A missing engine checkout fails with setup guidance.
 
 `CUBE_PLAY_HOME` optionally selects an absolute private launcher-state directory.
 The default uses the platform's per-user local application-data location. Unix state

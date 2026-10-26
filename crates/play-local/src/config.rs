@@ -51,6 +51,7 @@ pub struct Config {
     pub frontend_dir: PathBuf,
     pub workspace: Option<WorkspaceContext>,
     pub source_dir: Option<PathBuf>,
+    pub data_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -82,6 +83,13 @@ impl Config {
                 );
             }
             _ => return Err("Workspace context and source must be configured together".into()),
+        }
+        if let Some(path) = std::env::var_os("CUBE_PLAY_DATA") {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() || path.parent().is_none() {
+                return Err("CUBE_PLAY_DATA must be an absolute managed storage directory".into());
+            }
+            config.data_dir = Some(path);
         }
         Ok(config)
     }
@@ -116,6 +124,7 @@ impl Config {
             frontend_dir,
             workspace: None,
             source_dir: None,
+            data_dir: None,
         })
     }
 

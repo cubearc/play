@@ -94,6 +94,7 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         ("windows-engine", "unsupported_runtime"),
         ("old-compose", "compose_unavailable"),
         ("bad-image", "incompatible_runtime"),
+        ("old-runtime", "incompatible_runtime"),
     ]
     .into_iter()
     .chain(if cfg!(unix) {

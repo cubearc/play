@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -13,6 +13,22 @@ export default async function setup() {
     resolve(source, "sample 空.mp4"),
     "original selection fixture",
   );
+  await mkdir(resolve(source, "nested"));
+  await writeFile(
+    resolve(source, "notes.txt"),
+    "<script>window.fixtureExecuted = true</script>\nPrivate original notes.",
+  );
+  await writeFile(
+    resolve(source, "nested", "single.txt"),
+    "One compatible file opens automatically.",
+  );
+  await writeFile(
+    resolve(source, "unknown.xyz"),
+    Buffer.from([0, 255, 17, 42]),
+  );
+  for (const name of ["sample.png", "sample.mp4", "sample.wav"])
+    await copyFile(resolve("../tests/fixtures", name), resolve(source, name));
+  await mkdir(resolve(source, "empty"));
   const workspace = resolve(directory, "workspace.json");
   await writeFile(
     workspace,
@@ -28,6 +44,7 @@ export default async function setup() {
       CUBE_PLAY_FRONTEND_DIR: resolve("dist"),
       CUBE_PLAY_WORKSPACE: workspace,
       CUBE_PLAY_SOURCE: source,
+      CUBE_PLAY_DATA: resolve(directory, "imports"),
     },
     stdio: ["ignore", "pipe", "ignore"],
   });

@@ -4,7 +4,9 @@ A local-first investigation workspace powered by the [Cube Rust engine](https://
 Free Lab is the general workspace; structured challenges are optional.
 
 The host launcher opens local directories or files in a protected browser application.
-Workspace exploration, the Cube terminal, visual analysis, investigation persistence and challenges
+Browse files, preview supported media/text, inspect original bytes and explicitly
+import private copies without changing the source. The Cube terminal, visual Lab,
+investigation persistence and structured challenges
 are tracked in [GitHub Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).
 
@@ -20,6 +22,11 @@ cargo install --locked --path crates/play-launcher
 cube play
 ```
 
+Native builds depend directly on the sibling Cube workspace's `cube-core = 0.18.0`;
+the library is not yet published on crates.io. Keep that trusted checkout available
+for builds. Docker receives only its workspace manifest and library sources through
+a named context; algorithms stay in Core and deploy keys stay on the host.
+
 The first launch builds a local runtime image from the trusted Play checkout;
 setup can download pinned base images and locked dependencies. Keep the checkout
 available until setup finishes, or specify its absolute path with
@@ -34,8 +41,9 @@ cube play --stop ./investigation
 
 The browser opens after readiness. Empty directories work, source mounts are read-only,
 and separate local volumes survive shutdown/recreation. Direct files select their
-parent workspace and pass a selection hint. Challenge import, inspectors and the
-terminal are delivered by their separate issues; selecting `.cube` never executes it.
+parent workspace and open an inspector. Challenge stages and the terminal are
+delivered separately; selecting `.cube` never executes it. Read the
+[workspace guide](docs/workspace.md) for previews, explicit imports and limits.
 Use `--no-browser` to print a private session link or `--offline` to require an
 already installed runtime without setup downloads. See the [launcher guide](docs/launcher.md)
 for platform support, recovery and the invocation contract.

@@ -22,8 +22,10 @@ test("connects the real UI to the local Rust server and survives refresh", async
   await expect(
     page.getByRole("heading", { name: "Browser smoke workspace" }),
   ).toBeVisible();
-  await expect(page.getByText("Selected file:")).toBeVisible();
-  await expect(page.getByText("sample 空.mp4")).toBeVisible();
+  await expect(page.getByText("Opened file:")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "sample 空.mp4", exact: true }),
+  ).toBeVisible();
   const cookie = (await page.context().cookies()).find(
     (value) => value.name === "cube_play_session_17331",
   );

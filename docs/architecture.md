@@ -24,9 +24,15 @@ storage; refresh uses the cookie, and process restart invalidates it. This prote
 the local browser boundary, not an attacker controlling the host account.
 
 Responses use a restrictive Content Security Policy, no-referrer and no-store.
-API bodies are limited to 1 KiB at this stage. Static serving is limited to the
+Session bodies are limited to 1 KiB. Streaming imports have a 32 MiB/30-second limit;
+URLs/queries are limited to 16 KiB. Static serving is limited to the
 trusted frontend build directory; user workspaces must never be served from it.
 Diagnostics log process events without request URLs, tokens or payloads.
+
+The [workspace boundary](workspace.md) opens directory capabilities once and
+rejects symlinks/special files. Two bounded workers handle shallow discovery and
+Core reader APIs. Streaming responses retain their permit until closed. Imports
+commit atomically into separate private storage; source files are never overwritten.
 
 ## Runtime ownership
 
@@ -68,7 +74,12 @@ and source roots containing Docker control sockets are rejected.
 
 ## Core and storage boundaries
 
-Use a versioned direct `cube-core` dependency for algorithms, semantic types,
+The prerelease consumes the sibling Cube 0.18.0 library directly, with a pinned CI
+checkout. Docker's `cube_engine` context copies only its workspace manifest and
+Core sources; credentials, history, SDKs, fixtures and build caches are excluded.
+A maintainer must configure read-only source access for hosted CI while Core is private.
+
+Use the versioned direct `cube-core` dependency for algorithms, semantic types,
 validation and operation metadata. Descriptors describe functions, not universal
 dispatch. Existing pipeline execution applies only to its bounded adapter allowlist;
 image/media operations can use direct typed APIs. Preserve explicit binary/text

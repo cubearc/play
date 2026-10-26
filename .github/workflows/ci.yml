@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    working-directory: play
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,6 +30,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          path: play
+      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: cubearc/cube
+          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          path: cube
+          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: cargo test --workspace --all-features --locked
 
@@ -35,6 +48,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
+          path: play
+      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: cubearc/cube
+          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          path: cube
+          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
@@ -48,7 +70,7 @@ jobs:
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: rust-coverage
-          path: lcov.info
+          path: play/lcov.info
           if-no-files-found: error
 
   frontend:
@@ -56,16 +78,25 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: play/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
+          path: play
+      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: cubearc/cube
+          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          path: cube
+          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: play/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: npm ci
       - run: npm run check
@@ -77,7 +108,7 @@ jobs:
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: frontend-coverage
-          path: frontend/coverage/lcov.info
+          path: play/frontend/coverage/lcov.info
           if-no-files-found: error
 
   docker:
@@ -86,6 +117,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
+          path: play
+      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: cubearc/cube
+          ref: 3b43d47f8e73637e1a9e1b03284975d7f833e41d
+          path: cube
+          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: cargo build --locked -p play-launcher

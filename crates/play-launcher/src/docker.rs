@@ -36,7 +36,7 @@ pub fn runtime_user() -> Result<String> {
 
 pub fn default_image() -> Result<String> {
     Ok(format!(
-        "cube-play-local:{}-{}",
+        "cube-play-local:{}-r2-{}",
         env!("CARGO_PKG_VERSION"),
         runtime_user()?.replace(':', "-")
     ))
@@ -291,6 +291,10 @@ impl Docker {
             .and_then(Value::as_str)
             != Some("1")
             || image
+                .pointer("/Config/Labels/org.cubearc.play.runtime-revision")
+                .and_then(Value::as_str)
+                != Some("2")
+            || image
                 .pointer("/Config/Labels/org.cubearc.play.version")
                 .and_then(Value::as_str)
                 != Some(env!("CARGO_PKG_VERSION"))
@@ -326,6 +330,18 @@ impl Docker {
             .ok_or_else(|| Error::new("unsafe_user", "Runtime user identity is invalid"))?;
         let uid_argument = OsString::from(format!("CUBE_PLAY_UID={uid}"));
         let gid_argument = OsString::from(format!("CUBE_PLAY_GID={gid}"));
+        let core = std::env::var_os("CUBE_PLAY_CORE_SOURCE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| source.parent().unwrap_or(&source).join("cube"));
+        let core=core.canonicalize().map_err(|_|Error::new("core_missing","Runtime builds require a trusted Cube 0.18.0 checkout beside Play, or CUBE_PLAY_CORE_SOURCE pointing to that checkout"))?;
+        if !core.join("Cargo.toml").is_file() || !core.join("crates/cube-core/Cargo.toml").is_file()
+        {
+            return Err(Error::new(
+                "core_missing",
+                "The configured engine source is not a Cube Rust workspace",
+            ));
+        }
+        let core_argument = OsString::from(format!("cube_engine={}", state::docker_path(&core)?));
         let output = self.process.run(
             &[
                 OsStr::new("build"),
@@ -335,6 +351,8 @@ impl Docker {
                 &uid_argument,
                 OsStr::new("--build-arg"),
                 &gid_argument,
+                OsStr::new("--build-context"),
+                &core_argument,
                 OsStr::new("."),
             ],
             &source,

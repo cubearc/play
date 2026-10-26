@@ -2,6 +2,12 @@
 
 Use Rust stable through rustup, Node.js 24 and npm. Docker Compose v2 and Python 3.11+
 are required for container tests. Start with the [README quick start](README.md#developer-quick-start).
+Keep a trusted Cube 0.18.0 checkout at `../cube`; Cargo consumes its exact-version
+library directly. CI checks out a pinned Cube revision beside Play. While Core is
+private, hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
+configured by a maintainer. No key enters application containers or build contexts.
+Source access and GitHub Actions billing are prerequisites for hosted checks;
+passing local tests do not imply CI passed.
 
 ## Development
 
@@ -17,6 +23,10 @@ command. Open the printed session URL after Vite is ready. Vite proxies local AP
 requests to port 7331 and preserves the browser host. Both listeners use loopback.
 To test production serving, build the frontend and start the backend without the
 development origin override.
+To exercise files, use the launcher or configure both `CUBE_PLAY_SOURCE` and
+`CUBE_PLAY_WORKSPACE` (a regular JSON file with a v4 UUID `id` and display `name`).
+Set `CUBE_PLAY_DATA` separately for imports. The browser harness manages its own
+temporary fixtures automatically.
 
 ## Quality checks
 
@@ -45,6 +55,8 @@ The harness starts the compiled Rust server on loopback port 17331 and serves th
 production frontend. It checks the real session/API flow, refresh, browser errors,
 responsive overflow and external requests. No application API is mocked in these
 tests. Browser traces are disabled to avoid capturing session capabilities.
+It also tests Core-backed previews, inert hostile text, unsupported media, single-file
+selection, navigation, byte ranges and explicit imports.
 On Linux, Playwright may require `npx playwright install --with-deps chromium`.
 
 Test the real Compose image and runtime from the root:

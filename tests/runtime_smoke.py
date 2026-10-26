@@ -46,7 +46,7 @@ class RuntimeSmoke(unittest.TestCase):
         runtime_uid, runtime_gid = cls.runtime_user.split(":")
         cls.environment = {**os.environ, "CUBE_PLAY_PORT": str(cls.port), "CUBE_PLAY_UID": runtime_uid, "CUBE_PLAY_GID": runtime_gid}
         cls.origin = f"http://127.0.0.1:{cls.port}"
-        cls.addClassCleanup(cls.compose, "down", "--remove-orphans")
+        cls.addClassCleanup(cls.compose, "down", "--volumes", "--remove-orphans")
         cls.compose("up", "--build", "--wait", "--wait-timeout", "60", timeout=1800)
 
     def request(self, path, headers=None, method="GET", opener=None):
@@ -161,12 +161,23 @@ fn main(){
             def inspect(name):
                 return json.loads(subprocess.check_output(["docker", "inspect", name], text=True))[0]
 
+            def files_api(origin, path):
+                with opener.open(origin + path, timeout=10) as response:
+                    return json.load(response)
+
             try:
                 url = launch()
                 origin, health = authenticate(url)
                 self.assertEqual(health["workspace"]["name"], source.name)
                 self.assertNotIn(str(base), json.dumps(health))
                 self.assertEqual(list(source.iterdir()), [], "Launcher must not create source files")
+                self.assertEqual(files_api(origin, "/api/workspace/files")["entries"], [])
+                imported = b"Private notes imported explicitly; source remains unchanged."
+                request = urllib.request.Request(origin + "/api/workspace/import?name=private-notes.txt", data=imported, method="POST", headers={"Origin": origin, "Content-Type": "application/octet-stream"})
+                with opener.open(request, timeout=10) as response:
+                    self.assertEqual(response.status, 201)
+                self.assertFalse((source / "private-notes.txt").exists())
+                self.assertEqual(files_api(origin, "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
                 registry = json.loads((home / "workspaces.json").read_text())
                 workspace_id = registry["workspaces"][0]["id"]
                 name = f"cube-play-{workspace_id.replace('-', '')}-local"
@@ -205,6 +216,15 @@ fn main(){
                         self.assertEqual(source.stat().st_mode & 0o777, 0o700)
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     urls = list(executor.map(lambda _: launch(), range(2)))
+                image = (ROOT / "tests/fixtures/sample.png").read_bytes()
+                (source / "sample.png").write_bytes(image)
+                info = files_api(origin, "/api/workspace/inspect?path=sample.png")
+                self.assertEqual(info["signatures"][0]["format"], "png")
+                self.assertEqual(info["image"], {"width": 2, "height": 2})
+                with opener.open(urllib.request.Request(origin + "/api/workspace/media?path=sample.png", headers={"Range": "bytes=0-11"}), timeout=10) as response:
+                    self.assertEqual(response.status, 206)
+                    self.assertEqual(response.read(), image[:12])
+                self.assertEqual((source / "sample.png").read_bytes(), image)
                 self.assertTrue(all(authenticate(value)[1]["workspace"]["id"] == workspace_id for value in urls))
                 self.assertEqual(inspect(name)["Id"], first["Id"])
                 second_source = base / "second workspace"
@@ -225,6 +245,7 @@ fn main(){
                 subprocess.run(["docker", "container", "rm", name], check=True, capture_output=True)
                 restarted = launch()
                 self.assertEqual(authenticate(restarted)[1]["workspace"]["id"], workspace_id)
+                self.assertEqual(files_api(urllib.parse.urlsplit(restarted)._replace(path="", query="", fragment="").geturl(), "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
                 self.assertNotEqual(inspect(name)["Id"], first["Id"])
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/test-marker"]), b"retained")
                 self.assertEqual(subprocess.check_output(["docker", "exec", name, "cat", "/var/lib/cube-play/artifacts/result.bin"]), b"derived")

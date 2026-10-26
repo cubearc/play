@@ -34,9 +34,13 @@ The runtime is non-root, read-only and resource-bounded, without privileged mode
 On Unix it uses the invoking user's UID/GID so private sources remain readable
 without changing their permissions; running the launcher as root is rejected.
 Unsupported Docker file sharing or user mappings fail explicitly. Docker isolation
-is defense in depth, not an absolute security boundary. File discovery, previews,
-terminal execution and challenge validation remain separate implementation work;
-passing a challenge path currently selects it without executing or importing it.
+is defense in depth, not an absolute security boundary. File discovery uses bounded,
+capability-relative reads. Symlinks and special files are shown but not opened.
+Text is inert; inline media types and processing budgets are restricted. Imports
+require explicit confirmation and commit into private storage without overwriting
+sources or existing files. See the [workspace boundary](docs/workspace.md).
+Terminal execution and challenge stages remain separate work; inspecting a challenge
+does not execute it.
 Future changes must preserve the [documented boundaries](docs/architecture.md).
 
 There are no implicit telemetry calls, uploads or Cloud services. Dependency/image

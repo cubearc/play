@@ -1,6 +1,7 @@
 //! Local application boundary. Cube Core owns investigation algorithms.
 pub mod config;
 mod security;
+pub mod workspace;
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use config::Config;
 struct AppState {
     config: Arc<Config>,
     secret: Arc<str>,
+    workspace: workspace::Result<Option<Arc<workspace::Workspace>>>,
 }
 
 #[derive(Serialize)]
@@ -35,21 +37,29 @@ pub fn session_secret() -> String {
 pub fn app(config: Config, secret: String) -> Router {
     let frontend = ServeDir::new(&config.frontend_dir);
     let state = AppState {
+        workspace: workspace::Workspace::open(&config),
         config: Arc::new(config),
         secret: secret.into(),
     };
     let api = Router::new()
         .route("/health", get(workspace_health))
+        .route("/workspace/files", get(workspace::files))
+        .route("/workspace/inspect", get(workspace::inspection))
+        .route("/workspace/media", get(workspace::media))
+        .route("/workspace/import", post(workspace::import))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             security::require_session,
         ));
     Router::new()
         .nest("/api", api)
-        .route("/api/session", post(security::open_session))
+        .route(
+            "/api/session",
+            post(security::open_session).layer(RequestBodyLimitLayer::new(1024)),
+        )
         .route("/healthz", get(health))
         .fallback_service(frontend)
-        .layer(RequestBodyLimitLayer::new(1024))
+        .layer(RequestBodyLimitLayer::new(workspace::MAX_IMPORT as usize))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             security::boundary,
@@ -57,11 +67,12 @@ pub fn app(config: Config, secret: String) -> Router {
         .with_state(state)
 }
 
-async fn health() -> Json<Health> {
-    Json(Health {
+async fn health(State(state): State<AppState>) -> Result<Json<Health>, workspace::FileError> {
+    state.workspace.as_ref().map_err(|error| *error)?;
+    Ok(Json(Health {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
-    })
+    }))
 }
 
 #[derive(Serialize)]

@@ -2,6 +2,8 @@ services:
   play-local:
     build:
       context: .
+      additional_contexts:
+        cube_engine: "${CUBE_PLAY_CORE_SOURCE:-../cube}"
       args:
         CUBE_PLAY_UID: "${CUBE_PLAY_UID:-65532}"
         CUBE_PLAY_GID: "${CUBE_PLAY_GID:-65532}"
@@ -10,6 +12,9 @@ services:
     environment:
       CUBE_PLAY_ORIGIN: "http://127.0.0.1:${CUBE_PLAY_PORT:-7331}"
     read_only: true
+    volumes:
+      - play-data:/var/lib/cube-play
+      - play-artifacts:/var/lib/cube-play/artifacts
     user: "${CUBE_PLAY_UID:-65532}:${CUBE_PLAY_GID:-65532}"
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -20,3 +25,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
     stop_grace_period: 10s
+
+volumes:
+  play-data:
+  play-artifacts:

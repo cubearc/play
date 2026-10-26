@@ -35,7 +35,7 @@ it.each(["file", "challenge"])(
     ).toBeVisible();
     expect(
       screen.getByText(
-        intent === "challenge" ? "Selected challenge:" : "Selected file:",
+        intent === "challenge" ? "Opened challenge:" : "Opened file:",
       ),
     ).toBeVisible();
     expect(window.location.hash).toBe("");
@@ -54,7 +54,11 @@ it("shows a launched workspace without pretending discovery has selected a file"
     ),
   );
   render(<App />);
-  expect(await screen.findByText("No file is selected.")).toBeVisible();
+  expect(
+    await screen.findByText(
+      "Choose a file below, or import a private copy to begin.",
+    ),
+  ).toBeVisible();
 });
 
 it("shows the real connection and version without external requests", async () => {
