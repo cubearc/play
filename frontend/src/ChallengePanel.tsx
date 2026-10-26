@@ -4,6 +4,7 @@ import {
   challengeRequest,
   importChallenge,
 } from "./challenge-api";
+import { StageCandidate } from "./StageCandidate";
 import type { Store } from "./workspace-api";
 export type FileSelection = { store: Store; path: string };
 export function ChallengePanel({
@@ -212,6 +213,10 @@ export function ChallengePanel({
               </option>
             </select>
           </label>
+          <StageCandidate
+            challengeKey={active.definition.key}
+            stage={stage.id}
+          />
         </>
       )}
     </section>

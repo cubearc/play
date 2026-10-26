@@ -765,3 +765,217 @@ async fn non_executable_challenge_validation_navigation_and_resume() {
         manifest.to_string()
     );
 }
+
+#[tokio::test]
+async fn candidates_preserve_exact_types_explicit_fields_history_and_workspace_references() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let source = directory.path().join("source");
+    std::fs::write(
+        source.join("sample.png"),
+        include_bytes!("../../../tests/fixtures/sample.png"),
+    )
+    .unwrap();
+    std::fs::write(source.join("rabbit.cube"), challenge_manifest().to_string()).unwrap();
+    let (_, state) = server
+        .api(
+            "POST",
+            "/api/challenges/import",
+            json!({"store":"source","path":"rabbit.cube"}),
+        )
+        .await;
+    let key = state["active"]["definition"]["key"].as_str().unwrap();
+    let (_, binary) = server
+        .execute(
+            "encoding.base64.decode",
+            json!({"type":"text","data":"AP+A"}),
+            json!([]),
+        )
+        .await;
+    let binary_id = binary["result"]["id"].as_str().unwrap();
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":binary_id,"title":"Private binary","revision":0})
+            )
+            .await
+            .0,
+        200
+    );
+    let candidate = json!({"key":key,"stage":"first","result_id":binary_id,"revision":0,"selection":{"kind":"whole"}});
+    let (status, selected) = server
+        .api("PUT", "/api/challenges/candidates", candidate.clone())
+        .await;
+    assert_eq!(status, 200, "{selected}");
+    assert_eq!(selected["candidate"]["byte_size"], 3);
+    assert_eq!(
+        selected["candidate"]["sha256"],
+        cube_core::hashing::sha256(&[0, 255, 128])
+    );
+    assert_eq!(selected["candidate"]["status"], "private_unverified");
+    let mut invalid = candidate.clone();
+    invalid["stage"] = json!("second");
+    assert_eq!(
+        server
+            .api("PUT", "/api/challenges/candidates", invalid)
+            .await
+            .0,
+        400
+    );
+    let (_, text) = server
+        .execute(
+            "encoding.base64.encode",
+            json!({"type":"artifact","id":binary_id}),
+            json!([]),
+        )
+        .await;
+    let text_id = text["result"]["id"].as_str().unwrap();
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":text_id,"title":"Text","revision":0})
+            )
+            .await
+            .0,
+        200
+    );
+    assert_eq!(server.api("PUT","/api/challenges/candidates",json!({"key":key,"stage":"second","result_id":text_id,"revision":0,"selection":{"kind":"whole"}})).await.0,200);
+    let (_, channel) = server
+        .execute(
+            "image.channel.extract",
+            json!({"type":"file","store":"source","path":"sample.png","representation":"image"}),
+            json!([{"name":"channel","value":"green"}]),
+        )
+        .await;
+    let channel_id = channel["result"]["id"].as_str().unwrap();
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":channel_id,"title":"Channel","revision":0})
+            )
+            .await
+            .0,
+        200
+    );
+    let field = json!({"key":key,"stage":"first","result_id":channel_id,"revision":1,"selection":{"kind":"field","pointer":"/preview_png_base64","conversion":"base64_bytes"}});
+    let (status, revised) = server
+        .api("PUT", "/api/challenges/candidates", field.clone())
+        .await;
+    assert_eq!(status, 200, "{revised}");
+    assert_eq!(revised["history"].as_array().unwrap().len(), 2);
+    assert_eq!(revised["candidate"]["revision"], 2);
+    let field_text = json!({"key":key,"stage":"second","result_id":channel_id,"revision":1,"selection":{"kind":"field","pointer":"/channels/0","conversion":"text"}});
+    let (status, text_candidate) = server
+        .api("PUT", "/api/challenges/candidates", field_text)
+        .await;
+    assert_eq!(status, 200, "{text_candidate}");
+    assert_eq!(
+        text_candidate["candidate"]["sha256"],
+        cube_core::hashing::sha256(b"green")
+    );
+    assert_eq!(
+        server
+            .api("PUT", "/api/challenges/candidates", field)
+            .await
+            .0,
+        409
+    );
+    for (pointer, conversion) in [
+        ("/absent", "text"),
+        ("/bit_depth", "text"),
+        ("/channels/0", "base64_bytes"),
+        ("/channels/0", "text"),
+    ] {
+        assert_eq!(server.api("PUT","/api/challenges/candidates",json!({"key":key,"stage":"first","result_id":channel_id,"revision":2,"selection":{"kind":"field","pointer":pointer,"conversion":conversion}})).await.0,400);
+    }
+    let mut invalid = candidate.clone();
+    invalid["revision"] = json!(2);
+    invalid["result_id"] = json!(Uuid::new_v4());
+    assert_eq!(
+        server
+            .api("PUT", "/api/challenges/candidates", invalid)
+            .await
+            .0,
+        404
+    );
+    let (_, unsaved) = server
+        .execute(
+            "encoding.base64.decode",
+            json!({"type":"text","data":"AA=="}),
+            json!([]),
+        )
+        .await;
+    let mut invalid = candidate.clone();
+    invalid["revision"] = json!(2);
+    invalid["result_id"] = unsaved["result"]["id"].clone();
+    assert_eq!(
+        server
+            .api("PUT", "/api/challenges/candidates", invalid)
+            .await
+            .0,
+        409
+    );
+    std::fs::write(
+        source.join("large.b64"),
+        cube_core::encoding::base64_encode(&vec![0; 65537]),
+    )
+    .unwrap();
+    let (status, large) = server
+        .execute(
+            "encoding.base64.decode",
+            json!({"type":"file","store":"source","path":"large.b64","representation":"text"}),
+            json!([]),
+        )
+        .await;
+    assert_eq!(status, 200, "{large}");
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":large["result"]["id"],"title":"Large","revision":0})
+            )
+            .await
+            .0,
+        200
+    );
+    let mut invalid = candidate.clone();
+    invalid["revision"] = json!(2);
+    invalid["result_id"] = large["result"]["id"].clone();
+    assert_eq!(
+        server
+            .api("PUT", "/api/challenges/candidates", invalid)
+            .await
+            .0,
+        400
+    );
+    let path = format!("/api/challenges/candidates?key={key}&stage=first");
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, restored) = server.api("GET", &path, Value::Null).await;
+    assert_eq!(restored["candidate"], revised["candidate"]);
+    assert!(restored["error"].is_null());
+    assert_eq!(
+        server
+            .api("GET", &format!("/api/lab/results/{binary_id}"), Value::Null)
+            .await
+            .0,
+        200
+    );
+    std::fs::remove_file(
+        directory
+            .path()
+            .join(format!("artifacts/lab/{channel_id}/value.bin")),
+    )
+    .unwrap();
+    let (_, missing) = server.api("GET", &path, Value::Null).await;
+    assert_eq!(missing["candidate"], revised["candidate"]);
+    assert!(missing["error"].is_string());
+}

@@ -1,4 +1,5 @@
 //! One local investigation per authorized workspace; binary content stays on disk.
+mod candidates;
 mod challenges;
 mod http;
 pub(crate) mod library;

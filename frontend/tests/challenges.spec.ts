@@ -100,20 +100,18 @@ test("rejects an imported workflow recipe without executing or replacing the act
     name: "Local challenges",
     exact: true,
   });
-  await page
-    .getByLabel("Choose a file", { exact: true })
-    .setInputFiles({
-      name: `workflow-${info.project.name}.cube`,
-      mimeType: "application/json",
-      buffer: Buffer.from(
-        JSON.stringify({
-          format_version: 1,
-          engine_api: 1,
-          command: "touch SHOULD_NEVER_EXIST",
-          answers: ["private"],
-        }),
-      ),
-    });
+  await page.getByLabel("Choose a file", { exact: true }).setInputFiles({
+    name: `workflow-${info.project.name}.cube`,
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        format_version: 1,
+        engine_api: 1,
+        command: "touch SHOULD_NEVER_EXIST",
+        answers: ["private"],
+      }),
+    ),
+  });
   await page
     .getByRole("button", { name: "Import into workspace", exact: true })
     .click();

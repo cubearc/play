@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { LabResult } from "./lab-api";
 import { request } from "./notebook-api";
+import { CandidateControls } from "./StageCandidate";
 export function SavedResultActions({ result }: { result: LabResult }) {
   const [title, setTitle] = useState(""),
     [status, setStatus] = useState(""),
@@ -61,6 +62,7 @@ export function SavedResultActions({ result }: { result: LabResult }) {
         </a>
       </div>
       <p role="status">{status}</p>
+      <CandidateControls result={result} />
       <p>
         Export uses your browser’s download destination. The application
         receives no host write path.

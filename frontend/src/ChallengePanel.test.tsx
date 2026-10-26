@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ChallengePanel } from "./ChallengePanel";
 import { parseChallenge } from "./challenge-api";
 
+vi.mock("./StageCandidate", () => ({ StageCandidate: () => null }));
 const key = "a".repeat(64);
 function state() {
   return {

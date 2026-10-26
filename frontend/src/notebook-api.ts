@@ -28,7 +28,14 @@ export async function request(
           body: JSON.stringify(payload),
         }),
   });
-  const value: unknown = await response.json();
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error(
+      "The local API returned an incompatible response. Reopen the session or retry a bounded request.",
+    );
+  }
   if (!response.ok) {
     const error = object(value);
     throw new Error(

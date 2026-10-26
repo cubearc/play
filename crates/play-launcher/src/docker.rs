@@ -36,7 +36,7 @@ pub fn runtime_user() -> Result<String> {
 
 pub fn default_image() -> Result<String> {
     Ok(format!(
-        "cube-play-local:{}-r8-{}",
+        "cube-play-local:{}-r9-{}",
         env!("CARGO_PKG_VERSION"),
         runtime_user()?.replace(':', "-")
     ))
@@ -299,7 +299,7 @@ impl Docker {
             || image
                 .pointer("/Config/Labels/org.cubearc.play.runtime-revision")
                 .and_then(Value::as_str)
-                != Some("8")
+                != Some("9")
             || image
                 .pointer("/Config/Labels/org.cubearc.play.version")
                 .and_then(Value::as_str)

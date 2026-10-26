@@ -1,4 +1,5 @@
 //! Typed local execution with one bounded, cancellable Core worker process.
+mod candidates;
 mod execute;
 mod library;
 mod storage;
@@ -60,6 +61,7 @@ impl State {
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .merge(library::routes())
+        .merge(candidates::routes())
         .route("/lab/operations", get(catalog))
         .route("/lab/operations/{id}", get(describe))
         .route(

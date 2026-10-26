@@ -105,9 +105,10 @@ impl IntoResponse for Error {
         let status = match self.code.as_str() {
             "resource_limit" => StatusCode::PAYLOAD_TOO_LARGE,
             "busy" => StatusCode::TOO_MANY_REQUESTS,
-            "unknown_operation" | "result_missing" => StatusCode::NOT_FOUND,
+            "challenge_missing" | "unknown_operation" | "result_missing" => StatusCode::NOT_FOUND,
             "path_denied" | "symlink_denied" => StatusCode::FORBIDDEN,
-            "state_conflict"
+            "artifact_not_saved"
+            | "state_conflict"
             | "file_exists"
             | "artifact_unavailable"
             | "unsupported_operation"

@@ -113,3 +113,7 @@ comparison probes use the existing worker without allocating permanent result bu
 The [notebook](notebook.md) names immutable Core result bundles in SQLite and
 serializes note autosave with revision conflicts. Exports are authenticated browser
 downloads; containers never receive a host write destination.
+
+Private stage candidates append typed selection/conversion revisions in the same
+SQLite database. They reference named immutable Core bundles and preserve lineage;
+Core decodes explicitly selected Base64 fields. No verification or submission occurs.
