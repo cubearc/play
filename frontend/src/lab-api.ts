@@ -9,6 +9,7 @@ export type Operation = {
   description: string;
   version: number;
   parameters: unknown[];
+  inputType?: string;
 };
 export type ImageInfo = {
   width: number;
@@ -31,8 +32,14 @@ export type LabResult = {
   inline: { type: string; data?: unknown; base64?: string } | null;
 };
 export type Input =
-  | { type: "file"; store: Store; path: string; representation: "bytes" }
-  | { type: "artifact"; id: string };
+  | {
+      type: "file";
+      store: Store;
+      path: string;
+      representation: "bytes" | "text";
+    }
+  | { type: "artifact"; id: string }
+  | { type: "text"; data: string };
 export type Histogram = {
   channels: string[];
   pixels: number;
@@ -94,6 +101,9 @@ export async function operations(signal: AbortSignal): Promise<Operation[]> {
         description: text(core.description),
         version: integer(lab.version),
         parameters: core.parameters,
+        ...(typeof lab.input_type === "string"
+          ? { inputType: lab.input_type }
+          : {}),
       },
     ];
   });

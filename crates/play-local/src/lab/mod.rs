@@ -1,5 +1,6 @@
 //! Typed local execution with one bounded, cancellable Core worker process.
 mod execute;
+mod library;
 mod storage;
 mod types;
 mod worker;
@@ -43,7 +44,7 @@ impl Default for State {
     }
 }
 impl State {
-    async fn storage(&self, app: &AppState) -> Result<Arc<storage::Storage>> {
+    pub(crate) async fn storage(&self, app: &AppState) -> Result<Arc<storage::Storage>> {
         self.storage
             .get_or_init(|| async {
                 app.database().await?;
@@ -58,6 +59,7 @@ impl State {
 }
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(library::routes())
         .route("/lab/operations", get(catalog))
         .route("/lab/operations/{id}", get(describe))
         .route(

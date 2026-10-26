@@ -212,6 +212,27 @@ impl Storage {
         }
         Ok((record, data))
     }
+    pub fn history(&self) -> Result<Vec<Record>> {
+        let mut records = Vec::new();
+        for (index, entry) in self
+            .root
+            .entries()
+            .map_err(|_| Error::storage())?
+            .take(MAX_RESULTS + 1)
+            .enumerate()
+        {
+            if index == MAX_RESULTS {
+                return Err(Error::limit());
+            }
+            let entry = entry.map_err(|_| Error::storage())?;
+            let name = entry.file_name();
+            let id = Uuid::parse_str(name.to_str().ok_or_else(Error::storage)?)
+                .map_err(|_| Error::storage())?;
+            records.push(self.load(id)?.0);
+        }
+        records.sort_by_key(|r| std::cmp::Reverse(r.provenance.created_ms));
+        Ok(records)
+    }
     pub fn record(
         &self,
         id: Uuid,

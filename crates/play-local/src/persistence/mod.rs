@@ -1,5 +1,6 @@
 //! One local investigation per authorized workspace; binary content stays on disk.
 mod http;
+pub(crate) mod library;
 mod paths;
 mod records;
 
@@ -316,6 +317,7 @@ mod tests {
             .save_note(records::Note {
                 id: Uuid::new_v4(),
                 title: "No room".into(),
+                target: None,
                 body: "x".repeat(65536),
                 revision: 0,
             })

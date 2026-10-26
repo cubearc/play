@@ -5,7 +5,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { ArtifactLibrary, TextLab } from "./ArtifactLibrary";
 import { FileWorkspace } from "./FileWorkspace";
+import { InvestigationNotes } from "./InvestigationNotes";
 import {
   type Investigation,
   loadInvestigation,
@@ -87,6 +89,11 @@ function SavedWorkspace({
   reload: () => void;
 }) {
   const [title, setTitle] = useState(investigation.title);
+  const [selection, setSelection] = useState<View["selected"]>(
+    initialSelection
+      ? { store: "source", path: initialSelection.name }
+      : investigation.view.selected,
+  );
   const [titleRevision, setTitleRevision] = useState(investigation.revision);
   const [renaming, setRenaming] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -113,6 +120,7 @@ function SavedWorkspace({
     };
   }, []);
   const saveView = useCallback((view: View) => {
+    setSelection(view.selected);
     const state = queue.current;
     const encoded = JSON.stringify(view);
     if (state.failed || encoded === state.last) return;
@@ -213,6 +221,12 @@ function SavedWorkspace({
         initialView={initialSelection ? undefined : investigation.view}
         onViewChange={saveView}
       />
+      <TextLab
+        key={selection ? `${selection.store}:${selection.path}` : "inline"}
+        file={selection}
+      />
+      <InvestigationNotes target={selection} />
+      <ArtifactLibrary />
     </>
   );
 }

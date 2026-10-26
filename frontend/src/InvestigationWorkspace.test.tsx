@@ -9,6 +9,11 @@ import {
 } from "./investigation-api";
 import { entry, inspection, listing } from "./test/workspace";
 
+vi.mock("./ArtifactLibrary", () => ({
+  ArtifactLibrary: () => null,
+  TextLab: () => null,
+}));
+vi.mock("./InvestigationNotes", () => ({ InvestigationNotes: () => null }));
 vi.mock("./investigation-api", () => ({
   loadInvestigation: vi.fn(),
   saveInvestigation: vi.fn(),

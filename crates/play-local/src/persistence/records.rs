@@ -52,6 +52,8 @@ pub(super) struct Note {
     pub revision: i64,
     pub title: String,
     pub body: String,
+    #[serde(default)]
+    pub target: Option<Selection>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -126,7 +128,7 @@ impl Database {
     }
     pub(super) async fn notes(&self) -> Result<Vec<Note>> {
         let rows = sqlx::query(
-            "SELECT id,revision,title,body FROM notes ORDER BY updated_ms,id LIMIT 100",
+            "SELECT id,revision,title,body,target_json FROM notes ORDER BY updated_ms,id LIMIT 100",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -137,11 +139,24 @@ impl Database {
                     revision: row.try_get("revision")?,
                     title: row.try_get("title")?,
                     body: row.try_get("body")?,
+                    target: row
+                        .try_get::<Option<String>, _>("target_json")?
+                        .map(|v| serde_json::from_str(&v).map_err(|_| failed()))
+                        .transpose()?,
                 })
             })
             .collect()
     }
     pub(super) async fn save_note(&self, value: Note) -> Result<i64> {
+        if let Some(target) = &value.target {
+            workspace::validate(&target.path, false)?;
+        }
+        let target = value
+            .target
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|_| invalid())?;
         if value.id.get_version_num() != 4
             || !bounded(&value.title, 512)
             || value.body.len() > 65536
@@ -163,11 +178,11 @@ impl Database {
                 ));
             }
         }
-        let changed=sqlx::query("INSERT INTO notes(id,investigation_id,title,body,revision,updated_ms) SELECT ?,?,?,?,1,? WHERE ?=0 ON CONFLICT(id) DO NOTHING")
-            .bind(value.id.to_string()).bind(&self.investigation_id).bind(&value.title).bind(&value.body).bind(now()?).bind(value.revision).execute(&mut *transaction).await?.rows_affected();
+        let changed=sqlx::query("INSERT INTO notes(id,investigation_id,title,body,target_json,revision,updated_ms) SELECT ?,?,?,?,?,1,? WHERE ?=0 ON CONFLICT(id) DO NOTHING")
+            .bind(value.id.to_string()).bind(&self.investigation_id).bind(&value.title).bind(&value.body).bind(&target).bind(now()?).bind(value.revision).execute(&mut *transaction).await?.rows_affected();
         let changed = if value.revision > 0 {
-            sqlx::query("UPDATE notes SET title=?,body=?,revision=revision+1,updated_ms=? WHERE id=? AND revision=?")
-            .bind(value.title).bind(value.body).bind(now()?).bind(value.id.to_string()).bind(value.revision).execute(&mut *transaction).await?.rows_affected()
+            sqlx::query("UPDATE notes SET title=?,body=?,target_json=?,revision=revision+1,updated_ms=? WHERE id=? AND revision=?")
+            .bind(value.title).bind(value.body).bind(target).bind(now()?).bind(value.id.to_string()).bind(value.revision).execute(&mut *transaction).await?.rows_affected()
         } else {
             changed
         };

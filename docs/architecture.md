@@ -3,7 +3,7 @@
 Cube Play is a local application with one Rust API and one React interface.
 The Rust workspace contains `crates/play-local`, the host-side `crates/play-launcher`
 and `crates/play-runner`, alongside the React `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
-no second operation registry, challenge parser or idle execution service.
+no second operation registry or idle execution service.
 
 ## Request boundary
 
@@ -109,3 +109,7 @@ and speculative synchronization frameworks are outside the local MVP.
 The [visual Lab](visual-lab.md) consumes typed Core responses. Canvas 2D only
 draws a bounded viewport; ECharts plots returned counts. Transient pixel/histogram/
 comparison probes use the existing worker without allocating permanent result bundles.
+
+The [notebook](notebook.md) names immutable Core result bundles in SQLite and
+serializes note autosave with revision conflicts. Exports are authenticated browser
+downloads; containers never receive a host write destination.

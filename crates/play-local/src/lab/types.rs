@@ -107,9 +107,13 @@ impl IntoResponse for Error {
             "busy" => StatusCode::TOO_MANY_REQUESTS,
             "unknown_operation" | "result_missing" => StatusCode::NOT_FOUND,
             "path_denied" | "symlink_denied" => StatusCode::FORBIDDEN,
-            "unsupported_operation" | "contract_mismatch" | "cancelled" | "commit_started" => {
-                StatusCode::CONFLICT
-            }
+            "state_conflict"
+            | "file_exists"
+            | "artifact_unavailable"
+            | "unsupported_operation"
+            | "contract_mismatch"
+            | "cancelled"
+            | "commit_started" => StatusCode::CONFLICT,
             "timeout" => StatusCode::REQUEST_TIMEOUT,
             "storage_unavailable" | "worker_unavailable" => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::BAD_REQUEST,

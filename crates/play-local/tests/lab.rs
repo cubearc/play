@@ -480,3 +480,110 @@ async fn transient_probes_do_not_consume_artifact_quota_or_create_reusable_ids()
     let (status, failure) = server.api("POST", "/api/lab/execute", json!({"id":Uuid::new_v4(),"operation":"image.invert","version":1,"input":image,"retain_result":false})).await;
     assert_eq!(status, 400, "{failure}");
 }
+
+#[tokio::test]
+async fn notebook_names_history_exports_conflicts_and_missing_references_survive_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let (_, result) = server
+        .execute(
+            "encoding.base64.decode",
+            json!({"type":"text","data":"AP+A"}),
+            json!([]),
+        )
+        .await;
+    let id = result["result"]["id"].as_str().unwrap();
+    let name = json!({"id":id,"title":"Private bytes","revision":0});
+    assert_eq!(
+        server.api("PUT", "/api/lab/library", name.clone()).await.0,
+        200
+    );
+    assert_eq!(server.api("PUT", "/api/lab/library", name).await.0, 409);
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":id,"title":"Renamed bytes","revision":1})
+            )
+            .await
+            .1["revision"],
+        2
+    );
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":Uuid::new_v4(),"title":"Foreign","revision":0})
+            )
+            .await
+            .0,
+        404
+    );
+    let (_, history) = server.api("GET", "/api/lab/history", Value::Null).await;
+    assert_eq!(history["records"].as_array().unwrap().len(), 1);
+    let (status, bytes) = server
+        .raw(
+            "GET",
+            &format!("/api/lab/results/{id}/export?name=private.bin"),
+            b"",
+            true,
+        )
+        .await;
+    assert_eq!(status, 200);
+    assert_eq!(bytes, b"\0\xff\x80");
+    for invalid in ["../escape", "CON", "dir/file", "%0d%0aBad", "x%22name"] {
+        assert_ne!(
+            server
+                .raw(
+                    "GET",
+                    &format!("/api/lab/results/{id}/export?name={invalid}"),
+                    b"",
+                    true
+                )
+                .await
+                .0,
+            200
+        );
+    }
+    let note = Uuid::new_v4();
+    assert_eq!(server.api("PUT","/api/investigation/notes",json!({"id":note,"title":"Hypothesis","body":"<script>never execute</script>","revision":0,"target":{"store":"source","path":"missing.png"}})).await.0,200);
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/investigation/notes",
+                json!({"id":note,"title":"Stale","body":"lost","revision":0})
+            )
+            .await
+            .0,
+        409
+    );
+    assert_eq!(server.api("PUT","/api/investigation/notes",json!({"id":Uuid::new_v4(),"title":"Escape","body":"","revision":0,"target":{"store":"source","path":"../private"}})).await.0,400);
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, library) = server.api("GET", "/api/lab/library", Value::Null).await;
+    assert_eq!(library["entries"][0]["entry"]["title"], "Renamed bytes");
+    assert_eq!(library["entries"][0]["record"], result["result"]);
+    let (_, notes) = server
+        .api("GET", "/api/investigation/notes", Value::Null)
+        .await;
+    assert_eq!(notes[0]["target"]["path"], "missing.png");
+    assert_eq!(notes[0]["body"], "<script>never execute</script>");
+    std::fs::remove_file(
+        directory
+            .path()
+            .join(format!("artifacts/lab/{id}/value.bin")),
+    )
+    .unwrap();
+    let (_, library) = server.api("GET", "/api/lab/library", Value::Null).await;
+    assert_eq!(library["entries"][0]["entry"]["id"], id);
+    assert!(library["entries"][0]["record"].is_null());
+    assert!(library["entries"][0]["error"].is_string());
+    assert_eq!(
+        server.api("GET", "/api/lab/history", Value::Null).await.0,
+        503
+    );
+}

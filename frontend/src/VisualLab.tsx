@@ -16,6 +16,7 @@ import {
   resultUrl,
   structured,
 } from "./lab-api";
+import { SavedResultActions } from "./SavedResultActions";
 import type { Store } from "./workspace-api";
 
 function channels(model: string): string[] {
@@ -35,22 +36,34 @@ function channels(model: string): string[] {
   }
 }
 export default function VisualLab({
+  initialResult,
   store,
   path,
 }: {
   store: Store;
   path: string;
+  initialResult?: LabResult;
 }) {
   const [catalog, setCatalog] = useState<Operation[]>([]);
-  const [original, setOriginal] = useState<LabResult | null>(null);
-  const [image, setImage] = useState<LabResult | null>(null);
-  const [results, setResults] = useState<LabResult[]>([]);
-  const [selected, setSelected] = useState<LabResult | null>(null);
+  const [original, setOriginal] = useState<LabResult | null>(
+    initialResult ?? null,
+  );
+  const [image, setImage] = useState<LabResult | null>(initialResult ?? null);
+  const [results, setResults] = useState<LabResult[]>(
+    initialResult ? [initialResult] : [],
+  );
+  const [selected, setSelected] = useState<LabResult | null>(
+    initialResult ?? null,
+  );
   const [content, setContent] = useState<unknown>(null);
   const [counts, setCounts] = useState<Histogram | null>(null);
   const [pixel, setPixel] = useState<number[] | null>(null);
   const [channelPreview, setChannelPreview] = useState<string | null>(null);
-  const [channel, setChannel] = useState("");
+  const [channel, setChannel] = useState(
+    initialResult?.metadata
+      ? (channels(initialResult.metadata.color_model)[0] ?? "")
+      : "",
+  );
   const [x, setX] = useState(0),
     [y, setY] = useState(0);
   const [busy, setBusy] = useState(false),
@@ -126,10 +139,21 @@ export default function VisualLab({
       retain(decoded);
     });
   }
+  useEffect(() => {
+    if (!initialResult) return;
+    const controller = new AbortController();
+    operations(controller.signal).then(setCatalog, (error) => {
+      if (!controller.signal.aborted)
+        setError(
+          error instanceof Error ? error.message : "Core catalog unavailable.",
+        );
+    });
+    return () => controller.abort();
+  }, [initialResult]);
   const info = image?.metadata;
   const availableChannels = info ? channels(info.color_model) : [];
   const input = image ? { type: "artifact" as const, id: image.id } : null;
-  const ready = !busy && Boolean(input);
+  const ready = !busy && Boolean(input) && catalog.length > 0;
   const validPixel = Boolean(
     info &&
       Number.isInteger(x) &&
@@ -515,6 +539,9 @@ export default function VisualLab({
                 )}
               />
             </details>
+          )}
+          {selected?.retained && (
+            <SavedResultActions key={selected.id} result={selected} />
           )}
           {content !== null && (
             <section aria-label="Structured Core result">
