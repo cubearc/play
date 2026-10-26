@@ -139,4 +139,5 @@ jobs:
       - run: npm ci --prefix frontend
       - run: cd frontend && npx playwright install --with-deps chromium
       - run: docker build --target runner-tests --build-context cube_engine=../cube .
+      - run: docker build --target lab-tests --build-context cube_engine=../cube .
       - run: python3 tests/runtime_smoke.py

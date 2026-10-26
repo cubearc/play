@@ -7,8 +7,20 @@ use std::{
 
 use play_local::config::Config;
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    if std::env::args().skip(1).eq(["--lab-worker"]) {
+        return play_local::lab::worker_main();
+    }
+    match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime.block_on(application_main()),
+        Err(_) => ExitCode::FAILURE,
+    }
+}
+
+async fn application_main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

@@ -182,6 +182,12 @@ fn main(){
                     self.assertEqual(response.status, 201)
                 self.assertFalse((source / "private-notes.txt").exists())
                 self.assertEqual(files_api(origin, "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
+                operation_id = str(uuid.uuid4())
+                request = urllib.request.Request(origin + "/api/lab/execute", data=json.dumps({"id": operation_id, "operation": "encoding.base64.encode", "version": 1, "input": {"type": "bytes", "base64": "AP+A"}}).encode(), method="POST", headers={"Origin": origin, "Content-Type": "application/json"})
+                with opener.open(request, timeout=10) as response:
+                    lab_result = json.load(response)
+                    self.assertEqual(lab_result["inline"]["data"], "AP+A")
+                self.assertEqual(files_api(origin, "/api/lab/results/" + operation_id)["result"], lab_result["result"])
                 investigation = files_api(origin, "/api/investigation")
                 saved_view = {"store": "imports", "path": "", "offset": 0, "selected": {"store": "imports", "path": "private-notes.txt"}}
                 self.assertEqual(save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": investigation["revision"]})["revision"], 2)
@@ -277,6 +283,7 @@ fn main(){
                 self.assertEqual(files_api(urllib.parse.urlsplit(restarted)._replace(path="", query="", fragment="").geturl(), "/api/workspace/inspect?store=imports&path=private-notes.txt")["text"]["value"], imported.decode())
                 recovered_origin, _ = authenticate(restarted)
                 recovered = files_api(recovered_origin, "/api/investigation")
+                self.assertEqual(files_api(recovered_origin, "/api/lab/results/" + operation_id)["result"], lab_result["result"])
                 self.assertEqual(recovered["id"], investigation["id"])
                 self.assertEqual(recovered["title"], "Persistent case")
                 self.assertEqual(recovered["view"], saved_view)

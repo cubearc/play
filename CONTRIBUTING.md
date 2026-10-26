@@ -31,7 +31,9 @@ To exercise files, use the launcher or configure both `CUBE_PLAY_SOURCE` and
 Set `CUBE_PLAY_DATA` to enable the persisted file workspace and imports; SQLite uses its sibling `state/`
 directory, or an explicit `CUBE_PLAY_STATE` override. See [local persistence](docs/persistence.md)
 for private directory permissions, migration rules and recovery. The browser harness manages its own
-temporary fixtures automatically.
+temporary fixtures automatically. See the [typed Lab API](docs/lab-api.md) for
+discovery, requests and resource limits; its integration tests start the real
+server and real Core worker, including cancellation, binary results and restart recovery.
 
 ## Quality checks
 
@@ -71,6 +73,7 @@ Test the real Compose image and runtime from the root:
 ```sh
 python3 tests/runtime_smoke.py
 docker build --target runner-tests --build-context cube_engine=../cube .
+docker build --target lab-tests --build-context cube_engine=../cube .
 ```
 
 The suite uses unique Compose projects and available loopback ports, builds the

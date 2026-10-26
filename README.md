@@ -8,7 +8,8 @@ Browse files, preview supported media/text, inspect original bytes and explicitl
 import private copies without changing the source. Investigation names and file
 navigation persist in a private local SQLite database. See [local persistence](docs/persistence.md)
 for storage limits, migrations and recovery. The [isolated Cube terminal](docs/terminal.md)
-executes real CLI commands. Visual Lab, full
+executes real CLI commands. The [typed Lab API](docs/lab-api.md) exposes Core operations
+and managed results. Visual Lab controls, full
 notes/artifact workflows and structured challenges remain tracked in
 [GitHub Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).

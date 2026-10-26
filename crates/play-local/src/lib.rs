@@ -1,5 +1,6 @@
 //! Local application boundary. Cube Core owns investigation algorithms.
 pub mod config;
+pub mod lab;
 mod persistence;
 mod security;
 mod terminal;
@@ -22,6 +23,7 @@ use config::Config;
 #[derive(Clone)]
 struct AppState {
     persistence: PersistenceHandle,
+    lab: Arc<lab::State>,
     config: Arc<Config>,
     secret: Arc<str>,
     workspace: workspace::Result<Option<Arc<workspace::Workspace>>>,
@@ -54,6 +56,7 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
     let persistence = PersistenceHandle::default();
     let state = AppState {
         persistence: persistence.clone(),
+        lab: Arc::new(lab::State::default()),
         workspace: workspace::Workspace::open(&config),
         config: Arc::new(config),
         secret: secret.into(),
@@ -66,6 +69,7 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
         .route("/workspace/import", post(workspace::import))
         .merge(persistence::routes())
         .merge(terminal::routes())
+        .merge(lab::routes())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             security::require_session,

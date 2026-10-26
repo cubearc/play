@@ -8,6 +8,8 @@ test.skip(
 test("executes real Cube commands through xterm and closes the process session", async ({
   page,
 }) => {
+  // Real CLI, resizing and the full accessibility audit share this test budget.
+  test.setTimeout(60_000);
   const url = process.env.CUBE_PLAY_DOCKER_TEST_URL;
   if (!url) throw new Error("Real runner session unavailable");
   await page.goto(url);

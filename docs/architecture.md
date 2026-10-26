@@ -1,8 +1,8 @@
 # Architecture
 
 Cube Play is a local application with one Rust API and one React interface.
-The application contains `crates/play-local`, the host-side `crates/play-launcher`
-and `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
+The Rust workspace contains `crates/play-local`, the host-side `crates/play-launcher`
+and `crates/play-runner`, alongside the React `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
 no second operation registry, challenge parser or idle execution service.
 
 ## Request boundary
@@ -79,6 +79,11 @@ sources and the minimal Python member manifest/entry point needed by Cargo.
 Credentials, history, fixtures and build caches are excluded. Only compiled Rust
 binaries enter the runtime image.
 A maintainer must configure read-only source access for hosted CI while Core is private.
+
+The [typed Lab API](lab-api.md) derives discovery from Core, resolves authorized
+inputs and executes one bounded operation in a short-lived backend worker. It
+terminates and reaps workers on timeout/cancellation; generated result bundles
+use the existing artifact volume, separate from source and private SQLite state.
 
 Use the versioned direct `cube-core` dependency for algorithms, semantic types,
 validation and operation metadata. Descriptors describe functions, not universal
