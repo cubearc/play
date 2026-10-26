@@ -163,7 +163,10 @@ pub(super) async fn run(
                         } else {
                             match frame {
                                 Client::Input { data } => {
-                                    input_tx.try_send(data).err().map(|_| "input_backpressure")
+                                    match tokio::time::timeout(Duration::from_secs(2), input_tx.send(data)).await {
+                                        Ok(Ok(())) => None,
+                                        _ => Some("input_backpressure"),
+                                    }
                                 },
                                 Client::Resize { size } => {
                                     let actual = {
