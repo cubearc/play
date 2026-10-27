@@ -323,26 +323,46 @@ export async function executions(
       signal,
     ),
     512,
-  ).map((value) => {
-    const e = object(value);
-    if (
-      !["running", "succeeded", "failed", "cancelled", "interrupted"].includes(
-        String(e.status),
-      )
-    )
-      throw invalid();
-    return {
-      id: text(e.id),
-      configuration_revision: integer(e.configuration_revision),
-      step: text(e.step),
-      status: e.status as Execution["status"],
-      stale: flag(e.stale),
-      evidence: object(json(e.evidence)) as Record<string, Json>,
-      started_ms: integer(e.started_ms),
-      ended_ms: e.ended_ms === null ? null : integer(e.ended_ms),
-    };
-  });
+  ).map(parseExecution);
 }
+function parseExecution(value: unknown): Execution {
+  const e = object(value);
+  if (
+    !["running", "succeeded", "failed", "cancelled", "interrupted"].includes(
+      String(e.status),
+    )
+  )
+    throw invalid();
+  return {
+    id: text(e.id),
+    configuration_revision: integer(e.configuration_revision),
+    step: text(e.step),
+    status: e.status as Execution["status"],
+    stale: flag(e.stale),
+    evidence: object(json(e.evidence)) as Record<string, Json>,
+    started_ms: integer(e.started_ms),
+    ended_ms: e.ended_ms === null ? null : integer(e.ended_ms),
+  };
+}
+export async function execution(
+  id: string,
+  signal: AbortSignal,
+): Promise<Execution & { exploration_id: string }> {
+  const value = object(
+    await request(
+      `/explorations/executions/${encodeURIComponent(id)}`,
+      "GET",
+      undefined,
+      signal,
+    ),
+  );
+  if (value.schema_version !== 1) throw invalid();
+  return {
+    ...parseExecution(value),
+    exploration_id: text(value.exploration_id),
+  };
+}
+
 export async function executeStep(
   exploration: Exploration,
   step: Step,

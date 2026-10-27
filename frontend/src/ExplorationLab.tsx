@@ -17,6 +17,7 @@ import {
   type Step,
   saveExploration,
 } from "./exploration-api";
+import type { EvidenceTarget } from "./notebook-api";
 import { OperationParameters } from "./OperationParameters";
 import { SchemaField } from "./SchemaField";
 import { TypedOutputs } from "./TypedOutputs";
@@ -24,8 +25,10 @@ import type { Store } from "./workspace-api";
 
 export function ExplorationLab({
   asset,
+  onAnnotate,
 }: {
   asset: { store: Store; path: string } | null;
+  onAnnotate?: ((target: EvidenceTarget) => void) | undefined;
 }) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [items, setItems] = useState<Exploration[]>([]);
@@ -136,6 +139,7 @@ export function ExplorationLab({
               asset={asset}
               onSaved={saved}
               onEditingChange={setEditing}
+              onAnnotate={onAnnotate}
             />
           ) : (
             <p className="exploration-empty">
@@ -187,12 +191,14 @@ function Editor({
   asset,
   onSaved,
   onEditingChange,
+  onAnnotate,
 }: {
   initial: Exploration;
   catalog: CatalogEntry[];
   asset: { store: Store; path: string } | null;
   onSaved: (value: Exploration) => void;
   onEditingChange: (editing: boolean) => void;
+  onAnnotate?: ((target: EvidenceTarget) => void) | undefined;
 }) {
   const formId = useId();
   const [draft, setDraft] = useState(initial);
@@ -619,7 +625,24 @@ function Editor({
               to replay it.
             </p>
           )}
-          {output !== null && <TypedOutputs key={output.id} result={output} />}
+          {output !== null && (
+            <TypedOutputs
+              key={output.id}
+              result={output}
+              onAnnotate={
+                onAnnotate &&
+                runs.some((r) => r.evidence.result_id === output.id)
+                  ? (port) => {
+                      const run = runs.find(
+                        (r) => r.evidence.result_id === output.id,
+                      );
+                      if (run)
+                        onAnnotate({ execution_id: run.id, output_port: port });
+                    }
+                  : undefined
+              }
+            />
+          )}
           <details>
             <summary>
               Execution history ·{" "}
@@ -630,6 +653,20 @@ function Editor({
                 .filter((r) => r.step === step.id)
                 .map((run) => (
                   <li key={run.id}>
+                    {onAnnotate && (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() =>
+                          onAnnotate({
+                            execution_id: run.id,
+                            output_port: null,
+                          })
+                        }
+                      >
+                        Annotate execution
+                      </button>
+                    )}
                     {run.status}
                     {run.stale ? " · earlier configuration" : ""} ·{" "}
                     {new Date(run.started_ms).toLocaleString()}

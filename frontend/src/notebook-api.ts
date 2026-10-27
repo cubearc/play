@@ -1,12 +1,17 @@
 import { apiFetch } from "./capability";
 import { type LabResult, object, parseResult } from "./lab-api";
 import type { Store } from "./workspace-api";
+export type EvidenceTarget = {
+  execution_id: string;
+  output_port: string | null;
+};
+export type NoteTarget = { store: Store; path: string } | EvidenceTarget;
 export type Note = {
   id: string;
   revision: number;
   title: string;
   body: string;
-  target: { store: Store; path: string } | null;
+  target: NoteTarget | null;
 };
 export type Saved = {
   entry: { id: string; title: string; revision: number };
@@ -68,21 +73,38 @@ export async function notes(signal: AbortSignal): Promise<Note[]> {
       typeof note.revision !== "number"
     )
       throw new Error("Invalid local note.");
-    const target = note.target === null ? null : object(note.target);
-    if (
-      target &&
-      (typeof target.path !== "string" ||
-        !["source", "imports"].includes(String(target.store)))
-    )
-      throw new Error("Invalid note association.");
+    const raw = note.target === null ? null : object(note.target);
+    let target: NoteTarget | null = null;
+    if (raw && "execution_id" in raw) {
+      if (
+        typeof raw.execution_id !== "string" ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
+          raw.execution_id,
+        ) ||
+        (raw.output_port !== null &&
+          (typeof raw.output_port !== "string" ||
+            !raw.output_port ||
+            raw.output_port.length > 128))
+      )
+        throw new Error("Invalid note execution association.");
+      target = {
+        execution_id: raw.execution_id,
+        output_port: raw.output_port as string | null,
+      };
+    } else if (raw) {
+      if (
+        typeof raw.path !== "string" ||
+        !["source", "imports"].includes(String(raw.store))
+      )
+        throw new Error("Invalid note association.");
+      target = { store: raw.store as Store, path: raw.path };
+    }
     return {
       id: note.id,
       title: note.title,
       body: note.body,
       revision: note.revision,
-      target: target
-        ? { store: target.store as Store, path: target.path as string }
-        : null,
+      target,
     };
   });
 }

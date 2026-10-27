@@ -23,6 +23,12 @@ run without executing it again. The stored artifact identity, hash and named-por
 schemas must match the immutable execution evidence. Missing or private unretained
 outputs remain visible as history; reopening never replaces them or runs a repair.
 
+**Annotate selected output** carries that actual execution and named port into
+Notes. Create or associate a note explicitly; an existing draft stays intact.
+History also offers **Annotate execution** for observations about successful or
+failed attempts. A linked note can inspect the original output after subsequent
+graph edits, runs and restarts. See [private notes](notebook.md).
+
 **Replay inputs** checks the retained dependency path when a typed result opens.
 It compares current authorized file bytes and named artifact values with their
 recorded digests, checks operation/schema identities and reports private parameters
@@ -87,6 +93,10 @@ The original [Lab API](lab-api.md) remains available. Named-port clients use:
 - `GET /api/explorations/{id}` and `/executions`: reopen a configuration and its
   actual execution attempts. Completed attempts are immutable; interrupted runs
   are recovered explicitly on restart.
+- `GET /api/explorations/executions/{id}`: inspect one actual attempt by its UUID,
+  including the exploration/configuration/step reference and whether the
+  editable graph has advanced. Notes may link to this exact attempt and a retained
+  output port. Reading never starts a worker or repairs missing output.
 - `GET /api/lab/results/{id}/replay`: inspect availability of a retained result's
   actual inputs and dependencies. Returns schema version 1, `artifact_id`,
   `status` (`inputs_available` or `gaps`), bounded check counters and typed gaps.

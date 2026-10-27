@@ -15,6 +15,41 @@ vi.mock("echarts/core", () => ({
   })),
 }));
 afterEach(() => vi.unstubAllGlobals());
+it("annotates the explicitly selected retained port and refuses unretained output", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      Response.json({
+        schema_version: 1,
+        artifact_id: id,
+        status: "inputs_available",
+        checked_artifacts: 1,
+        gaps: [],
+      }),
+    ),
+  );
+  const value = result(
+    { text: "Text", bytes: { base64: "AP8=" } },
+    { text: "text", bytes: "bytes" },
+  );
+  value.record.retained = true;
+  const annotate = vi.fn();
+  const view = render(<TypedOutputs result={value} onAnnotate={annotate} />);
+  await userEvent.selectOptions(screen.getByLabelText("Output port"), "bytes");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Annotate selected output" }),
+  );
+  expect(annotate).toHaveBeenCalledWith("bytes");
+  view.rerender(
+    <TypedOutputs
+      result={{ ...value, record: { ...value.record, retained: false } }}
+      onAnnotate={annotate}
+    />,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Annotate selected output" }),
+  ).toBeNull();
+});
 function result(
   output: OperationResult["output"],
   semantics: Record<string, string>,

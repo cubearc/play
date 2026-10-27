@@ -13,6 +13,213 @@ use uuid::Uuid;
 static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
+async fn notes_bind_actual_attempts_and_ports_without_following_a_later_graph_revision() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let graph = Uuid::new_v4();
+    let step = Uuid::new_v4();
+    let mut definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Evidence notes","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"text.reverse","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABC"}},"parameters":{},"private_parameters":[],"position":[0,0]}]});
+    assert_eq!(
+        server
+            .api("PUT", "/api/explorations", definition.clone())
+            .await
+            .0,
+        200
+    );
+    let invoke = |id, revision, input| json!({"schema_version":2,"id":id,"operation":"text.reverse","operation_version":1,"inputs":{"input":input},"parameters":{},"exploration":{"id":graph,"revision":revision,"step":step}});
+    let first = Uuid::new_v4();
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(first, 1, json!({"type":"literal","value":"ABC"})),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    let note_id = Uuid::new_v4();
+    let mut note = json!({"id":note_id,"revision":0,"title":"Original output","body":"Keep the actual first attempt","target":{"execution_id":first,"output_port":"output"}});
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", note.clone())
+            .await
+            .0,
+        200
+    );
+    for target in [
+        json!({"execution_id":Uuid::new_v4(),"output_port":null}),
+        json!({"execution_id":first,"output_port":"missing"}),
+        json!({"execution_id":first,"output_port":"output","path":"../outside"}),
+    ] {
+        let mut invalid = note.clone();
+        invalid["id"] = json!(Uuid::new_v4());
+        invalid["target"] = target;
+        assert_eq!(
+            server
+                .api("PUT", "/api/investigation/notes", invalid)
+                .await
+                .0,
+            400
+        );
+    }
+    let other_directory = tempfile::tempdir().unwrap();
+    let other = Server::start(other_directory.path(), Uuid::new_v4());
+    assert_eq!(
+        other
+            .api("PUT", "/api/investigation/notes", note.clone())
+            .await
+            .0,
+        400
+    );
+    drop(other);
+    definition["revision"] = json!(1);
+    definition["steps"][0]["inputs"]["input"]["value"] = json!("XYZ");
+    assert_eq!(
+        server
+            .api("PUT", "/api/explorations", definition.clone())
+            .await
+            .0,
+        200
+    );
+    let second = Uuid::new_v4();
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                invoke(second, 2, json!({"type":"literal","value":"XYZ"}))
+            )
+            .await
+            .0,
+        200
+    );
+    let (_, run) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/executions/{first}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(run["id"], first.to_string());
+    assert_eq!(run["exploration_id"], graph.to_string());
+    assert_eq!(run["configuration_revision"], 1);
+    assert_eq!(run["stale"], true);
+    assert_eq!(run["evidence"]["result_id"], first.to_string());
+    note["revision"] = json!(1);
+    note["body"] = json!("Editable commentary on immutable old evidence");
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", note.clone())
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", note.clone())
+            .await
+            .0,
+        409
+    );
+    let (_, notes) = server
+        .api("GET", "/api/investigation/notes", Value::Null)
+        .await;
+    assert_eq!(notes[0]["target"], note["target"]);
+    assert_eq!(notes[0]["revision"], 2);
+    std::fs::write(directory.path().join("source/invalid.bin"), [255]).unwrap();
+    let file = json!({"type":"file","store":"source","path":"invalid.bin","representation":"text"});
+    definition["revision"] = json!(2);
+    definition["steps"][0]["inputs"]["input"] = file.clone();
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        200
+    );
+    let failed = Uuid::new_v4();
+    assert_ne!(
+        server
+            .api("POST", "/api/lab/v2/execute", invoke(failed, 3, file))
+            .await
+            .0,
+        200
+    );
+    let (_, run) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/executions/{failed}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(run["status"], "failed");
+    assert!(run["evidence"]["error"].is_object());
+    let failure_note = json!({"id":Uuid::new_v4(),"revision":0,"title":"Failed attempt","body":"No output was produced","target":{"execution_id":failed,"output_port":null}});
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", failure_note.clone())
+            .await
+            .0,
+        200
+    );
+    let mut invalid = failure_note;
+    invalid["id"] = json!(Uuid::new_v4());
+    invalid["target"]["output_port"] = json!("output");
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", invalid)
+            .await
+            .0,
+        400
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, notes) = server
+        .api("GET", "/api/investigation/notes", Value::Null)
+        .await;
+    let preserved = notes
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"] == note_id.to_string())
+        .unwrap();
+    assert_eq!(preserved["target"], note["target"]);
+    assert_eq!(preserved["body"], note["body"]);
+    std::fs::write(
+        directory
+            .path()
+            .join(format!("artifacts/lab/{first}/value.bin")),
+        b"corrupt",
+    )
+    .unwrap();
+    assert_ne!(
+        server
+            .api("GET", &format!("/api/lab/results/{first}"), Value::Null)
+            .await
+            .0,
+        200
+    );
+    note["revision"] = json!(2);
+    note["body"] = json!("Evidence is unavailable; keep its reference for recovery");
+    assert_eq!(
+        server
+            .api("PUT", "/api/investigation/notes", note.clone())
+            .await
+            .0,
+        200
+    );
+    let (_, notes) = server
+        .api("GET", "/api/investigation/notes", Value::Null)
+        .await;
+    assert_eq!(
+        notes
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == note_id.to_string())
+            .unwrap()["target"],
+        note["target"]
+    );
+}
+
+#[tokio::test]
 async fn replay_checks_follow_actual_dependencies_and_report_changed_missing_and_private_inputs() {
     let directory = tempfile::tempdir().unwrap();
     let workspace = Uuid::new_v4();

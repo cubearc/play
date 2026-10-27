@@ -12,6 +12,69 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
+it("binds a note to an exact execution and preserves drafts when the selection changes", async () => {
+  const execution = {
+    execution_id: crypto.randomUUID(),
+    output_port: "report",
+  };
+  const sent: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url, options) => {
+      if (options.method !== "PUT") return Response.json([]);
+      sent.push(JSON.parse(options.body));
+      return Response.json({ revision: sent.length });
+    }),
+  );
+  const view = render(
+    <InvestigationNotes
+      target={{ store: "source", path: "original.txt" }}
+      evidence={execution}
+    />,
+  );
+  await screen.findByText("Notes saved locally");
+  vi.useFakeTimers();
+  fireEvent.click(
+    screen.getByRole("button", { name: "New note for selected execution" }),
+  );
+  fireEvent.change(screen.getByLabelText("Note body"), {
+    target: { value: "Exact output hypothesis" },
+  });
+  await act(() => vi.advanceTimersByTimeAsync(401));
+  expect(sent[0]).toMatchObject({
+    target: execution,
+    body: "Exact output hypothesis",
+  });
+  expect(
+    screen.getByText(
+      `Associated with: execution ${execution.execution_id} / report`,
+    ),
+  ).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Note body"), {
+    target: { value: "Retain this unsaved draft" },
+  });
+  view.rerender(
+    <InvestigationNotes
+      target={null}
+      evidence={{ execution_id: crypto.randomUUID(), output_port: null }}
+    />,
+  );
+  expect(screen.getByLabelText("Note body")).toHaveValue(
+    "Retain this unsaved draft",
+  );
+  expect(
+    screen.getByRole("button", { name: "New note for selected execution" }),
+  ).toBeDisabled();
+  await act(() => vi.advanceTimersByTimeAsync(401));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Associate with selected execution" }),
+  );
+  await act(() => vi.advanceTimersByTimeAsync(401));
+  expect(sent[2]).toMatchObject({
+    target: { output_port: null },
+    body: "Retain this unsaved draft",
+  });
+});
 it("coalesces rapid drafts and serializes edits made while a save is in flight", async () => {
   let release: (value: Response) => void = () => {};
   const sent: { revision: number; body: string }[] = [];

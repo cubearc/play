@@ -18,6 +18,7 @@ import {
   saveInvestigation,
   type View,
 } from "./investigation-api";
+import type { EvidenceTarget } from "./notebook-api";
 import { WorkspacePanels } from "./WorkspacePanels";
 
 function panelView(view: View, panel: Panel): View {
@@ -101,6 +102,7 @@ function SavedWorkspace({
   reload: () => void;
 }) {
   const [title, setTitle] = useState(investigation.title);
+  const [noteEvidence, setNoteEvidence] = useState<EvidenceTarget | null>(null);
   const [savedTitle, setSavedTitle] = useState(investigation.title);
   const [panel, setPanel] = useState<Panel>(
     initialSelection
@@ -305,7 +307,13 @@ function SavedWorkspace({
                   "Choose a file in Files, or begin with a typed literal input."
                 )}
               </p>
-              <ExplorationLab asset={selection} />
+              <ExplorationLab
+                asset={selection}
+                onAnnotate={(target) => {
+                  setNoteEvidence(target);
+                  changePanel("notes");
+                }}
+              />
               <details className="quick-tools">
                 <summary>Quick text and byte tools</summary>
                 <TextLab
@@ -319,7 +327,9 @@ function SavedWorkspace({
               </details>
             </>
           ),
-          notes: <InvestigationNotes target={selection} />,
+          notes: (
+            <InvestigationNotes target={selection} evidence={noteEvidence} />
+          ),
           artifacts: <ArtifactLibrary />,
           challenges: (
             <ChallengePanel

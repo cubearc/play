@@ -85,7 +85,7 @@ export default function App() {
         <a href="/" className="brand" aria-label="Cube Play home">
           <CubeMark />
           <span>
-            Cube<span className="brand-light">Play</span>
+            Cube <span className="brand-light">Play</span>
           </span>
         </a>
         <div className="header-actions">

@@ -7,6 +7,20 @@ are plain text; HTML and scripts are inert. Stale revisions stop autosave and re
 the draft in the editor. Copy it before explicitly reloading/discarding it; newer
 stored content is never silently overwritten. Empty titles must be corrected.
 
+For a typed exploration result, choose **Output port**, then **Annotate selected
+output**. In Notes, choose **New note for selected execution** or associate the
+current note with that execution. Existing drafts are preserved. **Annotate
+execution** in execution history can also record observations about failed attempts.
+The association identifies the actual attempt and optional output port; changing
+the graph or running it again never redirects the note to a newer result.
+
+Choose **Inspect linked execution** to read its status, configuration revision,
+recorded evidence and retained output without running it again. Missing/corrupt
+artifacts remain explicit errors while the note reference and editable commentary
+remain available. Unretained output cannot acquire an output association.
+These notes use the existing SQLite association field; file/investigation notes
+and existing IDs remain unchanged.
+
 Select any generated Lab result, enter an artifact name and choose **Save named
 artifact**. Names and optimistic revisions live in the existing SQLite database;
 exact bytes, type, parameters, digests and lineage stay in immutable Lab bundles on
@@ -45,6 +59,12 @@ New endpoints use the existing local session and Host/Origin checks:
 `GET /api/lab/results/{id}/export?name=result.bin`. Library writes use an existing
 result UUID, title and revision (0 creates; subsequent writes use the returned
 revision). Export names reject paths, reserved names and header injection.
+
+Note `target` is `null`, `{store, path}`, or `{execution_id, output_port}` with a
+local attempt UUID and a recorded retained port name (or `null` for the whole
+attempt). Unknown attempts, other workspaces, invalid ports and mixed reference
+fields are rejected. `GET /api/explorations/executions/{id}` returns the actual
+attempt and configuration reference; it performs no operation or implicit replay.
 
 Historical cipher profiles use the same typed exploration controls and named
 ports. Gronsfeld, Autokey, Quagmire, square/matrix ciphers and the other explicit

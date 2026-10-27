@@ -75,8 +75,18 @@ function Content({ semantic, value }: { semantic: string; value: Json }) {
     />
   );
 }
-export function TypedOutputs({ result }: { result: OperationResult }) {
-  const [selected, setSelected] = useState(result.ports[0]?.name ?? "");
+export function TypedOutputs({
+  result,
+  initialPort,
+  onAnnotate,
+}: {
+  result: OperationResult;
+  initialPort?: string | undefined;
+  onAnnotate?: ((port: string) => void) | undefined;
+}) {
+  const [selected, setSelected] = useState(
+    initialPort ?? result.ports[0]?.name ?? "",
+  );
   const port = result.ports.find((port) => port.name === selected);
   const value = result.output[selected];
   return (
@@ -107,21 +117,38 @@ export function TypedOutputs({ result }: { result: OperationResult }) {
       ) : (
         <p>This optional output was not produced.</p>
       )}
+      {onAnnotate && result.record.retained && port && value !== undefined && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => onAnnotate(port.name)}
+        >
+          Annotate selected output
+        </button>
+      )}
       <p>
         Preview is limited to 65,536 characters. Export retains the complete
         output bundle.
       </p>
       <details>
         <summary>Output data and provenance</summary>
-        <pre>
-          {JSON.stringify(result.output, null, 2).slice(0, PREVIEW_LIMIT)}
-        </pre>
-        <pre>
-          {JSON.stringify(result.record.provenance, null, 2).slice(
+        <textarea
+          className="text-preview"
+          readOnly
+          rows={8}
+          aria-label="Named output bundle JSON"
+          value={JSON.stringify(result.output, null, 2).slice(0, PREVIEW_LIMIT)}
+        />
+        <textarea
+          className="text-preview"
+          readOnly
+          rows={8}
+          aria-label="Recorded operation provenance JSON"
+          value={JSON.stringify(result.record.provenance, null, 2).slice(
             0,
             PREVIEW_LIMIT,
           )}
-        </pre>
+        />
         {port && (
           <p>
             Schema SHA-256: <code>{port.schema_sha256}</code>

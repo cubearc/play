@@ -1287,13 +1287,11 @@ summary:focus-visible {
   color: #42584c;
   padding: 0 6px;
 }
-.step-inspector pre {
-  max-height: 320px;
-  overflow: auto;
-  padding: 16px;
-  font-size: 12px;
-  background: #f5f8f6;
-  border-radius: 8px;
+.linked-execution {
+  min-width: 0;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e7e5;
 }
 .step-inspector code {
   display: block;

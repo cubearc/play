@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { type Note, notes, request } from "./notebook-api";
+import { LinkedExecution } from "./LinkedExecution";
+import { type EvidenceTarget, type Note, notes, request } from "./notebook-api";
 import type { Store } from "./workspace-api";
 
 function validNote(value: Note) {
@@ -10,7 +11,13 @@ function validNote(value: Note) {
   );
 }
 type Target = { store: Store; path: string } | null;
-export function InvestigationNotes({ target }: { target: Target }) {
+export function InvestigationNotes({
+  target,
+  evidence,
+}: {
+  target: Target;
+  evidence?: EvidenceTarget | null | undefined;
+}) {
   const [items, setItems] = useState<Note[]>([]),
     [active, setActive] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null),
@@ -129,7 +136,39 @@ export function InvestigationNotes({ target }: { target: Target }) {
         Autosaved only in this investigation. Wait for the saved confirmation
         before leaving.
       </p>
+      {evidence && (
+        <p>
+          Selected execution: <code>{evidence.execution_id}</code>
+          {evidence.output_port && (
+            <>
+              {" "}
+              / <code>{evidence.output_port}</code>
+            </>
+          )}
+          . Existing note drafts are preserved until you choose a note action.
+        </p>
+      )}
       <div className="lab-controls">
+        {evidence && (
+          <button
+            type="button"
+            className="button secondary"
+            disabled={status === "Loading notes…" || (dirty && active !== null)}
+            onClick={() => {
+              const note: Note = {
+                id: crypto.randomUUID(),
+                revision: 0,
+                title: "Evidence note",
+                body: "",
+                target: evidence,
+              };
+              setActive(note);
+              edit(note);
+            }}
+          >
+            New note for selected execution
+          </button>
+        )}
         <button
           type="button"
           className="button secondary"
@@ -181,7 +220,9 @@ export function InvestigationNotes({ target }: { target: Target }) {
           <p>
             Associated with:{" "}
             {active.target
-              ? `${active.target.store}/${active.target.path}`
+              ? "execution_id" in active.target
+                ? `execution ${active.target.execution_id}${active.target.output_port ? ` / ${active.target.output_port}` : ""}`
+                : `${active.target.store}/${active.target.path}`
               : "this investigation"}
           </p>
           <button
@@ -192,6 +233,22 @@ export function InvestigationNotes({ target }: { target: Target }) {
           >
             Associate with selected file or investigation
           </button>
+          {evidence && (
+            <button
+              type="button"
+              className="button secondary"
+              disabled={blocked.current}
+              onClick={() => edit({ ...active, target: evidence })}
+            >
+              Associate with selected execution
+            </button>
+          )}
+          {active.target && "execution_id" in active.target && (
+            <LinkedExecution
+              key={`${active.target.execution_id}:${active.target.output_port ?? ""}`}
+              target={active.target}
+            />
+          )}
         </div>
       )}
       <p role="status">{status}</p>

@@ -1,4 +1,5 @@
 //! Private bounded exploration histories in the existing SQLite database.
+mod evidence;
 mod model;
 use super::{Database, conflict, failed, invalid, now};
 use crate::{
@@ -10,6 +11,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path, State},
     routing::get,
 };
+pub(crate) use evidence::EvidenceTarget;
 pub(crate) use model::Context;
 pub(crate) use model::{Definition, Source};
 use serde_json::{Value, json};
@@ -21,6 +23,7 @@ pub(super) fn routes() -> Router<AppState> {
         .route("/explorations", get(list).put(save))
         .route("/explorations/{id}", get(load))
         .route("/explorations/{id}/executions", get(executions))
+        .route("/explorations/executions/{id}", get(execution))
         .layer(DefaultBodyLimit::max(65536))
 }
 async fn db(state: &AppState) -> Result<std::sync::Arc<Database>> {
@@ -63,6 +66,9 @@ async fn executions(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<Value>>> {
     Ok(Json(db(&state).await?.exploration_executions(id).await?))
+}
+async fn execution(State(state): State<AppState>, Path(id): Path<Uuid>) -> Result<Json<Value>> {
+    Ok(Json(db(&state).await?.execution(id).await?))
 }
 impl Database {
     async fn exploration(&self, id: Uuid, revision: i64) -> Result<Definition> {

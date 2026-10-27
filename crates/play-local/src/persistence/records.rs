@@ -71,7 +71,13 @@ pub(super) struct Note {
     pub title: String,
     pub body: String,
     #[serde(default)]
-    pub target: Option<Selection>,
+    pub target: Option<NoteTarget>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub(super) enum NoteTarget {
+    File(Selection),
+    Execution(super::explorations::EvidenceTarget),
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -167,7 +173,10 @@ impl Database {
     }
     pub(super) async fn save_note(&self, value: Note) -> Result<i64> {
         if let Some(target) = &value.target {
-            workspace::validate(&target.path, false)?;
+            match target {
+                NoteTarget::File(target) => workspace::validate(&target.path, false)?,
+                NoteTarget::Execution(target) => target.validate(self).await?,
+            }
         }
         let target = value
             .target
