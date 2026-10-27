@@ -19,7 +19,7 @@ async fn private_outputs_require_an_explicit_choice_before_retention_chaining_or
     let server = Server::start(directory.path(), workspace);
     let graph = Uuid::new_v4();
     let step = Uuid::new_v4();
-    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Private output choice","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.solitaire.decode","operation_version":1,"inputs":{"text":{"type":"literal","value":"EXKYIZSGEH"}},"parameters":{"max_steps":1048576},"private_parameters":["deck"],"position":[0,0]}]});
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Private output choice","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.solitaire.decode","operation_version":1,"inputs":{},"parameters":{"max_steps":1048576},"private_parameters":["deck"],"position":[0,0]}]});
     assert_eq!(
         server.api("PUT", "/api/explorations", definition).await.0,
         200
@@ -2382,6 +2382,165 @@ async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart()
         ops.iter()
             .filter(|v| v["execution"]["available"] == true)
             .count(),
-        203
+        cube_core::operations::catalog().len()
+    );
+}
+
+#[tokio::test]
+async fn every_catalog_operation_is_available_and_file_metadata_requires_workspace_authority() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let (status, catalog) = server
+        .api("GET", "/api/lab/v2/operations", Value::Null)
+        .await;
+    assert_eq!(status, 200);
+    let operations = catalog["operations"].as_array().unwrap();
+    assert_eq!(operations.len(), cube_core::operations::catalog().len());
+    for item in operations {
+        assert_eq!(
+            item["execution"]["available"], true,
+            "{}",
+            item["contract"]["operation"]
+        );
+    }
+    let source = directory.path().join("source/metadata.png");
+    std::fs::write(&source, b"\x89PNG\r\n\x1a\n").unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&source)
+        .unwrap()
+        .set_len(20 * 1024 * 1024)
+        .unwrap();
+    let request = |input| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"file.info.inspect","operation_version":1,"inputs":{"input":input},"parameters":{}});
+    let binding =
+        json!({"type":"file","store":"source","path":"metadata.png","representation":"bytes"});
+    let (status, result) = server
+        .api("POST", "/api/lab/v2/execute", request(binding))
+        .await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["inline"]["data"]["output"]["size"], 20 * 1024 * 1024);
+    assert_eq!(
+        result["inline"]["data"]["output"]["signatures"][0]["format"],
+        "png"
+    );
+    assert_eq!(
+        result["result"]["provenance"]["inputs"][0]["reference"]["digest_representation"],
+        "file_metadata_json"
+    );
+    for input in [
+        json!({"type":"literal","value":{"reference":"/etc/passwd"}}),
+        json!({"type":"file","store":"source","path":"../outside","representation":"bytes"}),
+        json!({"type":"file","store":"source","path":"/etc/passwd","representation":"bytes"}),
+    ] {
+        assert_ne!(
+            server
+                .api("POST", "/api/lab/v2/execute", request(input))
+                .await
+                .0,
+            200
+        );
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(directory.path(), directory.path().join("source/escape"))
+            .unwrap();
+        assert_ne!(server.api("POST","/api/lab/v2/execute",request(json!({"type":"file","store":"source","path":"escape/private","representation":"bytes"}))).await.0,200);
+    }
+    let data = include_bytes!("../../../tests/fixtures/sample.png");
+    let carve = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"file.carve","operation_version":1,"inputs":{"source":{"type":"literal","value":{"base64":cube_core::encoding::base64_encode(data)}}},"parameters":{"offset":0}});
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", carve).await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(
+        result["inline"]["data"]["data"]["base64"],
+        cube_core::encoding::base64_encode(data)
+    );
+    assert_eq!(std::fs::metadata(source).unwrap().len(), 20 * 1024 * 1024);
+}
+
+#[tokio::test]
+async fn private_input_literals_are_per_run_and_never_enter_configuration_or_input_fingerprints() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let graph = Uuid::new_v4();
+    let public = Uuid::new_v4();
+    let private = Uuid::new_v4();
+    let mut definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Private key validation","hypothesis":"","scope":null,"steps":[
+        {"id":public,"operation":"blockchain.scalar.validate","operation_version":1,"inputs":{},"parameters":{},"private_parameters":[],"position":[0,0]},
+        {"id":private,"operation":"blockchain.private.export","operation_version":1,"inputs":{},"parameters":{"output":"raw"},"private_parameters":[],"position":[1,0]}
+    ]});
+    let (status, saved) = server
+        .api("PUT", "/api/explorations", definition.clone())
+        .await;
+    assert_eq!(status, 200, "{saved}");
+    let mut material = [0u8; 32];
+    material[31] = 1;
+    let encoded = cube_core::encoding::base64_encode(&material);
+    let binding = json!({"type":"literal","value":{"base64":encoded}});
+    definition["revision"] = json!(1);
+    definition["steps"][0]["inputs"] = json!({"input":binding});
+    assert_ne!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        200
+    );
+    let invoke = |step, op, p| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":1,"inputs":{"input":binding},"parameters":p,"exploration":{"id":graph,"revision":1,"step":step}});
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(public, "blockchain.scalar.validate", json!({})),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["result"]["provenance"]["inputs"], json!([]));
+    assert_eq!(
+        result["result"]["metadata"]["private_inputs_redacted"],
+        true
+    );
+    assert!(!result.to_string().contains(&encoded));
+    let id = result["result"]["id"].as_str().unwrap();
+    let (_, replay) = server
+        .api("GET", &format!("/api/lab/results/{id}/replay"), Value::Null)
+        .await;
+    assert_eq!(replay["status"], "gaps");
+    let (status, transient) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(
+                private,
+                "blockchain.private.export",
+                json!({"output":"raw"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{transient}");
+    assert_eq!(transient["retained"], false);
+    let (_, history) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/{graph}/executions"),
+            Value::Null,
+        )
+        .await;
+    let private_run = history
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["step"] == private.to_string())
+        .unwrap();
+    assert_eq!(private_run["evidence"]["sha256"], Value::Null);
+    assert_eq!(private_run["evidence"]["inputs"], json!([]));
+    let (_, saved) = server
+        .api("GET", &format!("/api/explorations/{graph}"), Value::Null)
+        .await;
+    assert!(!saved.to_string().contains(&encoded));
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let mut missing = invoke(public, "blockchain.scalar.validate", json!({}));
+    missing["inputs"] = json!({});
+    assert_ne!(
+        server.api("POST", "/api/lab/v2/execute", missing).await.0,
+        200
     );
 }

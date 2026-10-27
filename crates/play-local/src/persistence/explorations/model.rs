@@ -213,6 +213,9 @@ impl Definition {
                     .ok_or_else(super::invalid)?;
                 match source {
                     Source::Literal { value } => {
+                        if contract.policy.private_input {
+                            return Err(super::invalid());
+                        }
                         operations::contracts::validate_value(&port.schema, value)
                             .map_err(|_| super::invalid())?
                     }
@@ -229,7 +232,10 @@ impl Definition {
                             _ => return Err(super::invalid()),
                         };
                         if port.semantic_type != semantic
-                            && !(semantic == "bytes" && port.semantic_type == "byte_reader")
+                            && !(semantic == "bytes"
+                                && (port.semantic_type == "byte_reader"
+                                    || (step.operation == "file.info.inspect"
+                                        && port.semantic_type == "file_path")))
                         {
                             return Err(super::invalid());
                         }

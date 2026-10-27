@@ -1,19 +1,39 @@
 //! Explicit adapters call typed Core APIs; descriptors never dispatch algorithms.
+mod audio;
+mod blockchain;
+mod brainfuck;
+mod files;
 mod fraction;
+mod image_analysis;
 mod images;
 mod linear;
 mod mono;
 mod numbers;
 mod poly;
 mod puzzle_codes;
+mod reasoning;
+mod symbols;
 mod text;
+mod text_analysis;
+mod video;
+mod workflows;
 
 use cube_core::errors::{ErrorCode, OperationError};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
-    puzzle_codes::supported(operation)
+    workflows::supported(operation)
+        || video::supported(operation)
+        || blockchain::supported(operation)
+        || brainfuck::supported(operation)
+        || audio::supported(operation)
+        || image_analysis::supported(operation)
+        || files::supported(operation)
+        || text_analysis::supported(operation)
+        || reasoning::supported(operation)
+        || symbols::supported(operation)
+        || puzzle_codes::supported(operation)
         || fraction::supported(operation)
         || cube_core::ciphers::mono::OPERATIONS
             .iter()
@@ -60,6 +80,20 @@ pub(super) fn execute(
         }
         _ if puzzle_codes::supported(operation) => {
             puzzle_codes::execute(operation, inputs, parameters)
+        }
+        _ if symbols::supported(operation) => symbols::execute(operation, inputs, parameters),
+        _ if reasoning::supported(operation) => reasoning::execute(operation, inputs, parameters),
+        _ if text_analysis::supported(operation) => {
+            text_analysis::execute(operation, inputs, parameters)
+        }
+        _ if files::supported(operation) => files::execute(operation, inputs, parameters),
+        _ if audio::supported(operation) => audio::execute(operation, inputs, parameters),
+        _ if brainfuck::supported(operation) => brainfuck::execute(operation, inputs, parameters),
+        _ if blockchain::supported(operation) => blockchain::execute(operation, inputs, parameters),
+        _ if video::supported(operation) => video::execute(operation, inputs, parameters),
+        _ if workflows::supported(operation) => workflows::execute(operation, inputs, parameters),
+        _ if image_analysis::supported(operation) => {
+            image_analysis::execute(operation, inputs, parameters)
         }
         _ if fraction::supported(operation) => fraction::execute(operation, inputs, parameters),
         _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),

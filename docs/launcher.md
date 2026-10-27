@@ -87,8 +87,9 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 16 adds an explicit per-run choice for retaining private operation
-outputs. It retains immutable private solutions and their local final-value
+Runtime revision 17 includes the complete typed Core catalog, explicit per-run
+private inputs and private output retention. Private values and input fingerprints
+stay outside saved configurations and execution provenance. It retains immutable private solutions and their local final-value
 inspector, and notes linked to exact execution attempts and output ports.
 It retains the host workspace chooser, section-based shell and persistent navigation,
 includes bounded replay-input diagnostics and preserves historical

@@ -182,15 +182,24 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
         worker.inputs,
         worker.parameters.clone(),
     )?);
+    finish(&contract, &worker.parameters, output)
+}
+// Filesystem metadata is already bounded to twelve header bytes. The trusted
+// capability resolver calls Core directly and reuses the same result validation.
+fn finish(
+    contract: &Contract,
+    effective_parameters: &Value,
+    output: Value,
+) -> Result<WorkerOutput> {
+    let output = contracts::canonical_value(output);
     checked(
         contract.validate_outputs(&output),
-        &worker.operation,
+        &contract.operation,
         "outputs",
     )?;
     let bytes = execute::json_bytes(&output, MAX_OUTPUT)?;
     // Private parameters stay ephemeral. Ordinary effective parameters are replayable.
-    let parameters = worker
-        .parameters
+    let parameters = effective_parameters
         .as_object()
         .ok_or_else(Error::invalid)?
         .iter()
@@ -208,7 +217,7 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
             Representation::Structured,
             "operation.outputs",
             &bytes,
-            json!({"schema_version":2,"ports":ports}),
+            json!({"schema_version":2,"ports":ports,"private_inputs_redacted":contract.policy.private_input}),
         ),
         parameters,
     })
@@ -273,6 +282,38 @@ pub(super) async fn resolve(
             }).await.map_err(|_|Error::storage())?
         }
     }
+}
+async fn authorized_file_info(
+    app: &AppState,
+    binding: Binding,
+) -> Result<(Value, InputRecord, Value)> {
+    let Binding::File {
+        store,
+        path,
+        representation: Representation::Bytes,
+    } = binding
+    else {
+        return Err(Error::new(
+            "contract_mismatch",
+            "Select an authorized workspace file; literal paths and artifact references grant no filesystem access.",
+        ));
+    };
+    let workspace = app
+        .workspace
+        .as_ref()
+        .map_err(|e| Error::from(*e))?
+        .clone()
+        .ok_or_else(Error::invalid)?;
+    let permit = workspace::permit(&workspace).await?;
+    tokio::task::spawn_blocking(move || {
+        let _permit=permit;
+        let mut file=workspace.file(store,&path)?;
+        let output=contracts::canonical_value(json!({"output":cube_core::forensics::inspect::file_info_reader(&mut file)?}));
+        let digest=execute::json_bytes(&output,MAX_INLINE)?;
+        let source=serde_json::to_value(store).map_err(|_|Error::invalid())?;
+        let value=json!({"reference":format!("{}:{}",source.as_str().ok_or_else(Error::invalid)?,path)});
+        Ok((value,InputRecord {reference:json!({"type":"file","store":store,"path":path,"representation":"bytes","digest_representation":"file_metadata_json"}),semantic_type:"file_path".into(),byte_size:digest.len(),sha256:cube_core::hashing::sha256(&digest)},output))
+    }).await.map_err(|_|Error::storage())?
 }
 async fn invoke(
     State(app): State<AppState>,
@@ -356,12 +397,24 @@ async fn job(
     let mut inputs = serde_json::Map::new();
     let mut records = Vec::new();
     let mut encoded_images = Vec::new();
+    let mut file_info_output = None;
     for (name, binding) in request.inputs {
         let port = contract
             .inputs
             .iter()
             .find(|p| p.name == name)
             .ok_or_else(Error::invalid)?;
+        if request.operation == "file.info.inspect" {
+            let (value, mut record, output) = authorized_file_info(&app, binding).await?;
+            record.reference["input_port"] = json!(name);
+            record.reference["schema_sha256"] = json!(cube_core::hashing::sha256(
+                &execute::json_bytes(&port.schema, 128 * 1024)?
+            ));
+            inputs.insert(name, value);
+            records.push(record);
+            file_info_output = Some(output);
+            continue;
+        }
         if let Binding::File { representation, .. } = &binding {
             if *representation == Representation::Image {
                 encoded_images.push(name.clone());
@@ -410,13 +463,20 @@ async fn job(
     if *cancellation.borrow() {
         return Err(Error::cancelled());
     }
-    let wire = execute::json_bytes(
-        &json!({"typed":Worker {operation:request.operation.clone(),operation_version:request.operation_version,inputs,parameters:request.parameters,encoded_images}}),
-        MAX_WIRE,
-    )?;
-    let output = super::worker_output(wire, request.timeout_ms, &mut cancellation).await?;
+    let output = if let Some(output) = file_info_output {
+        finish(&contract, &request.parameters, output)?
+    } else {
+        let wire = execute::json_bytes(
+            &json!({"typed":Worker {operation:request.operation.clone(),operation_version:request.operation_version,inputs,parameters:request.parameters,encoded_images}}),
+            MAX_WIRE,
+        )?;
+        super::worker_output(wire, request.timeout_ms, &mut cancellation).await?
+    };
     if *cancellation.borrow() {
         return Err(Error::cancelled());
+    }
+    if contract.policy.private_input {
+        records.clear();
     }
     let provenance = Provenance {
         operation: request.operation,

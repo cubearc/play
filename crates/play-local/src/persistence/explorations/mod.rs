@@ -11,6 +11,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path, State},
     routing::get,
 };
+use cube_core::operations;
 pub(crate) use evidence::EvidenceTarget;
 pub(crate) use model::Context;
 pub(crate) use model::{Definition, Source};
@@ -200,7 +201,31 @@ impl Database {
         for name in &step.private_parameters {
             supplied.remove(name);
         }
-        if inputs != &Value::Object(expected) || Value::Object(supplied) != step.parameters {
+        let contract = operations::require(operation)
+            .map_err(|_| invalid())?
+            .contract()
+            .map_err(|_| invalid())?;
+        if contract.policy.private_input
+            && step
+                .inputs
+                .values()
+                .any(|source| matches!(source, Source::Literal { .. }))
+        {
+            return Err(conflict());
+        }
+        let mut supplied_inputs = inputs.as_object().ok_or_else(invalid)?.clone();
+        if contract.policy.private_input {
+            // Per-run literal private inputs are validated by Core, never stored
+            // in the reusable configuration or execution row.
+            supplied_inputs.retain(|name, value| {
+                expected.contains_key(name)
+                    || value["type"] != "literal"
+                    || !contract.inputs.iter().any(|p| p.name == *name)
+            });
+        }
+        if Value::Object(supplied_inputs) != Value::Object(expected)
+            || Value::Object(supplied) != step.parameters
+        {
             return Err(conflict());
         }
         let mut tx = self.pool.begin().await?;
@@ -225,7 +250,7 @@ impl Database {
                 let inputs=response["result"]["provenance"]["inputs"].as_array().map(|inputs|inputs.iter().map(|input|json!({"port":input["reference"]["input_port"],"semantic_type":input["semantic_type"],"sha256":input["sha256"],"byte_size":input["byte_size"]})).collect::<Vec<_>>()).unwrap_or_default();
                 (
                     "succeeded",
-                    json!({"result_id":if retained {response["result"]["id"].clone()} else {Value::Null},"retained":retained,"ports":response["result"]["metadata"]["ports"],"sha256":response["result"]["sha256"],"inputs":inputs,"provenance_reference":if retained {response["result"]["id"].clone()} else {Value::Null},"replay":if retained {"see artifact provenance"} else {"private output was not retained"}}),
+                    json!({"result_id":if retained {response["result"]["id"].clone()} else {Value::Null},"retained":retained,"ports":response["result"]["metadata"]["ports"],"sha256":if retained {response["result"]["sha256"].clone()} else {Value::Null},"inputs":inputs,"provenance_reference":if retained {response["result"]["id"].clone()} else {Value::Null},"replay":if retained {"see artifact provenance"} else {"private output was not retained"}}),
                 )
             }
             Err(error) => (

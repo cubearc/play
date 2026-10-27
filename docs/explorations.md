@@ -191,3 +191,26 @@ plaintext. Parameters, source literals and artifact references are validated by
 Core schemas and the existing capability-gated worker. No network access or
 upload is introduced. See the pinned Core guide `docs/cipher-permutations.md`
 for exact keyword ties, shapes, route directions, alphabets and pad conventions.
+
+The local execution catalog covers every installed Core operation. Discovery is
+separate from execution authorization: filesystem operations require selected
+workspace files, and limits remain visible in each execution descriptor. File
+metadata inspects only a bounded header, even for a large file; its
+`file_metadata_json` digest identifies metadata, not complete file contents.
+Carving creates a derived artifact from an explicit range or validated candidate;
+it does not write back into source directories.
+
+Brainfuck uses separate `source` text and `input` byte-array ports (operation
+version 2). Profile execution also requires an explicit profile (version 2).
+Earlier incompatible configurations remain readable and require deliberate edits.
+Color exports expose aligned PNG `images`, QR exposes nullable byte `payloads`,
+and text-grid rendering adds `image` only when an explicit complete color mapping
+is supplied. Generic structured viewers preserve these results without guessing
+codecs, text encodings or forensic meaning.
+
+For operations marked with private inputs, entered values apply to the current
+run. They are cleared after each attempt or step selection and never enter the
+saved configuration. Authorized file and artifact references can still be saved.
+Execution evidence omits private input values and fingerprints and reports a
+replay gap. An unretained private output also leaves no output digest in saved
+execution history. Retention remains an explicit, separate choice for each run.

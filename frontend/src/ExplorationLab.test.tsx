@@ -397,3 +397,47 @@ it("protects an unsaved draft and waits for the new exploration before showing i
     "New exploration",
   );
 });
+
+it("keeps private inputs outside saved configuration and clears them after each attempt", async () => {
+  const privateEntry = {
+    ...entry,
+    contract: {
+      ...entry.contract,
+      policy: { ...entry.contract.policy, private_input: true },
+    },
+  };
+  const graph: api.Exploration = {
+    schema_version: 1,
+    id: "private-inputs",
+    revision: 1,
+    title: "Private material",
+    hypothesis: "",
+    scope: null,
+    steps: [
+      {
+        id: "one",
+        operation: entry.contract.operation,
+        operation_version: 1,
+        inputs: {},
+        parameters: {},
+        private_parameters: [],
+        position: [0, 0],
+      },
+    ],
+  };
+  vi.mocked(api.catalog).mockResolvedValue([privateEntry]);
+  vi.mocked(api.explorations).mockResolvedValue([graph]);
+  const user = userEvent.setup();
+  render(<ExplorationLab asset={null} />);
+  const input = await screen.findByLabelText(/^text value/);
+  await user.type(input, "private-run-only");
+  expect(screen.queryByText("Unsaved changes")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Run selected path" }));
+  await waitFor(() => expect(api.executeStep).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(api.executeStep).mock.calls[0]?.[1].inputs).toEqual({});
+  expect(vi.mocked(api.executeStep).mock.calls[0]?.[6]).toEqual({
+    text: "private-run-only",
+  });
+  await waitFor(() => expect(input).toHaveValue(""));
+  expect(api.saveExploration).not.toHaveBeenCalled();
+});

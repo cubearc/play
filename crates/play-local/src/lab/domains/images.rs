@@ -15,7 +15,7 @@ fn invalid() -> OperationError {
         "use the exact logical raster fields and parameters",
     )
 }
-fn raster(value: &Value) -> Result<Image, OperationError> {
+pub(super) fn raster(value: &Value) -> Result<Image, OperationError> {
     let model: String = super::field(value, "color_model")?;
     Image::from_samples(
         super::field(value, "width")?,
@@ -26,13 +26,13 @@ fn raster(value: &Value) -> Result<Image, OperationError> {
         super::bytes(&value["transparency"])?,
     )
 }
-fn image(value: &Image) -> Value {
+pub(super) fn image(value: &Image) -> Value {
     json!(values::Image::from(value))
 }
-fn bytes(value: &[u8]) -> Value {
+pub(super) fn bytes(value: &[u8]) -> Value {
     json!({"base64":cube_core::encoding::base64_encode(value)})
 }
-fn region(p: &Value) -> Result<Option<Region>, OperationError> {
+pub(super) fn region(p: &Value) -> Result<Option<Region>, OperationError> {
     let Some(value) = p.get("region") else {
         return Ok(None);
     };
@@ -45,7 +45,7 @@ fn region(p: &Value) -> Result<Option<Region>, OperationError> {
         height,
     }))
 }
-fn channels(p: &Value) -> Result<Option<Vec<Channel>>, OperationError> {
+pub(super) fn channels(p: &Value) -> Result<Option<Vec<Channel>>, OperationError> {
     p.get("channels")
         .map(|value| {
             let names: Vec<String> =

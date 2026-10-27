@@ -215,6 +215,7 @@ function Editor({
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState("");
   const [privateValues, setPrivateValues] = useState<Record<string, Json>>({});
+  const [privateInputs, setPrivateInputs] = useState<Record<string, Json>>({});
   const [retainPrivateOutput, setRetainPrivateOutput] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
@@ -291,6 +292,7 @@ function Editor({
     setDraft((draft) => ({ ...draft, steps: [...draft.steps, step] }));
     setSelected(step.id);
     setPrivateValues({});
+    setPrivateInputs({});
     setRetainPrivateOutput(false);
     setStatus("Unsaved changes");
   }
@@ -322,9 +324,14 @@ function Editor({
         throw new Error(
           "Run the upstream private-output step explicitly and choose whether to retain its result before chaining it.",
         );
-      if (current.id !== step?.id && current.private_parameters.length)
+      if (
+        current.id !== step?.id &&
+        (current.private_parameters.length ||
+          catalog.find((e) => e.contract.operation === current.operation)
+            ?.contract.policy.private_input)
+      )
         throw new Error(
-          "Run the upstream step with its private parameters first.",
+          "Run the upstream step with its private inputs and parameters first.",
         );
       for (const source of Object.values(current.inputs))
         if (source.type === "step") {
@@ -348,6 +355,7 @@ function Editor({
         current.id === step?.id ? privateValues : {},
         controller.signal,
         current.id === step?.id && retainPrivateOutput,
+        current.id === step?.id ? privateInputs : {},
       );
       history = await executions(draft.id, controller.signal);
       if (mounted.current) {
@@ -383,6 +391,7 @@ function Editor({
         setBusy(false);
         setRunning(false);
         setPrivateValues({});
+        setPrivateInputs({});
         setRetainPrivateOutput(false);
       }
     }
@@ -447,6 +456,7 @@ function Editor({
               setSelected(initial.steps[0]?.id ?? null);
               setInvalidFields({});
               setPrivateValues({});
+              setPrivateInputs({});
               setRetainPrivateOutput(false);
               setError(null);
               setStatus("Restored the last saved configuration");
@@ -537,6 +547,7 @@ function Editor({
             setSelected(id);
             setInvalidFields({});
             setPrivateValues({});
+            setPrivateInputs({});
             setRetainPrivateOutput(false);
             setOutput(null);
           }}
@@ -553,6 +564,7 @@ function Editor({
                   setSelected(s.id);
                   setInvalidFields({});
                   setPrivateValues({});
+                  setPrivateInputs({});
                   setRetainPrivateOutput(false);
                   setOutput(null);
                 }}
@@ -580,12 +592,44 @@ function Editor({
                 onValidityChange={(valid) =>
                   validity(`input:${port.name}`, valid)
                 }
-                onChange={(value) =>
-                  updateStep((step) => ({
-                    ...step,
-                    inputs: { ...step.inputs, [port.name]: value },
-                  }))
+                privateValue={
+                  entry.contract.policy.private_input
+                    ? privateInputs[port.name]
+                    : undefined
                 }
+                privateInput={entry.contract.policy.private_input}
+                onChange={(value) => {
+                  if (
+                    entry.contract.policy.private_input &&
+                    value.type === "literal"
+                  ) {
+                    if (step.inputs[port.name])
+                      updateStep((step) => ({
+                        ...step,
+                        inputs: Object.fromEntries(
+                          Object.entries(step.inputs).filter(
+                            ([name]) => name !== port.name,
+                          ),
+                        ),
+                      }));
+                    setPrivateInputs((values) => ({
+                      ...values,
+                      [port.name]: value.value,
+                    }));
+                  } else {
+                    setPrivateInputs((values) =>
+                      Object.fromEntries(
+                        Object.entries(values).filter(
+                          ([name]) => name !== port.name,
+                        ),
+                      ),
+                    );
+                    updateStep((step) => ({
+                      ...step,
+                      inputs: { ...step.inputs, [port.name]: value },
+                    }));
+                  }
+                }}
               />
             ))}
           </fieldset>
@@ -755,7 +799,11 @@ function InputField({
   asset,
   onChange,
   onValidityChange,
+  privateValue,
+  privateInput,
 }: {
+  privateValue: Json | undefined;
+  privateInput: boolean;
   port: Port;
   step: Step;
   exploration: Exploration;
@@ -785,7 +833,9 @@ function InputField({
       ? "text"
       : port.semantic_type === "image.samples"
         ? "image"
-        : port.semantic_type === "bytes" || port.semantic_type === "byte_reader"
+        : port.semantic_type === "bytes" ||
+            port.semantic_type === "byte_reader" ||
+            port.semantic_type === "file_path"
           ? "bytes"
           : null;
   const chosen =
@@ -832,7 +882,13 @@ function InputField({
             }
           }}
         >
-          <option value="literal">Enter a value</option>
+          <option value="literal" disabled={port.semantic_type === "file_path"}>
+            {port.semantic_type === "file_path"
+              ? "Choose a workspace file"
+              : privateInput
+                ? "Private value for this run"
+                : "Enter a value"}
+          </option>
           {asset && fileRepresentation && (
             <option value="file">Selected asset: {asset.path}</option>
           )}
@@ -849,18 +905,36 @@ function InputField({
           ))}
         </select>
       </label>
-      {(!source || source.type === "literal") && (
-        <SchemaField
-          label={`${port.name} value`}
-          schema={port.schema}
-          value={source?.type === "literal" ? source.value : undefined}
-          required={port.required}
-          onValidityChange={onValidityChange}
-          onChange={(value) => {
-            onChange({ type: "literal", value: value ?? null });
-          }}
-        />
+      {port.semantic_type === "file_path" && chosen === "literal" && (
+        <p>
+          Select an asset in Files. Typed paths do not grant filesystem access.
+        </p>
       )}
+      {privateInput && (!source || source.type === "literal") && (
+        <p>
+          This private value is used only for this run. It is not saved in the
+          configuration and must be entered again.
+        </p>
+      )}
+      {port.semantic_type !== "file_path" &&
+        (!source || source.type === "literal") && (
+          <SchemaField
+            label={`${port.name} value`}
+            schema={port.schema}
+            value={
+              privateInput
+                ? privateValue
+                : source?.type === "literal"
+                  ? source.value
+                  : undefined
+            }
+            required={port.required}
+            onValidityChange={onValidityChange}
+            onChange={(value) => {
+              onChange({ type: "literal", value: value ?? null });
+            }}
+          />
+        )}
     </div>
   );
 }

@@ -32,3 +32,12 @@ is RGBA [40, 50, 60, 128]. No browser rendering is used to establish these value
 `rabbit.cube` is an original version-1 public challenge fixture referencing
 `sample.png`. Its hostile-looking instruction is inert text used to verify that
 challenge import never evaluates scripts or requires private answers.
+
+`qr-binary.matrix` is Cube's original byte-mode `Cube\0\xff` symbol, generated
+with qrcode 0.14.1. Tests add a four-module quiet zone and two-pixel modules;
+payload assertions compare bytes, including NUL and non-UTF-8.
+
+`jpeg-frames.mov` and `pcm-track.mov` contain original tiny sample tables and
+payloads from Cube's `tests/common/mov.rs` and `pcm_mov.rs` builders. They use
+two 2×1 grayscale JPEG frames (decoded samples 64 and 192) and a separate PCM8
+mono track `[0, 128, 255, 64]` at 8 kHz. Tests require no external codec process.

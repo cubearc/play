@@ -55,6 +55,8 @@ test("retains a private Core output only for the explicitly chosen run", async (
     (e: { title: string }) => e.title === name,
   );
   expect(graph.steps[0].parameters.deck).toBeUndefined();
+  expect(graph.steps[0].inputs).toEqual({});
+  await expect(lab.getByLabel("text value *", { exact: true })).toHaveValue("");
   expect(graph.steps[0].retain_private_output).toBeUndefined();
   const first = await (
     await api.get(`/api/explorations/${graph.id}/executions`)
@@ -62,6 +64,9 @@ test("retains a private Core output only for the explicitly chosen run", async (
   expect(first).toHaveLength(1);
   expect(first[0].evidence.retained).toBe(false);
   expect(first[0].evidence.result_id).toBeNull();
+  expect(first[0].evidence.sha256).toBeNull();
+  expect(first[0].evidence.inputs).toEqual([]);
+  await lab.getByLabel("text value *", { exact: true }).fill("EXKYIZSGEH");
   await deck.fill(cards);
   await keep.check();
   await lab
@@ -86,6 +91,7 @@ test("retains a private Core output only for the explicitly chosen run", async (
     replay: "required",
   });
   expect(JSON.stringify(artifact.result)).not.toContain(cards);
+  expect(artifact.result.provenance.inputs).toEqual([]);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expect(
     lab.getByRole("button", { name: "Preserve as solution", exact: true }),

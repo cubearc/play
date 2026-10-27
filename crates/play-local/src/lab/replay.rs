@@ -137,6 +137,9 @@ async fn inspect_record(
     let id = record.id;
     let contract =
         operations::describe(&record.provenance.operation).and_then(|d| d.contract().ok());
+    if record.metadata["private_inputs_redacted"] == true {
+        report.gap(id,None,"private_inputs_required","Private inputs were not retained or fingerprinted; supply them explicitly for a new execution.");
+    }
     let ports = record.metadata["ports"].as_array();
     let current = contract.as_ref().is_some_and(|c| {
         ports.is_some_and(|ports| {

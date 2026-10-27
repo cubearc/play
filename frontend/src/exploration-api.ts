@@ -370,6 +370,7 @@ export async function executeStep(
   privateValues: Record<string, Json>,
   signal: AbortSignal,
   retainPrivateOutput = false,
+  privateInputs: Record<string, Json> = {},
 ): Promise<OperationResult> {
   const inputs: Record<string, Source> = {};
   for (const [name, source] of Object.entries(step.inputs)) {
@@ -394,6 +395,11 @@ export async function executeStep(
       id: run.evidence.result_id,
       port: source.port,
     };
+  }
+  for (const [name, value] of Object.entries(privateInputs)) {
+    if (inputs[name])
+      throw new Error("Choose one explicit source for each private input.");
+    inputs[name] = { type: "literal", value };
   }
   const id = crypto.randomUUID();
   const value = object(
