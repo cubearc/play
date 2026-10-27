@@ -19,6 +19,11 @@ private progress and explicit Lab-result candidate associations. Planning stays 
 
 ## Start an investigation
 
+The v0.1.0 acceptance scope uses the recorded macOS and Linux-container validation.
+Native Windows and WSL/Docker Desktop validation is deferred to
+[the platform follow-up](https://github.com/cubearc/play/issues/24); the platform
+instructions describe intended behavior, not verified results in those environments.
+
 Install a Landlock-capable Docker Engine with Compose v2, or Docker Desktop 4.94.0+
 with Linux containers, and start the local engine. For source installation, use
 Rust stable through rustup and Node.js 24 with npm. Build the trusted launcher UI

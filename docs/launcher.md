@@ -118,6 +118,11 @@ separate from the SQLite investigation persistence capability.
 
 ## Platforms and permissions
 
+For v0.1.0, recorded validation covers native macOS checks and real Linux-container
+workflows on Docker Desktop. The maintainer deferred native Windows and WSL/Docker
+Desktop testing on 2026-10-27. The Windows and WSL rows below describe intended
+behavior; validation remains open in [the platform follow-up](https://github.com/cubearc/play/issues/24).
+
 | Environment | Behavior |
 | --- | --- |
 | Linux local Engine | Uses the calling user's UID and primary GID in a non-root image; source ownership and modes remain unchanged. Use a normal account with Docker access. |
