@@ -332,7 +332,7 @@ fn main(){
                 named_before = files_api(origin, "/api/lab/library")
                 typed_before = files_api(origin, "/api/explorations")
                 typed_runs = {item["id"]: files_api(origin, "/api/explorations/" + item["id"] + "/executions") for item in typed_before["explorations"]}
-                captured = {entry["entry"]["id"]: files_api(origin, "/api/lab/results/" + entry["entry"]["id"]) for entry in named_before["entries"] if entry["record"] and entry["record"].get("metadata", {}).get("terminal_capture")}
+                captured = {entry["entry"]["id"]: files_api(origin, "/api/lab/results/" + entry["entry"]["id"]) for entry in named_before["entries"] if entry["record"] and (entry["record"].get("metadata") or {}).get("terminal_capture")}
                 if (ROOT / "frontend/node_modules/.bin/playwright").exists():
                     self.assertTrue(captured)
                 for capture in captured.values():
