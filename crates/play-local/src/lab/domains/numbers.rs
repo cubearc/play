@@ -191,10 +191,25 @@ mod tests {
                 ),
             ),
         ];
+        let mut covered = std::collections::BTreeSet::new();
         for (op, inputs, parameters, expected) in cases {
+            covered.insert(op);
             assert!(supported(op));
             let output = execute(op, inputs.clone(), parameters.clone()).unwrap();
             assert_eq!(output["output"], expected, "{op}");
+            let worker=serde_json::from_value(json!({"operation":op,"operation_version":1,"inputs":inputs,"parameters":parameters})).unwrap();
+            let result = super::super::super::typed::run(worker).unwrap();
+            assert_eq!(
+                serde_json::from_slice::<Value>(
+                    &result
+                        .data
+                        .bytes(super::super::super::types::MAX_OUTPUT)
+                        .unwrap()
+                )
+                .unwrap(),
+                output,
+                "named worker {op}"
+            );
             cube_core::operations::describe(op)
                 .unwrap()
                 .contract()
@@ -206,5 +221,13 @@ mod tests {
                 })
                 .unwrap();
         }
+        assert_eq!(
+            covered,
+            cube_core::operations::catalog()
+                .into_iter()
+                .filter(|op| op.category == "numbers")
+                .map(|op| op.id)
+                .collect()
+        );
     }
 }

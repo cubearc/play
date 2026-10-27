@@ -2,6 +2,7 @@
 mod linear;
 mod mono;
 mod numbers;
+mod text;
 
 use cube_core::errors::{ErrorCode, OperationError};
 use serde::de::DeserializeOwned;
@@ -13,6 +14,7 @@ pub(super) fn supported(operation: &str) -> bool {
         .any(|d| d.id == operation)
         || linear::supported(operation)
         || numbers::supported(operation)
+        || text::supported(operation)
         || matches!(
             operation,
             "encoding.base58check.encode" | "encoding.base58check.decode"
@@ -48,6 +50,7 @@ pub(super) fn execute(
         }
         _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),
         _ if numbers::supported(operation) => numbers::execute(operation, inputs, parameters),
+        _ if text::supported(operation) => text::execute(operation, inputs, parameters),
         _ => mono::execute(operation, inputs, parameters),
     }
 }

@@ -16,6 +16,12 @@ alternative contract, such as substitution by an explicit target alphabet or a
 keyword. Complex values use bounded JSON. Integers outside JavaScript's exact
 numeric range use decimal strings. Bytes use explicit Base64 objects.
 
+For text investigations, use `text.normalize` with an explicit Unicode form,
+`text.extract` with a scalar-index list or stride, and `text.statistics` for Core
+counts. `text.unicode.compare` accepts separate `input` and `other` ports and
+preserves both original and normalized observations. Parameter/type errors identify
+the selected operation and the rejected input or parameter section.
+
 Literal inputs are included in the saved configuration. To investigate a file,
 select an authorized asset instead: its bytes stay outside SQLite, and execution
 records retain its digest. Private parameters are entered for a particular run,

@@ -107,12 +107,37 @@ fn contract(operation: &str, version: u32) -> Result<Contract> {
     }
     Ok(contract)
 }
+fn checked(
+    value: std::result::Result<(), cube_core::errors::OperationError>,
+    operation: &str,
+    section: &str,
+) -> Result<()> {
+    value.map_err(|error|{
+        let mut error=Error::from(error);
+        error.operation=Some(operation.into());
+        error.parameter=Some(section.into());
+        if section=="parameters" && error.code=="invalid_input" {error.code="invalid_parameter".into();}
+        if section=="outputs" && error.code!="resource_limit" {
+            error.code="contract_mismatch".into();
+            error.message="The Core result does not match its published output contract; no result was saved.".into();
+        }
+        error
+    })
+}
 pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
     let contract = contract(&worker.operation, worker.operation_version)?;
     execute::json_bytes(&worker.inputs, MAX_INPUT)?;
     execute::json_bytes(&worker.parameters, MAX_INLINE)?;
-    contract.validate_inputs(&worker.inputs)?;
-    contract.validate_parameters(&worker.parameters)?;
+    checked(
+        contract.validate_inputs(&worker.inputs),
+        &worker.operation,
+        "inputs",
+    )?;
+    checked(
+        contract.validate_parameters(&worker.parameters),
+        &worker.operation,
+        "parameters",
+    )?;
     let parameters = worker
         .parameters
         .as_object_mut()
@@ -136,7 +161,11 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
         worker.inputs,
         worker.parameters.clone(),
     )?);
-    contract.validate_outputs(&output)?;
+    checked(
+        contract.validate_outputs(&output),
+        &worker.operation,
+        "outputs",
+    )?;
     let bytes = execute::json_bytes(&output, MAX_OUTPUT)?;
     // Private parameters stay ephemeral. Ordinary effective parameters are replayable.
     let parameters = worker
@@ -243,7 +272,11 @@ async fn invoke(
         return Err(Error::invalid());
     }
     let contract = contract(&request.operation, request.operation_version)?;
-    contract.validate_parameters(&request.parameters)?;
+    checked(
+        contract.validate_parameters(&request.parameters),
+        &request.operation,
+        "parameters",
+    )?;
     let storage = app.lab.storage(&app).await?;
     let permit = app
         .lab
@@ -346,7 +379,11 @@ async fn job(
         inputs.insert(name, value);
     }
     let inputs = Value::Object(inputs);
-    contract.validate_inputs(&inputs)?;
+    checked(
+        contract.validate_inputs(&inputs),
+        &request.operation,
+        "inputs",
+    )?;
     if *cancellation.borrow() {
         return Err(Error::cancelled());
     }
