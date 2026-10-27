@@ -380,9 +380,9 @@ fn main(){
                 self.assertEqual(files_api(recovered_origin, "/api/explorations"), typed_before)
                 for graph, runs in typed_runs.items():
                     self.assertEqual(files_api(recovered_origin, "/api/explorations/" + graph + "/executions"), runs)
-                for artifact, capture in captured.items():
-                    self.assertEqual(files_api(recovered_origin, "/api/lab/results/" + artifact), capture)
-                    replay = files_api(recovered_origin, "/api/lab/results/" + artifact + "/replay")
+                for capture_id, capture in captured.items():
+                    self.assertEqual(files_api(recovered_origin, "/api/lab/results/" + capture_id), capture)
+                    replay = files_api(recovered_origin, "/api/lab/results/" + capture_id + "/replay")
                     self.assertEqual(replay["status"], "gaps")
                     self.assertTrue(any(gap["code"] == "cli_declaration" for gap in replay["gaps"]))
                 self.assertEqual(files_api(recovered_origin, "/api/solutions"), solutions_before)
