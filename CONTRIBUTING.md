@@ -107,8 +107,9 @@ Rust integration tests also use a controlled Docker CLI fixture for unavailable
 engines, incompatible images, unsafe reuse, ownership failures, bounded output and
 process cleanup. These do not substitute for the real Docker suite. The fixture
 is compiled by rustc during tests and formatted separately because it is not a
-runtime binary target. Native Rust tests run on Linux, macOS and Windows; real
-Docker integration runs on Linux CI and can be reproduced on Docker Desktop.
+runtime binary target. The configured CI matrix targets native Rust tests on Linux,
+macOS and Windows and real Docker integration on Linux. These jobs can also be
+reproduced locally; workflow configuration does not establish a passing run.
 
 ## Coverage
 
@@ -176,8 +177,12 @@ PATH for the launcher browser-readiness fixture.
 | Session, Host/Origin, paths, symlinks, quotas and failed writes | HTTP/workspace/persistence tests and Docker/Runner checks |
 
 The CI matrix includes native Rust tests on Linux, macOS and Windows, plus Linux
-quality/coverage, frontend and Docker jobs. Local macOS tests and Linux containers
-do not establish native Windows/WSL/Desktop validation. A hosted run that never
-starts because billing or private-source access is unavailable is not passing
-validation. Record actual commit/run evidence and remaining platform gaps in the
-GitHub milestone; never replace them with fabricated badges or lowered gates.
+quality/coverage, frontend and Docker jobs. For v0.1.0, the maintainer accepts the
+recorded local checks and explicitly deferred native Windows/WSL/Docker Desktop
+validation on 2026-10-27; retain that work in [the platform follow-up](https://github.com/cubearc/play/issues/24).
+Local macOS tests and Linux containers do not establish native Windows validation.
+Hosted jobs blocked by account billing/spending limits are accepted as a temporary
+integration exception, with no passing hosted result claimed. Keep the workflows,
+warnings policy, coverage gates and security checks intact. Record actual commit/run
+evidence and scope decisions in the GitHub milestone. The v0.1.0 exception does not
+waive functional or conformance requirements for subsequent milestones.
