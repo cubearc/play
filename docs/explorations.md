@@ -233,6 +233,12 @@ completed evidence if a later step fails or is cancelled. A field's actual type 
 the consumer's complete contract are checked before its operation executes.
 Selections and exact projected-input digests persist in provenance and replay checks.
 
+Supported CLI captures can be published explicitly in Terminal or imported from a
+selected authorized source/import file with **Import selected CLI capture**. Inspect
+the typed output, save it with an artifact name, then choose it with **Load saved
+inputs**. Publication never reruns a command or treats a file as execution attestation;
+missing original inputs and unverified CLI provenance remain visible replay gaps.
+
 Under **Investigation scope**, keep a free exploration or use **Load local stages**
 to associate a stage from the active, already imported local challenge. Switch the
 active challenge in Local challenges to choose another. Save the configuration to

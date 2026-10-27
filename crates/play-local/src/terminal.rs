@@ -121,7 +121,7 @@ async fn upgrade(
                 .max_frame_size(protocol::FRAME_LIMIT)
                 .write_buffer_size(8192)
                 .max_write_buffer_size(65536)
-                .on_upgrade(move |socket| forward(socket, channel, ready))),
+                .on_upgrade(move |socket| forward(socket, channel, ready, state))),
             Server::Error { code } if code == "session_limit" => Err(FileError(
                 StatusCode::TOO_MANY_REQUESTS,
                 "terminal_busy",
@@ -192,11 +192,14 @@ async fn forward(
     mut socket: WebSocket,
     mut runner: play_runner::transport::Channel,
     ready: Server,
+    app: AppState,
 ) {
     use play_runner::transport::{receive, send};
     let result = async {
         let ready = serde_json::to_string(&ready).map_err(|_| ())?;
         socket.send(Message::Text(ready.into())).await.map_err(|_| ())?;
+        let mut pending: Option<(String, Vec<u8>, std::time::Instant)> = None;
+        let mut tick=tokio::time::interval(std::time::Duration::from_secs(1));
         loop {
             tokio::select! {
                 message = socket.recv() => match message {
@@ -205,6 +208,8 @@ async fn forward(
                         match &frame {
                             Client::Input { data } if !data.is_empty() && data.len() <= protocol::INPUT_FRAME => {},
                             Client::Resize { size } if size.valid() => {},
+                            Client::CaptureList if pending.is_none() => {},
+                            Client::CaptureRead {id} if pending.is_none() && protocol::valid_capture(id) => {pending=Some((id.clone(),Vec::new(),std::time::Instant::now()));},
                             Client::Close => {
                                 send(&mut runner, &frame).await.map_err(|_| ())?;
                                 break;
@@ -218,15 +223,31 @@ async fn forward(
                 },
                 message = receive::<Server>(&mut runner) => {
                     let Some(frame) = message.map_err(|_| ())? else { break; };
-                    let done = matches!(&frame, Server::End { .. } | Server::Error { .. });
+                    let done = matches!(&frame, Server::End { .. });
                     let message = match frame {
                         Server::Output { data } if data.len() <= 4096 => Message::Binary(data.into()),
+                        Server::Captures {ids} if ids.len()<=16 && ids.iter().all(|id|protocol::valid_capture(id)) => Message::Text(serde_json::json!({"type":"captures","ids":ids}).to_string().into()),
+                        Server::CaptureData {id,data,done} => {
+                            let (expected,bytes,started)=pending.as_mut().ok_or(())?;
+                            if id!=*expected || data.len()>4096 || bytes.len()+data.len()>protocol::CAPTURE_LIMIT || started.elapsed()>std::time::Duration::from_secs(5) {return Err(());}
+                            bytes.extend(data);
+                            if !done {continue;}
+                            let (id,bytes,_)=pending.take().ok_or(())?;
+                            let response=match crate::lab::capture::publish(&app,Some(&id),bytes).await {
+                                Ok(value)=>value,
+                                Err(error)=>serde_json::json!({"type":"publication_error","message":error.message}),
+                            };
+                            Message::Text(response.to_string().into())
+                        },
+                        Server::Error {code} if code=="capture_unavailable" => {pending=None;Message::Text(serde_json::json!({"type":"publication_error","message":"The staged capture is missing, incomplete, linked or exceeds the staging limits. Finish the command and refresh, or start a new session."}).to_string().into())},
+                        Server::Error {..} => return Err(()),
                         other => Message::Text(serde_json::to_string(&other).map_err(|_| ())?.into()),
                     };
                     tokio::time::timeout(std::time::Duration::from_secs(2), socket.send(message))
                         .await.map_err(|_| ())?.map_err(|_| ())?;
                     if done { break; }
-                }
+                },
+                _ = tick.tick() => {if pending.as_ref().is_some_and(|(_,_,started)|started.elapsed()>std::time::Duration::from_secs(5)) {return Err(());}}
             }
         }
         Ok::<_, ()>(())

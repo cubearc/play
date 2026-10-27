@@ -59,6 +59,8 @@ impl Session {
         let temporary = std::env::temp_dir().join(format!("cube-terminal-{}", Uuid::new_v4()));
         fs::DirBuilder::new().mode(0o700).create(&temporary)?;
         let result = (|| {
+            let captures = temporary.join("captures");
+            fs::DirBuilder::new().mode(0o700).create(&captures)?;
             let pair = native_pty_system()
                 .openpty(pty_size(size))
                 .map_err(|_| failed())?;
@@ -75,6 +77,7 @@ impl Session {
                 ("CUBE_RUNNER_OUTPUT", &config.output),
                 ("CUBE_RUNNER_CUBE", &config.cube),
                 ("TMPDIR", &temporary),
+                ("CUBE_PLAY_CAPTURE_DIR", &captures),
                 ("HOME", &temporary),
             ] {
                 command.env(name, path);
@@ -180,6 +183,26 @@ pub(super) async fn run(
                                     None
                                 },
                                 Client::Close => Some("closed"),
+                                Client::CaptureList => {
+                                    match super::captures::list(&session.temporary) {
+                                        Ok(ids) => send(&mut channel,&Server::Captures {ids}).await?,
+                                        Err(_) => send(&mut channel,&Server::error("capture_unavailable")).await?,
+                                    }
+                                    None
+                                },
+                                Client::CaptureRead {id} => {
+                                    match super::captures::read(&session.temporary,&id) {
+                                        Ok(bytes) => {
+                                            let count=bytes.len().div_ceil(4096);
+                                            for (index,data) in bytes.chunks(4096).enumerate() {
+                                                send(&mut channel,&Server::CaptureData {id:id.clone(),data:data.to_vec(),done:index+1==count}).await?;
+                                            }
+                                            if bytes.is_empty() {send(&mut channel,&Server::error("capture_unavailable")).await?;}
+                                        },
+                                        Err(_) => send(&mut channel,&Server::error("capture_unavailable")).await?,
+                                    }
+                                    None
+                                },
                                 _ => Some("invalid_input"),
                             }
                         }

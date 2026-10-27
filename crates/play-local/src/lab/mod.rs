@@ -1,5 +1,6 @@
 //! Typed local execution with one bounded, cancellable Core worker process.
 mod candidates;
+pub(crate) mod capture;
 mod domains;
 mod execute;
 mod library;
@@ -67,6 +68,7 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .merge(library::routes())
         .merge(candidates::routes())
+        .merge(capture::routes())
         .merge(solutions::routes())
         .merge(typed::routes())
         .route("/lab/operations", get(catalog))

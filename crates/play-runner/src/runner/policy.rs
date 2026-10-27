@@ -46,6 +46,8 @@ impl Budget {
             }
             Client::Resize { size } if size.valid() => Ok(()),
             Client::Close => Ok(()),
+            Client::CaptureList => Ok(()),
+            Client::CaptureRead { id } if crate::protocol::valid_capture(id) => Ok(()),
             _ => Err("invalid_input"),
         }
     }

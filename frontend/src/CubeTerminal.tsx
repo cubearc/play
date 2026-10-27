@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 import { terminalProtocols } from "./capability";
+import { type OperationResult, openTypedResult } from "./exploration-api";
+import { TypedOutputs } from "./TypedOutputs";
 import {
   type TerminalStatus,
   type TerminalStore,
@@ -145,6 +147,12 @@ function TerminalSession({
   const [connected, setConnected] = useState(false);
   const [ended, setEnded] = useState(false);
   const [size, setSize] = useState("");
+  const [captures, setCaptures] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<OperationResult | null>(null);
+  const [captureMessage, setCaptureMessage] = useState("");
+  const reading = useRef<AbortController | null>(null);
+  useEffect(() => () => reading.current?.abort(), []);
   useEffect(() => {
     let active = true;
     let cleanup = () => {};
@@ -262,6 +270,58 @@ function TerminalSession({
                 setMessage("Connected to Cube Runner");
                 term.focus();
               }
+            } else if (
+              value.type === "captures" &&
+              "ids" in value &&
+              Array.isArray(value.ids) &&
+              value.ids.length <= 16 &&
+              value.ids.every(
+                (id) =>
+                  typeof id === "string" && /^[A-Za-z0-9_-]{1,96}$/.test(id),
+              )
+            ) {
+              setCaptures(value.ids);
+              setCaptureMessage(
+                value.ids.length
+                  ? "Choose a capture to publish explicitly."
+                  : "No staged captures. Run a supported command with --lab-capture first.",
+              );
+            } else if (
+              value.type === "publication_error" &&
+              "message" in value &&
+              typeof value.message === "string"
+            ) {
+              setPublishing(false);
+              setCaptureMessage(value.message);
+            } else if (
+              value.type === "published" &&
+              "id" in value &&
+              typeof value.id === "string"
+            ) {
+              reading.current?.abort();
+              const controller = new AbortController();
+              reading.current = controller;
+              void openTypedResult(value.id, controller.signal)
+                .then((result) => {
+                  if (active && !controller.signal.aborted) {
+                    setPublished(result);
+                    setCaptureMessage(
+                      "Published locally without rerunning. Original inputs are unavailable; provenance is an unverified CLI declaration.",
+                    );
+                  }
+                })
+                .catch((error) => {
+                  if (active && !controller.signal.aborted)
+                    setCaptureMessage(
+                      error instanceof Error
+                        ? error.message
+                        : "Reopen the retained artifact to inspect it.",
+                    );
+                })
+                .finally(() => {
+                  if (active && !controller.signal.aborted)
+                    setPublishing(false);
+                });
             } else if (value.type === "end") {
               setMessage(terminalEnd("reason" in value ? value.reason : null));
               setConnected(false);
@@ -284,6 +344,7 @@ function TerminalSession({
           if (active) {
             setConnected(false);
             setEnded(true);
+            setPublishing(false);
             setMessage((previous) =>
               previous === "Connected to Cube Runner" ||
               previous === "Starting isolated terminal…"
@@ -344,6 +405,47 @@ function TerminalSession({
         ref={container}
         aria-label="Cube terminal output"
       />
+      <section aria-label="Terminal to Lab">
+        <h3>Send a result to the Lab</h3>
+        <p>
+          Use <code>cube --lab-capture text reverse --text CUBE</code> to stage
+          a supported result privately. Captures are limited to 128 KiB and
+          discarded when this session ends. Terminal history is never recorded.
+        </p>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={!connected || publishing}
+          onClick={() =>
+            socket.current?.send(JSON.stringify({ type: "capture_list" }))
+          }
+        >
+          Refresh staged captures
+        </button>
+        <ul>
+          {captures.map((id) => (
+            <li key={id}>
+              <code>{id}</code>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={!connected || publishing}
+                onClick={() => {
+                  setPublishing(true);
+                  setCaptureMessage("Publishing selected capture…");
+                  socket.current?.send(
+                    JSON.stringify({ type: "capture_read", id }),
+                  );
+                }}
+              >
+                Send to Lab
+              </button>
+            </li>
+          ))}
+        </ul>
+        {captureMessage && <p role="status">{captureMessage}</p>}
+        {published && <TypedOutputs key={published.id} result={published} />}
+      </section>
       <p className="terminal-help">
         Try <code>cube encode base64 hello</code> or <code>cube --help</code>.
         Use Ctrl+C to interrupt a command and Ctrl+D at an empty prompt to exit.

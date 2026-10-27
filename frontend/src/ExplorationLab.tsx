@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { CaptureImport } from "./CaptureImport";
 import { ExplorationFlow, stepState } from "./ExplorationFlow";
 import { InputField } from "./ExplorationInput";
 import { ExplorationScope } from "./ExplorationScope";
@@ -102,6 +103,9 @@ export function ExplorationLab({
         </button>
       </header>
       {error && <p role="alert">{error}</p>}
+      {asset && (
+        <CaptureImport key={`${asset.store}:${asset.path}`} asset={asset} />
+      )}
       {loading ? (
         <p role="status">Loading operation contracts and explorations…</p>
       ) : (

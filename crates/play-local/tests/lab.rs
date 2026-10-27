@@ -2546,6 +2546,93 @@ async fn private_input_literals_are_per_run_and_never_enter_configuration_or_inp
 }
 
 #[tokio::test]
+async fn explicit_capture_import_is_binary_safe_idempotent_unverified_and_survives_restart() {
+    use cube_core::investigation::session::typed_capture::TypedCapture;
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let capture = TypedCapture::from_result(
+        "encoding.hex.decode",
+        "capture-fixture",
+        &json!({"input":"00ff80"}),
+        &json!({}),
+        &json!({"output":{"base64":"AP+A"}}),
+    )
+    .unwrap();
+    let file = directory.path().join("source/capture.json");
+    std::fs::write(&file, capture.to_json().unwrap()).unwrap();
+    let request = json!({"store":"source","path":"capture.json"});
+    let (status, published) = server
+        .api("POST", "/api/lab/captures/import", request.clone())
+        .await;
+    assert_eq!(status, 200, "{published}");
+    let (_, again) = server
+        .api("POST", "/api/lab/captures/import", request.clone())
+        .await;
+    assert_eq!(again, published);
+    let id = published["id"].as_str().unwrap();
+    let path = format!("/api/lab/results/{id}");
+    let (_, result) = server.api("GET", &path, Value::Null).await;
+    assert_eq!(result["inline"]["data"]["output"]["base64"], "AP+A");
+    assert_eq!(
+        result["result"]["metadata"]["terminal_capture"]["trust"],
+        "unverified_cli_declaration"
+    );
+    let (_, replay) = server
+        .api("GET", &format!("{path}/replay"), Value::Null)
+        .await;
+    assert_eq!(replay["status"], "gaps");
+    assert!(
+        replay["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "cli_declaration")
+    );
+    let consumer = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"encoding.hex.encode","operation_version":1,"inputs":{"input":{"type":"artifact","id":id,"port":"output"}},"parameters":{}});
+    let (status, encoded) = server.api("POST", "/api/lab/v2/execute", consumer).await;
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(encoded["inline"]["data"]["output"], "00ff80");
+    let mut forged = serde_json::to_value(&capture).unwrap();
+    forged["outputs"]["output"]["base64"] = json!("AAAA");
+    std::fs::write(&file, forged.to_string()).unwrap();
+    assert_ne!(
+        server
+            .api("POST", "/api/lab/captures/import", request.clone())
+            .await
+            .0,
+        200
+    );
+    for path in ["../capture.json", "/etc/passwd"] {
+        assert_ne!(
+            server
+                .api(
+                    "POST",
+                    "/api/lab/captures/import",
+                    json!({"store":"source","path":path})
+                )
+                .await
+                .0,
+            200
+        );
+    }
+    std::fs::write(&file, "x".repeat(128 * 1024 + 1)).unwrap();
+    assert_ne!(
+        server
+            .api("POST", "/api/lab/captures/import", request)
+            .await
+            .0,
+        200
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    assert_eq!(
+        server.api("GET", &path, Value::Null).await.1["result"]["id"],
+        id
+    );
+}
+
+#[tokio::test]
 async fn structured_field_connections_preserve_selection_and_replay_without_coercion() {
     let directory = tempfile::tempdir().unwrap();
     let workspace = Uuid::new_v4();

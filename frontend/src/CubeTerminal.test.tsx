@@ -4,6 +4,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { CubeTerminal } from "./CubeTerminal";
 import { terminalStatus } from "./terminal-api";
 
+vi.mock("./exploration-api", async (original) => ({
+  ...(await original<typeof import("./exploration-api")>()),
+  openTypedResult: vi.fn(),
+}));
 const mocks = vi.hoisted(() => ({
   data: null as null | ((data: string) => void),
   resize: null as null | ((size: { cols: number; rows: number }) => void),
@@ -179,4 +183,70 @@ it("handles transport errors and malformed responses without injecting output in
   act(() => socket.onmessage?.({ data: "<script>untrusted</script>" }));
   expect(await screen.findByText(/invalid response/)).toBeVisible();
   expect(screen.queryByText("untrusted")).not.toBeInTheDocument();
+});
+
+it("only publishes a selected staged capture and keeps the terminal alive after publication errors", async () => {
+  setup();
+  const { openTypedResult } = await import("./exploration-api");
+  const { parseResult } = await import("./lab-api");
+  const { typedWire, outputPort, id } = await import("./test/lab-fixture");
+  vi.mocked(openTypedResult).mockResolvedValue({
+    id,
+    record: parseResult(typedWire()),
+    ports: [outputPort],
+    output: { text: "A6" },
+  });
+  const user = userEvent.setup();
+  render(<CubeTerminal />);
+  await user.click(
+    await screen.findByRole("button", { name: "Start terminal" }),
+  );
+  await waitFor(() => expect(Socket.instances.length).toBe(1));
+  const socket = Socket.instances[0];
+  if (!socket) throw new Error("Missing socket");
+  act(() =>
+    socket.onmessage?.({
+      data: JSON.stringify({ type: "ready", size: { cols: 80, rows: 18 } }),
+    }),
+  );
+  expect(socket.send).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole("button", { name: "Refresh staged captures" }),
+  );
+  expect(socket.send).toHaveBeenLastCalledWith(
+    JSON.stringify({ type: "capture_list" }),
+  );
+  act(() =>
+    socket.onmessage?.({ data: JSON.stringify({ type: "captures", ids: [] }) }),
+  );
+  expect(await screen.findByText(/No staged captures/)).toBeVisible();
+  act(() =>
+    socket.onmessage?.({
+      data: JSON.stringify({ type: "captures", ids: ["capture-1"] }),
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Send to Lab" }));
+  expect(socket.send).toHaveBeenLastCalledWith(
+    JSON.stringify({ type: "capture_read", id: "capture-1" }),
+  );
+  expect(screen.getByRole("button", { name: "Send to Lab" })).toBeDisabled();
+  act(() =>
+    socket.onmessage?.({
+      data: JSON.stringify({
+        type: "publication_error",
+        message: "Capture is incomplete",
+      }),
+    }),
+  );
+  expect(await screen.findByText("Capture is incomplete")).toBeVisible();
+  expect(socket.close).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Send to Lab" }));
+  await act(async () =>
+    socket.onmessage?.({ data: JSON.stringify({ type: "published", id }) }),
+  );
+  expect(await screen.findByLabelText("Exact text output")).toHaveValue("A6");
+  expect(openTypedResult).toHaveBeenCalledWith(id, expect.any(AbortSignal));
+  expect(
+    await screen.findByText(/Published locally without rerunning/),
+  ).toBeVisible();
 });

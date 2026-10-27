@@ -580,3 +580,27 @@ export async function openExecution(
     );
   return result;
 }
+export async function openTypedResult(
+  id: string,
+  signal: AbortSignal,
+): Promise<OperationResult> {
+  resultUrl(id);
+  const result = await readOperationResult(
+    object(await request(`/lab/results/${id}`, "GET", undefined, signal)),
+    signal,
+  );
+  if (result.id !== id) throw invalid();
+  return result;
+}
+export async function importCapture(
+  store: Store,
+  path: string,
+  signal: AbortSignal,
+): Promise<OperationResult> {
+  const value = object(
+    await request("/lab/captures/import", "POST", { store, path }, signal),
+  );
+  if (value.type !== "published" || typeof value.id !== "string")
+    throw invalid();
+  return openTypedResult(value.id, signal);
+}

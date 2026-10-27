@@ -188,7 +188,7 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
 }
 // Filesystem metadata is already bounded to twelve header bytes. The trusted
 // capability resolver calls Core directly and reuses the same result validation.
-fn finish(
+pub(super) fn finish(
     contract: &Contract,
     effective_parameters: &Value,
     output: Value,
