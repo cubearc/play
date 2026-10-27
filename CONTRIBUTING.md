@@ -1,45 +1,10 @@
 # Contributing to Cube Play
 
-Use Rust stable through rustup, Node.js 24 and npm. Docker Compose v2 and Python 3.11+
-are required for container tests. Start with the [README quick start](README.md#developer-quick-start).
-The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
-4.94.0 or newer on macOS/Windows. Unsupported isolation fails before starting a
-terminal. See [terminal boundaries](docs/terminal.md).
-Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
-Cargo consumes its exact-version library directly. The matching reference revision is
-`a8fc3c0842d7164c79292539fe762ffc04f13a15` (or a compatible descendant).
-CI checks out a pinned Cube revision beside Play. While Core is private,
-hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
-configured by a maintainer. No key enters application containers or build contexts.
-Source access and GitHub Actions billing are prerequisites for hosted checks;
-passing local tests do not imply CI passed.
-
-## Development
-
-For frontend hot reload, run these commands in two terminals from the root:
-
-```sh
-CUBE_PLAY_ORIGIN=http://127.0.0.1:5173 cargo run --locked -p play-local
-npm run dev --prefix frontend
-```
-
-In PowerShell, set `$env:CUBE_PLAY_ORIGIN = 'http://127.0.0.1:5173'` before the Cargo
-command. Open the printed session URL after Vite is ready. Vite proxies local API
-requests to port 7331 and preserves the browser host. Both listeners use loopback.
-To test production serving, build the frontend and start the backend without the
-development origin override.
-To exercise files, use the launcher or configure both `CUBE_PLAY_SOURCE` and
-`CUBE_PLAY_WORKSPACE` (a regular JSON file with a v4 UUID `id` and display `name`).
-Set `CUBE_PLAY_DATA` to enable the persisted file workspace and imports; SQLite uses its sibling `state/`
-directory, or an explicit `CUBE_PLAY_STATE` override. See [local persistence](docs/persistence.md)
-for private directory permissions, migration rules and recovery. The browser harness manages its own
-temporary fixtures automatically. See the [typed Lab API](docs/lab-api.md) for
-discovery, requests and resource limits; its integration tests start the real
-server and real Core worker, including cancellation, binary results and restart recovery.
+Use the [developer quick start](docs/development.md) and keep the trusted Cube checkout beside Play. For the application, follow [source installation](docs/installation.md).
 
 ## Quality checks
 
-From the root, build the trusted launcher assets before Cargo checks:
+Build the launcher assets before Cargo checks. From the root:
 
 ```sh
 npm ci --prefix frontend
@@ -49,111 +14,21 @@ rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
 cargo test --workspace --all-features --locked
-npm ci --prefix frontend
 npm run check --prefix frontend
 npm run build --prefix frontend
 npm run test:coverage --prefix frontend
 cargo build --workspace --locked
 ```
 
-For real desktop/mobile browser smoke tests, run from `frontend/`:
+Browser, Docker, coverage and complete contract-conformance procedures are in [Contributor verification](docs/reference/validation.md). Keep the 80% Rust/frontend coverage gates, denied warnings and exact operation-ID checks intact.
 
-```sh
-npx playwright install chromium
-npm run test:e2e
-```
+The checked-in CI workflow pins Cube and currently uses `CUBE_CORE_READ_KEY` for that checkout. Source/runtime containers receive no deploy key. Report local validation separately from hosted CI; a workflow definition does not establish a passing run.
 
-The harness starts the compiled Rust server on loopback port 17331 and serves the
-production frontend. It checks the real session/API flow, refresh, browser errors,
-responsive overflow and external requests. No application API is mocked in these
-tests. Browser traces are disabled to avoid capturing session capabilities.
-It also tests Core-backed previews, inert hostile text, unsupported media, single-file
-selection, navigation, byte ranges, imports, saved-state restoration and conflicting
-tabs. Browser cases run serially because the real server owns one investigation.
-On Linux, Playwright may require `npx playwright install --with-deps chromium`.
+## Documentation
 
-Test the real Compose image and runtime from the root:
+Follow the [shared authoring guide](https://github.com/cubearc/docs/blob/main/content/contributing/documentation.md). Keep the README focused on first use, task instructions in the user guides and exact API/storage/security contracts in reference pages. Update affected examples and [navigation](docs/SUMMARY.md) with behavior changes; link to shared explanations.
 
-```sh
-python3 tests/runtime_smoke.py
-docker build --target runner-tests --build-context cube_engine=../cube .
-docker build --target lab-tests --build-context cube_engine=../cube .
-```
-
-The suite uses unique Compose projects and available loopback ports, builds the
-image, checks HTTP/security/container settings and exercises the real launcher with
-empty/private sources, literal paths, concurrent reuse, two workspaces, session
-isolation, browser readiness, stop and recreation with persistent test volumes.
-Only fixture-owned containers and temporary test volumes are removed. Set
-`CUBE_PLAY_CUBE` to a trusted built Cube executable and `CUBE_PLAY_LAUNCHER` to the
-Play executable to additionally exercise the real cross-repository CLI handoff.
-With frontend dependencies and Chromium installed, the Docker suite runs the full
-Playwright suite against the real two-container workspace on desktop/mobile. It
-checks known-answer CLI output, errors, PTY resizing/closure, accessibility, previews,
-notes/conflicts, exports, RGB/palette counts, transforms/comparison, challenge import,
-progress and candidate association. It then recreates the containers and checks
-named artifacts, candidate revisions and SQLite recovery. Desktop and mobile use
-separate fixture investigations within the production retention limits. Native
-browser workers likewise own their temporary server/data directories.
-Source hashes must remain
-unchanged. The native browser suite intentionally skips its two container-only PTY cases.
-
-Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
-exercise PTY sessions, read isolation, output exhaustion and process cleanup.
-A test-only executable probes inherited CPU/process/file limits with lower soft
-limits after asserting the production values; memory and descriptor exhaustion
-are also checked. It runs without a shell and never ships in the runtime image. The Docker `runner-tests`
-target reproduces them on macOS/Windows. Native API development does not start a
-host terminal; configure a private Linux runner socket explicitly when needed.
-
-Rust integration tests also use a controlled Docker CLI fixture for unavailable
-engines, incompatible images, unsafe reuse, ownership failures, bounded output and
-process cleanup. These do not substitute for the real Docker suite. The fixture
-is compiled by rustc during tests and formatted separately because it is not a
-runtime binary target. The configured CI matrix targets native Rust tests on Linux,
-macOS and Windows and real Docker integration on Linux. These jobs can also be
-reproduced locally; workflow configuration does not establish a passing run.
-
-## Coverage
-
-```sh
-cargo install cargo-llvm-cov --version 0.9.1 --locked
-cargo llvm-cov --workspace --all-features --locked --fail-under-lines 80 --ignore-filename-regex '/tests/'
-cargo llvm-cov report --lcov --output-path lcov.info --ignore-filename-regex '/tests/'
-```
-
-The Rust line gate is 80% of application source, including process startup; test
-sources are excluded. This keeps request/security/configuration and runtime paths
-covered without counting test assertions as product coverage. Frontend gates are
-80% of statements, branches, functions and lines; the root mount is exercised by
-real browser tests. CI prints actual coverage and uploads LCOV artifacts without
-requiring an external reporting account. Improve tests rather than lowering gates
-or suppressing warnings. Do not commit generated coverage/build output.
-
-The named-port API and exploration model are documented in
-[Typed explorations](docs/explorations.md). A new or changed operation is complete
-only with its canonical Core contract/reference, actual result-conformance tests,
-and validated Play adapter/viewer handling. Regenerate contracts in the Core
-checkout using `cargo run --locked -p cube-core --example operation_contracts`;
-never maintain a second handwritten frontend catalog.
-The Lab integration matrix reads Core's packaged synthetic conformance fixtures
-and executes every installed ID through the authorized API with real workers.
-It rejects missing/duplicate IDs, contract/version drift and incorrect named
-outputs, and writes `target/play-operation-conformance.json` for CI. Fixture-owned
-investigations are batched within existing retention quotas. File metadata times
-are validated but excluded from known-answer equality; floating-point analyses
-use a relative tolerance of 1e-12. Integers, decimal strings and bytes stay exact.
-
-On Intel macOS, unsigned rebuilt native binaries can delay worker startup beyond
-the integration-test deadline. After building the exact executable under test,
-`codesign --force --sign - target/debug/play-local` applies a local ad-hoc signature
-without a signing identity or host security-policy change. Rebuilds replace it.
-Before rerunning Cargo, also sign its matching executable under `target/debug/deps`;
-Cargo can restore the final binary from that artifact.
-This is a native development diagnostic; the ordinary launcher uses Linux containers.
-The host API and runtime suites also ad-hoc sign their own temporary browser and
-folder-picker probes on macOS so host validation does not consume the UI response
-deadline.
+Use `python3 ../docs/tools/check_links.py .` when the docs repository is checked out beside Play. Validate changed commands against the real interface and report the result.
 
 ## Changes and review
 
@@ -171,33 +46,3 @@ duplicate metadata catalogs. Use existing tools instead of custom quality wrappe
 Keep planning in GitHub Issues and CubeArc Roadmap. After authorized delivery,
 verify remote commits and CI. Close an issue only after its acceptance criteria pass
 and the work is integrated into the target branch; keep incomplete work open.
-
-## Integrated MVP verification
-
-Run the commands above against the final source before release. The runtime suite
-uses real Cube CLI delegation when `CUBE_PLAY_CUBE` names the trusted executable;
-set it explicitly for full cross-repository verification. Use Rustup's `rustc` on
-PATH for the launcher browser-readiness fixture.
-
-| User journey | Reproducible coverage |
-| --- | --- |
-| Empty/current directory, files, explicit file and browser readiness | Launcher integration and Docker runtime tests |
-| Image and MP4 preview or metadata fallback | `workspace.spec.ts`, `lab.spec.ts` |
-| Real PTY Cube command and cleanup | `runner.spec.ts`, Linux Runner tests |
-| Generate, name, reopen and compare artifacts | `lab.spec.ts`, `notebook.spec.ts`, real Lab API tests |
-| Private notes, rapid updates and conflicting tabs | Notebook component/API/browser tests |
-| Restart, recreation and crash recovery | Persistence/Lab API tests and Docker runtime tests |
-| Non-executable challenge import and local stage progress | `challenges.spec.ts`, real challenge API tests |
-| Byte/text/structured-field candidates and retained lineage | `candidates.spec.ts`, real candidate API tests |
-| Session, Host/Origin, paths, symlinks, quotas and failed writes | HTTP/workspace/persistence tests and Docker/Runner checks |
-
-The CI matrix includes native Rust tests on Linux, macOS and Windows, plus Linux
-quality/coverage, frontend and Docker jobs. For v0.1.0, the maintainer accepts the
-recorded local checks and explicitly deferred native Windows/WSL/Docker Desktop
-validation on 2026-10-27; retain that work in [the platform follow-up](https://github.com/cubearc/play/issues/24).
-Local macOS tests and Linux containers do not establish native Windows validation.
-Hosted jobs blocked by account billing/spending limits are accepted as a temporary
-integration exception, with no passing hosted result claimed. Keep the workflows,
-warnings policy, coverage gates and security checks intact. Record actual commit/run
-evidence and scope decisions in the GitHub milestone. The v0.1.0 exception does not
-waive functional or conformance requirements for subsequent milestones.

@@ -31,19 +31,8 @@ Only one operation runs at a time. **Cancel operation** requests worker terminat
 leaving the file also requests cancellation. Publication already in progress may
 finish, as described in the [API](lab-api.md). Errors preserve the existing original
 and results; retry explicitly. Managed results survive restarts within the existing
-64-result/64-MiB quota. This initial result list is session-local; reopening named
-artifacts/history belongs to the notes and artifacts capability. No results are
+64-result/64-MiB quota. Use the [notebook and artifact library](notebook.md) to reopen named results and history. No results are
 submitted, uploaded or used as challenge answers automatically.
 
-The UI uses React hooks and lazy loads visual controls and the ECharts chart.
-Canvas renders a bounded viewport; Core supplies every histogram, sample, channel
-and transformation. ECharts uses modular imports, a resize observer and disposal
-on unmount. See the official [module guide](https://echarts.apache.org/handbook/en/basics/import/)
-and [chart lifecycle guidance](https://echarts.apache.org/handbook/en/concepts/chart-size/).
 
-Run the frontend coverage suite for boundary/component tests and Playwright for
-real Rust/Core desktop/mobile workflows. The Docker runtime smoke suite also runs
-those Lab flows inside the actual local container. Original RGB and indexed PNG
-fixtures have known counts, palette values and transparency; malformed and oversized
-inputs are generated only in temporary test workspaces. Tests check source bytes,
-no external requests, result selection, keyboard controls, accessibility and overflow.
+See [implementation and verification](reference/visual-lab.md) for contributor details.
