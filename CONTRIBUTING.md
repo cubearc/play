@@ -5,9 +5,11 @@ are required for container tests. Start with the [README quick start](README.md#
 The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
 4.94.0 or newer on macOS/Windows. Unsupported isolation fails before starting a
 terminal. See [terminal boundaries](docs/terminal.md).
-Keep a trusted Cube 0.18.0 checkout at `../cube`; Cargo consumes its exact-version
-library directly. CI checks out a pinned Cube revision beside Play. While Core is
-private, hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
+Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
+Cargo consumes its exact-version library directly. The matching reference revision is
+`277f1c14ead577cea156cd61fe9588e78a8eca2f` (or a compatible descendant).
+CI checks out a pinned Cube revision beside Play. While Core is private,
+hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
 configured by a maintainer. No key enters application containers or build contexts.
 Source access and GitHub Actions billing are prerequisites for hosted checks;
 passing local tests do not imply CI passed.
@@ -121,6 +123,19 @@ covered without counting test assertions as product coverage. Frontend gates are
 real browser tests. CI prints actual coverage and uploads LCOV artifacts without
 requiring an external reporting account. Improve tests rather than lowering gates
 or suppressing warnings. Do not commit generated coverage/build output.
+
+The named-port API and exploration model are documented in
+[Typed explorations](docs/explorations.md). A new or changed operation is complete
+only with its canonical Core contract/reference, actual result-conformance tests,
+and validated Play adapter/viewer handling. Regenerate contracts in the Core
+checkout using `cargo run --locked -p cube-core --example operation_contracts`;
+never maintain a second handwritten frontend catalog.
+
+On Intel macOS, unsigned rebuilt native binaries can delay worker startup beyond
+the integration-test deadline. After building the exact executable under test,
+`codesign --force --sign - target/debug/play-local` applies a local ad-hoc signature
+without a signing identity or host security-policy change. Rebuilds replace it.
+This is a native development diagnostic; the ordinary launcher uses Linux containers.
 
 ## Changes and review
 

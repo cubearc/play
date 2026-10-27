@@ -1,0 +1,53 @@
+//! Explicit adapters call typed Core APIs; descriptors never dispatch algorithms.
+mod linear;
+mod mono;
+mod numbers;
+
+use cube_core::errors::{ErrorCode, OperationError};
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
+
+pub(super) fn supported(operation: &str) -> bool {
+    cube_core::ciphers::mono::OPERATIONS
+        .iter()
+        .any(|d| d.id == operation)
+        || linear::supported(operation)
+        || numbers::supported(operation)
+        || matches!(
+            operation,
+            "encoding.base58check.encode" | "encoding.base58check.decode"
+        )
+}
+fn field<T: DeserializeOwned>(value: &Value, name: &str) -> Result<T, OperationError> {
+    serde_json::from_value(value.get(name).cloned().unwrap_or(Value::Null)).map_err(|_| {
+        OperationError::new(ErrorCode::InvalidInput, "use the exact typed input fields")
+    })
+}
+fn bytes(value: &Value) -> Result<Vec<u8>, OperationError> {
+    let encoded: String = field(value, "base64")?;
+    cube_core::encoding::base64_decode(&encoded)
+        .map_err(|_| OperationError::new(ErrorCode::InvalidInput, "use canonical Base64 bytes"))
+}
+pub(super) fn execute(
+    operation: &str,
+    inputs: Value,
+    parameters: Value,
+) -> Result<Value, OperationError> {
+    match operation {
+        "encoding.base58check.encode" => {
+            let encoded: String = field(&inputs["input"], "base64")?;
+            let bytes = cube_core::encoding::base64_decode(&encoded).map_err(|_| {
+                OperationError::new(ErrorCode::InvalidInput, "use canonical Base64 bytes")
+            })?;
+            let version: u8 = field(&parameters, "version")?;
+            Ok(json!({"output":cube_core::encoding::base58check::encode(version,&bytes)?}))
+        }
+        "encoding.base58check.decode" => {
+            let input: String = field(&inputs, "input")?;
+            Ok(json!({"output":cube_core::encoding::base58check::decode(&input)?}))
+        }
+        _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),
+        _ if numbers::supported(operation) => numbers::execute(operation, inputs, parameters),
+        _ => mono::execute(operation, inputs, parameters),
+    }
+}

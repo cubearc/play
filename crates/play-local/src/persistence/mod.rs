@@ -1,6 +1,7 @@
 //! One local investigation per authorized workspace; binary content stays on disk.
 mod candidates;
 mod challenges;
+pub(crate) mod explorations;
 mod http;
 pub(crate) mod library;
 mod paths;
@@ -224,6 +225,10 @@ impl Database {
                 .fetch_one(&mut *transaction)
                 .await?;
         sqlx::query("UPDATE sessions SET status='interrupted' WHERE status='running'")
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("UPDATE exploration_executions SET status='interrupted',ended_ms=? WHERE status='running'")
+            .bind(timestamp)
             .execute(&mut *transaction)
             .await?;
         let session_id = Uuid::new_v4().to_string();

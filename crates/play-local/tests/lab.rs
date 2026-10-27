@@ -46,6 +46,7 @@ impl Server {
             .unwrap()
             .to_string();
         let mut process = Command::new(env!("CARGO_BIN_EXE_play-local"))
+            .env("TOKIO_WORKER_THREADS", "2")
             .env("CUBE_PLAY_BIND", &address)
             .env("CUBE_PLAY_ORIGIN", format!("http://{address}"))
             .env("CUBE_PLAY_SOURCE", &source)
@@ -66,7 +67,12 @@ impl Server {
             let _ = send.send(line);
         });
         let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
-        let secret = line.split("#session=").nth(1).unwrap().trim().to_owned();
+        let secret = line
+            .split("#session=")
+            .nth(1)
+            .expect("the real local server must print a session URL after startup")
+            .trim()
+            .to_owned();
         Self {
             process,
             address,
@@ -95,7 +101,7 @@ impl Server {
         let mut response = Vec::new();
         tokio::time::timeout(Duration::from_secs(12), socket.read_to_end(&mut response))
             .await
-            .unwrap()
+            .unwrap_or_else(|_| panic!("{method} {path} exceeded the real HTTP deadline"))
             .unwrap();
         let split = response.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
         let head = std::str::from_utf8(&response[..split]).unwrap();
@@ -978,4 +984,203 @@ async fn candidates_preserve_exact_types_explicit_fields_history_and_workspace_r
     let (_, missing) = server.api("GET", &path, Value::Null).await;
     assert_eq!(missing["candidate"], revised["candidate"]);
     assert!(missing["error"].is_string());
+}
+
+#[tokio::test]
+async fn named_ports_execute_real_core_and_restore_immutable_branch_lineage() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let (_, catalog) = server
+        .api("GET", "/api/lab/v2/operations", Value::Null)
+        .await;
+    let operations = catalog["operations"].as_array().unwrap();
+    assert_eq!(operations.len(), cube_core::operations::catalog().len());
+    assert!(
+        operations
+            .iter()
+            .all(|o| !o["contract"]["outputs"].as_array().unwrap().is_empty())
+    );
+    assert!(
+        operations
+            .iter()
+            .find(|o| o["contract"]["operation"] == "cipher.rot5")
+            .unwrap()["execution"]["available"]
+            .as_bool()
+            .unwrap()
+    );
+    let exploration = Uuid::new_v4();
+    let first = Uuid::new_v4();
+    let branch = Uuid::new_v4();
+    let mut definition = json!({"schema_version":1,"id":exploration,"revision":0,"title":"Digit hypothesis","hypothesis":"ROT5 is its own inverse","scope":null,"steps":[
+        {"id":first,"operation":"cipher.rot5","operation_version":1,"inputs":{"text":{"type":"literal","value":"A1"}},"parameters":{},"position":[0,0]},
+        {"id":branch,"operation":"cipher.rot5","operation_version":1,"inputs":{"text":{"type":"step","step":first,"port":"text"}},"parameters":{},"position":[200,0]}
+    ]});
+    let (status, saved) = server
+        .api("PUT", "/api/explorations", definition.clone())
+        .await;
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(saved["revision"], 1);
+    let request = |step, inputs: Value| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.rot5","operation_version":1,"inputs":inputs,"parameters":{},"exploration":{"id":exploration,"revision":1,"step":step}});
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(first, json!({"text":{"type":"literal","value":"A1"}})),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["inline"]["data"]["text"], "A6");
+    assert_eq!(
+        result["result"]["metadata"]["ports"][0]["schema_sha256"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    let result_id = result["result"]["id"].clone();
+    let (status, inverse) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                branch,
+                json!({"text":{"type":"artifact","id":result_id,"port":"text"}}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{inverse}");
+    assert_eq!(inverse["inline"]["data"]["text"], "A1");
+    let runs_path = format!("/api/explorations/{exploration}/executions");
+    let (_, runs) = server.api("GET", &runs_path, Value::Null).await;
+    assert_eq!(runs.as_array().unwrap().len(), 2);
+    assert_eq!(runs[0]["status"], "succeeded");
+    // A caller cannot attribute a different input to a saved step.
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                request(first, json!({"text":{"type":"literal","value":"forged"}}))
+            )
+            .await
+            .0,
+        409
+    );
+    definition["revision"] = json!(1);
+    definition["hypothesis"] = json!("An edited hypothesis");
+    let (status, revised) = server
+        .api("PUT", "/api/explorations", definition.clone())
+        .await;
+    assert_eq!(status, 200, "{revised}");
+    assert_eq!(revised["revision"], 2);
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        409
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, restored) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/{exploration}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(restored["hypothesis"], "An edited hypothesis");
+    let (_, runs) = server.api("GET", &runs_path, Value::Null).await;
+    assert_eq!(runs[0]["evidence"]["result_id"], result_id);
+    assert_eq!(runs[0]["stale"], true);
+    let (_, original) = server
+        .api(
+            "GET",
+            &format!("/api/lab/results/{}", result_id.as_str().unwrap()),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(original["inline"]["data"]["text"], "A6");
+}
+
+#[tokio::test]
+async fn typed_invocations_reject_wrong_types_paths_versions_and_unsafe_graphs() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let mut request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.rot5","operation_version":1,"inputs":{"text":{"type":"literal","value":42}},"parameters":{}});
+    assert_eq!(
+        server
+            .api("POST", "/api/lab/v2/execute", request.clone())
+            .await
+            .0,
+        400
+    );
+    request["inputs"] = json!({"text":{"type":"file","store":"source","path":"../outside","representation":"text"}});
+    assert_eq!(
+        server
+            .api("POST", "/api/lab/v2/execute", request.clone())
+            .await
+            .0,
+        400
+    );
+    request["operation_version"] = json!(99);
+    assert_eq!(
+        server
+            .api("POST", "/api/lab/v2/execute", request.clone())
+            .await
+            .0,
+        409
+    );
+    request["operation_version"] = json!(1);
+    request["inputs"] = json!({"text":{"type":"literal","value":"A"}});
+    request["parameters"] = json!({"script":"unsafe"});
+    assert_eq!(
+        server.api("POST", "/api/lab/v2/execute", request).await.0,
+        400
+    );
+    let node = Uuid::new_v4();
+    let definition = json!({"schema_version":1,"id":Uuid::new_v4(),"revision":0,"title":"Cycle","hypothesis":"","scope":null,"steps":[{"id":node,"operation":"cipher.rot5","operation_version":1,"inputs":{"text":{"type":"step","step":node,"port":"text"}},"parameters":{},"position":[0,0]}]});
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        400
+    );
+    let valid = json!({"schema_version":1,"id":Uuid::new_v4(),"revision":0,"title":"duplicate-test","hypothesis":"","scope":null,"steps":[]});
+    let duplicate = valid.to_string().replace(
+        "\"title\":\"duplicate-test\"",
+        "\"title\":\"one\",\"title\":\"two\"",
+    );
+    assert_eq!(
+        server
+            .raw("PUT", "/api/explorations", duplicate.as_bytes(), true)
+            .await
+            .0,
+        400
+    );
+    // Invalid data never acquires a successful result or an invented execution.
+    let (_, history) = server.api("GET", "/api/lab/history", Value::Null).await;
+    assert!(
+        history
+            .get("results")
+            .and_then(Value::as_array)
+            .is_none_or(Vec::is_empty)
+    );
+}
+
+#[tokio::test]
+async fn substitution_parameter_variants_are_saved_and_executed_by_the_real_named_worker() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    for parameters in [
+        json!({"source":"ABC","target":"CAB"}),
+        json!({"source":"ABC","keyword":"CAB"}),
+    ] {
+        let id = Uuid::new_v4();
+        let step = Uuid::new_v4();
+        let inputs = json!({"text":{"type":"literal","value":"ABC"}});
+        let definition = json!({"schema_version":1,"id":id,"revision":0,"title":"Substitution hypothesis","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.substitution.encode","operation_version":1,"inputs":inputs,"parameters":parameters,"position":[0,0]}]});
+        let (status, saved) = server.api("PUT", "/api/explorations", definition).await;
+        assert_eq!(status, 200, "{saved}");
+        let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.substitution.encode","operation_version":1,"inputs":inputs,"parameters":parameters,"exploration":{"id":id,"revision":1,"step":step}});
+        let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+        assert_eq!(status, 200, "{result}");
+        assert_eq!(result["inline"]["data"]["text"], "CAB");
+    }
 }

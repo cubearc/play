@@ -15,6 +15,7 @@ use serde::Serialize;
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(super::explorations::routes())
         .route("/investigation", get(snapshot).put(metadata))
         .route("/investigation/view", put(view))
         .route("/investigation/sessions", get(sessions))

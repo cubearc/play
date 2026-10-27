@@ -10,6 +10,7 @@ import {
 import { entry, inspection, listing } from "./test/workspace";
 
 vi.mock("./ChallengePanel", () => ({ ChallengePanel: () => null }));
+vi.mock("./ExplorationLab", () => ({ ExplorationLab: () => null }));
 vi.mock("./ArtifactLibrary", () => ({
   ArtifactLibrary: () => null,
   TextLab: () => null,

@@ -117,3 +117,9 @@ downloads; containers never receive a host write destination.
 Private stage candidates append typed selection/conversion revisions in the same
 SQLite database. They reference named immutable Core bundles and preserve lineage;
 Core decodes explicitly selected Base64 fields. No verification or submission occurs.
+
+[Typed explorations](explorations.md) separate immutable configuration revisions
+from actual execution attempts. Named-port schemas come from versioned Core
+contracts; Play adds tested interface adapters, capability resolution and UI
+controls. Execution evidence points to existing immutable artifact bundles instead
+of duplicating result bytes or private parameters in SQLite.

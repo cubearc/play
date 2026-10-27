@@ -7,6 +7,7 @@ import {
 } from "react";
 import { ArtifactLibrary, TextLab } from "./ArtifactLibrary";
 import { ChallengePanel, type FileSelection } from "./ChallengePanel";
+import { ExplorationLab } from "./ExplorationLab";
 import { FileWorkspace } from "./FileWorkspace";
 import { InvestigationNotes } from "./InvestigationNotes";
 import {
@@ -234,6 +235,7 @@ function SavedWorkspace({
         key={selection ? `${selection.store}:${selection.path}` : "inline"}
         file={selection}
       />
+      <ExplorationLab asset={selection} />
       <InvestigationNotes target={selection} />
       <ArtifactLibrary />
     </>

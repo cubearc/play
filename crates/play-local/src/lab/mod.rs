@@ -1,9 +1,11 @@
 //! Typed local execution with one bounded, cancellable Core worker process.
 mod candidates;
+mod domains;
 mod execute;
 mod library;
 mod storage;
-mod types;
+mod typed;
+pub(crate) mod types;
 mod worker;
 pub use worker::main as worker_main;
 
@@ -62,6 +64,7 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .merge(library::routes())
         .merge(candidates::routes())
+        .merge(typed::routes())
         .route("/lab/operations", get(catalog))
         .route("/lab/operations/{id}", get(describe))
         .route(
@@ -84,30 +87,7 @@ async fn catalog() -> Json<Value> {
 async fn describe(Path(id): Path<String>) -> Result<Json<Value>> {
     Ok(Json(execute::discovery(execute::descriptor(&id)?)))
 }
-struct CancelOnDrop(watch::Sender<bool>);
-impl Drop for CancelOnDrop {
-    fn drop(&mut self) {
-        let _ = self.0.send(true);
-    }
-}
-struct ActiveGuard {
-    state: Arc<State>,
-    id: Uuid,
-}
-impl Drop for ActiveGuard {
-    fn drop(&mut self) {
-        if let Ok(mut active) = self.state.active.lock()
-            && active.as_ref().is_some_and(|(id, _, _)| *id == self.id)
-        {
-            *active = None;
-        }
-    }
-}
-
-async fn execution(
-    AxumState(app): AxumState<AppState>,
-    request: axum::extract::Request,
-) -> Result<Json<Value>> {
+pub(crate) async fn request_json(request: axum::extract::Request) -> Result<Value> {
     if request
         .headers()
         .get(header::CONTENT_TYPE)
@@ -134,6 +114,33 @@ async fn execution(
     .map_err(|_| Error::limit())?;
     let document = std::str::from_utf8(&body).map_err(|_| Error::invalid())?;
     let parsed = cube_core::pipeline::json::parse(document)?;
+    Ok(parsed)
+}
+struct CancelOnDrop(watch::Sender<bool>);
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.send(true);
+    }
+}
+struct ActiveGuard {
+    state: Arc<State>,
+    id: Uuid,
+}
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.state.active.lock()
+            && active.as_ref().is_some_and(|(id, _, _)| *id == self.id)
+        {
+            *active = None;
+        }
+    }
+}
+
+async fn execution(
+    AxumState(app): AxumState<AppState>,
+    request: axum::extract::Request,
+) -> Result<Json<Value>> {
+    let parsed = request_json(request).await?;
     let request: Request = serde_json::from_value(parsed).map_err(|_| Error::invalid())?;
     execute::validate(&request)?;
     let storage = app.lab.storage(&app).await?;
@@ -303,6 +310,53 @@ async fn job(
         },
         MAX_WIRE,
     )?;
+    let output = worker_output(wire, request.timeout_ms, &mut cancellation).await?;
+    if *cancellation.borrow() {
+        return Err(Error::cancelled());
+    }
+    let provenance = Provenance {
+        operation: request.operation.clone(),
+        adapter_api: ADAPTER_API,
+        pipeline_adapter: cube_core::pipeline::adapter_version(&request.operation),
+        engine_api: cube_core::pipeline::ENGINE_API,
+        core_version: execute::core_version(),
+        parameters: output.parameters.clone(),
+        inputs,
+        created_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| Error::invalid())?
+            .as_millis()
+            .try_into()
+            .map_err(|_| Error::invalid())?,
+    };
+    let id = request.id;
+    if !request.retain_result {
+        let bytes = output.data.bytes(MAX_OUTPUT)?;
+        let record = storage.record(id, output, provenance, &bytes)?;
+        return response(record, &bytes, false);
+    }
+    {
+        let mut active = app.lab.active.lock().map_err(|_| Error::storage())?;
+        if *cancellation.borrow() {
+            return Err(Error::cancelled());
+        }
+        if let Some((_, _, committing)) = active.as_mut().filter(|(active, _, _)| *active == id) {
+            *committing = true;
+        }
+    }
+    tokio::task::spawn_blocking(move || {
+        let record = storage.save(id, output, provenance)?;
+        let (_, bytes) = storage.load(id)?;
+        response(record, &bytes, true)
+    })
+    .await
+    .map_err(|_| Error::storage())?
+}
+async fn worker_output(
+    wire: Vec<u8>,
+    timeout_ms: u64,
+    cancellation: &mut watch::Receiver<bool>,
+) -> Result<WorkerOutput> {
     let executable = std::env::current_exe().map_err(|_| Error::invalid())?;
     let mut child = tokio::process::Command::new(executable)
         .arg("--lab-worker")
@@ -345,52 +399,12 @@ async fn job(
         })?
     };
     let output = tokio::select! {
-        value=tokio::time::timeout(Duration::from_millis(request.timeout_ms),run)=>value.unwrap_or_else(|_|Err(Error::new("timeout","The operation reached its wall-clock limit; its worker was terminated."))),
+        value=tokio::time::timeout(Duration::from_millis(timeout_ms),run)=>value.unwrap_or_else(|_|Err(Error::new("timeout","The operation reached its wall-clock limit; its worker was terminated."))),
         _=cancellation.changed()=>Err(Error::cancelled()),
     };
     let _ = child.kill().await;
     let _ = child.wait().await;
-    let output = output?;
-    if *cancellation.borrow() {
-        return Err(Error::cancelled());
-    }
-    let provenance = Provenance {
-        operation: request.operation.clone(),
-        adapter_api: ADAPTER_API,
-        pipeline_adapter: cube_core::pipeline::adapter_version(&request.operation),
-        engine_api: cube_core::pipeline::ENGINE_API,
-        core_version: execute::core_version(),
-        parameters: output.parameters.clone(),
-        inputs,
-        created_ms: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| Error::invalid())?
-            .as_millis()
-            .try_into()
-            .map_err(|_| Error::invalid())?,
-    };
-    let id = request.id;
-    if !request.retain_result {
-        let bytes = output.data.bytes(MAX_OUTPUT)?;
-        let record = storage.record(id, output, provenance, &bytes)?;
-        return response(record, &bytes, false);
-    }
-    {
-        let mut active = app.lab.active.lock().map_err(|_| Error::storage())?;
-        if *cancellation.borrow() {
-            return Err(Error::cancelled());
-        }
-        if let Some((_, _, committing)) = active.as_mut().filter(|(active, _, _)| *active == id) {
-            *committing = true;
-        }
-    }
-    tokio::task::spawn_blocking(move || {
-        let record = storage.save(id, output, provenance)?;
-        let (_, bytes) = storage.load(id)?;
-        response(record, &bytes, true)
-    })
-    .await
-    .map_err(|_| Error::storage())?
+    output
 }
 fn response(record: Record, bytes: &[u8], retained: bool) -> Result<Value> {
     let inline = if !retained || bytes.len() <= INLINE_RESULT {

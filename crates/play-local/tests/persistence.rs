@@ -833,3 +833,89 @@ async fn record_budgets_reject_new_entries_without_changing_existing_rows() {
     );
     fixture.stop().await;
 }
+
+#[tokio::test]
+async fn exploration_revisions_privacy_recovery_and_storage_limits_preserve_legacy_notes() {
+    let mut fixture = Fixture::new();
+    assert_eq!(fixture.get("/api/investigation").await.0, StatusCode::OK);
+    let note = Uuid::new_v4();
+    assert_eq!(fixture.put("/api/investigation/notes",json!({"id":note,"revision":0,"title":"Existing note","body":"Private original evidence"})).await.0,StatusCode::OK);
+    let exploration = Uuid::new_v4();
+    let step = Uuid::new_v4();
+    let mut definition = json!({"schema_version":1,"id":exploration,"revision":0,"title":"Private key hypothesis","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.vigenere.encode","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABC"}},"parameters":{"key":"DO-NOT-RETAIN"},"private_parameters":["key"],"position":[0,0]}]});
+    assert_eq!(
+        fixture.put("/api/explorations", definition.clone()).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    definition["steps"][0]["parameters"] = json!({});
+    let (status, saved) = fixture.put("/api/explorations", definition.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    let run = Uuid::new_v4();
+    let mut sql = fixture.sql().await;
+    sqlx::query("INSERT INTO exploration_executions(id,exploration_id,configuration_revision,step_id,status,started_ms) VALUES(?,?,1,?,'running',1)").bind(run.to_string()).bind(exploration.to_string()).bind(step.to_string()).execute(&mut sql).await.unwrap();
+    drop(sql);
+    fixture.stop().await;
+    fixture.start();
+    let (_, notes) = fixture.get("/api/investigation/notes").await;
+    assert_eq!(notes[0]["id"], note.to_string());
+    assert_eq!(notes[0]["body"], "Private original evidence");
+    let (_, runs) = fixture
+        .get(&format!("/api/explorations/{exploration}/executions"))
+        .await;
+    assert_eq!(runs[0]["status"], "interrupted");
+    assert!(runs[0]["ended_ms"].as_i64().is_some());
+    let mut sql = fixture.sql().await;
+    assert!(
+        sqlx::query("UPDATE exploration_executions SET status='succeeded' WHERE id=?")
+            .bind(run.to_string())
+            .execute(&mut sql)
+            .await
+            .is_err()
+    );
+    let encoded:String=sqlx::query_scalar("SELECT definition_json FROM exploration_configurations WHERE exploration_id=? AND revision=1").bind(exploration.to_string()).fetch_one(&mut sql).await.unwrap();
+    assert!(!encoded.contains("DO-NOT-RETAIN"));
+    assert!(
+        sqlx::query("UPDATE exploration_configurations SET definition_json='{}'")
+            .execute(&mut sql)
+            .await
+            .is_err()
+    );
+    drop(sql);
+    definition["revision"] = json!(1);
+    definition["title"] = json!("Revised hypothesis");
+    assert_eq!(
+        fixture.put("/api/explorations", definition.clone()).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        fixture.put("/api/explorations", definition).await.0,
+        StatusCode::CONFLICT
+    );
+    for index in 1..32 {
+        let value = json!({"schema_version":1,"id":Uuid::new_v4(),"revision":0,"title":format!("Free exploration {index}"),"hypothesis":"","scope":null,"steps":[]});
+        assert_eq!(
+            fixture.put("/api/explorations", value).await.0,
+            StatusCode::OK
+        );
+    }
+    let over = json!({"schema_version":1,"id":Uuid::new_v4(),"revision":0,"title":"Quota exceeded","hypothesis":"","scope":null,"steps":[]});
+    assert_eq!(
+        fixture.put("/api/explorations", over).await.0,
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+    let (_, list) = fixture.get("/api/explorations").await;
+    assert_eq!(list["explorations"].as_array().unwrap().len(), 32);
+    assert_eq!(
+        fs::read(
+            fixture
+                .config
+                .source_dir
+                .as_ref()
+                .unwrap()
+                .join("original.txt")
+        )
+        .unwrap(),
+        b"original private source"
+    );
+    fixture.stop().await;
+}

@@ -48,9 +48,18 @@ pub fn main() -> ExitCode {
         if input.len() > MAX_WIRE {
             return Err(Error::limit());
         }
-        let request =
-            serde_json::from_slice::<WorkerRequest>(&input).map_err(|_| Error::invalid())?;
-        execute::run(request)
+        let document: serde_json::Value =
+            serde_json::from_slice(&input).map_err(|_| Error::invalid())?;
+        if let Some(typed) = document.get("typed") {
+            if document.as_object().is_none_or(|fields| fields.len() != 1) {
+                return Err(Error::invalid());
+            }
+            super::typed::run(serde_json::from_value(typed.clone()).map_err(|_| Error::invalid())?)
+        } else {
+            execute::run(
+                serde_json::from_value::<WorkerRequest>(document).map_err(|_| Error::invalid())?,
+            )
+        }
     })();
     match execute::json_bytes(&result, MAX_WIRE).and_then(|bytes| {
         std::io::stdout()

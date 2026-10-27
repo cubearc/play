@@ -926,3 +926,212 @@ summary:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.exploration-lab {
+  margin-block: 28px;
+  background: #fff;
+  border: 1px solid #dce5df;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.exploration-lab > header {
+  padding: 20px;
+  border-bottom: 1px solid #e2e7e5;
+}
+.exploration-toolbar,
+.exploration-heading,
+.operation-menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.exploration-toolbar button:not(.button) {
+  padding: 8px 14px;
+  border: 1px solid #dce5df;
+  border-radius: 6px;
+  background: #fff;
+}
+.exploration-toolbar button[aria-pressed="true"] {
+  color: #18533f;
+  background: #e8f2ec;
+}
+.exploration-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  min-height: 320px;
+}
+.exploration-list {
+  padding: 12px;
+  border-right: 1px solid #e2e7e5;
+  background: #f8faf8;
+}
+.exploration-list button {
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  margin-bottom: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+.exploration-list button[aria-current="true"] {
+  background: #e5efe9;
+  color: #18533f;
+}
+.exploration-list small,
+.flow-node-caption,
+.flow-node small,
+.schema-field small {
+  display: block;
+  color: #58665e;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.exploration-editor {
+  min-width: 0;
+  padding: 18px;
+}
+.exploration-editor label {
+  display: block;
+  font-size: 12px;
+  color: #42584c;
+}
+.exploration-editor input:not([type="checkbox"]),
+.exploration-editor select,
+.exploration-editor textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cddbd2;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  color: #192b28;
+  margin-block: 5px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+.exploration-editor input:focus,
+.exploration-editor select:focus,
+.exploration-editor textarea:focus {
+  outline: 2px solid #337c65;
+  outline-offset: 2px;
+}
+.exploration-heading > label {
+  flex: 1;
+  min-width: 160px;
+}
+.exploration-empty {
+  padding: 36px;
+  color: #65716b;
+}
+.operation-menu {
+  margin-block: 12px;
+  align-items: end;
+}
+.operation-menu > label {
+  flex: 1;
+  min-width: 140px;
+}
+.operation-menu .button {
+  margin-bottom: 10px;
+}
+.exploration-canvas {
+  border: 1px solid #e2e7e5;
+  border-radius: 8px;
+  overflow: auto;
+  margin-block: 12px;
+  background-color: #f9fbfa;
+  background-image: radial-gradient(#dbe5df 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.flow-surface {
+  position: relative;
+  min-height: 240px;
+}
+.flow-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.flow-node {
+  position: absolute;
+  width: 200px;
+  min-height: 88px;
+  background: #fff;
+  border: 1px solid #cddbd2;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  box-shadow: 0 2px 6px #192b2808;
+}
+.flow-node.selected {
+  border: 2px solid #216853;
+}
+.flow-node strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.step-inspector {
+  padding-top: 12px;
+  border-top: 1px solid #e2e7e5;
+}
+.step-inspector fieldset {
+  margin-block: 16px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  padding: 14px;
+}
+.step-inspector legend {
+  font-size: 12px;
+  color: #42584c;
+  padding: 0 6px;
+}
+.step-inspector pre {
+  max-height: 320px;
+  overflow: auto;
+  padding: 16px;
+  font-size: 12px;
+  background: #f5f8f6;
+  border-radius: 8px;
+}
+.step-inspector code {
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.step-list {
+  padding-left: 22px;
+}
+.step-list button {
+  padding: 8px;
+  background: transparent;
+  border: 0;
+  color: #216853;
+}
+.schema-field,
+.port-input {
+  margin-bottom: 12px;
+}
+@media (max-width: 720px) {
+  .exploration-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .exploration-list {
+    border-right: 0;
+    border-bottom: 1px solid #e2e7e5;
+  }
+  .exploration-list button {
+    width: auto;
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .exploration-editor {
+    padding: 12px;
+  }
+}

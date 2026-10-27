@@ -5,6 +5,10 @@
 - All algorithms and operation metadata belong to versioned `cube-core`. Play owns
   UI, filesystem authorization, local persistence and execution orchestration.
   The terminal runs the real Cube CLI; the Lab uses typed Core APIs.
+- Every new or changed operation needs its canonical versioned Core descriptor,
+  named input/output schemas, generated reference, real conformance fixture and
+  tested Play adapter/viewer handling. Catalog presence does not grant execution.
+  Preserve direct-only operations and never duplicate metadata in the frontend.
 - Preserve loopback exposure, Host/Origin checks, local session authorization,
   read-only sources, bounded processing and no implicit network reporting. Never
   add a Docker socket, privileged container or automatic challenge execution.
