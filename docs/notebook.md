@@ -44,3 +44,11 @@ New endpoints use the existing local session and Host/Origin checks:
 `GET /api/lab/results/{id}/export?name=result.bin`. Library writes use an existing
 result UUID, title and revision (0 creates; subsequent writes use the returned
 revision). Export names reject paths, reserved names and header injection.
+
+Historical cipher profiles use the same typed exploration controls and named
+ports. Gronsfeld, Autokey, Quagmire, square/matrix ciphers and the other explicit
+profiles are implemented in Core; see the [pinned Core cipher guide](https://github.com/cubearc/cube/blob/750b4b783b9d85829080e2769c29b46dd84eb414/docs/ciphers.md).
+Playfair exposes text, prepared text and filler positions separately; decode
+retains fillers. Solitaire deck/passphrase parameters stay ephemeral, and
+private results require explicit retention through the existing private-output
+flow. These direct operations add no implicit uploads or pipeline adapters.

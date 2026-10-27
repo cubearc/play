@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 9aadc00515b192eb3b75e3809e25cf784bc130a5
+          ref: 750b4b783b9d85829080e2769c29b46dd84eb414
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 9aadc00515b192eb3b75e3809e25cf784bc130a5
+          ref: 750b4b783b9d85829080e2769c29b46dd84eb414
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -90,7 +90,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 9aadc00515b192eb3b75e3809e25cf784bc130a5
+          ref: 750b4b783b9d85829080e2769c29b46dd84eb414
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -125,7 +125,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 9aadc00515b192eb3b75e3809e25cf784bc130a5
+          ref: 750b4b783b9d85829080e2769c29b46dd84eb414
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false

@@ -3,6 +3,7 @@ mod images;
 mod linear;
 mod mono;
 mod numbers;
+mod poly;
 mod text;
 
 use cube_core::errors::{ErrorCode, OperationError};
@@ -13,6 +14,9 @@ pub(super) fn supported(operation: &str) -> bool {
     cube_core::ciphers::mono::OPERATIONS
         .iter()
         .any(|d| d.id == operation)
+        || cube_core::ciphers::poly::OPERATIONS
+            .iter()
+            .any(|d| d.id == operation)
         || linear::supported(operation)
         || numbers::supported(operation)
         || text::supported(operation)
@@ -54,6 +58,12 @@ pub(super) fn execute(
         _ if numbers::supported(operation) => numbers::execute(operation, inputs, parameters),
         _ if text::supported(operation) => text::execute(operation, inputs, parameters),
         _ if images::supported(operation) => images::execute(operation, inputs, parameters),
+        _ if cube_core::ciphers::poly::OPERATIONS
+            .iter()
+            .any(|d| d.id == operation) =>
+        {
+            poly::execute(operation, inputs, parameters)
+        }
         _ => mono::execute(operation, inputs, parameters),
     }
 }
