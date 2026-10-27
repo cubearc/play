@@ -1,8 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 test("associates exact Lab bytes and explicit structured fields, then restores candidates", async ({
   page,
+  api,
 }, info) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Session unavailable");
@@ -72,7 +73,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     .getByRole("button", { name: "Inspect sample.png", exact: true })
     .click();
   const source = await (
-    await page.request.get("/api/workspace/media?path=sample.png")
+    await api.get("/api/workspace/media?path=sample.png")
   ).body();
   await page
     .getByRole("button", { name: "Open visual Lab", exact: true })
@@ -161,9 +162,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     library.getByLabel("Reopened result content", { exact: true }),
   ).toHaveValue("AP+A");
   expect(
-    await (
-      await page.request.get("/api/workspace/media?path=sample.png")
-    ).body(),
+    await (await api.get("/api/workspace/media?path=sample.png")).body(),
   ).toEqual(source);
   expect(external).toEqual([]);
   if (process.env.CUBE_PLAY_CAPTURE_UI === "1") {

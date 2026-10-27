@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { connect, SessionError, takeLaunchLink } from "./api";
+import { setSessionToken } from "./capability";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -102,16 +103,22 @@ describe("local connection", () => {
     });
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/session", {
       method: "POST",
-      credentials: "same-origin",
+      credentials: "omit",
+      redirect: "error",
       headers: { Authorization: "Bearer capability" },
       signal,
     });
-    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/health", {
-      credentials: "same-origin",
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/health");
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+      credentials: "omit",
       signal,
     });
+    expect(fetcher.mock.calls[1]?.[1].headers.get("Authorization")).toBe(
+      "Bearer capability",
+    );
   });
-  it("uses the existing cookie without a capability in the URL", async () => {
+  it("uses the origin-scoped session without a capability in the URL", async () => {
+    setSessionToken("remembered");
     const fetcher = vi
       .fn()
       .mockResolvedValue(Response.json({ status: "ok", version: "0.1.0" }));

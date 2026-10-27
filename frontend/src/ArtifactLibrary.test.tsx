@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ArtifactLibrary, TextLab } from "./ArtifactLibrary";
+import { readLink } from "./capability";
 import { catalog, id, wire } from "./test/lab-fixture";
 
 vi.mock("./VisualLab", () => ({
@@ -186,11 +187,21 @@ it("runs a discovered default Core text operation, saves a name and offers expli
   fireEvent.click(screen.getByRole("button", { name: "Save named artifact" }));
   await waitFor(() => expect(saved).toBe(true));
   await screen.findByText(/Artifact saved locally/);
-  expect(
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  fireEvent.click(
     within(
       screen.getByRole("region", { name: "Preserve selected result" }),
-    ).getByRole("link"),
-  ).toHaveAttribute("download");
+    ).getByRole("button", { name: "Export selected artifact" }),
+  );
+  await screen.findByText("The browser download was requested.");
+  expect(click).toHaveBeenCalledOnce();
+  expect(readLink).toHaveBeenCalledWith(
+    `/api/lab/results/${id}/export?name=cube-play-${id}.bin`,
+    expect.any(AbortSignal),
+  );
+  click.mockRestore();
 });
 it("runs file input with the exact discovered representation and renders plain text inertly", async () => {
   vi.stubGlobal(

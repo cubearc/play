@@ -84,7 +84,7 @@ fn request(path: &str) -> axum::http::request::Builder {
     Request::builder()
         .uri(path)
         .header(header::HOST, "127.0.0.1:7331")
-        .header(header::COOKIE, format!("cube_play_session_7331={SECRET}"))
+        .header(header::AUTHORIZATION, format!("Bearer {SECRET}"))
 }
 fn png() -> Vec<u8> {
     cube_core::image::Image::from_samples(

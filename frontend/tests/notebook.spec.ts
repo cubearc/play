@@ -1,17 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, api }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Session unavailable");
   await page.goto(url);
   await expect(
     page.getByRole("button", { name: "Source files", exact: true }),
   ).toBeVisible();
-  const snapshot = await (await page.request.get("/api/investigation")).json();
+  const snapshot = await (await api.get("/api/investigation")).json();
   expect(
     (
-      await page.request.put("/api/investigation/view", {
+      await api.put("/api/investigation/view", {
         headers: { Origin: new URL(url).origin },
         data: {
           revision: snapshot.view_revision,
@@ -82,7 +82,7 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
   ).toHaveValue("AP+A");
   const download = page.waitForEvent("download");
   await library
-    .getByRole("link", { name: "Export selected artifact", exact: true })
+    .getByRole("button", { name: "Export selected artifact", exact: true })
     .click();
   const exported = await download;
   expect(exported.suggestedFilename()).toMatch(/^cube-play-[a-f0-9-]+\.bin$/);
@@ -117,13 +117,14 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
 });
 test("keeps an unsaved conflicting draft until the user explicitly reloads", async ({
   page,
+  api,
 }, info) => {
   const id = crypto.randomUUID(),
     title = `Conflict ${info.project.name}`,
     origin = new URL(process.env.CUBE_PLAY_TEST_URL ?? "").origin;
   expect(
     (
-      await page.request.put("/api/investigation/notes", {
+      await api.put("/api/investigation/notes", {
         headers: { Origin: origin },
         data: { id, title, body: "Original", revision: 0 },
       })
@@ -137,7 +138,7 @@ test("keeps an unsaved conflicting draft until the user explicitly reloads", asy
   await notes.getByRole("button", { name: title, exact: true }).click();
   expect(
     (
-      await page.request.put("/api/investigation/notes", {
+      await api.put("/api/investigation/notes", {
         headers: { Origin: origin },
         data: { id, title, body: "Newer stored value", revision: 1 },
       })

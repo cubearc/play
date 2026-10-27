@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 test.skip(
   !process.env.CUBE_PLAY_DOCKER_TEST_URL,

@@ -68,8 +68,11 @@ cargo run --locked -p play-local
 ```
 
 Open the session URL printed by the server. It uses `127.0.0.1:7331` and a temporary
-credential in the URL fragment. The UI removes the fragment and exchanges it for an
-HttpOnly, same-site cookie. Refresh reuses the cookie; restart requires the new link.
+credential in the URL fragment. The UI removes it before requests and keeps the
+validated capability in origin-scoped, per-tab session storage. API requests use
+Authorization headers, so sessions at different local ports do not share cookies.
+Refresh reuses that tab's session; restart requires the new link. Use the launcher
+link when opening a separate tab.
 Do not share session links. Stop the application with Ctrl+C.
 
 Readiness is available at `http://127.0.0.1:7331/healthz`; `/api/health` requires the

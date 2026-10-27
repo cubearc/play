@@ -30,7 +30,7 @@ it("preserves literal Unicode names, private credentials and byte offsets", asyn
   });
   expect(fetcher.mock.calls[2]?.[1]).toEqual(
     expect.objectContaining({
-      credentials: "same-origin",
+      credentials: "omit",
       method: "POST",
       body: file,
     }),

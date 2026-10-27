@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
@@ -74,7 +74,7 @@ it("shows the real connection and version without external requests", async () =
   expect(screen.getByText("Cube Play 0.1.0")).toBeVisible();
   expect(fetcher).toHaveBeenCalledWith(
     "/api/health",
-    expect.objectContaining({ credentials: "same-origin" }),
+    expect.objectContaining({ credentials: "omit" }),
   );
 });
 
@@ -123,4 +123,45 @@ it("aborts outstanding work when unmounted", async () => {
   await waitFor(() => expect(signal).toBeDefined());
   result.unmount();
   expect(signal?.aborted).toBe(true);
+});
+
+it("accepts a fresh launcher capability while recovering in the same document", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.1.0" }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<App />);
+  await screen.findByRole("button", { name: "Try again" });
+  window.history.replaceState(null, "", "/#session=fresh");
+  fireEvent(window, new HashChangeEvent("hashchange"));
+  expect(await screen.findByText("Your connection is ready")).toBeVisible();
+  expect(window.location.hash).toBe("");
+});
+
+it("keeps an active investigation mounted until the received session is explicitly opened", async () => {
+  window.history.replaceState(null, "", "/#session=first");
+  const fetcher = vi.fn(async (url: string) =>
+    url === "/api/session"
+      ? new Response(null, { status: 204 })
+      : Response.json({ status: "ok", version: "0.1.0" }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByText("Your connection is ready");
+  const count = fetcher.mock.calls.length;
+  window.history.replaceState(null, "", "/#session=second");
+  fireEvent(window, new HashChangeEvent("hashchange"));
+  expect(
+    screen.getByRole("region", { name: "Received launcher link" }),
+  ).toBeVisible();
+  expect(fetcher).toHaveBeenCalledTimes(count);
+  expect(window.location.hash).toBe("");
+  await user.click(
+    screen.getByRole("button", { name: "Open received session" }),
+  );
+  await screen.findByText("Your connection is ready");
+  expect(fetcher).toHaveBeenCalledTimes(count + 2);
 });

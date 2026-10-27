@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 test("chains real image decoding and channel outputs through typed ports", async ({
   page,
@@ -71,6 +71,7 @@ test("chains real image decoding and channel outputs through typed ports", async
 
 test("builds a typed substitution exploration and restores its immutable result", async ({
   page,
+  api,
 }, info) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
@@ -148,7 +149,7 @@ test("builds a typed substitution exploration and restores its immutable result"
     lab.getByRole("combobox", { name: "Output port", exact: true }),
   ).toHaveValue("text");
   await expect(lab.getByText(/succeeded ·/)).toHaveCount(3);
-  const response = await page.request.get("/api/explorations");
+  const response = await api.get("/api/explorations");
   expect(response.ok()).toBe(true);
   const value = await response.json();
   const exploration = value.explorations.find(
@@ -163,9 +164,7 @@ test("builds a typed substitution exploration and restores its immutable result"
     type: "literal",
     value: "",
   });
-  const runs = await page.request.get(
-    `/api/explorations/${exploration.id}/executions`,
-  );
+  const runs = await api.get(`/api/explorations/${exploration.id}/executions`);
   expect(runs.ok()).toBe(true);
   expect(await runs.json()).toHaveLength(3);
 });

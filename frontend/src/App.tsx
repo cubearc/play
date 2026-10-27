@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import { connect, type Health, SessionError, takeLaunchLink } from "./api";
+import {
+  connect,
+  type Health,
+  type LaunchLink,
+  SessionError,
+  takeLaunchLink,
+} from "./api";
 import { CubeTerminal } from "./CubeTerminal";
+import { sessionToken } from "./capability";
 import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
 type Connection =
@@ -35,6 +42,18 @@ export default function App() {
   const [connection, setConnection] = useState<Connection>({
     state: "connecting",
   });
+  const [pendingLaunch, setPendingLaunch] = useState<LaunchLink | null>(null);
+  useEffect(() => {
+    const receive = () => {
+      const link = takeLaunchLink();
+      if (!link.session && !link.selection) return;
+      if (connection.state !== "ready") setConnectionRequest(link);
+      else if (link.selection || link.session !== sessionToken())
+        setPendingLaunch(link);
+    };
+    window.addEventListener("hashchange", receive);
+    return () => window.removeEventListener("hashchange", receive);
+  }, [connection.state]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,6 +98,23 @@ export default function App() {
         id="main-content"
         className="workspace mx-auto w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14"
       >
+        {pendingLaunch && (
+          <section aria-label="Received launcher link">
+            <p>
+              A new launcher link is ready. Save any edits before opening it.
+            </p>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => {
+                setConnectionRequest(pendingLaunch);
+                setPendingLaunch(null);
+              }}
+            >
+              Open received session
+            </button>
+          </section>
+        )}
         <div className="workspace-heading">
           <div>
             <p className="eyebrow">YOUR LOCAL LABORATORY</p>

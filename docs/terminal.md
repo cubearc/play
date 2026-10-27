@@ -74,8 +74,9 @@ no-new-privileges. The socket directory is `0700`, its endpoint `0600`; an owner
 lock controls replacement of stale endpoints and peer credentials must match the
 runtime user. Runner receives no host Docker control socket.
 
-The browser connects to `/api/terminal/ws` using the existing HttpOnly session
-cookie. The exact Host and Origin, selected root and initial size are checked
+The browser connects to `/api/terminal/ws` with `cube-play.v1` and a separate
+`cube-play.auth.<capability>` subprotocol. The server selects only the former;
+the credential never enters the URL or reflected protocol. The exact Host and Origin, selected root and initial size are checked
 before upgrade. Browser messages only send PTY input, resize or close; executable
 paths and environment overrides are never accepted. Untrusted requests cannot
 create host processes. Probe/status messages reveal only resource availability,

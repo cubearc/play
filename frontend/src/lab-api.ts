@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 import type { Store } from "./workspace-api";
 
 export type Binding = {
@@ -84,7 +85,10 @@ async function response(result: Response): Promise<Record<string, unknown>> {
 }
 export async function operations(signal: AbortSignal): Promise<Operation[]> {
   const value = await response(
-    await fetch("/api/lab/operations", { signal, credentials: "same-origin" }),
+    await apiFetch("/api/lab/operations", {
+      signal,
+      credentials: "omit",
+    }),
   );
   if (!Array.isArray(value.operations) || value.operations.length > 2048)
     throw invalid();
@@ -173,18 +177,18 @@ export async function execute(
 ): Promise<LabResult> {
   const id = crypto.randomUUID();
   const cancel = () => {
-    void fetch(`/api/lab/executions/${id}`, {
+    void apiFetch(`/api/lab/executions/${id}`, {
       method: "DELETE",
-      credentials: "same-origin",
+      credentials: "omit",
     }).catch(() => {});
   };
   signal.addEventListener("abort", cancel, { once: true });
   try {
     return parseResult(
       await response(
-        await fetch("/api/lab/execute", {
+        await apiFetch("/api/lab/execute", {
           method: "POST",
-          credentials: "same-origin",
+          credentials: "omit",
           signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -209,9 +213,9 @@ export async function structured(
 ): Promise<unknown> {
   if (result.representation !== "structured") throw invalid();
   if (result.inline?.type === "structured") return result.inline.data;
-  const response = await fetch(resultUrl(result.id), {
+  const response = await apiFetch(resultUrl(result.id), {
     signal,
-    credentials: "same-origin",
+    credentials: "omit",
   });
   if (!response.ok)
     throw new Error(

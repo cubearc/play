@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 import { type LabResult, object, parseResult } from "./lab-api";
 import type { Store } from "./workspace-api";
 export type Note = {
@@ -17,8 +18,8 @@ export async function request(
   signal?: AbortSignal,
   payload?: unknown,
 ): Promise<unknown> {
-  const response = await fetch(`/api${path}`, {
-    credentials: "same-origin",
+  const response = await apiFetch(`/api${path}`, {
+    credentials: "omit",
     ...(signal ? { signal } : {}),
     ...(payload === undefined
       ? {}

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { apiFetch } from "./capability";
 import {
   execute,
   type LabResult,
@@ -292,8 +293,8 @@ export function ResultReader({ result }: { result: LabResult }) {
         },
       );
     else if (result.representation === "text")
-      void fetch(resultUrl(result.id), {
-        credentials: "same-origin",
+      void apiFetch(resultUrl(result.id), {
+        credentials: "omit",
         signal: controller.signal,
       })
         .then(async (response) => {

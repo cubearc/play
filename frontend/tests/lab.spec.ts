@@ -1,22 +1,21 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 let previousView: unknown;
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, api }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   await page.goto(url);
   await expect(
     page.getByRole("button", { name: "Source files", exact: true }),
   ).toBeVisible();
-  previousView = (await (await page.request.get("/api/investigation")).json())
-    .view;
+  previousView = (await (await api.get("/api/investigation")).json()).view;
   await page.getByRole("button", { name: "Source files", exact: true }).click();
 });
-test.afterEach(async ({ page }) => {
-  const snapshot = await (await page.request.get("/api/investigation")).json();
+test.afterEach(async ({ api }) => {
+  const snapshot = await (await api.get("/api/investigation")).json();
   const origin = new URL(process.env.CUBE_PLAY_TEST_URL ?? "").origin;
-  const response = await page.request.put("/api/investigation/view", {
+  const response = await api.put("/api/investigation/view", {
     headers: { Origin: origin },
     data: { revision: snapshot.view_revision, view: previousView },
   });
@@ -25,6 +24,7 @@ test.afterEach(async ({ page }) => {
 
 test("inspects exact Core samples, histogram, channels and transformed results", async ({
   page,
+  api,
 }) => {
   const external: string[] = [],
     errors: string[] = [];
@@ -34,7 +34,7 @@ test("inspects exact Core samples, histogram, channels and transformed results",
   });
   page.on("pageerror", (error) => errors.push(error.message));
   const bytes = await (
-    await page.request.get("/api/workspace/media?path=sample.png")
+    await api.get("/api/workspace/media?path=sample.png")
   ).body();
   await page
     .getByRole("button", { name: "Inspect sample.png", exact: true })
@@ -112,7 +112,7 @@ test("inspects exact Core samples, histogram, channels and transformed results",
       .getByLabel("Structured result content", { exact: true })
       .inputValue(),
   );
-  const catalog = await (await page.request.get("/api/lab/operations")).json();
+  const catalog = await (await api.get("/api/lab/operations")).json();
   async function coreProbe(
     operation: string,
     input: unknown,
@@ -122,7 +122,7 @@ test("inspects exact Core samples, histogram, channels and transformed results",
     const descriptor = catalog.operations.find(
       (entry: { core: { id: string } }) => entry.core.id === operation,
     );
-    const response = await page.request.post("/api/lab/execute", {
+    const response = await api.post("/api/lab/execute", {
       headers: { Origin: origin },
       data: {
         id: crypto.randomUUID(),
@@ -198,9 +198,7 @@ test("inspects exact Core samples, histogram, channels and transformed results",
     ),
   ).toBe(true);
   expect(
-    await (
-      await page.request.get("/api/workspace/media?path=sample.png")
-    ).body(),
+    await (await api.get("/api/workspace/media?path=sample.png")).body(),
   ).toEqual(bytes);
   expect(external).toEqual([]);
   expect(errors).toEqual([]);

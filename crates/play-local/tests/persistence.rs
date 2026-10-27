@@ -79,7 +79,7 @@ impl Fixture {
             .method(method)
             .header("Host", "127.0.0.1:7331")
             .header("Origin", "http://127.0.0.1:7331")
-            .header("Cookie", "cube_play_session_7331=private-capability")
+            .header("Authorization", "Bearer private-capability")
             .header("Content-Type", "application/json");
         let response = self
             .running
@@ -123,7 +123,7 @@ impl Fixture {
                     .method("POST")
                     .header("Host", "127.0.0.1:7331")
                     .header("Origin", "http://127.0.0.1:7331")
-                    .header("Cookie", "cube_play_session_7331=private-capability")
+                    .header("Authorization", "Bearer private-capability")
                     .body(Body::from(bytes.to_owned()))
                     .unwrap(),
             )
@@ -760,7 +760,7 @@ async fn state_routes_require_session_origin_and_bounded_bodies() {
                     .uri(endpoint)
                     .method("PUT")
                     .header("Host", "127.0.0.1:7331")
-                    .header("Cookie", "cube_play_session_7331=private-capability")
+                    .header("Authorization", "Bearer private-capability")
                     .header("Origin", "http://untrusted.example")
                     .body(Body::from("{}"))
                     .unwrap(),

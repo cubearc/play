@@ -27,6 +27,7 @@ struct AppState {
     lab: Arc<lab::State>,
     config: Arc<Config>,
     secret: Arc<str>,
+    read_grants: Arc<security::ReadGrants>,
     workspace: workspace::Result<Option<Arc<workspace::Workspace>>>,
 }
 
@@ -61,8 +62,13 @@ pub fn application(config: Config, secret: String) -> (Router, PersistenceHandle
         workspace: workspace::Workspace::open(&config),
         config: Arc::new(config),
         secret: secret.into(),
+        read_grants: Arc::default(),
     };
     let api = Router::new()
+        .route(
+            "/read-links",
+            post(security::create_read_link).layer(RequestBodyLimitLayer::new(16 * 1024)),
+        )
         .route("/health", get(workspace_health))
         .route("/workspace/files", get(workspace::files))
         .route("/workspace/inspect", get(workspace::inspection))

@@ -24,9 +24,64 @@ fn request(path: &str) -> axum::http::request::Builder {
 
 fn authenticated(path: &str) -> Request<Body> {
     request(path)
-        .header(header::COOKIE, format!("cube_play_session_7331={SECRET}"))
+        .header(header::AUTHORIZATION, format!("Bearer {SECRET}"))
         .body(Body::empty())
         .unwrap()
+}
+
+#[tokio::test]
+async fn media_capabilities_do_not_grant_api_authority_or_other_urls() {
+    let application = application();
+    let response = application
+        .clone()
+        .oneshot(
+            request("/api/read-links")
+                .method("POST")
+                .header(header::ORIGIN, ORIGIN)
+                .header(header::AUTHORIZATION, format!("Bearer {SECRET}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    r#"{"uri":"/api/workspace/media?path=sample.mp4"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let url = value["url"].as_str().unwrap();
+    assert!(!url.contains(SECRET));
+    // No workspace is configured: the capability passes auth, but grants no root.
+    let response = application
+        .clone()
+        .oneshot(request(url).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    for path in [
+        url.replace("sample.mp4", "other.mp4"),
+        url.replace("/workspace/media", "/health"),
+    ] {
+        assert_eq!(
+            application
+                .clone()
+                .oneshot(request(&path).body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let foreign = self::application();
+    assert_eq!(
+        foreign
+            .oneshot(request(url).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]
@@ -49,7 +104,7 @@ async fn readiness_and_authenticated_health_report_real_version() {
 }
 
 #[tokio::test]
-async fn exchanges_fragment_capability_for_httponly_same_site_cookie() {
+async fn validates_fragment_capability_and_retires_the_legacy_cookie() {
     let application = application();
     let response = application
         .clone()
@@ -65,7 +120,8 @@ async fn exchanges_fragment_capability_for_httponly_same_site_cookie() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let cookie = response.headers()[header::SET_COOKIE].to_str().unwrap();
-    assert!(cookie.contains("HttpOnly; SameSite=Strict; Path=/api"));
+    assert!(cookie.contains("Max-Age=0; HttpOnly; SameSite=Strict; Path=/api"));
+    assert!(!cookie.contains(SECRET));
     let response = application
         .oneshot(
             request("/api/health")
@@ -75,7 +131,7 @@ async fn exchanges_fragment_capability_for_httponly_same_site_cookie() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -87,6 +143,7 @@ async fn rejects_missing_invalid_and_ambiguous_sessions() {
             "cube_play_session_7331={SECRET}; cube_play_session_7331={SECRET}"
         )),
         Some("other=value".into()),
+        Some(format!("cube_play_session_7331={SECRET}")),
     ] {
         let mut req = request("/api/health");
         if let Some(cookie) = cookie {
@@ -283,7 +340,7 @@ async fn notebook_challenge_and_candidate_mutations_require_session_and_origin()
         );
         let originless = request(path)
             .method(method)
-            .header(header::COOKIE, format!("cube_play_session_7331={SECRET}"))
+            .header(header::AUTHORIZATION, format!("Bearer {SECRET}"))
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from("{} "))
             .unwrap();

@@ -1,7 +1,6 @@
 """Exercise the real Compose image without mounting or changing host investigations."""
 
 import hashlib
-import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -19,6 +18,22 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class LocalCapabilities(urllib.request.BaseHandler):
+    """Attach a fixture capability only to its exact local API origin."""
+
+    def __init__(self):
+        self.tokens = {}
+
+    def http_request(self, request):
+        parsed = urllib.parse.urlsplit(request.full_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        if parsed.path.startswith("/api/") and origin in self.tokens and not request.has_header("Authorization"):
+            request.add_unredirected_header("Authorization", "Bearer " + self.tokens[origin])
+        return request
+
+    https_request = http_request
 
 
 class RuntimeSmoke(unittest.TestCase):
@@ -71,11 +86,15 @@ class RuntimeSmoke(unittest.TestCase):
         logs = self.compose("logs", "--no-color", "play-local")
         match = re.search(r"#session=([a-f0-9-]+)", logs)
         self.assertIsNotNone(match, "Local session URL was not printed")
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        capabilities = LocalCapabilities()
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), capabilities)
         status, headers, _ = self.request("/api/session", {"Origin": self.origin, "Authorization": "Bearer " + match[1]}, "POST", opener)
         self.assertEqual(status, 204)
         self.assertIn("HttpOnly", headers["Set-Cookie"])
         self.assertIn("SameSite=Strict", headers["Set-Cookie"])
+        self.assertIn("Max-Age=0", headers["Set-Cookie"])
+        self.assertNotIn(match[1], headers["Set-Cookie"])
+        capabilities.tokens[self.origin] = match[1]
         self.assertEqual(self.request("/api/health", opener=opener)[0], 200)
 
     def test_browser_request_boundaries(self):
@@ -129,8 +148,8 @@ fn main(){
 ''')
             subprocess.run(["rustc", "--edition=2024", str(probe_source), "-o", str(probe)], check=True, capture_output=True)
             environment.update(CUBE_PLAY_BROWSER=str(probe), CUBE_PLAY_BROWSER_RECORD=str(record))
-            cookie_jar = http.cookiejar.CookieJar()
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(cookie_jar))
+            capabilities = LocalCapabilities()
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), capabilities)
 
             def launch(*args, cwd=source, browser=False):
                 binary = [os.environ["CUBE_PLAY_CUBE"], "play"] if os.environ.get("CUBE_PLAY_CUBE") else [str(launcher)]
@@ -155,6 +174,7 @@ fn main(){
                 request = urllib.request.Request(origin + "/api/session", method="POST", headers={"Origin": origin, "Authorization": "Bearer " + values["session"][0]})
                 with opener.open(request, timeout=5) as response:
                     self.assertEqual(response.status, 204)
+                capabilities.tokens[origin] = values["session"][0]
                 with opener.open(origin + "/api/health", timeout=5) as response:
                     return origin, json.load(response)
 

@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 import { type LabResult, object, parseResult, resultUrl } from "./lab-api";
 import type { Store } from "./workspace-api";
 
@@ -273,9 +274,9 @@ async function request(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  const response = await fetch(`/api${path}`, {
+  const response = await apiFetch(`/api${path}`, {
     method,
-    credentials: "same-origin",
+    credentials: "omit",
     ...(signal ? { signal } : {}),
     ...(body === undefined
       ? {}
@@ -397,9 +398,9 @@ export async function executeStep(
   return readOperationResult(value, signal);
 }
 export async function cancelExecution(id: string): Promise<void> {
-  await fetch(`/api/lab/executions/${encodeURIComponent(id)}`, {
+  await apiFetch(`/api/lab/executions/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    credentials: "same-origin",
+    credentials: "omit",
   }).then((response) => {
     if (!response.ok)
       throw new Error(
@@ -423,8 +424,8 @@ export type OperationResult = {
 };
 const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 async function boundedContent(id: string, signal: AbortSignal): Promise<Json> {
-  const response = await fetch(resultUrl(id), {
-    credentials: "same-origin",
+  const response = await apiFetch(resultUrl(id), {
+    credentials: "omit",
     signal,
   });
   if (!response.ok || !response.body)

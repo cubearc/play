@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { LabCanvas } from "./LabCanvas";
+import { useReadLink } from "./useReadLink";
 
 const LabHistogram = lazy(() => import("./LabHistogram"));
 
@@ -214,6 +215,8 @@ export default function VisualLab({
       retain(result);
     });
   }
+  const originalLink = useReadLink(original ? resultUrl(original.id) : null);
+  const imageLink = useReadLink(image ? resultUrl(image.id) : null);
   return (
     <section className="visual-lab" aria-label="Visual Lab">
       <h3>Visual Lab</h3>
@@ -271,11 +274,14 @@ export default function VisualLab({
             below come from Core, not canvas samples. Indexed pixels remain
             palette indices until explicitly expanded.
           </p>
+          {(originalLink.error || imageLink.error) && (
+            <p role="alert">{originalLink.error ?? imageLink.error}</p>
+          )}
           <div className="lab-comparison">
             <figure>
               <img
                 className="image-preview"
-                src={resultUrl(original.id)}
+                src={originalLink.url ?? undefined}
                 alt="Original Core-decoded raster"
               />
               <figcaption>Original decoded raster</figcaption>
@@ -283,7 +289,7 @@ export default function VisualLab({
             <figure>
               <img
                 className="image-preview"
-                src={resultUrl(image.id)}
+                src={imageLink.url ?? ""}
                 alt="Active Lab raster"
               />
               <figcaption>
@@ -291,20 +297,34 @@ export default function VisualLab({
               </figcaption>
             </figure>
           </div>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => {
+              originalLink.renew();
+              imageLink.renew();
+            }}
+          >
+            Renew private previews
+          </button>
           <fieldset disabled={busy}>
             <legend>Exact pixel inspection</legend>
-            <LabCanvas
-              src={resultUrl(image.id)}
-              width={info.width}
-              height={info.height}
-              x={validPixel ? x : 0}
-              y={validPixel ? y : 0}
-              onPick={(px, py) => {
-                setX(px);
-                setY(py);
-                setPixel(null);
-              }}
-            />
+            {imageLink.url ? (
+              <LabCanvas
+                src={imageLink.url}
+                width={info.width}
+                height={info.height}
+                x={validPixel ? x : 0}
+                y={validPixel ? y : 0}
+                onPick={(px, py) => {
+                  setX(px);
+                  setY(py);
+                  setPixel(null);
+                }}
+              />
+            ) : (
+              <p role="status">Opening private raster preview…</p>
+            )}
             <div className="lab-controls">
               <label>
                 Pixel X

@@ -1,8 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 test("connects the real UI to the local Rust server and survives refresh", async ({
   page,
+  api,
 }) => {
   const sessionUrl = process.env.CUBE_PLAY_TEST_URL;
   if (!sessionUrl) throw new Error("Local session was not initialized");
@@ -20,7 +21,7 @@ test("connects the real UI to the local Rust server and survives refresh", async
   ).toBeVisible();
   await expect(page).toHaveURL(`${origin}/`);
   await expect(page.getByText("Connected locally")).toBeVisible();
-  const health = await (await page.request.get("/api/health")).json();
+  const health = await (await api.get("/api/health")).json();
   await expect(
     page.getByRole("heading", { name: health.workspace.name, exact: true }),
   ).toBeVisible();
@@ -31,8 +32,7 @@ test("connects the real UI to the local Rust server and survives refresh", async
   const cookie = (await page.context().cookies()).find(
     (value) => value.name === `cube_play_session_${new URL(sessionUrl).port}`,
   );
-  expect(cookie?.httpOnly).toBe(true);
-  expect(cookie?.sameSite).toBe("Strict");
+  expect(cookie).toBeUndefined();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Your connection is ready" }),

@@ -33,7 +33,7 @@ describe("typed Lab boundary", () => {
     );
     expect(result.metadata).toEqual(metadata);
     expect(JSON.parse(fetcher.mock.calls[1]?.[1].body).version).toBe(1);
-    expect(fetcher.mock.calls[1]?.[1].credentials).toBe("same-origin");
+    expect(fetcher.mock.calls[1]?.[1].credentials).toBe("omit");
     expect(
       await structured({ ...result, representation: "structured" }, signal()),
     ).toEqual(counts);

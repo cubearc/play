@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
 test.beforeEach(async ({ page }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
@@ -11,14 +11,16 @@ test.beforeEach(async ({ page }) => {
 });
 test("opens a launcher challenge, navigates authorized artifacts and restores private progress", async ({
   page,
+  api,
 }) => {
   const origin = new URL(process.env.CUBE_PLAY_TEST_URL ?? "").origin;
   const before = await (
-    await page.request.get("/api/workspace/media?path=rabbit.cube")
+    await api.get("/api/workspace/media?path=rabbit.cube")
   ).body();
   await page.goto(`${origin}/#file=rabbit.cube&intent=challenge`);
-  // OS browser launching opens a document; a same-document test navigation does not.
-  await page.reload();
+  await page
+    .getByRole("button", { name: "Open received session", exact: true })
+    .click();
   const panel = page.getByRole("region", {
     name: "Local challenges",
     exact: true,
@@ -91,9 +93,7 @@ test("opens a launcher challenge, navigates authorized artifacts and restores pr
     ),
   ).toBe(true);
   expect(
-    await (
-      await page.request.get("/api/workspace/media?path=rabbit.cube")
-    ).body(),
+    await (await api.get("/api/workspace/media?path=rabbit.cube")).body(),
   ).toEqual(before);
 });
 test("rejects an imported workflow recipe without executing or replacing the active challenge", async ({

@@ -23,7 +23,7 @@ async fn native_development_does_not_start_host_processes() {
             Request::builder()
                 .uri("/api/terminal")
                 .header("Host", "127.0.0.1:7331")
-                .header("Cookie", format!("cube_play_session_7331={SECRET}"))
+                .header("Authorization", format!("Bearer {SECRET}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -137,12 +137,12 @@ async fn websocket_bridge_enforces_authorization_and_preserves_streams() {
         axum::serve(tcp, app(config, SECRET.into())).await.unwrap();
     });
     let url = format!("ws://{address}/api/terminal/ws?cols=80&rows=24");
-    let make = |url: &str, cookie: bool, origin: Option<&str>| {
+    let make = |url: &str, capability: bool, origin: Option<&str>| {
         let mut request = url.into_client_request().unwrap();
-        if cookie {
+        if capability {
             request.headers_mut().insert(
-                "cookie",
-                format!("cube_play_session_{}={SECRET}", address.port())
+                "sec-websocket-protocol",
+                format!("cube-play.v1, cube-play.auth.{SECRET}")
                     .parse()
                     .unwrap(),
             );
@@ -176,9 +176,10 @@ async fn websocket_bridge_enforces_authorization_and_preserves_streams() {
             matches!(error,tokio_tungstenite::tungstenite::Error::Http(response) if response.status().as_u16()==expected)
         );
     }
-    let (mut ws, _) = connect_async(make(&url, true, Some(&origin)))
+    let (mut ws, response) = connect_async(make(&url, true, Some(&origin)))
         .await
         .unwrap();
+    assert_eq!(response.headers()["sec-websocket-protocol"], "cube-play.v1");
     assert_eq!(
         serde_json::from_str::<Value>(ws.next().await.unwrap().unwrap().to_text().unwrap())
             .unwrap()["type"],

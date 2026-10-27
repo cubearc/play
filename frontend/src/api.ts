@@ -1,3 +1,5 @@
+import { apiFetch, setSessionToken } from "./capability";
+
 export type Health = {
   status: "ok";
   version: string;
@@ -47,15 +49,17 @@ export async function connect(
   if (session) {
     const response = await fetch("/api/session", {
       method: "POST",
-      credentials: "same-origin",
+      credentials: "omit",
+      redirect: "error",
       headers: { Authorization: `Bearer ${session}` },
       signal,
     });
     if (!response.ok)
       throw new SessionError("The local session link is missing or expired.");
+    setSessionToken(session);
   }
-  const response = await fetch("/api/health", {
-    credentials: "same-origin",
+  const response = await apiFetch("/api/health", {
+    credentials: "omit",
     signal,
   });
   if (response.status === 401 || response.status === 403) {

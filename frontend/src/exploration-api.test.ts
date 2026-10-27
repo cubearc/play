@@ -292,7 +292,7 @@ describe("exploration transport and replay boundaries", () => {
     expect((await saveExploration(value)).revision).toBe(2);
     expect(fetch.mock.calls[1]?.[1]).toMatchObject({
       method: "PUT",
-      credentials: "same-origin",
+      credentials: "omit",
     });
     await expect(saveExploration(value)).rejects.toThrow("Local storage full");
   });

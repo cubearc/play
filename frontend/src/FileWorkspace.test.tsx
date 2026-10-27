@@ -255,15 +255,27 @@ it.each(["image", "video", "audio"] as const)(
     await screen.findByText("Bounded Core evidence.");
     const media =
       kind === "image"
-        ? screen.getByRole("img")
-        : screen.getByLabelText(
+        ? await screen.findByRole("img")
+        : await screen.findByLabelText(
             `${kind === "video" ? "Video" : "Audio"} preview of sample.file`,
           );
     fireEvent.error(media);
-    expect(await screen.findByText(/browser could not decode/)).toBeVisible();
+    expect(
+      await screen.findByText(
+        /media preview failed or its private link expired/,
+      ),
+    ).toBeVisible();
     expect(
       screen.getByRole("region", { name: "Byte inspection" }),
     ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry media preview" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/media preview failed or its private link expired/),
+      ).not.toBeInTheDocument(),
+    );
   },
 );
 

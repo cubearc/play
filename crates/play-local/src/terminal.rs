@@ -116,6 +116,7 @@ async fn upgrade(
         .ok_or_else(unavailable)?;
         match first {
             ready @ Server::Ready { .. } => Ok(websocket
+                .protocols(["cube-play.v1"])
                 .max_message_size(protocol::FRAME_LIMIT)
                 .max_frame_size(protocol::FRAME_LIMIT)
                 .write_buffer_size(8192)

@@ -1,7 +1,7 @@
 # Typed local Lab API
 
 The Lab calls the versioned Rust Core directly. It never parses terminal output or
-executes scripts. These endpoints require the same local session cookie and exact
+executes scripts. These endpoints require the local session Authorization header and exact
 Host/Origin as other workspace APIs. Files/results stay local; no network operation,
 telemetry or upload is added. See [the visual Lab](visual-lab.md) for interactive controls.
 

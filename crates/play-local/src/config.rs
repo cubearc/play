@@ -152,6 +152,7 @@ impl Config {
         self.origin.trim_start_matches("http://")
     }
 
+    /// Legacy name used only to expire browser cookies from older versions.
     pub fn session_cookie(&self) -> String {
         format!(
             "cube_play_session_{}",

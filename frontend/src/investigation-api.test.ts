@@ -31,10 +31,11 @@ it("restores typed local state and saves explicit revisions without external req
     path: "saved.bin",
   });
   expect(await saveInvestigation("", { title: "Case", revision: 1 })).toBe(2);
-  expect(fetcher).toHaveBeenNthCalledWith(1, "/api/investigation", {
-    credentials: "same-origin",
-    signal,
-  });
+  expect(fetcher).toHaveBeenNthCalledWith(
+    1,
+    "/api/investigation",
+    expect.objectContaining({ credentials: "omit", signal }),
+  );
   expect(fetcher).toHaveBeenNthCalledWith(
     2,
     "/api/investigation",

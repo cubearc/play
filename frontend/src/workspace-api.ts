@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 export type Store = "source" | "imports";
 export type Category =
   | "image"
@@ -137,9 +138,9 @@ export async function listFiles(
 ): Promise<Listing> {
   const value = object(
     await response(
-      fetch(url("files", store, path, offset), {
+      apiFetch(url("files", store, path, offset), {
         signal,
-        credentials: "same-origin",
+        credentials: "omit",
       }),
     ),
   );
@@ -162,9 +163,9 @@ export async function inspectFile(
 ): Promise<Inspection> {
   const value = object(
     await response(
-      fetch(url("inspect", store, path, offset), {
+      apiFetch(url("inspect", store, path, offset), {
         signal,
-        credentials: "same-origin",
+        credentials: "omit",
       }),
     ),
   );
@@ -220,9 +221,9 @@ export async function importFile(
 ): Promise<{ store: Store; path: string }> {
   const value = object(
     await response(
-      fetch(`/api/workspace/import?${new URLSearchParams({ name })}`, {
+      apiFetch(`/api/workspace/import?${new URLSearchParams({ name })}`, {
         method: "POST",
-        credentials: "same-origin",
+        credentials: "omit",
         headers: { "Content-Type": "application/octet-stream" },
         body: file,
         signal,

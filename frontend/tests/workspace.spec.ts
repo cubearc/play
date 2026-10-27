@@ -1,18 +1,18 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./session";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, api }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   const token = new URLSearchParams(new URL(url).hash.slice(1)).get("session");
-  await page.request.post("/api/session", {
+  await api.post("/api/session", {
     headers: {
       Origin: new URL(url).origin,
       Authorization: `Bearer ${token}`,
     },
   });
-  const snapshot = await (await page.request.get("/api/investigation")).json();
-  const reset = await page.request.put("/api/investigation/view", {
+  const snapshot = await (await api.get("/api/investigation")).json();
+  const reset = await api.put("/api/investigation/view", {
     headers: { Origin: new URL(url).origin },
     data: {
       revision: snapshot.view_revision,
@@ -99,6 +99,7 @@ test("auto-opens a single compatible file and handles an empty directory", async
 
 test("serves real video/audio ranges and preserves a private explicit import after refresh", async ({
   page,
+  api,
 }) => {
   await page
     .getByRole("button", { name: "Inspect sample.mp4", exact: true })
@@ -117,10 +118,9 @@ test("serves real video/audio ranges and preserves a private explicit import aft
     )
     .toBe(true);
   await expect(page.getByText("Cube container metadata")).toBeVisible();
-  const response = await page.request.get(
-    "/api/workspace/media?path=sample.mp4",
-    { headers: { Range: "bytes=0-15" } },
-  );
+  const response = await api.get("/api/workspace/media?path=sample.mp4", {
+    headers: { Range: "bytes=0-15" },
+  });
   expect(response.status()).toBe(206);
   expect((await response.body()).length).toBe(16);
   await page
@@ -193,6 +193,8 @@ test("prevents another tab from silently replacing saved navigation", async ({
 }) => {
   const second = await context.newPage();
   await second.goto("/");
+  await expect(second.getByRole("button", { name: "Try again" })).toBeVisible();
+  await second.goto(process.env.CUBE_PLAY_TEST_URL ?? "");
   await expect(
     second.getByRole("button", { name: "Inspect sample.png", exact: true }),
   ).toBeVisible();

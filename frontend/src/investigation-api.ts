@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 import type { Store } from "./workspace-api";
 
 export type View = {
@@ -54,7 +55,10 @@ export async function loadInvestigation(
   signal: AbortSignal,
 ): Promise<Investigation> {
   const value = await response(
-    await fetch("/api/investigation", { signal, credentials: "same-origin" }),
+    await apiFetch("/api/investigation", {
+      signal,
+      credentials: "omit",
+    }),
   );
   const view = object(value.view);
   const selection = view.selected === null ? null : object(view.selected);
@@ -82,9 +86,9 @@ export async function saveInvestigation(
   payload: unknown,
 ): Promise<number> {
   const result = await response(
-    await fetch(`/api/investigation${endpoint}`, {
+    await apiFetch(`/api/investigation${endpoint}`, {
       method: "PUT",
-      credentials: "same-origin",
+      credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),

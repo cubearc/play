@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useReadLink } from "./useReadLink";
 import {
   type Inspection,
   inspectFile,
@@ -35,6 +36,12 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
     );
     return () => controller.abort();
   }, [store, path, request]);
+  const preview = useReadLink(
+    result?.preview.available &&
+      ["image", "audio", "video"].includes(result.preview.kind)
+      ? mediaUrl(store, path)
+      : null,
+  );
   const name = path.split("/").at(-1) ?? path;
   return (
     <section className="file-inspector" aria-label="File inspector">
@@ -102,24 +109,39 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
             </p>
           )}
           {result.notice && <p className="file-notice">{result.notice}</p>}
-          {mediaFailed && (
-            <p className="file-warning" role="status">
-              The browser could not decode this media. Its metadata and byte
-              inspection remain available below.
-            </p>
+          {(mediaFailed || preview.error) && (
+            <div>
+              <p className="file-warning" role="status">
+                The media preview failed or its private link expired. Metadata
+                and byte inspection remain available below.
+              </p>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => {
+                  setMediaFailed(false);
+                  preview.renew();
+                }}
+              >
+                Retry media preview
+              </button>
+            </div>
           )}
+          {preview.error && <p role="alert">{preview.error}</p>}
           {result.preview.available &&
             !mediaFailed &&
+            preview.url &&
             result.preview.kind === "image" && (
               <img
                 className="image-preview"
-                src={mediaUrl(store, path)}
+                src={preview.url ?? undefined}
                 alt={`Preview of ${name}`}
                 onError={() => setMediaFailed(true)}
               />
             )}
           {result.preview.available &&
             !mediaFailed &&
+            preview.url &&
             result.preview.kind === "video" && (
               <>
                 <video
@@ -127,7 +149,7 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
                   controls
                   muted
                   preload="metadata"
-                  src={mediaUrl(store, path)}
+                  src={preview.url ?? undefined}
                   onError={() => setMediaFailed(true)}
                   aria-label={`Video preview of ${name}`}
                 />
@@ -138,6 +160,7 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
             )}
           {result.preview.available &&
             !mediaFailed &&
+            preview.url &&
             result.preview.kind === "audio" && (
               <>
                 <audio
@@ -145,7 +168,7 @@ export function FileInspector({ store, path }: { store: Store; path: string }) {
                   controls
                   muted
                   preload="metadata"
-                  src={mediaUrl(store, path)}
+                  src={preview.url ?? undefined}
                   onError={() => setMediaFailed(true)}
                   aria-label={`Audio preview of ${name}`}
                 />

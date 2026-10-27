@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 export type TerminalStore = "source" | "imports" | "output";
 export type TerminalStatus = {
   available: boolean;
@@ -11,9 +12,9 @@ export type TerminalStatus = {
 export async function terminalStatus(
   signal: AbortSignal,
 ): Promise<TerminalStatus> {
-  const response = await fetch("/api/terminal", {
+  const response = await apiFetch("/api/terminal", {
     signal,
-    credentials: "same-origin",
+    credentials: "omit",
   });
   if (!response.ok)
     throw new Error(

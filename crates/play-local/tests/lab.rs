@@ -162,17 +162,13 @@ impl Server {
     }
     async fn raw(&self, method: &str, path: &str, body: &[u8], authorized: bool) -> (u16, Vec<u8>) {
         let mut socket = tokio::net::TcpStream::connect(&self.address).await.unwrap();
-        let cookie = if authorized {
-            format!(
-                "Cookie: cube_play_session_{}={}\r\n",
-                self.address.split(':').nth(1).unwrap(),
-                self.secret
-            )
+        let authorization = if authorized {
+            format!("Authorization: Bearer {}\r\n", self.secret)
         } else {
             String::new()
         };
         let head = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {}\r\nOrigin: http://{}\r\n{cookie}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "{method} {path} HTTP/1.1\r\nHost: {}\r\nOrigin: http://{}\r\n{authorization}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             self.address,
             self.address,
             body.len()

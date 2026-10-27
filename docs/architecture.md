@@ -13,15 +13,24 @@ authenticated health at `/api/health`. All surfaces validate the exact configure
 Host and any Origin; mutations require the exact Origin. Cross-site fetches and
 forwarded-host headers are rejected. There is no CORS allowance.
 
-A random per-process capability appears only in the explicit startup URL fragment.
-The frontend removes it before sending requests, exchanges it in an Authorization
-header and receives an HttpOnly, SameSite=Strict session cookie scoped to `/api`.
-Cookie names include the local port so simultaneous workspaces do not overwrite
-each other's sessions. Authenticated health includes bounded UUID/name context;
-public readiness never includes workspace metadata or host paths.
-Credential comparison is constant-time. No token is stored in browser persistent
-storage; refresh uses the cookie, and process restart invalidates it. This protects
-the local browser boundary, not an attacker controlling the host account.
+A random per-process capability appears in the explicit startup URL fragment.
+The frontend removes it before requests, validates it through `POST /api/session`
+and stores it in per-tab `sessionStorage`, scoped to the complete browser origin
+including its port. API requests carry `Authorization: Bearer ...` with credentials
+omitted and redirects rejected. Cookies never grant API authority; startup expires
+the legacy cookie. Authenticated health includes bounded UUID/name context, while
+public readiness includes neither workspace metadata nor host paths. Process
+restart invalidates the capability. Credential comparison is constant-time.
+
+Media elements and explicit downloads obtain a separate bounded read capability
+through `POST /api/read-links` with `{uri}`. A link authorizes only the exact
+workspace-media or artifact-content/export URL for one hour. It grants no other
+path, query, mutation or terminal access. At most 256 links remain active, expired
+links release capacity, and source authorization still runs on every request.
+Preview retry renews access; export obtains a fresh link on the explicit action.
+Terminal upgrades supply the API capability through a WebSocket subprotocol;
+responses select only `cube-play.v1`, never the authentication value. These
+boundaries do not protect against an attacker controlling the host account.
 
 Responses use a restrictive Content Security Policy, no-referrer and no-store.
 Session bodies are limited to 1 KiB. Streaming imports have a 32 MiB/30-second limit;

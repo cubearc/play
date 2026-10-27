@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { terminalProtocols } from "./capability";
 import {
   type TerminalStatus,
   type TerminalStore,
@@ -184,6 +185,7 @@ function TerminalSession({
         resize();
         const ws = new WebSocket(
           terminalUrl(request.store, request.path, term.cols, term.rows),
+          terminalProtocols(),
         );
         ws.binaryType = "arraybuffer";
         socket.current = ws;

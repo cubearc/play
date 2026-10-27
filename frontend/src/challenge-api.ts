@@ -1,3 +1,4 @@
+import { apiFetch } from "./capability";
 import { object } from "./lab-api";
 import { request } from "./notebook-api";
 import type { Store } from "./workspace-api";
@@ -148,9 +149,9 @@ export async function importChallenge(
   file: { store: Store; path: string },
   signal?: AbortSignal,
 ): Promise<ChallengeState> {
-  const response = await fetch("/api/challenges/import", {
+  const response = await apiFetch("/api/challenges/import", {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "omit",
     ...(signal ? { signal } : {}),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(file),
