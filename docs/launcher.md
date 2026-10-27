@@ -53,7 +53,8 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 11 includes bounded replay-input diagnostics and preserves historical
+Runtime revision 12 adds the section-based workspace shell and persistent section
+navigation. It includes bounded replay-input diagnostics and preserves historical
 configurations independently of current operation versions. It requires origin-scoped header authorization, restricted media
 links and browser WebSocket authorization. It also includes typed explorations and
 the current canonical operation catalog, private candidate revisions, non-executable challenges

@@ -54,11 +54,7 @@ it("shows a launched workspace without pretending discovery has selected a file"
     ),
   );
   render(<App />);
-  expect(
-    await screen.findByText(
-      "Choose a file below, or import a private copy to begin.",
-    ),
-  ).toBeVisible();
+  expect(await screen.findByText("Source files are read-only.")).toBeVisible();
 });
 
 it("shows the real connection and version without external requests", async () => {

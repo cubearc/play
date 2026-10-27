@@ -1,6 +1,6 @@
 # Typed explorations
 
-Open a workspace with `cube play`. In **Explorations**, choose **New exploration**,
+Open a workspace with `cube play`. Select **Explorations** in the workspace menu, then **New exploration**,
 name the investigation and write a hypothesis. Add an operation, fill its named
 inputs and parameters, then **Save configuration** and **Run selected path**.
 Switch between **Flow** and **Steps** to navigate the same configuration.
@@ -10,6 +10,13 @@ path to execute missing upstream steps for this configuration. Existing successf
 outputs can be reused; changing the configuration preserves earlier executions
 and marks them as belonging to an earlier configuration. Opening a workspace never
 runs its graph. A challenge is optional.
+
+Use **Files** to choose an asset, then **Explore selected file** to carry that
+selection into the operation forms. Switching workspace sections preserves open
+drafts, results and terminal sessions. The last section and file navigation resume
+after restart. **Notes**, **Artifacts**, **Local challenges** and **Terminal** each
+have their own section. Single-operation text/byte utilities remain under
+**Quick text and byte tools** in Explorations.
 
 Open **Execution history**, then **View retained output** to inspect an earlier
 run without executing it again. The stored artifact identity, hash and named-port

@@ -6,12 +6,30 @@ use sqlx::Row;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Panel {
+    #[default]
+    Files,
+    Explorations,
+    Notes,
+    Artifacts,
+    Challenges,
+    Terminal,
+}
+impl Panel {
+    fn is_files(&self) -> bool {
+        matches!(self, Self::Files)
+    }
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct View {
     pub store: Store,
     pub path: String,
     pub offset: usize,
     pub selected: Option<Selection>,
+    #[serde(default, skip_serializing_if = "Panel::is_files")]
+    pub panel: Panel,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

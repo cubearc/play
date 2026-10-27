@@ -1116,3 +1116,38 @@ async fn archived_configuration_remains_readable_when_its_contract_version_is_un
     );
     fixture.stop().await;
 }
+
+#[tokio::test]
+async fn workspace_sections_resume_with_selected_files_and_reject_unknown_panels() {
+    let mut fixture = Fixture::new();
+    let (_, snapshot) = fixture.get("/api/investigation").await;
+    let view = json!({"store":"source","path":"","offset":0,"selected":{"store":"source","path":"original.txt"},"panel":"notes"});
+    assert_eq!(
+        fixture
+            .put(
+                "/api/investigation/view",
+                json!({"revision":snapshot["view_revision"],"view":view})
+            )
+            .await
+            .0,
+        StatusCode::OK
+    );
+    fixture.stop().await;
+    fixture.start();
+    let (_, recovered) = fixture.get("/api/investigation").await;
+    assert_eq!(recovered["view"], view);
+    let mut invalid = view.clone();
+    invalid["panel"] = json!("cloud");
+    assert_eq!(
+        fixture
+            .put(
+                "/api/investigation/view",
+                json!({"revision":recovered["view_revision"],"view":invalid})
+            )
+            .await
+            .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(fixture.get("/api/investigation").await.1["view"], view);
+    fixture.stop().await;
+}

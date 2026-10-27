@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./session";
+import { expect, openQuickTools, openSection, test } from "./session";
 
 test("associates exact Lab bytes and explicit structured fields, then restores candidates", async ({
   page,
@@ -13,6 +13,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     if (new URL(request.url()).origin !== origin) external.push(request.url());
   });
   await page.goto(url);
+  await openSection(page, "Files");
   await page.getByRole("button", { name: "Source files", exact: true }).click();
   await page
     .getByRole("button", { name: "Inspect rabbit.cube", exact: true })
@@ -21,17 +22,20 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     name: "Local challenges",
     exact: true,
   });
+  await openSection(page, "Local challenges");
   await challenges
     .getByRole("button", { name: "Import selected challenge", exact: true })
     .click();
   await challenges
     .getByRole("button", { name: "Inspect evidence", exact: true })
     .click();
+  await openSection(page, "Files");
   await page.getByRole("button", { name: "Source files", exact: true }).click();
   const textLab = page.getByRole("region", {
     name: "Text and byte Lab",
     exact: true,
   });
+  await openQuickTools(page);
   await textLab
     .getByRole("button", {
       name: "Discover text and byte operations",
@@ -69,6 +73,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
       /Private candidate revision \d+ · bytes · 3 bytes · unverified/,
     ),
   ).toBeVisible();
+  await openSection(page, "Files");
   await page
     .getByRole("button", { name: "Inspect sample.png", exact: true })
     .click();
@@ -138,6 +143,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     ),
   ).toBeVisible();
   await page.reload();
+  await openSection(page, "Local challenges");
   await challenges
     .getByRole("button", { name: "Record a candidate", exact: true })
     .click();
@@ -157,6 +163,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
     name: "Artifact library",
     exact: true,
   });
+  await openSection(page, "Artifacts");
   await library.getByRole("button", { name: bytesName, exact: true }).click();
   await expect(
     library.getByLabel("Reopened result content", { exact: true }),
@@ -166,6 +173,7 @@ test("associates exact Lab bytes and explicit structured fields, then restores c
   ).toEqual(source);
   expect(external).toEqual([]);
   if (process.env.CUBE_PLAY_CAPTURE_UI === "1") {
+    await openSection(page, "Local challenges");
     await restored.scrollIntoViewIfNeeded();
     await page.screenshot({
       path: info.outputPath("private-stage-candidate.png"),

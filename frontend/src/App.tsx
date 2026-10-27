@@ -6,7 +6,6 @@ import {
   SessionError,
   takeLaunchLink,
 } from "./api";
-import { CubeTerminal } from "./CubeTerminal";
 import { sessionToken } from "./capability";
 import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
@@ -96,7 +95,7 @@ export default function App() {
       </header>
       <main
         id="main-content"
-        className="workspace mx-auto w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14"
+        className="workspace mx-auto w-full max-w-6xl px-6 py-6 sm:px-8 sm:py-8"
       >
         {pendingLaunch && (
           <section aria-label="Received launcher link">
@@ -118,7 +117,11 @@ export default function App() {
         <div className="workspace-heading">
           <div>
             <p className="eyebrow">YOUR LOCAL LABORATORY</p>
-            <h1>Investigation workspace</h1>
+            <h1>
+              {connection.state === "ready" && connection.health.workspace
+                ? connection.health.workspace.name
+                : "Investigation workspace"}
+            </h1>
           </div>
           <span className={`connection-badge ${ready ? "connected" : ""}`}>
             <span className="status-dot" />
@@ -135,11 +138,9 @@ export default function App() {
             aria-label="Open workspace"
           >
             <div>
-              <p className="eyebrow">READ-ONLY SOURCE</p>
-              <h2>{connection.health.workspace.name}</h2>
               <p>
-                Source files remain unchanged. Generated results use separate
-                local storage.
+                <strong>Source files are read-only.</strong> Notes and results
+                stay local.
               </p>
               {connectionRequest.selection ? (
                 <p className="selected-file">
@@ -151,11 +152,7 @@ export default function App() {
                   </strong>{" "}
                   {connectionRequest.selection.name}
                 </p>
-              ) : (
-                <p className="selected-file">
-                  Choose a file below, or import a private copy to begin.
-                </p>
-              )}
+              ) : null}
             </div>
           </section>
         ) : (
@@ -190,45 +187,48 @@ export default function App() {
             initialSelection={connectionRequest.selection}
           />
         )}
-        {connection.state === "ready" && connection.health.workspace && (
-          <CubeTerminal />
-        )}
-        <section className="session-panel" aria-labelledby="session-title">
-          <div>
-            <p className="eyebrow">LOCAL SESSION</p>
-            <h2 id="session-title">
-              {ready
-                ? "Your connection is ready"
-                : connection.state === "error"
-                  ? "Let's reconnect"
-                  : "Connecting to your application"}
-            </h2>
-            <p role="status" aria-live="polite">
-              {connection.state === "ready"
-                ? "Connected to Cube Play on this machine. No account or cloud connection is required."
-                : connection.state === "error"
-                  ? connection.message
-                  : "Checking the local application…"}
-            </p>
-          </div>
-          {connection.state === "error" ? (
-            <button
-              type="button"
-              className="button"
-              onClick={() =>
-                setConnectionRequest((request) => ({ ...request }))
-              }
-            >
-              Try again <span aria-hidden="true">↗</span>
-            </button>
-          ) : (
-            <span className="session-detail">
-              {connection.state === "ready"
-                ? `Cube Play ${connection.health.version}`
-                : "Please wait"}
-            </span>
-          )}
-        </section>
+        <details
+          className="connection-details"
+          open={connection.state !== "ready" || !connection.health.workspace}
+        >
+          <summary>Local connection</summary>
+          <section className="session-panel" aria-labelledby="session-title">
+            <div>
+              <p className="eyebrow">LOCAL SESSION</p>
+              <h2 id="session-title">
+                {ready
+                  ? "Your connection is ready"
+                  : connection.state === "error"
+                    ? "Let's reconnect"
+                    : "Connecting to your application"}
+              </h2>
+              <p role="status" aria-live="polite">
+                {connection.state === "ready"
+                  ? "Connected to Cube Play on this machine. No account or cloud connection is required."
+                  : connection.state === "error"
+                    ? connection.message
+                    : "Checking the local application…"}
+              </p>
+            </div>
+            {connection.state === "error" ? (
+              <button
+                type="button"
+                className="button"
+                onClick={() =>
+                  setConnectionRequest((request) => ({ ...request }))
+                }
+              >
+                Try again <span aria-hidden="true">↗</span>
+              </button>
+            ) : (
+              <span className="session-detail">
+                {connection.state === "ready"
+                  ? `Cube Play ${connection.health.version}`
+                  : "Please wait"}
+              </span>
+            )}
+          </section>
+        </details>
         <footer className="workspace-footer">
           <span>Private files. Local execution. Your investigation.</span>
           <span>POWERED BY CUBE</span>

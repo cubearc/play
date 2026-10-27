@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./session";
+import { expect, openSection, test } from "./session";
 
 test.skip(
   !process.env.CUBE_PLAY_DOCKER_TEST_URL,
@@ -13,6 +13,7 @@ test("executes real Cube commands through xterm and closes the process session",
   const url = process.env.CUBE_PLAY_DOCKER_TEST_URL;
   if (!url) throw new Error("Real runner session unavailable");
   await page.goto(url);
+  await openSection(page, "Terminal");
   await page
     .getByRole("button", { name: "Start terminal", exact: true })
     .click();

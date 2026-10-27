@@ -1,4 +1,4 @@
-import { expect, test } from "./session";
+import { expect, openSection, test } from "./session";
 
 test("chains real image decoding and channel outputs through typed ports", async ({
   page,
@@ -6,10 +6,12 @@ test("chains real image decoding and channel outputs through typed ports", async
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   await page.goto(url);
+  await openSection(page, "Files");
   await page.getByRole("button", { name: "Source files", exact: true }).click();
   await page
     .getByRole("button", { name: "Inspect sample.png", exact: true })
     .click();
+  await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });
   await lab
     .getByRole("button", { name: "New exploration", exact: true })
@@ -79,6 +81,7 @@ test("builds a typed substitution exploration and restores its immutable result"
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   await page.goto(url);
+  await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });
   await expect(
     lab.getByRole("button", { name: "New exploration" }),

@@ -17,7 +17,7 @@ test("connects the real UI to the local Rust server and survives refresh", async
   });
   await page.goto(`${sessionUrl}&file=sample+%E7%A9%BA.mp4&intent=file`);
   await expect(
-    page.getByRole("heading", { name: "Your connection is ready" }),
+    page.getByText("Connected locally", { exact: true }),
   ).toBeVisible();
   await expect(page).toHaveURL(`${origin}/`);
   await expect(page.getByText("Connected locally")).toBeVisible();
@@ -35,7 +35,7 @@ test("connects the real UI to the local Rust server and survives refresh", async
   expect(cookie).toBeUndefined();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Your connection is ready" }),
+    page.getByText("Connected locally", { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(

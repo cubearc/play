@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, openSection, test } from "./session";
 
 test("runs canonical historical ciphers and displays separate filler evidence", async ({
   page,
@@ -6,6 +6,7 @@ test("runs canonical historical ciphers and displays separate filler evidence", 
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   await page.goto(url);
+  await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });
   await lab
     .getByRole("button", { name: "New exploration", exact: true })

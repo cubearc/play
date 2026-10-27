@@ -1,11 +1,19 @@
 import { apiFetch } from "./capability";
 import type { Store } from "./workspace-api";
 
+export type Panel =
+  | "files"
+  | "explorations"
+  | "notes"
+  | "artifacts"
+  | "challenges"
+  | "terminal";
 export type View = {
   store: Store;
   path: string;
   offset: number;
   selected: { store: Store; path: string } | null;
+  panel?: Panel;
 };
 export type Investigation = {
   id: string;
@@ -62,6 +70,21 @@ export async function loadInvestigation(
   );
   const view = object(value.view);
   const selection = view.selected === null ? null : object(view.selected);
+  if (
+    view.panel !== undefined &&
+    (typeof view.panel !== "string" ||
+      ![
+        "files",
+        "explorations",
+        "notes",
+        "artifacts",
+        "challenges",
+        "terminal",
+      ].includes(view.panel))
+  )
+    throw new Error(
+      "The investigation API returned an invalid workspace section.",
+    );
   if (!Array.isArray(value.warnings) || value.warnings.length > 16)
     throw new Error("The investigation API returned invalid recovery notices.");
   return {
@@ -78,6 +101,7 @@ export async function loadInvestigation(
       selected: selection
         ? { store: store(selection.store), path: text(selection.path) }
         : null,
+      ...(view.panel === undefined ? {} : { panel: view.panel as Panel }),
     },
   };
 }

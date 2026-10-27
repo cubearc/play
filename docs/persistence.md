@@ -6,8 +6,9 @@ that directory reuses the same database and volumes. Moving a directory creates 
 new workspace; retain the old registry/volumes for explicit recovery. Play never
 silently reassigns another workspace's database or uploads host paths.
 
-The UI restores the investigation name, explorer store/directory/page and selected
-file. An explicit `cube play file` selection takes precedence. Navigation saves
+The UI restores the investigation name, workspace section, explorer store/directory/page
+and selected file. Existing navigation without a section opens **Files**. Explicit
+file/challenge launcher intents select their corresponding section. Navigation saves
 immediately through serialized, coalesced requests. Wait for **Navigation saved
 locally** before closing the browser. Conflicting tabs stop autosaving and offer
 **Reload investigation** rather than replacing newer state. Missing files retain

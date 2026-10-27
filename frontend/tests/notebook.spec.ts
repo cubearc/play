@@ -1,10 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./session";
+import { expect, openQuickTools, openSection, test } from "./session";
 
 test.beforeEach(async ({ page, api }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Session unavailable");
   await page.goto(url);
+  await openSection(page, "Files");
   await expect(
     page.getByRole("button", { name: "Source files", exact: true }),
   ).toBeVisible();
@@ -28,6 +29,7 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const name = `Private binary ${info.project.name}`;
+  await openQuickTools(page);
   const lab = page.getByRole("region", {
     name: "Text and byte Lab",
     exact: true,
@@ -57,6 +59,7 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
     name: "Private notes",
     exact: true,
   });
+  await openSection(page, "Notes");
   await expect(
     notes.getByText("Notes saved locally", { exact: true }),
   ).toBeVisible();
@@ -73,6 +76,7 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
     name: "Artifact library",
     exact: true,
   });
+  await openSection(page, "Artifacts");
   await library
     .getByRole("button", { name: "Refresh artifact library", exact: true })
     .click();
@@ -92,11 +96,13 @@ test("autosaves private notes and preserves exact named Lab bytes across browser
   for await (const chunk of stream) buffers.push(Buffer.from(chunk));
   expect(Buffer.concat(buffers)).toEqual(Buffer.from([0, 255, 128]));
   await page.reload();
+  await openSection(page, "Notes");
   await notes.getByRole("button", { name: noteName, exact: true }).click();
   await expect(notes.getByLabel("Note body", { exact: true })).toHaveValue(
     /Private hypothesis/,
   );
   expect(await page.evaluate(() => "noteExecuted" in window)).toBe(false);
+  await openSection(page, "Artifacts");
   await library.getByRole("button", { name, exact: true }).click();
   await expect(
     library.getByLabel("Reopened result content", { exact: true }),
@@ -131,6 +137,7 @@ test("keeps an unsaved conflicting draft until the user explicitly reloads", asy
     ).ok(),
   ).toBe(true);
   await page.reload();
+  await openSection(page, "Notes");
   const notes = page.getByRole("region", {
     name: "Private notes",
     exact: true,

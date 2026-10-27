@@ -54,6 +54,8 @@ it.each([
   { ...snapshot, revision: 1.5 },
   { ...snapshot, revision: "1" },
   { ...snapshot, view: { ...snapshot.view, store: "other" } },
+  { ...snapshot, view: { ...snapshot.view, panel: "cloud" } },
+  { ...snapshot, view: { ...snapshot.view, panel: ["files"] } },
   { ...snapshot, warnings: null },
   { ...snapshot, warnings: Array(17).fill("warning") },
   { ...snapshot, warnings: [{}] },

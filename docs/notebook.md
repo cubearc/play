@@ -1,6 +1,6 @@
 # Private notes and artifacts
 
-Use **New note** to record a hypothesis. Notes autosave after 400 ms and serialize
+Open **Notes**, then use **New note** to record a hypothesis. Notes autosave after 400 ms and serialize
 edits made during an active write. Wait for **Notes saved locally** before leaving.
 A note can refer to the selected source/imported file or the investigation. Notes
 are plain text; HTML and scripts are inert. Stale revisions stop autosave and retain
@@ -11,12 +11,13 @@ Select any generated Lab result, enter an artifact name and choose **Save named
 artifact**. Names and optimistic revisions live in the existing SQLite database;
 exact bytes, type, parameters, digests and lineage stay in immutable Lab bundles on
 the artifact volume. No second database or binary copy is created. Refresh the
-artifact library to reopen or rename results. **Load operation history** reads at
+**Artifacts** section to reopen or rename results. **Load operation history** reads at
 most 64 retained bundles; it performs no recursive source analysis. References to
 missing/corrupt results remain visible for recovery. Reopened image results can
 use the same visual controls; two compatible saved images can be compared by Core.
 
-The text/byte Lab discovers available Core operations with default parameters. With
+Under **Explorations**, expand **Quick text and byte tools** for single-operation
+Core tools with default parameters. With
 no file selected it accepts explicit private text; with a file it uses the selected
 Core input type and strict text decoding or exact bytes. It does not parse terminal
 output or implement encoding algorithms. Use the real terminal for other parameters.

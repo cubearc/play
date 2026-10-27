@@ -3,11 +3,14 @@ use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
-    sync::mpsc,
+    sync::{Mutex, mpsc},
     time::Duration,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
+
+// Hold the fixture allocator until the child binds. Operations remain concurrent.
+static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
 async fn replay_checks_follow_actual_dependencies_and_report_changed_missing_and_private_inputs() {
@@ -252,6 +255,9 @@ impl Drop for Server {
 }
 impl Server {
     fn start(root: &std::path::Path, id: Uuid) -> Self {
+        let _startup = SERVER_STARTUP
+            .lock()
+            .expect("Another Lab fixture failed during startup");
         let source = root.join("source");
         std::fs::create_dir_all(&source).unwrap();
         let context = root.join("context.json");

@@ -7,15 +7,25 @@ import {
 } from "react";
 import { ArtifactLibrary, TextLab } from "./ArtifactLibrary";
 import { ChallengePanel, type FileSelection } from "./ChallengePanel";
+import { CubeTerminal } from "./CubeTerminal";
 import { ExplorationLab } from "./ExplorationLab";
 import { FileWorkspace } from "./FileWorkspace";
 import { InvestigationNotes } from "./InvestigationNotes";
 import {
   type Investigation,
   loadInvestigation,
+  type Panel,
   saveInvestigation,
   type View,
 } from "./investigation-api";
+import { WorkspacePanels } from "./WorkspacePanels";
+
+function panelView(view: View, panel: Panel): View {
+  const next = { ...view };
+  if (panel === "files") delete next.panel;
+  else next.panel = panel;
+  return next;
+}
 
 type Selection = { name: string; intent: "file" | "challenge" } | null;
 export function InvestigationWorkspace({
@@ -91,6 +101,16 @@ function SavedWorkspace({
   reload: () => void;
 }) {
   const [title, setTitle] = useState(investigation.title);
+  const [savedTitle, setSavedTitle] = useState(investigation.title);
+  const [panel, setPanel] = useState<Panel>(
+    initialSelection
+      ? initialSelection.intent === "challenge"
+        ? "challenges"
+        : "files"
+      : (investigation.view.panel ?? "files"),
+  );
+  const panelRef = useRef(panel);
+  const viewRef = useRef(investigation.view);
   const [requestedSelection, setRequestedSelection] =
     useState<FileSelection | null>(null);
   const [selection, setSelection] = useState<View["selected"]>(
@@ -100,6 +120,15 @@ function SavedWorkspace({
   );
   const [titleRevision, setTitleRevision] = useState(investigation.revision);
   const [renaming, setRenaming] = useState(false);
+  useEffect(() => {
+    if (title === savedTitle && !renaming) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [title, savedTitle, renaming]);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [status, setStatus] = useState("Navigation saved locally");
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +153,7 @@ function SavedWorkspace({
     };
   }, []);
   const saveView = useCallback((view: View) => {
+    viewRef.current = view;
     setSelection(view.selected);
     const state = queue.current;
     const encoded = JSON.stringify(view);
@@ -157,6 +187,15 @@ function SavedWorkspace({
       }
     })();
   }, []);
+  const saveFilesView = useCallback(
+    (view: View) => saveView(panelView(view, panelRef.current)),
+    [saveView],
+  );
+  function changePanel(next: Panel) {
+    panelRef.current = next;
+    setPanel(next);
+    saveView(panelView(viewRef.current, next));
+  }
   async function rename(event: FormEvent) {
     event.preventDefault();
     if (renaming) return;
@@ -167,7 +206,10 @@ function SavedWorkspace({
         revision: titleRevision,
         title,
       });
-      if (active.current) setTitleRevision(revision);
+      if (active.current) {
+        setTitleRevision(revision);
+        setSavedTitle(title);
+      }
     } catch (error) {
       if (active.current)
         setTitleError(
@@ -220,24 +262,78 @@ function SavedWorkspace({
           <p role="status">{status}</p>
         )}
       </section>
-      <ChallengePanel
-        selected={selection}
-        launch={initialSelection}
-        onOpen={setRequestedSelection}
-      />
-      <FileWorkspace
-        requestedSelection={requestedSelection}
-        initialSelection={initialSelection}
-        initialView={initialSelection ? undefined : investigation.view}
-        onViewChange={saveView}
-      />
-      <TextLab
-        key={selection ? `${selection.store}:${selection.path}` : "inline"}
-        file={selection}
-      />
-      <ExplorationLab asset={selection} />
-      <InvestigationNotes target={selection} />
-      <ArtifactLibrary />
+      <WorkspacePanels active={panel} onChange={changePanel}>
+        {{
+          files: (
+            <>
+              {selection && (
+                <div className="selected-asset">
+                  <span>
+                    Selected asset:{" "}
+                    <code>
+                      {selection.store}/{selection.path}
+                    </code>
+                  </span>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => changePanel("explorations")}
+                  >
+                    Explore selected file
+                  </button>
+                </div>
+              )}
+              <FileWorkspace
+                requestedSelection={requestedSelection}
+                initialSelection={initialSelection}
+                initialView={initialSelection ? undefined : investigation.view}
+                onViewChange={saveFilesView}
+              />
+            </>
+          ),
+          explorations: (
+            <>
+              <p className="selected-asset">
+                {selection ? (
+                  <>
+                    Selected asset:{" "}
+                    <code>
+                      {selection.store}/{selection.path}
+                    </code>
+                  </>
+                ) : (
+                  "Choose a file in Files, or begin with a typed literal input."
+                )}
+              </p>
+              <ExplorationLab asset={selection} />
+              <details className="quick-tools">
+                <summary>Quick text and byte tools</summary>
+                <TextLab
+                  key={
+                    selection
+                      ? `${selection.store}:${selection.path}`
+                      : "inline"
+                  }
+                  file={selection}
+                />
+              </details>
+            </>
+          ),
+          notes: <InvestigationNotes target={selection} />,
+          artifacts: <ArtifactLibrary />,
+          challenges: (
+            <ChallengePanel
+              selected={selection}
+              launch={initialSelection}
+              onOpen={(value) => {
+                setRequestedSelection(value);
+                changePanel("files");
+              }}
+            />
+          ),
+          terminal: <CubeTerminal />,
+        }}
+      </WorkspacePanels>
     </>
   );
 }

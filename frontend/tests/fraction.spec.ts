@@ -1,4 +1,4 @@
-import { expect, test } from "./session";
+import { expect, openSection, test } from "./session";
 
 test("runs a rail permutation and displays separate Morse padding evidence", async ({
   page,
@@ -9,6 +9,7 @@ test("runs a rail permutation and displays separate Morse padding evidence", asy
   const catalog = await (await api.get("/api/lab/v2/operations")).json();
   expect(catalog.operations).toHaveLength(288);
   await page.goto(url);
+  await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });
   await lab
     .getByRole("button", { name: "New exploration", exact: true })

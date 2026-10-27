@@ -1,10 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./session";
+import { expect, openSection, test } from "./session";
 
 test.beforeEach(async ({ page }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Session unavailable");
   await page.goto(url);
+  await openSection(page, "Files");
   await expect(
     page.getByRole("button", { name: "Source files", exact: true }),
   ).toBeVisible();
@@ -58,6 +59,7 @@ test("opens a launcher challenge, navigates authorized artifacts and restores pr
   await expect(
     page.getByRole("img", { name: "Preview of sample.png", exact: true }),
   ).toBeVisible();
+  await openSection(page, "Local challenges");
   await panel
     .getByRole("button", { name: "Record a candidate", exact: true })
     .click();
@@ -124,6 +126,7 @@ test("rejects an imported workflow recipe without executing or replacing the act
       exact: true,
     }),
   ).toBeVisible();
+  await openSection(page, "Local challenges");
   await panel
     .getByRole("button", { name: "Import selected challenge", exact: true })
     .click();
@@ -131,6 +134,9 @@ test("rejects an imported workflow recipe without executing or replacing the act
     "Workflow recipes, scripts and private answers are unsupported",
   );
   await expect(
-    page.getByRole("region", { name: "Workspace files", exact: true }),
+    panel.getByRole("heading", {
+      name: "Local rabbit investigation",
+      exact: true,
+    }),
   ).toBeVisible();
 });

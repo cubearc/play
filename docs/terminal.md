@@ -1,11 +1,13 @@
 # Isolated Cube terminal
 
-Open a workspace with `cube play`, choose a working directory and select **Start
+Open a workspace with `cube play`, select **Terminal**, choose a working directory and select **Start
 terminal**. The console executes the real versioned `cube` binary in Cube Runner.
 Try `cube encode base64 hello` or `cube --help`. Quote arguments containing spaces.
 Use Ctrl+C to interrupt a command; `exit`, Ctrl+D at an empty prompt or **End session**
 closes the session and its processes. Terminal input/output stays in memory and is
 not automatically recorded, uploaded or added to investigation history.
+Switching workspace sections keeps an active session running. Return to Terminal
+to inspect its output or explicitly end it.
 
 The console accepts `cube ...`, `pwd`, `clear`, `exit` and
 `cd <source|imports|output> [relative/path]`. It does not evaluate shell scripts,

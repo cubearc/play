@@ -54,6 +54,50 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
+it("restores the actual workspace section and saves section changes with existing file navigation", async () => {
+  api({ ...snapshot, view: { ...snapshot.view, panel: "notes" } });
+  const user = userEvent.setup();
+  render(<InvestigationWorkspace initialSelection={null} />);
+  expect(await screen.findByRole("tab", { name: "Notes" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await user.click(screen.getByRole("tab", { name: "Explorations" }));
+  await waitFor(() =>
+    expect(saveInvestigation).toHaveBeenCalledWith("/view", {
+      revision: 4,
+      view: { ...snapshot.view, panel: "explorations" },
+    }),
+  );
+  await user.click(screen.getByRole("tab", { name: "Files" }));
+  await waitFor(() =>
+    expect(saveInvestigation).toHaveBeenLastCalledWith("/view", {
+      revision: 5,
+      view: snapshot.view,
+    }),
+  );
+});
+it("protects an unsaved workspace name until the actual save succeeds", async () => {
+  api();
+  const user = userEvent.setup();
+  render(<InvestigationWorkspace initialSelection={null} />);
+  const name = await screen.findByLabelText("Investigation name");
+  await user.clear(name);
+  await user.type(name, "Unsaved case");
+  const dirty = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(dirty);
+  expect(dirty.defaultPrevented).toBe(true);
+  await user.click(screen.getByRole("button", { name: "Save name" }));
+  await waitFor(() =>
+    expect(saveInvestigation).toHaveBeenCalledWith("", {
+      revision: 1,
+      title: "Unsaved case",
+    }),
+  );
+  const saved = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(saved);
+  expect(saved.defaultPrevented).toBe(false);
+});
 it("restores selected files, saves the name and keeps recovered state visible", async () => {
   api({
     ...snapshot,

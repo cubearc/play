@@ -1,11 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./session";
+import { expect, openSection, test } from "./session";
 
 let previousView: unknown;
 test.beforeEach(async ({ page, api }) => {
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   await page.goto(url);
+  await openSection(page, "Files");
   await expect(
     page.getByRole("button", { name: "Source files", exact: true }),
   ).toBeVisible();

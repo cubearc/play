@@ -232,6 +232,15 @@ function Editor({
   const entry = catalog.find((e) => e.contract.operation === step?.operation);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   useEffect(() => {
+    if (!dirty && !busy) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty, busy]);
+  useEffect(() => {
     onEditingChange(dirty || busy);
     return () => onEditingChange(false);
   }, [dirty, busy, onEditingChange]);

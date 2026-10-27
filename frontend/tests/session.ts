@@ -1,6 +1,30 @@
-import { type APIRequestContext, test as base } from "@playwright/test";
+import {
+  type APIRequestContext,
+  test as base,
+  expect,
+  type Page,
+} from "@playwright/test";
 
 export { expect } from "@playwright/test";
+
+export async function openSection(page: Page, name: string) {
+  await page.getByRole("tab", { name, exact: true }).click();
+  await expect(page.getByRole("tabpanel", { name, exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Saved investigation", exact: true })
+      .getByRole("status"),
+  ).toHaveText("Navigation saved locally");
+}
+export async function openQuickTools(page: Page) {
+  await openSection(page, "Explorations");
+  if (
+    !(await page
+      .getByRole("region", { name: "Text and byte Lab", exact: true })
+      .isVisible())
+  )
+    await page.getByText("Quick text and byte tools", { exact: true }).click();
+}
 
 // API assertions use a separate client. Browser requests must prove that the
 // application itself supplies authorization; no test header is injected there.
