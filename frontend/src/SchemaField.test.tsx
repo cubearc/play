@@ -85,3 +85,21 @@ it("distinguishes an explicit empty string from an unset field without retaining
     screen.queryByRole("button", { name: /Use empty text/ }),
   ).not.toBeInTheDocument();
 });
+
+it("preserves exact multiline caller text while retaining private input controls", async () => {
+  const user = userEvent.setup();
+  const changed = vi.fn();
+  render(
+    <SchemaField
+      label="Caller source"
+      schema={{ type: "string" }}
+      value={undefined}
+      onChange={changed}
+    />,
+  );
+  const source = screen.getByRole("textbox", { name: "Caller source" });
+  expect(source.tagName).toBe("TEXTAREA");
+  await user.click(source);
+  await user.paste("aba cab\nA😀 a");
+  expect(changed).toHaveBeenLastCalledWith("aba cab\nA😀 a");
+});

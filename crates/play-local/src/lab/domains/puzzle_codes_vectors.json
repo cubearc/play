@@ -1,0 +1,692 @@
+[
+  {
+    "domain": "book",
+    "op": "cipher.book.encode",
+    "function": "book_encode",
+    "command": "cipher book-encode",
+    "ty": "EncodeOptions",
+    "call": "encode(source,text,&p)?",
+    "inputs": {
+      "source": "aba cab\nA😀 a",
+      "text": "aaa😀"
+    },
+    "parameters": {
+      "scheme": "word_character",
+      "index_base": 1,
+      "matching": "round_robin"
+    },
+    "outputs": {
+      "coordinates": "1:1,1:3,2:2,3:2",
+      "source_sha256": "b66cd26f0139b0db53ffb85a65a095972bdd06fee0bc0c6dd6ceb271c313451f",
+      "coordinate_count": 4,
+      "indexed_units": 4
+    },
+    "reporttype": "EncodeReport",
+    "description": "Deterministic inverse book coordinates; exact source hash and existing word/line tokenization; no retrieval.",
+    "rev": false
+  },
+  {
+    "domain": "keyboard",
+    "op": "text.keyboard.coordinates.encode",
+    "function": "keyboard_coordinates_encode",
+    "command": "text keyboard-coordinates",
+    "ty": "Options",
+    "call": "encode(text,&p)?",
+    "inputs": {
+      "text": "a😀β"
+    },
+    "parameters": {
+      "layout": {
+        "geometry": "original-ragged",
+        "entries": [
+          {
+            "key": "k0",
+            "layer": "base",
+            "symbol": "a",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "base",
+            "symbol": "b",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "base",
+            "symbol": "😀",
+            "row": 1,
+            "column": 0
+          },
+          {
+            "key": "k0",
+            "layer": "shift",
+            "symbol": "A",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "shift",
+            "symbol": "B",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "shift",
+            "symbol": "β",
+            "row": 1,
+            "column": 0
+          }
+        ]
+      },
+      "index_base": 1
+    },
+    "outputs": {
+      "coordinates": [
+        [
+          1,
+          1,
+          "base"
+        ],
+        [
+          2,
+          1,
+          "base"
+        ],
+        [
+          2,
+          1,
+          "shift"
+        ]
+      ],
+      "positions": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          5,
+          2
+        ]
+      ],
+      "definition_sha256": "74c434e3b99dafe57a9335fa1456dbf6f009dd4424563df9a182cf4fd71a68e0"
+    },
+    "reporttype": "CoordinateReport",
+    "description": "Exact row,column,layer tuples and original byte/scalar positions on explicit geometry.",
+    "rev": true
+  },
+  {
+    "domain": "keyboard",
+    "op": "text.keyboard.coordinates.decode",
+    "function": "keyboard_coordinates_decode",
+    "command": "text keyboard-coordinates",
+    "ty": "Options",
+    "call": "decode(&coordinates,&p)?",
+    "inputs": {
+      "coordinates": [
+        [
+          1,
+          1,
+          "base"
+        ],
+        [
+          2,
+          1,
+          "base"
+        ],
+        [
+          2,
+          1,
+          "shift"
+        ]
+      ]
+    },
+    "parameters": {
+      "layout": {
+        "geometry": "original-ragged",
+        "entries": [
+          {
+            "key": "k0",
+            "layer": "base",
+            "symbol": "a",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "base",
+            "symbol": "b",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "base",
+            "symbol": "😀",
+            "row": 1,
+            "column": 0
+          },
+          {
+            "key": "k0",
+            "layer": "shift",
+            "symbol": "A",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "shift",
+            "symbol": "B",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "shift",
+            "symbol": "β",
+            "row": 1,
+            "column": 0
+          }
+        ]
+      },
+      "index_base": 1
+    },
+    "outputs": {
+      "text": "a😀β",
+      "positions": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          5,
+          2
+        ]
+      ],
+      "definition_sha256": "74c434e3b99dafe57a9335fa1456dbf6f009dd4424563df9a182cf4fd71a68e0"
+    },
+    "reporttype": "TextReport",
+    "description": "Decode explicit row,column,layer tuples; no inferred origin, layer or OS locale.",
+    "rev": true
+  },
+  {
+    "domain": "keyboard",
+    "op": "text.keyboard.shift.encode",
+    "function": "keyboard_shift_encode",
+    "command": "text keyboard-shift",
+    "ty": "Shift",
+    "call": "shift(text,&p,false)?",
+    "inputs": {
+      "text": "ab😀ABβ"
+    },
+    "parameters": {
+      "layout": {
+        "geometry": "original-ragged",
+        "entries": [
+          {
+            "key": "k0",
+            "layer": "base",
+            "symbol": "a",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "base",
+            "symbol": "b",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "base",
+            "symbol": "😀",
+            "row": 1,
+            "column": 0
+          },
+          {
+            "key": "k0",
+            "layer": "shift",
+            "symbol": "A",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "shift",
+            "symbol": "B",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "shift",
+            "symbol": "β",
+            "row": 1,
+            "column": 0
+          }
+        ]
+      },
+      "dx": "-9223372036854775807",
+      "dy": "0",
+      "edge": "wrap"
+    },
+    "outputs": {
+      "text": "ba😀BAβ",
+      "source_coordinates": [
+        [
+          0,
+          0,
+          "base"
+        ],
+        [
+          0,
+          1,
+          "base"
+        ],
+        [
+          1,
+          0,
+          "base"
+        ],
+        [
+          0,
+          0,
+          "shift"
+        ],
+        [
+          0,
+          1,
+          "shift"
+        ],
+        [
+          1,
+          0,
+          "shift"
+        ]
+      ],
+      "target_coordinates": [
+        [
+          0,
+          1,
+          "base"
+        ],
+        [
+          0,
+          0,
+          "base"
+        ],
+        [
+          1,
+          0,
+          "base"
+        ],
+        [
+          0,
+          1,
+          "shift"
+        ],
+        [
+          0,
+          0,
+          "shift"
+        ],
+        [
+          1,
+          0,
+          "shift"
+        ]
+      ],
+      "positions": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          6,
+          3
+        ],
+        [
+          7,
+          4
+        ],
+        [
+          8,
+          5
+        ]
+      ],
+      "bijective": true,
+      "definition_sha256": "74c434e3b99dafe57a9335fa1456dbf6f009dd4424563df9a182cf4fd71a68e0"
+    },
+    "reporttype": "ShiftReport",
+    "description": "Explicit signed displacement; wrap follows destination row lengths; inverse requires a total bijection.",
+    "rev": false
+  },
+  {
+    "domain": "keyboard",
+    "op": "text.keyboard.shift.decode",
+    "function": "keyboard_shift_decode",
+    "command": "text keyboard-shift",
+    "ty": "Shift",
+    "call": "shift(text,&p,true)?",
+    "inputs": {
+      "text": "ba😀BAβ"
+    },
+    "parameters": {
+      "layout": {
+        "geometry": "original-ragged",
+        "entries": [
+          {
+            "key": "k0",
+            "layer": "base",
+            "symbol": "a",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "base",
+            "symbol": "b",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "base",
+            "symbol": "😀",
+            "row": 1,
+            "column": 0
+          },
+          {
+            "key": "k0",
+            "layer": "shift",
+            "symbol": "A",
+            "row": 0,
+            "column": 0
+          },
+          {
+            "key": "k1",
+            "layer": "shift",
+            "symbol": "B",
+            "row": 0,
+            "column": 1
+          },
+          {
+            "key": "k2",
+            "layer": "shift",
+            "symbol": "β",
+            "row": 1,
+            "column": 0
+          }
+        ]
+      },
+      "dx": "-9223372036854775807",
+      "dy": "0",
+      "edge": "wrap"
+    },
+    "outputs": {
+      "text": "ab😀ABβ",
+      "source_coordinates": [
+        [
+          0,
+          1,
+          "base"
+        ],
+        [
+          0,
+          0,
+          "base"
+        ],
+        [
+          1,
+          0,
+          "base"
+        ],
+        [
+          0,
+          1,
+          "shift"
+        ],
+        [
+          0,
+          0,
+          "shift"
+        ],
+        [
+          1,
+          0,
+          "shift"
+        ]
+      ],
+      "target_coordinates": [
+        [
+          0,
+          0,
+          "base"
+        ],
+        [
+          0,
+          1,
+          "base"
+        ],
+        [
+          1,
+          0,
+          "base"
+        ],
+        [
+          0,
+          0,
+          "shift"
+        ],
+        [
+          0,
+          1,
+          "shift"
+        ],
+        [
+          1,
+          0,
+          "shift"
+        ]
+      ],
+      "positions": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          6,
+          3
+        ],
+        [
+          7,
+          4
+        ],
+        [
+          8,
+          5
+        ]
+      ],
+      "bijective": true,
+      "definition_sha256": "74c434e3b99dafe57a9335fa1456dbf6f009dd4424563df9a182cf4fd71a68e0"
+    },
+    "reporttype": "ShiftReport",
+    "description": "Explicit signed displacement; wrap follows destination row lengths; inverse requires a total bijection.",
+    "rev": false
+  },
+  {
+    "domain": "tokens",
+    "op": "symbol.tokens.decode",
+    "function": "symbol_tokens_decode",
+    "command": "decode tokens",
+    "ty": "Parameters",
+    "call": "transform(text,&p,false)?",
+    "inputs": {
+      "text": "triangle|○|△"
+    },
+    "parameters": {
+      "table": {
+        "source_id": "synthetic:original-v1",
+        "profile_id": "example-token-table",
+        "license_id": "original-fixture",
+        "entries": [
+          {
+            "token": "△",
+            "value": "A",
+            "aliases": [
+              "triangle"
+            ]
+          },
+          {
+            "token": "○",
+            "value": "B",
+            "aliases": []
+          }
+        ]
+      },
+      "boundaries": {
+        "kind": "separated",
+        "separator": "|"
+      },
+      "output_separator": "|"
+    },
+    "outputs": {
+      "text": "A|B|A",
+      "records": [
+        {
+          "input_token": "triangle",
+          "canonical_token": "△",
+          "output_token": "A",
+          "byte_offset": 0,
+          "scalar_offset": 0,
+          "alias_used": true
+        },
+        {
+          "input_token": "○",
+          "canonical_token": "○",
+          "output_token": "B",
+          "byte_offset": 9,
+          "scalar_offset": 9,
+          "alias_used": false
+        },
+        {
+          "input_token": "△",
+          "canonical_token": "△",
+          "output_token": "A",
+          "byte_offset": 13,
+          "scalar_offset": 11,
+          "alias_used": false
+        }
+      ],
+      "source_id": "synthetic:original-v1",
+      "profile_id": "example-token-table",
+      "license_id": "original-fixture",
+      "definition_sha256": "2186a62559b8280a2fc5b3c6e121e835b2fb11f348cf361ca94f94fa02fee2d7",
+      "bijective": false
+    },
+    "reporttype": "Report",
+    "description": "Caller-owned symbolic token map; exact boundaries, aliases and original source positions; no assets.",
+    "rev": false
+  },
+  {
+    "domain": "tokens",
+    "op": "symbol.tokens.encode",
+    "function": "symbol_tokens_encode",
+    "command": "encode tokens",
+    "ty": "Parameters",
+    "call": "transform(text,&p,true)?",
+    "inputs": {
+      "text": "A|B|A"
+    },
+    "parameters": {
+      "table": {
+        "source_id": "synthetic:original-v1",
+        "profile_id": "example-token-table",
+        "license_id": "original-fixture",
+        "entries": [
+          {
+            "token": "△",
+            "value": "A",
+            "aliases": []
+          },
+          {
+            "token": "○",
+            "value": "B",
+            "aliases": []
+          }
+        ]
+      },
+      "boundaries": {
+        "kind": "separated",
+        "separator": "|"
+      },
+      "output_separator": "|"
+    },
+    "outputs": {
+      "text": "△|○|△",
+      "records": [
+        {
+          "input_token": "A",
+          "canonical_token": "△",
+          "output_token": "△",
+          "byte_offset": 0,
+          "scalar_offset": 0,
+          "alias_used": false
+        },
+        {
+          "input_token": "B",
+          "canonical_token": "○",
+          "output_token": "○",
+          "byte_offset": 2,
+          "scalar_offset": 2,
+          "alias_used": false
+        },
+        {
+          "input_token": "A",
+          "canonical_token": "△",
+          "output_token": "△",
+          "byte_offset": 4,
+          "scalar_offset": 4,
+          "alias_used": false
+        }
+      ],
+      "source_id": "synthetic:original-v1",
+      "profile_id": "example-token-table",
+      "license_id": "original-fixture",
+      "definition_sha256": "703ea7ce8f303b5cf1bae7d837d904d025e859b9605adf60c9e0be4edbbf22cd",
+      "bijective": true
+    },
+    "reporttype": "Report",
+    "description": "Inverse of an explicitly bijective alias-free token table; no guessed glyphs or normalization.",
+    "rev": false
+  }
+]

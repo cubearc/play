@@ -138,3 +138,28 @@ local filesystem availability. Operation errors use `{schema_version: 1, error: 
 message, operation, parameter, offset}}`, preserving Core categories and safe
 context without echoing arbitrary input or secret values. No unsafe fallback or
 automatic retry is performed.
+
+## Caller-owned puzzle profiles
+
+The named-port API executes `cipher.book.encode` and its existing decoder,
+`text.keyboard.coordinates.encode/decode`, `text.keyboard.shift.encode/decode`,
+`text.keyboard.remap`, and `symbol.tokens.encode/decode` through typed Core calls.
+Book encoding has separate `source` and `text` input ports. Its `coordinates`
+output can feed the legacy decoder's `input` port with the identical caller source
+in parameters. Source hashes retain exact UTF-8/line endings. Keyboard coordinates
+are JSON arrays of `[row,column,layer]`; select the named JSON output to reuse it,
+without a text conversion. Geometry, origin, displacement and edge policies are
+explicit parameters from the Core schema.
+
+Text fields use multiline editors so line breaks are not discarded. Browser text
+editing uses LF; file-backed source ports retain the original UTF-8 bytes, including
+CRLF. The hash describes the exact value sent to Core.
+
+The visual Lab's schema editor accepts caller table/geometry objects and renders
+individual text, coordinate, position and provenance outputs through existing
+bounded viewers. Symbol records retain exact aliases and byte/scalar positions;
+Core refuses ambiguous inverses. No browser font, OS keyboard, remote source,
+OCR, puzzle answer or new pipeline adapter is introduced. Definitions and results
+remain within the workspace's existing local persistence and authorization bounds.
+The Core guide documents the 64 KiB definition, 1 MiB input, 65,536 item and
+4 MiB report limits; the Lab's request/artifact quotas also apply.

@@ -5,6 +5,7 @@ mod linear;
 mod mono;
 mod numbers;
 mod poly;
+mod puzzle_codes;
 mod text;
 
 use cube_core::errors::{ErrorCode, OperationError};
@@ -12,7 +13,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
-    fraction::supported(operation)
+    puzzle_codes::supported(operation)
+        || fraction::supported(operation)
         || cube_core::ciphers::mono::OPERATIONS
             .iter()
             .any(|d| d.id == operation)
@@ -55,6 +57,9 @@ pub(super) fn execute(
         "encoding.base58check.decode" => {
             let input: String = field(&inputs, "input")?;
             Ok(json!({"output":cube_core::encoding::base58check::decode(&input)?}))
+        }
+        _ if puzzle_codes::supported(operation) => {
+            puzzle_codes::execute(operation, inputs, parameters)
         }
         _ if fraction::supported(operation) => fraction::execute(operation, inputs, parameters),
         _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),

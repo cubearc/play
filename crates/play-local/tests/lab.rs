@@ -1499,3 +1499,127 @@ async fn transposition_fractionation_keep_evidence_across_real_worker_and_restar
         .await;
     assert_eq!(status, 400, "{bad}");
 }
+
+#[tokio::test]
+async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let request = |op: &str, inputs: Value, parameters: Value| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":1,"inputs":inputs,"parameters":parameters});
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("../src/lab/domains/puzzle_codes_vectors.json")).unwrap();
+    let book = &cases[0];
+    let literals = |v: &Value| {
+        Value::Object(
+            v.as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), json!({"type":"literal","value":v})))
+                .collect(),
+        )
+    };
+    let (status, encoded) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                book["op"].as_str().unwrap(),
+                literals(&book["inputs"]),
+                book["parameters"].clone(),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(encoded["inline"]["data"], book["outputs"]);
+    let id = encoded["result"]["id"].clone();
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (status, decoded) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.book.decode",
+                json!({"input":{"type":"artifact","id":id,"port":"coordinates"}}),
+                json!({"source":book["inputs"]["source"],"scheme":"word_character","index_base":1}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{decoded}");
+    assert_eq!(decoded["inline"]["data"]["output"], book["inputs"]["text"]);
+    let coords = cases
+        .iter()
+        .find(|c| c["op"] == "text.keyboard.coordinates.encode")
+        .unwrap();
+    let (status, encoded) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "text.keyboard.coordinates.encode",
+                literals(&coords["inputs"]),
+                coords["parameters"].clone(),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(encoded["inline"]["data"], coords["outputs"]);
+    let (status,decoded)=server.api("POST","/api/lab/v2/execute",request("text.keyboard.coordinates.decode",json!({"coordinates":{"type":"artifact","id":encoded["result"]["id"],"port":"coordinates"}}),coords["parameters"].clone())).await;
+    assert_eq!(status, 200, "{decoded}");
+    assert_eq!(decoded["inline"]["data"]["text"], coords["inputs"]["text"]);
+    for c in cases.iter().skip(1) {
+        let (status, result) = server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                request(
+                    c["op"].as_str().unwrap(),
+                    literals(&c["inputs"]),
+                    c["parameters"].clone(),
+                ),
+            )
+            .await;
+        assert_eq!(status, 200, "{result}");
+        assert_eq!(result["inline"]["data"], c["outputs"]);
+    }
+    let token = cases
+        .iter()
+        .find(|c| c["op"] == "symbol.tokens.decode")
+        .unwrap();
+    let (status, bad) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "symbol.tokens.encode",
+                json!({"text":{"type":"literal","value":"A"}}),
+                token["parameters"].clone(),
+            ),
+        )
+        .await;
+    assert_eq!(status, 400, "{bad}");
+    let (status, bad) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "text.keyboard.coordinates.decode",
+                json!({"coordinates":{"type":"literal","value":"1,1,base"}}),
+                coords["parameters"].clone(),
+            ),
+        )
+        .await;
+    assert_eq!(status, 400, "{bad}");
+    let (status, catalog) = server
+        .api("GET", "/api/lab/v2/operations", Value::Null)
+        .await;
+    assert_eq!(status, 200);
+    let ops = catalog["operations"].as_array().unwrap();
+    assert_eq!(ops.len(), 295);
+    assert_eq!(
+        ops.iter()
+            .filter(|v| v["execution"]["available"] == true)
+            .count(),
+        203
+    );
+}

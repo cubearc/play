@@ -121,6 +121,15 @@ export function SchemaField({
           checked={value === true}
           onChange={(event) => onChange(event.target.checked)}
         />
+      ) : type === "string" && !secret ? (
+        <textarea
+          id={id}
+          rows={3}
+          spellCheck={false}
+          autoComplete="off"
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => scalar(event.target.value)}
+        />
       ) : type === "string" ||
         type === "integer" ||
         type === "number" ||
