@@ -46,13 +46,14 @@ it("creates only a named intent, waits for readiness and preserves the name when
   const user = userEvent.setup();
   render(<LauncherHome navigate={navigate} />);
   await screen.findByText("No local workspaces are registered yet.");
+  expect(screen.queryByLabelText("Workspace folder name")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "New workspace" }));
   const name = screen.getByLabelText("Workspace folder name");
+  expect(name).toHaveFocus();
   await user.clear(name);
   await user.type(name, "Private investigation");
   await user.click(screen.getByRole("button", { name: "Create workspace" }));
-  expect(
-    screen.getByRole("button", { name: "Choose local directory" }),
-  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Open folder" })).toBeDisabled();
   expect(navigate).not.toHaveBeenCalled();
   expect(openWorkspace).toHaveBeenCalledWith(
     { intent: "new", name: "Private investigation" },
@@ -77,11 +78,26 @@ it("recovers recent loading and reports a failed open without discarding investi
     await screen.findByText("No local workspaces are registered yet."),
   ).toBeVisible();
   vi.mocked(openWorkspace).mockRejectedValueOnce(new Error("Directory moved"));
-  await user.click(
-    screen.getByRole("button", { name: "Choose local directory" }),
-  );
+  await user.click(screen.getByRole("button", { name: "Open folder" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Directory moved");
   expect(screen.getByRole("status")).toHaveTextContent("preserved");
+});
+
+it("cancels naming without opening a system dialog and restores keyboard focus", async () => {
+  const user = userEvent.setup();
+  render(<LauncherHome navigate={vi.fn()} />);
+  const create = screen.getByRole("button", { name: "New workspace" });
+  await user.click(create);
+  await user.clear(screen.getByLabelText("Workspace folder name"));
+  await user.type(screen.getByLabelText("Workspace folder name"), "Draft case");
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(create).toHaveFocus();
+  expect(screen.queryByLabelText("Workspace folder name")).toBeNull();
+  expect(openWorkspace).not.toHaveBeenCalled();
+  await user.click(create);
+  expect(screen.getByLabelText("Workspace folder name")).toHaveValue(
+    "Draft case",
+  );
 });
 it("opens an initial ready session only after authenticated local state loads and can recover invalid bootstrap state", async () => {
   const navigate = vi.fn();

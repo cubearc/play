@@ -1,5 +1,12 @@
 # Browse and inspect local files
 
+The workbench uses the full window width, with the workspace name and connection
+state in its compact header. The sidebar groups Files, Explorations and Notes under
+Investigate, Artifacts and Solutions under Library, and Local challenges and Terminal
+under Tools. Narrow windows use a horizontal section bar. Section changes retain
+mounted editors and drafts. Select the investigation name or **Rename** to reveal its
+name editor; navigation-save status remains in the compact investigation toolbar.
+
 Open a directory with `cube play [path]`. **Source files** navigates its read-only
 contents; **Imported files** shows copies explicitly saved locally. Navigation is
 shallow. Direct-file launches retain siblings. Exactly one compatible file in a

@@ -81,6 +81,7 @@ it("protects an unsaved workspace name until the actual save succeeds", async ()
   api();
   const user = userEvent.setup();
   render(<InvestigationWorkspace initialSelection={null} />);
+  await user.click(await screen.findByText("Rename"));
   const name = await screen.findByLabelText("Investigation name");
   await user.clear(name);
   await user.type(name, "Unsaved case");
@@ -121,6 +122,7 @@ it("restores selected files, saves the name and keeps recovered state visible", 
   ).toBeVisible();
   expect(screen.getByText("One artifact is missing")).toBeVisible();
   expect(saveInvestigation).not.toHaveBeenCalled();
+  await user.click(screen.getByText("Rename"));
   await user.clear(screen.getByLabelText("Investigation name"));
   await user.type(screen.getByLabelText("Investigation name"), "Renamed case");
   await user.click(screen.getByRole("button", { name: "Save name" }));
@@ -239,6 +241,7 @@ it("reports rename failure and aborts outstanding restoration when unmounted", a
   );
   const user = userEvent.setup();
   const result = render(<InvestigationWorkspace initialSelection={null} />);
+  await user.click(await screen.findByText("Rename"));
   await user.click(await screen.findByRole("button", { name: "Save name" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Name could not be saved",

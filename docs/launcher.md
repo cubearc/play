@@ -34,10 +34,16 @@ stop it by its original absolute directory path.
 
 ## Choose a workspace in the browser
 
+The launcher opens a recent-workspace list with **New workspace** and **Open folder**
+actions. **New workspace** reveals the folder-name form; **Create workspace** then
+opens the system dialog to choose its parent directory. **Cancel** closes the form
+without opening a dialog and retains the draft name. **Open folder** immediately
+opens the directory dialog. Recent entries resume their existing local investigation.
+
 After a normal `cube play` launch, **Workspaces** in the application header opens
 the trusted host chooser. **Create workspace** creates exactly one new directory
 under the parent selected in the system folder dialog. Existing directories are
-never overwritten. **Choose local directory** authorizes an existing folder,
+never overwritten. **Open folder** authorizes an existing folder,
 including an empty one. Recent entries reuse the registered identity and volumes;
 unavailable sources remain listed with explicit recovery guidance. A recent root
 that now resolves through a different symlink must be authorized again with Open.

@@ -200,6 +200,9 @@ it("does not execute an upstream private-output operation implicitly while chain
 it("creates and saves an actual graph configuration before explicit execution", async () => {
   const user = userEvent.setup();
   render(<ExplorationLab asset={null} />);
+  expect(
+    screen.getByRole("region", { name: "Explorations", exact: true }),
+  ).toBeVisible();
   await user.click(
     await screen.findByRole("button", { name: "New exploration" }),
   );

@@ -87,11 +87,10 @@ export function ExplorationLab({
   }
   const exploration = items.find((e) => e.id === selected);
   return (
-    <section className="exploration-lab" aria-labelledby="explorations-title">
+    <section className="exploration-lab" aria-label="Explorations">
       <header className="exploration-toolbar">
         <div>
-          <p className="eyebrow">VISUAL INVESTIGATION</p>
-          <h2 id="explorations-title">Explorations</h2>
+          <h3 id="explorations-title">Saved explorations</h3>
         </div>
         <button
           type="button"

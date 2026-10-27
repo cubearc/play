@@ -22,7 +22,7 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
   await page.goto(link);
   await page.getByRole("link", { name: "Workspaces", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Your investigations", exact: true }),
+    page.getByRole("heading", { name: "Your workspaces", exact: true }),
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => location.hash)).toBe("");
   expect(
@@ -43,12 +43,13 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
     });
 
   await writeFile(join(parent, "selection"), "");
-  await page
-    .getByRole("button", { name: "Choose local directory", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Open folder", exact: true }).click();
   await expect(page.getByRole("status")).toContainText(
     "Folder selection cancelled",
   );
+  await page
+    .getByRole("button", { name: "New workspace", exact: true })
+    .click();
   await page
     .getByLabel("Workspace folder name", { exact: true })
     .fill("../escape");
@@ -100,9 +101,7 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
       .filter({ has: page.getByText(folder, { exact: true }) }),
   ).toBeEnabled();
   await writeFile(join(parent, "selection"), source);
-  await page
-    .getByRole("button", { name: "Choose local directory", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Open folder", exact: true }).click();
   await expect(
     page.getByRole("heading", {
       name: "investigation $private 空",
