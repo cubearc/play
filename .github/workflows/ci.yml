@@ -31,13 +31,12 @@ jobs:
         with:
           persist-credentials: false
           path: play
-      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+      - name: Check out the public versioned Core library
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
+          ref: 07e58b4442dd9eeebfbc9ff4a2289c38ed6feaf7
           path: cube
-          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -58,13 +57,12 @@ jobs:
         with:
           persist-credentials: false
           path: play
-      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+      - name: Check out the public versioned Core library
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
+          ref: 07e58b4442dd9eeebfbc9ff4a2289c38ed6feaf7
           path: cube
-          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
@@ -106,13 +104,12 @@ jobs:
         with:
           persist-credentials: false
           path: play
-      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+      - name: Check out the public versioned Core library
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
+          ref: 07e58b4442dd9eeebfbc9ff4a2289c38ed6feaf7
           path: cube
-          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -141,13 +138,12 @@ jobs:
         with:
           persist-credentials: false
           path: play
-      - name: Check out the versioned Core library (requires CUBE_CORE_READ_KEY)
+      - name: Check out the public versioned Core library
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
+          ref: 07e58b4442dd9eeebfbc9ff4a2289c38ed6feaf7
           path: cube
-          ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
