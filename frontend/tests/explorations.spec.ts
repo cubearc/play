@@ -1,5 +1,74 @@
 import { expect, test } from "@playwright/test";
 
+test("chains real image decoding and channel outputs through typed ports", async ({
+  page,
+}, info) => {
+  const url = process.env.CUBE_PLAY_TEST_URL;
+  if (!url) throw new Error("Local session unavailable");
+  await page.goto(url);
+  await page.getByRole("button", { name: "Source files", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Inspect sample.png", exact: true })
+    .click();
+  const lab = page.getByRole("region", { name: "Explorations", exact: true });
+  await lab
+    .getByRole("button", { name: "New exploration", exact: true })
+    .click();
+  await lab
+    .getByLabel("Exploration name", { exact: true })
+    .fill(`Image channel ${info.project.name}`);
+  await lab
+    .getByRole("combobox", { name: "Operation", exact: true })
+    .selectOption("image.decode");
+  await lab.getByRole("button", { name: "Add step", exact: true }).click();
+  await lab
+    .getByRole("combobox", { name: "input · bytes", exact: true })
+    .selectOption("file");
+  await lab
+    .getByRole("button", { name: "Save configuration", exact: true })
+    .click();
+  await lab
+    .getByRole("button", { name: "Run selected path", exact: true })
+    .click();
+  await expect(
+    lab.getByRole("region", { name: "Exact raster viewer", exact: true }),
+  ).toContainText("2 × 2");
+  await lab
+    .getByRole("combobox", { name: "Operation", exact: true })
+    .selectOption("image.channel.extract");
+  await lab.getByRole("button", { name: "Add step", exact: true }).click();
+  await lab
+    .getByRole("combobox", { name: "input · image.samples", exact: true })
+    .selectOption({ label: "image.decode → output" });
+  await lab.getByLabel("channel *", { exact: true }).selectOption("red");
+  await lab
+    .getByRole("button", { name: "Save configuration", exact: true })
+    .click();
+  await lab
+    .getByRole("button", { name: "Run selected path", exact: true })
+    .click();
+  const outputs = lab.getByRole("region", {
+    name: "Selected operation outputs",
+    exact: true,
+  });
+  await expect(
+    outputs.getByRole("combobox", { name: "Output port", exact: true }),
+  ).toHaveValue("output");
+  await outputs
+    .getByRole("combobox", { name: "Output port", exact: true })
+    .selectOption("image");
+  await expect(outputs.getByRole("table")).toContainText("20");
+  await expect(
+    outputs.getByRole("columnheader", { name: "gray", exact: true }),
+  ).toBeVisible();
+  await outputs
+    .getByRole("combobox", { name: "Output port", exact: true })
+    .selectOption("data");
+  await expect(
+    outputs.getByLabel("Base64 byte output", { exact: true }),
+  ).toHaveValue(Buffer.from([20, 230, 120, 40]).toString("base64"));
+});
+
 test("builds a typed substitution exploration and restores its immutable result", async ({
   page,
 }, info) => {

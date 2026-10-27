@@ -24,6 +24,18 @@ bundle is limited to 4 MiB. **Output data and provenance** exposes the recorded
 parameters, source references and schema digest. Name or explicitly export the
 complete retained bundle using the existing artifact controls.
 
+For an image workflow, select a source file, add `image.decode` with **Selected
+file**, then connect its `output` to `image.histogram`, `image.channel.extract`
+or a transform. Channel extraction keeps its report, exact `data` bytes and
+grayscale `image` separate. Comparison keeps an optional `mask` as its own port.
+The raster viewer displays native 8-bit samples, keyboard coordinates and zoom;
+its table reads Core samples rather than browser-rendered colors. Unsupported
+shapes retain their bounded structured data. Direct selected-image inputs are
+decoded only in the resource-limited worker, after filesystem authorization.
+Input digests explicitly identify their representation: `file_bytes` hashes the
+authorized original file, while `json_wire_value` hashes a literal or named-port
+value's serialized transport. These hashes are not interchangeable.
+
 Parameters and choices come from Core schemas. **Parameter form** selects an
 alternative contract, such as substitution by an explicit target alphabet or a
 keyword. Complex values use bounded JSON. Integers outside JavaScript's exact
@@ -49,8 +61,8 @@ The original [Lab API](lab-api.md) remains available. Named-port clients use:
 
 - `GET /api/lab/v2/operations`: every canonical Core contract and truthful local
   `execution.available`, adapter version and limits. Only available adapters appear
-  in the operation picker. Existing image inspectors continue using their direct
-  Lab API while their named-port adapters are integrated.
+  in the operation picker. The original image inspectors and the named-port image
+  adapters call the same actual Core APIs.
 - `POST /api/lab/v2/execute`: schema version 2, a fresh execution UUID, exact
   operation/version, named input bindings and a parameter object.
 - `GET` / `PUT /api/explorations`: list or save configurations with optimistic

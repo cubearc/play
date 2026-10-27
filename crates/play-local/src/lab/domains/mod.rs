@@ -1,4 +1,5 @@
 //! Explicit adapters call typed Core APIs; descriptors never dispatch algorithms.
+mod images;
 mod linear;
 mod mono;
 mod numbers;
@@ -15,6 +16,7 @@ pub(super) fn supported(operation: &str) -> bool {
         || linear::supported(operation)
         || numbers::supported(operation)
         || text::supported(operation)
+        || images::supported(operation)
         || matches!(
             operation,
             "encoding.base58check.encode" | "encoding.base58check.decode"
@@ -25,7 +27,7 @@ fn field<T: DeserializeOwned>(value: &Value, name: &str) -> Result<T, OperationE
         OperationError::new(ErrorCode::InvalidInput, "use the exact typed input fields")
     })
 }
-fn bytes(value: &Value) -> Result<Vec<u8>, OperationError> {
+pub(super) fn bytes(value: &Value) -> Result<Vec<u8>, OperationError> {
     let encoded: String = field(value, "base64")?;
     cube_core::encoding::base64_decode(&encoded)
         .map_err(|_| OperationError::new(ErrorCode::InvalidInput, "use canonical Base64 bytes"))
@@ -51,6 +53,7 @@ pub(super) fn execute(
         _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),
         _ if numbers::supported(operation) => numbers::execute(operation, inputs, parameters),
         _ if text::supported(operation) => text::execute(operation, inputs, parameters),
+        _ if images::supported(operation) => images::execute(operation, inputs, parameters),
         _ => mono::execute(operation, inputs, parameters),
     }
 }

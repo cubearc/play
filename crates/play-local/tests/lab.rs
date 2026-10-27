@@ -8,6 +8,87 @@ use std::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
+
+#[tokio::test]
+async fn named_image_outputs_preserve_samples_multiple_ports_and_restart_references() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let bytes = include_bytes!("../../../tests/fixtures/sample.png");
+    let source = directory.path().join("source/sample.png");
+    std::fs::write(&source, bytes).unwrap();
+    let file = json!({"type":"file","store":"source","path":"sample.png","representation":"image"});
+    let request = |operation: &str, inputs: Value, parameters: Value| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":operation,"operation_version":1,"inputs":inputs,"parameters":parameters});
+    let (status, channel) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "image.channel.extract",
+                json!({"input":file}),
+                json!({"channel":"red"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{channel}");
+    assert_eq!(
+        channel["result"]["metadata"]["ports"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert_eq!(
+        channel["inline"]["data"]["output"]["channels"],
+        json!(["red"])
+    );
+    assert_eq!(channel["inline"]["data"]["image"]["color_model"], "gray");
+    assert_eq!(
+        channel["result"]["provenance"]["inputs"][0]["reference"]["digest_representation"],
+        "file_bytes"
+    );
+    let id = channel["result"]["id"].as_str().unwrap();
+    let named = json!({"type":"artifact","id":id,"port":"image"});
+    let (status, histogram) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request("image.histogram", json!({"input":named}), json!({})),
+        )
+        .await;
+    assert_eq!(status, 200, "{histogram}");
+    assert_eq!(histogram["inline"]["data"]["output"]["pixels"], 4);
+    assert_eq!(
+        histogram["result"]["provenance"]["inputs"][0]["reference"]["digest_representation"],
+        "json_wire_value"
+    );
+    let (status, compare) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "image.compare",
+                json!({"left":file,"right":file}),
+                json!({"mask":true}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{compare}");
+    assert_eq!(compare["inline"]["data"]["output"]["equal"], true);
+    assert!(compare["inline"]["data"]["mask"].is_object());
+    assert_eq!(std::fs::read(&source).unwrap(), bytes);
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (status, reopened) = server
+        .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+        .await;
+    assert_eq!(status, 200, "{reopened}");
+    assert_eq!(reopened["inline"], channel["inline"]);
+    assert_eq!(
+        reopened["result"]["metadata"],
+        channel["result"]["metadata"]
+    );
+}
 struct Server {
     process: Child,
     address: String,

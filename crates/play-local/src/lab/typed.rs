@@ -55,6 +55,8 @@ pub(super) struct Worker {
     operation_version: u32,
     inputs: Value,
     parameters: Value,
+    #[serde(default)]
+    encoded_images: Vec<String>,
 }
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
@@ -128,6 +130,25 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
     let contract = contract(&worker.operation, worker.operation_version)?;
     execute::json_bytes(&worker.inputs, MAX_INPUT)?;
     execute::json_bytes(&worker.parameters, MAX_INLINE)?;
+    // Only the trusted file resolver can mark encoded image inputs. Decoding
+    // remains in this bounded child process, before logical-schema validation.
+    if worker.encoded_images.len() > 32 {
+        return Err(Error::limit());
+    }
+    for name in &worker.encoded_images {
+        if !contract
+            .inputs
+            .iter()
+            .any(|p| p.name == *name && p.semantic_type == "image.samples")
+        {
+            return Err(Error::invalid());
+        }
+        let bytes = domains::bytes(&worker.inputs[name])?;
+        let image = cube_core::image::Image::decode(&bytes)?;
+        worker.inputs[name] = serde_json::to_value(contracts::values::Image::from(&image))
+            .map_err(|_| Error::invalid())?;
+    }
+    execute::json_bytes(&worker.inputs, MAX_INPUT)?;
     checked(
         contract.validate_inputs(&worker.inputs),
         &worker.operation,
@@ -203,7 +224,7 @@ async fn resolve(
             Ok((
                 value,
                 InputRecord {
-                    reference: json!({"type":"literal","retained":false}),
+                    reference: json!({"type":"literal","retained":false,"digest_representation":"json_wire_value"}),
                     semantic_type: String::new(),
                     byte_size: bytes.len(),
                     sha256: cube_core::hashing::sha256(&bytes),
@@ -215,7 +236,7 @@ async fn resolve(
             path,
             representation,
         } => {
-            let (data, record) = super::input(
+            let (data, mut record) = super::input(
                 app,
                 storage,
                 Input::File {
@@ -225,18 +246,14 @@ async fn resolve(
                 },
             )
             .await?;
+            record.reference["digest_representation"] = json!("file_bytes");
             let bytes = data.bytes(MAX_INPUT)?;
             let value = match representation {
                 Representation::Text => {
                     json!(std::str::from_utf8(&bytes).map_err(|_| Error::invalid())?)
                 }
                 Representation::Bytes => json!({"base64":data.base64}),
-                Representation::Image => {
-                    return Err(Error::new(
-                        "unsupported_operation",
-                        "Use the image Lab until its named-port worker adapter is available.",
-                    ));
-                }
+                Representation::Image => json!({"base64":data.base64}),
                 Representation::Structured => return Err(Error::invalid()),
             };
             Ok((value, record))
@@ -252,7 +269,7 @@ async fn resolve(
                 let metadata=record.metadata["ports"].as_array().and_then(|ports|ports.iter().find(|p|p["name"]==port)).ok_or_else(Error::storage)?;
                 let value=value.get(&port).cloned().ok_or_else(Error::storage)?;
                 let bytes=execute::json_bytes(&value,MAX_INPUT)?;
-                Ok((value,InputRecord {reference:json!({"type":"artifact","id":id,"port":port}),semantic_type:metadata["semantic_type"].as_str().ok_or_else(Error::storage)?.into(),byte_size:bytes.len(),sha256:cube_core::hashing::sha256(&bytes)}))
+                Ok((value,InputRecord {reference:json!({"type":"artifact","id":id,"port":port,"digest_representation":"json_wire_value"}),semantic_type:metadata["semantic_type"].as_str().ok_or_else(Error::storage)?.into(),byte_size:bytes.len(),sha256:cube_core::hashing::sha256(&bytes)}))
             }).await.map_err(|_|Error::storage())?
         }
     }
@@ -338,6 +355,7 @@ async fn job(
 ) -> Result<Value> {
     let mut inputs = serde_json::Map::new();
     let mut records = Vec::new();
+    let mut encoded_images = Vec::new();
     for (name, binding) in request.inputs {
         let port = contract
             .inputs
@@ -345,6 +363,9 @@ async fn job(
             .find(|p| p.name == name)
             .ok_or_else(Error::invalid)?;
         if let Binding::File { representation, .. } = &binding {
+            if *representation == Representation::Image {
+                encoded_images.push(name.clone());
+            }
             let semantic = match representation {
                 Representation::Text => "text",
                 Representation::Bytes => "bytes",
@@ -379,16 +400,18 @@ async fn job(
         inputs.insert(name, value);
     }
     let inputs = Value::Object(inputs);
-    checked(
-        contract.validate_inputs(&inputs),
-        &request.operation,
-        "inputs",
-    )?;
+    if encoded_images.is_empty() {
+        checked(
+            contract.validate_inputs(&inputs),
+            &request.operation,
+            "inputs",
+        )?;
+    }
     if *cancellation.borrow() {
         return Err(Error::cancelled());
     }
     let wire = execute::json_bytes(
-        &json!({"typed":Worker {operation:request.operation.clone(),operation_version:request.operation_version,inputs,parameters:request.parameters}}),
+        &json!({"typed":Worker {operation:request.operation.clone(),operation_version:request.operation_version,inputs,parameters:request.parameters,encoded_images}}),
         MAX_WIRE,
     )?;
     let output = super::worker_output(wire, request.timeout_ms, &mut cancellation).await?;

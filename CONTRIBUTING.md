@@ -7,7 +7,7 @@ The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
 terminal. See [terminal boundaries](docs/terminal.md).
 Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
 Cargo consumes its exact-version library directly. The matching reference revision is
-`840d8a94b711eeae1e09409f83647924dba98ded` (or a compatible descendant).
+`9aadc00515b192eb3b75e3809e25cf784bc130a5` (or a compatible descendant).
 CI checks out a pinned Cube revision beside Play. While Core is private,
 hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
 configured by a maintainer. No key enters application containers or build contexts.

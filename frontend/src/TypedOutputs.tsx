@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import type { Json, OperationResult } from "./exploration-api";
 import { histogram } from "./lab-api";
 import { SavedResultActions } from "./SavedResultActions";
+import { TypedImage } from "./TypedImage";
 
 const LabHistogram = lazy(() => import("./LabHistogram"));
 const PREVIEW_LIMIT = 65536;
@@ -9,7 +10,8 @@ const PREVIEW_LIMIT = 65536;
 // A closed set of Play-owned viewers. Contract content cannot load components.
 function viewer(
   semantic: string,
-): "text" | "bytes" | "histogram" | "structured" {
+): "text" | "bytes" | "histogram" | "image" | "structured" {
+  if (semantic === "image.samples") return "image";
   if (semantic === "text" || semantic.startsWith("text.")) return "text";
   if (semantic === "bytes" || semantic === "byte_reader") return "bytes";
   if (semantic === "image.histogram") return "histogram";
@@ -17,6 +19,7 @@ function viewer(
 }
 function Content({ semantic, value }: { semantic: string; value: Json }) {
   const kind = viewer(semantic);
+  if (kind === "image") return <TypedImage value={value} />;
   if (kind === "text" && typeof value === "string")
     return (
       <>

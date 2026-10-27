@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+.lab-image-scroll {
+  max-width: 100%;
+  max-height: 30rem;
+  overflow: auto;
+}
+
 @theme {
   --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
   --color-ink: #192b28;
