@@ -1297,6 +1297,14 @@ summary:focus-visible {
   min-width: 0;
   margin-block: 28px;
 }
+.private-output-choice label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.private-output-choice input[type="checkbox"] {
+  width: auto;
+}
 .solution-list {
   display: flex;
   flex-wrap: wrap;

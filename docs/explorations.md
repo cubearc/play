@@ -81,6 +81,11 @@ select an authorized asset instead: its bytes stay outside SQLite, and execution
 records retain its digest. Private parameters are entered for a particular run,
 redacted from provenance and requested again for replay. Private operation outputs
 require explicit retention; otherwise their result references are not persisted.
+For these operations, **Keep this private output for this run** starts unchecked
+and resets after every attempt or step selection. Keeping the output locally
+enables chaining and private solutions; it never retains private parameters.
+Connected private-output steps must be run explicitly before their outputs can be
+used downstream. The application never retains such an upstream result implicitly.
 
 ## Local API
 

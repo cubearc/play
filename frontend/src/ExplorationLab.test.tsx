@@ -64,6 +64,139 @@ beforeEach(() => {
     output: { text: "A6" },
   });
 });
+it("requires a fresh explicit choice to retain each private output and preserves it only for the selected run", async () => {
+  const privateEntry = {
+    ...entry,
+    contract: {
+      ...entry.contract,
+      operation: "private.example",
+      policy: { ...entry.contract.policy, private_output: true },
+    },
+  };
+  const graph: api.Exploration = {
+    schema_version: 1,
+    id: "private-case",
+    revision: 1,
+    title: "Private result",
+    hypothesis: "",
+    scope: null,
+    steps: [
+      {
+        id: "one",
+        operation: "private.example",
+        operation_version: 1,
+        inputs: { text: { type: "literal", value: "A1" } },
+        parameters: {},
+        private_parameters: [],
+        position: [0, 0],
+      },
+    ],
+  };
+  vi.mocked(api.catalog).mockResolvedValue([privateEntry]);
+  vi.mocked(api.explorations).mockResolvedValue([graph]);
+  const user = userEvent.setup();
+  render(<ExplorationLab asset={null} onPreserve={vi.fn()} />);
+  const choice = await screen.findByRole("checkbox", {
+    name: "Keep this private output for this run",
+  });
+  expect(choice).not.toBeChecked();
+  const run = screen.getByRole("button", { name: "Run selected path" });
+  await user.click(run);
+  await screen.findByText(
+    "Execution recorded locally. Private output was not retained.",
+  );
+  expect(vi.mocked(api.executeStep).mock.calls[0]?.[5]).toBe(false);
+  expect(
+    screen.queryByRole("button", { name: "Preserve as solution" }),
+  ).toBeNull();
+  await user.click(choice);
+  vi.mocked(api.executeStep).mockResolvedValueOnce({
+    id,
+    record: { ...parseResult(typedWire()), retained: true },
+    ports: [outputPort],
+    output: { text: "A6" },
+  });
+  await user.click(run);
+  await screen.findByText("Execution and output preserved locally");
+  expect(vi.mocked(api.executeStep).mock.calls[1]?.[5]).toBe(true);
+  expect(choice).not.toBeChecked();
+  expect(
+    screen.getByRole("button", { name: "Preserve as solution" }),
+  ).toBeEnabled();
+  await user.click(choice);
+  vi.mocked(api.executeStep).mockRejectedValueOnce(
+    new Error("Private execution failed"),
+  );
+  await user.click(run);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Private execution failed",
+  );
+  expect(choice).not.toBeChecked();
+  expect(api.saveExploration).not.toHaveBeenCalled();
+  expect(graph.steps[0]?.parameters).toEqual({});
+});
+it("does not execute an upstream private-output operation implicitly while chaining", async () => {
+  const privateEntry = {
+    ...entry,
+    contract: {
+      ...entry.contract,
+      operation: "private.example",
+      policy: { ...entry.contract.policy, private_output: true },
+    },
+  };
+  const graph: api.Exploration = {
+    schema_version: 1,
+    id: "private-path",
+    revision: 1,
+    title: "Private branch",
+    hypothesis: "",
+    scope: null,
+    steps: [
+      {
+        id: "one",
+        operation: "private.example",
+        operation_version: 1,
+        inputs: { text: { type: "literal", value: "A1" } },
+        parameters: {},
+        private_parameters: [],
+        position: [0, 0],
+      },
+      {
+        id: "two",
+        operation: entry.contract.operation,
+        operation_version: 1,
+        inputs: { text: { type: "step", step: "one", port: "text" } },
+        parameters: {},
+        private_parameters: [],
+        position: [300, 0],
+      },
+    ],
+  };
+  vi.mocked(api.catalog).mockResolvedValue([privateEntry, entry]);
+  vi.mocked(api.explorations).mockResolvedValue([graph]);
+  const user = userEvent.setup();
+  render(<ExplorationLab asset={null} />);
+  await screen.findByRole("checkbox", {
+    name: "Keep this private output for this run",
+  });
+  await user.click(screen.getByRole("button", { name: "Steps" }));
+  await user.click(
+    within(screen.getByRole("list", { name: "Exploration steps" })).getByRole(
+      "button",
+      { name: "cipher.rot5" },
+    ),
+  );
+  expect(
+    screen.queryByRole("checkbox", {
+      name: "Keep this private output for this run",
+    }),
+  ).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Run selected path" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Run the upstream private-output step explicitly",
+  );
+  expect(api.executeStep).not.toHaveBeenCalled();
+});
 it("creates and saves an actual graph configuration before explicit execution", async () => {
   const user = userEvent.setup();
   render(<ExplorationLab asset={null} />);

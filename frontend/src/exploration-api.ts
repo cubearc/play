@@ -369,6 +369,7 @@ export async function executeStep(
   runs: Execution[],
   privateValues: Record<string, Json>,
   signal: AbortSignal,
+  retainPrivateOutput = false,
 ): Promise<OperationResult> {
   const inputs: Record<string, Source> = {};
   for (const [name, source] of Object.entries(step.inputs)) {
@@ -406,6 +407,7 @@ export async function executeStep(
         operation_version: step.operation_version,
         inputs,
         parameters: { ...step.parameters, ...privateValues },
+        retain_private_output: retainPrivateOutput,
         exploration: {
           id: exploration.id,
           revision: exploration.revision,

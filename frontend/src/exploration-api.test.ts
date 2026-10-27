@@ -336,6 +336,12 @@ describe("exploration transport and replay boundaries", () => {
       port: "text",
     });
     expect(request.parameters).toEqual({ key: "ephemeral" });
+    expect(request.retain_private_output).toBe(false);
+    fetch.mockResolvedValueOnce(Response.json(typedWire()));
+    await executeStep(value, step, [run], { key: "ephemeral" }, signal, true);
+    expect(
+      JSON.parse(fetch.mock.calls[1]?.[1].body ?? "{}").retain_private_output,
+    ).toBe(true);
     expect(step.parameters).toEqual({});
   });
   it("validates run status, unavailable inline output and cancellation outcomes", async () => {

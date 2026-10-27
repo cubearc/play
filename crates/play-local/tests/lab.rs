@@ -13,6 +13,118 @@ use uuid::Uuid;
 static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
+async fn private_outputs_require_an_explicit_choice_before_retention_chaining_or_solutions() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let graph = Uuid::new_v4();
+    let step = Uuid::new_v4();
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Private output choice","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.solitaire.decode","operation_version":1,"inputs":{"text":{"type":"literal","value":"EXKYIZSGEH"}},"parameters":{"max_steps":1048576},"private_parameters":["deck"],"position":[0,0]}]});
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        200
+    );
+    let deck: Vec<u8> = (1..=54).collect();
+    let invoke = |id, retain: bool| json!({"schema_version":2,"id":id,"operation":"cipher.solitaire.decode","operation_version":1,"inputs":{"text":{"type":"literal","value":"EXKYIZSGEH"}},"parameters":{"deck":deck,"max_steps":1048576},"retain_private_output":retain,"exploration":{"id":graph,"revision":1,"step":step}});
+    let transient = Uuid::new_v4();
+    let mut request = invoke(transient, false);
+    request
+        .as_object_mut()
+        .unwrap()
+        .remove("retain_private_output");
+    let (status, preview) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{preview}");
+    assert_eq!(preview["retained"], false);
+    assert_eq!(preview["inline"]["data"]["text"], "AAAAAAAAAA");
+    assert_ne!(
+        server
+            .api("GET", &format!("/api/lab/results/{transient}"), Value::Null)
+            .await
+            .0,
+        200
+    );
+    let preserve = |id, result| json!({"id":id,"revision":0,"title":"Private solution","explanation":"Preserve only an explicitly retained plaintext result.","source":{"type":"result","selection":{"result_id":result,"port":"text"}}});
+    assert_ne!(
+        server
+            .api("PUT", "/api/solutions", preserve(Uuid::new_v4(), transient))
+            .await
+            .0,
+        200
+    );
+    let retained = Uuid::new_v4();
+    let (status, output) = server
+        .api("POST", "/api/lab/v2/execute", invoke(retained, true))
+        .await;
+    assert_eq!(status, 200, "{output}");
+    assert_eq!(output["retained"], true);
+    let solution = Uuid::new_v4();
+    let (status, snapshot) = server
+        .api("PUT", "/api/solutions", preserve(solution, retained))
+        .await;
+    assert_eq!(status, 200, "{snapshot}");
+    assert!(
+        !snapshot
+            .to_string()
+            .contains(&serde_json::to_string(&deck).unwrap())
+    );
+    assert!(
+        snapshot["replay_current"]["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|gap| gap["code"] == "private_parameters_required")
+    );
+    let next = Uuid::new_v4();
+    assert_eq!(
+        server
+            .api("POST", "/api/lab/v2/execute", invoke(next, false))
+            .await
+            .1["retained"],
+        false
+    );
+    let (_, history) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/{graph}/executions"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(history.as_array().unwrap().len(), 3);
+    assert_eq!(history[0]["evidence"]["result_id"], Value::Null);
+    assert_eq!(history[1]["evidence"]["result_id"], retained.to_string());
+    assert_eq!(history[2]["evidence"]["result_id"], Value::Null);
+    let (_, configuration) = server
+        .api("GET", &format!("/api/explorations/{graph}"), Value::Null)
+        .await;
+    assert!(configuration["steps"][0]["parameters"]["deck"].is_null());
+    assert!(
+        configuration["steps"][0]
+            .get("retain_private_output")
+            .is_none()
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (status, final_value) = server
+        .api(
+            "GET",
+            &format!("/api/solutions/{solution}/final"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{final_value}");
+    assert_eq!(final_value["value"], "AAAAAAAAAA");
+    for id in [transient, next] {
+        assert_ne!(
+            server
+                .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+                .await
+                .0,
+            200
+        );
+    }
+}
+
+#[tokio::test]
 async fn solutions_keep_sensitive_parameters_redacted_and_require_retained_evidence() {
     let directory = tempfile::tempdir().unwrap();
     let server = Server::start(directory.path(), Uuid::new_v4());

@@ -215,6 +215,7 @@ function Editor({
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState("");
   const [privateValues, setPrivateValues] = useState<Record<string, Json>>({});
+  const [retainPrivateOutput, setRetainPrivateOutput] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
   );
@@ -290,6 +291,7 @@ function Editor({
     setDraft((draft) => ({ ...draft, steps: [...draft.steps, step] }));
     setSelected(step.id);
     setPrivateValues({});
+    setRetainPrivateOutput(false);
     setStatus("Unsaved changes");
   }
   async function run() {
@@ -307,10 +309,23 @@ function Editor({
     setError(null);
     setOutput(null);
     let history = runs;
+    let selectedRetained = false;
     const visited = new Set<string>();
     async function execute(current: Step): Promise<void> {
       if (visited.has(current.id)) return;
       visited.add(current.id);
+      if (
+        current.id !== step?.id &&
+        catalog.find((e) => e.contract.operation === current.operation)
+          ?.contract.policy.private_output
+      )
+        throw new Error(
+          "Run the upstream private-output step explicitly and choose whether to retain its result before chaining it.",
+        );
+      if (current.id !== step?.id && current.private_parameters.length)
+        throw new Error(
+          "Run the upstream step with its private parameters first.",
+        );
       for (const source of Object.values(current.inputs))
         if (source.type === "step") {
           const producer = draft.steps.find((s) => s.id === source.step);
@@ -325,10 +340,6 @@ function Editor({
           )
             await execute(producer);
         }
-      if (current.id !== step?.id && current.private_parameters.length)
-        throw new Error(
-          "Run the upstream step with its private parameters first.",
-        );
       setStatus(`Running ${current.operation}…`);
       const result = await executeStep(
         draft,
@@ -336,16 +347,25 @@ function Editor({
         history,
         current.id === step?.id ? privateValues : {},
         controller.signal,
+        current.id === step?.id && retainPrivateOutput,
       );
       history = await executions(draft.id, controller.signal);
       if (mounted.current) {
         setRuns(history);
-        if (current.id === step?.id) setOutput(result);
+        if (current.id === step?.id) {
+          setOutput(result);
+          selectedRetained = result.record.retained;
+        }
       }
     }
     try {
       await execute(step);
-      if (mounted.current) setStatus("Execution preserved locally");
+      if (mounted.current)
+        setStatus(
+          selectedRetained
+            ? "Execution and output preserved locally"
+            : "Execution recorded locally. Private output was not retained.",
+        );
     } catch (error) {
       if (mounted.current) {
         setError(
@@ -363,6 +383,7 @@ function Editor({
         setBusy(false);
         setRunning(false);
         setPrivateValues({});
+        setRetainPrivateOutput(false);
       }
     }
   }
@@ -426,6 +447,7 @@ function Editor({
               setSelected(initial.steps[0]?.id ?? null);
               setInvalidFields({});
               setPrivateValues({});
+              setRetainPrivateOutput(false);
               setError(null);
               setStatus("Restored the last saved configuration");
             }}
@@ -515,6 +537,7 @@ function Editor({
             setSelected(id);
             setInvalidFields({});
             setPrivateValues({});
+            setRetainPrivateOutput(false);
             setOutput(null);
           }}
         />
@@ -530,6 +553,7 @@ function Editor({
                   setSelected(s.id);
                   setInvalidFields({});
                   setPrivateValues({});
+                  setRetainPrivateOutput(false);
                   setOutput(null);
                 }}
               >
@@ -580,6 +604,27 @@ function Editor({
               }
             />
           </fieldset>
+          {entry.contract.policy.private_output && (
+            <fieldset disabled={busy} className="private-output-choice">
+              <legend>Private output for the next run</legend>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={retainPrivateOutput}
+                  onChange={(event) =>
+                    setRetainPrivateOutput(event.target.checked)
+                  }
+                />
+                Keep this private output for this run
+              </label>
+              <p>
+                Leave unchecked to view the result without retaining its
+                content. Keeping it locally enables chaining, notes on a
+                selected output and private solutions. This choice resets after
+                each attempt and never saves private parameters.
+              </p>
+            </fieldset>
+          )}
           <div className="exploration-toolbar">
             <button
               type="button"
