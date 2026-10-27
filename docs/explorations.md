@@ -11,6 +11,19 @@ outputs can be reused; changing the configuration preserves earlier executions
 and marks them as belonging to an earlier configuration. Opening a workspace never
 runs its graph. A challenge is optional.
 
+Open **Execution history**, then **View retained output** to inspect an earlier
+run without executing it again. The stored artifact identity, hash and named-port
+schemas must match the immutable execution evidence. Missing or private unretained
+outputs remain visible as history; reopening never replaces them or runs a repair.
+
+Use **Output port** to select a named result. Text remains inert, bytes retain
+explicit Base64 transport, and known histogram results offer a chart and semantic
+table. Other reports use a structured fallback; resembling a histogram does not
+grant a chart. Previews show at most 65,536 characters, and reading a retained
+bundle is limited to 4 MiB. **Output data and provenance** exposes the recorded
+parameters, source references and schema digest. Name or explicitly export the
+complete retained bundle using the existing artifact controls.
+
 Parameters and choices come from Core schemas. **Parameter form** selects an
 alternative contract, such as substitution by an explicit target alphabet or a
 keyword. Complex values use bounded JSON. Integers outside JavaScript's exact

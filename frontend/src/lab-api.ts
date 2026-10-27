@@ -118,7 +118,10 @@ export function parseResult(value: Record<string, unknown>): LabResult {
     (!value.retained && value.content_url !== null)
   )
     throw invalid();
-  const meta = record.metadata === null ? null : object(record.metadata);
+  const meta =
+    record.representation !== "image" || record.metadata === null
+      ? null
+      : object(record.metadata);
   const metadata = meta
     ? {
         width: integer(meta.width),

@@ -8,11 +8,13 @@ import {
   executions,
   explorations,
   json,
+  openExecution,
   parseCatalog,
   parseExploration,
   type Step,
   saveExploration,
 } from "./exploration-api";
+import { id, outputPort, typedWire } from "./test/lab-fixture";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -62,6 +64,13 @@ describe("canonical operation contracts", () => {
       json({ value: "18446744073709551615", bytes: { base64: "AP8=" } }),
     ).toEqual({ value: "18446744073709551615", bytes: { base64: "AP8=" } });
   });
+  it("preserves a positive advertised operation version without treating it as the schema version", () => {
+    const input = JSON.parse(JSON.stringify(catalog()));
+    input.operations[0].contract.operation_version = 3;
+    expect(parseCatalog(input)[0]?.contract.operation_version).toBe(3);
+    input.operations[0].contract.operation_version = 0;
+    expect(() => parseCatalog(input)).toThrow();
+  });
   it("preserves separate graph inputs, versions and stage scope", () => {
     const value = {
       schema_version: 1,
@@ -97,6 +106,128 @@ describe("exploration transport and replay boundaries", () => {
     scope: null,
     steps: [],
   };
+  const retainedRun: Execution = {
+    id: "execution",
+    configuration_revision: 1,
+    step: "step",
+    status: "succeeded",
+    stale: true,
+    started_ms: 1,
+    ended_ms: 2,
+    evidence: {
+      result_id: id,
+      sha256: "0".repeat(64),
+      // JSON object order must not affect immutable port matching.
+      ports: [
+        {
+          schema_sha256: outputPort.schema_sha256,
+          operation_version: 1,
+          schema_version: 1,
+          semantic_type: "text",
+          name: "text",
+        },
+      ],
+    },
+  };
+  it("reopens exactly the retained execution without rerunning or rewriting its old configuration", async () => {
+    const fetcher = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(Response.json(typedWire())));
+    vi.stubGlobal("fetch", fetcher);
+    expect(
+      await openExecution(retainedRun, new AbortController().signal),
+    ).toMatchObject({
+      id,
+      output: { text: "A6" },
+      ports: [outputPort],
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]?.[0]).toBe(`/api/lab/results/${id}`);
+    expect(fetcher.mock.calls[0]?.[1].method).toBe("GET");
+    await expect(
+      openExecution(
+        { ...retainedRun, evidence: {} },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("no retained output");
+    await expect(
+      openExecution(
+        {
+          ...retainedRun,
+          evidence: { ...retainedRun.evidence, sha256: "wrong" },
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("immutable evidence");
+  });
+  it("rejects mismatched identities, unknown ports, malformed metadata and oversized retained data", async () => {
+    const badWires = [
+      {
+        ...typedWire(),
+        result: {
+          ...typedWire().result,
+          id: "6d434f94-89f3-4fb8-a7d8-c345a0000002",
+        },
+        content_url:
+          "/api/lab/results/6d434f94-89f3-4fb8-a7d8-c345a0000002/content",
+      },
+      typedWire({ undeclared: "not a named output" }),
+      {
+        ...typedWire(),
+        result: {
+          ...typedWire().result,
+          metadata: { schema_version: 3, ports: [] },
+        },
+      },
+      { ...typedWire(), result: { ...typedWire().result, byte_size: 4194305 } },
+      {
+        ...typedWire(),
+        result: {
+          ...typedWire().result,
+          metadata: { schema_version: 2, ports: [outputPort, outputPort] },
+        },
+      },
+      {
+        ...typedWire(),
+        result: {
+          ...typedWire().result,
+          metadata: {
+            schema_version: 2,
+            ports: [{ ...outputPort, schema_sha256: "bad" }],
+          },
+        },
+      },
+    ];
+    for (const response of badWires) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(Response.json(response)),
+      );
+      await expect(
+        openExecution(retainedRun, new AbortController().signal),
+      ).rejects.toThrow();
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ ...typedWire(), inline: null }))
+        .mockResolvedValueOnce(new Response("x".repeat(4194305))),
+    );
+    await expect(
+      openExecution(retainedRun, new AbortController().signal),
+    ).rejects.toThrow("budget");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ ...typedWire(), inline: null }))
+        .mockResolvedValueOnce(new Response(null, { status: 404 })),
+    );
+    await expect(
+      openExecution(retainedRun, new AbortController().signal),
+    ).rejects.toThrow("history was preserved");
+  });
   it("preserves typed file, artifact and branch sources and rejects malformed navigation", () => {
     const input = {
       ...value,
@@ -178,13 +309,7 @@ describe("exploration transport and replay boundaries", () => {
       private_parameters: ["key"],
       position: [0, 0],
     };
-    const fetch = vi.fn().mockResolvedValue(
-      Response.json({
-        schema_version: 1,
-        result: { id: "result" },
-        inline: { type: "structured", data: { text: "A6" } },
-      }),
-    );
+    const fetch = vi.fn().mockResolvedValue(Response.json(typedWire()));
     vi.stubGlobal("fetch", fetch);
     const signal = new AbortController().signal;
     await expect(executeStep(value, step, [], {}, signal)).rejects.toThrow(
@@ -203,7 +328,7 @@ describe("exploration transport and replay boundaries", () => {
     };
     expect(
       await executeStep(value, step, [run], { key: "ephemeral" }, signal),
-    ).toEqual({ id: "result", output: { text: "A6" } });
+    ).toMatchObject({ id, output: { text: "A6" }, ports: [outputPort] });
     const request = JSON.parse(fetch.mock.calls[0]?.[1].body ?? "{}");
     expect(request.inputs.text).toEqual({
       type: "artifact",
@@ -228,13 +353,8 @@ describe("exploration transport and replay boundaries", () => {
       .fn()
       .mockResolvedValueOnce(Response.json([run]))
       .mockResolvedValueOnce(Response.json([{ ...run, status: "verified" }]))
-      .mockResolvedValueOnce(
-        Response.json({
-          schema_version: 1,
-          result: { id: "large-result" },
-          inline: null,
-        }),
-      )
+      .mockResolvedValueOnce(Response.json({ ...typedWire(), inline: null }))
+      .mockResolvedValueOnce(Response.json({ text: "large retained text" }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(new Response(null, { status: 409 }));
     vi.stubGlobal("fetch", fetch);
@@ -251,7 +371,7 @@ describe("exploration transport and replay boundaries", () => {
     };
     expect(
       await executeStep(value, step, [], {}, new AbortController().signal),
-    ).toEqual({ id: "large-result", output: null });
+    ).toMatchObject({ id, output: { text: "large retained text" } });
     await cancelExecution("run");
     await expect(cancelExecution("run")).rejects.toThrow(
       "could not be cancelled",

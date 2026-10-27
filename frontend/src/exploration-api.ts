@@ -1,4 +1,4 @@
-import { object } from "./lab-api";
+import { type LabResult, object, parseResult, resultUrl } from "./lab-api";
 import type { Store } from "./workspace-api";
 
 export type Json =
@@ -162,7 +162,7 @@ export function parseCatalog(value: unknown): CatalogEntry[] {
       policy = object(c.policy);
     if (
       c.schema_version !== 1 ||
-      c.operation_version !== 1 ||
+      integer(c.operation_version) < 1 ||
       e.adapter_version !== 2
     )
       throw invalid();
@@ -172,7 +172,7 @@ export function parseCatalog(value: unknown): CatalogEntry[] {
     return {
       contract: {
         schema_version: 1,
-        operation_version: 1,
+        operation_version: integer(c.operation_version),
         operation,
         category: text(c.category),
         description: text(c.description),
@@ -348,7 +348,7 @@ export async function executeStep(
   runs: Execution[],
   privateValues: Record<string, Json>,
   signal: AbortSignal,
-): Promise<{ id: string; output: Json }> {
+): Promise<OperationResult> {
   const inputs: Record<string, Source> = {};
   for (const [name, source] of Object.entries(step.inputs)) {
     if (source.type !== "step") {
@@ -394,12 +394,7 @@ export async function executeStep(
       signal,
     ),
   );
-  if (value.schema_version !== 1) throw invalid();
-  const inline = value.inline === null ? null : object(value.inline);
-  return {
-    id: text(object(value.result).id),
-    output: inline ? json(inline.data) : null,
-  };
+  return readOperationResult(value, signal);
 }
 export async function cancelExecution(id: string): Promise<void> {
   await fetch(`/api/lab/executions/${encodeURIComponent(id)}`, {
@@ -411,4 +406,123 @@ export async function cancelExecution(id: string): Promise<void> {
         "The execution could not be cancelled; refresh its status.",
       );
   });
+}
+
+export type OutputPort = {
+  name: string;
+  semantic_type: string;
+  schema_version: number;
+  operation_version: number;
+  schema_sha256: string;
+};
+export type OperationResult = {
+  id: string;
+  record: LabResult;
+  ports: OutputPort[];
+  output: { [name: string]: Json };
+};
+const MAX_RESULT_BYTES = 4 * 1024 * 1024;
+async function boundedContent(id: string, signal: AbortSignal): Promise<Json> {
+  const response = await fetch(resultUrl(id), {
+    credentials: "same-origin",
+    signal,
+  });
+  if (!response.ok || !response.body)
+    throw new Error(
+      "The retained result is unavailable. Its history was preserved.",
+    );
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let size = 0;
+  let content = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESULT_BYTES)
+        throw new Error("The result exceeds the bounded local viewer budget.");
+      content += decoder.decode(value, { stream: true });
+    }
+    content += decoder.decode();
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
+  return json(JSON.parse(content));
+}
+async function readOperationResult(
+  value: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<OperationResult> {
+  if (value.schema_version !== 1) throw invalid();
+  const record = parseResult(value);
+  const metadata = object(object(value.result).metadata);
+  if (
+    record.semantic_type !== "operation.outputs" ||
+    record.representation !== "structured" ||
+    metadata.schema_version !== 2 ||
+    record.byte_size > MAX_RESULT_BYTES
+  )
+    throw invalid();
+  const names = new Set<string>();
+  const ports = array(metadata.ports, 32).map((value) => {
+    const port = object(value);
+    const name = text(port.name);
+    const hash = text(port.schema_sha256);
+    if (
+      !name ||
+      names.has(name) ||
+      port.schema_version !== 1 ||
+      integer(port.operation_version) < 1 ||
+      !/^[a-f0-9]{64}$/.test(hash)
+    )
+      throw invalid();
+    names.add(name);
+    return {
+      name,
+      semantic_type: text(port.semantic_type),
+      schema_version: 1,
+      operation_version: integer(port.operation_version),
+      schema_sha256: hash,
+    };
+  });
+  const output = object(
+    record.inline?.type === "structured"
+      ? json(record.inline.data)
+      : record.retained
+        ? await boundedContent(record.id, signal)
+        : null,
+  ) as { [name: string]: Json };
+  if (Object.keys(output).some((name) => !names.has(name))) throw invalid();
+  return { id: record.id, record, ports, output };
+}
+export async function openExecution(
+  run: Execution,
+  signal: AbortSignal,
+): Promise<OperationResult> {
+  if (run.status !== "succeeded" || typeof run.evidence.result_id !== "string")
+    throw new Error(
+      "This execution has no retained output. Its evidence remains available.",
+    );
+  const id = run.evidence.result_id;
+  resultUrl(id);
+  const result = await readOperationResult(
+    object(await request(`/lab/results/${id}`, "GET", undefined, signal)),
+    signal,
+  );
+  if (
+    result.id !== id ||
+    result.record.sha256 !== run.evidence.sha256 ||
+    !Array.isArray(run.evidence.ports) ||
+    run.evidence.ports.length !== result.ports.length ||
+    result.ports.some((port, index) => {
+      const stored = object((run.evidence.ports as Json[])[index]);
+      return Object.entries(port).some(([key, value]) => stored[key] !== value);
+    })
+  )
+    throw new Error(
+      "The retained result does not match this execution's immutable evidence.",
+    );
+  return result;
 }

@@ -61,3 +61,27 @@ export function catalog(
     })),
   };
 }
+
+export const outputPort = {
+  name: "text",
+  semantic_type: "text",
+  schema_version: 1,
+  operation_version: 1,
+  schema_sha256: "1".repeat(64),
+};
+export function typedWire(output: Record<string, unknown> = { text: "A6" }) {
+  return wire("cipher.rot5", {
+    result: {
+      ...wire().result,
+      representation: "structured",
+      semantic_type: "operation.outputs",
+      metadata: { schema_version: 2, ports: [outputPort] },
+      provenance: {
+        operation: "cipher.rot5",
+        parameters: [],
+        core_version: "0.18.0",
+      },
+    },
+    inline: { type: "structured", data: output },
+  });
+}

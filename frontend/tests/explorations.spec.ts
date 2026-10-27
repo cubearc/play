@@ -68,6 +68,17 @@ test("builds a typed substitution exploration and restores its immutable result"
   );
   await lab.getByText(/Execution history/).click();
   await expect(lab.getByText(/succeeded ·/)).toHaveCount(3);
+  await lab
+    .getByRole("button", { name: "View retained output", exact: true })
+    .first()
+    .click();
+  await expect(
+    lab.getByLabel("Exact text output", { exact: true }),
+  ).toHaveValue("CAB");
+  await expect(
+    lab.getByRole("combobox", { name: "Output port", exact: true }),
+  ).toHaveValue("text");
+  await expect(lab.getByText(/succeeded ·/)).toHaveCount(3);
   const response = await page.request.get("/api/explorations");
   expect(response.ok()).toBe(true);
   const value = await response.json();
@@ -83,4 +94,9 @@ test("builds a typed substitution exploration and restores its immutable result"
     type: "literal",
     value: "",
   });
+  const runs = await page.request.get(
+    `/api/explorations/${exploration.id}/executions`,
+  );
+  expect(runs.ok()).toBe(true);
+  expect(await runs.json()).toHaveLength(3);
 });

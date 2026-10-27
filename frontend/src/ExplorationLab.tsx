@@ -9,6 +9,8 @@ import {
   type Json,
   catalog as loadCatalog,
   explorations as loadExplorations,
+  type OperationResult,
+  openExecution,
   type Port,
   type Schema,
   type Source,
@@ -17,6 +19,7 @@ import {
 } from "./exploration-api";
 import { OperationParameters } from "./OperationParameters";
 import { SchemaField } from "./SchemaField";
+import { TypedOutputs } from "./TypedOutputs";
 import type { Store } from "./workspace-api";
 
 export function ExplorationLab({
@@ -204,7 +207,8 @@ function Editor({
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
   );
-  const [output, setOutput] = useState<Json | null>(null);
+  const [output, setOutput] = useState<OperationResult | null>(null);
+  const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("Saved locally");
@@ -228,9 +232,9 @@ function Editor({
   const entry = catalog.find((e) => e.contract.operation === step?.operation);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   useEffect(() => {
-    onEditingChange(dirty);
+    onEditingChange(dirty || busy);
     return () => onEditingChange(false);
-  }, [dirty, onEditingChange]);
+  }, [dirty, busy, onEditingChange]);
   const invalid = Object.values(invalidFields).some(Boolean);
   function validity(name: string, valid: boolean) {
     setInvalidFields((fields) => ({ ...fields, [name]: !valid }));
@@ -279,6 +283,7 @@ function Editor({
     const controller = new AbortController();
     active.current = controller;
     setBusy(true);
+    setRunning(true);
     setError(null);
     setOutput(null);
     let history = runs;
@@ -315,7 +320,7 @@ function Editor({
       history = await executions(draft.id, controller.signal);
       if (mounted.current) {
         setRuns(history);
-        if (current.id === step?.id) setOutput(result.output);
+        if (current.id === step?.id) setOutput(result);
       }
     }
     try {
@@ -336,8 +341,30 @@ function Editor({
       active.current = null;
       if (mounted.current) {
         setBusy(false);
+        setRunning(false);
         setPrivateValues({});
       }
+    }
+  }
+  async function open(run: Execution) {
+    const controller = new AbortController();
+    active.current = controller;
+    setBusy(true);
+    setError(null);
+    setOutput(null);
+    try {
+      const result = await openExecution(run, controller.signal);
+      if (mounted.current) {
+        setOutput(result);
+        setStatus(
+          `Viewing execution from configuration ${run.configuration_revision}`,
+        );
+      }
+    } catch (error) {
+      if (mounted.current) setError(message(error));
+    } finally {
+      active.current = null;
+      if (mounted.current) setBusy(false);
     }
   }
   const matches = catalog.filter(
@@ -463,6 +490,7 @@ function Editor({
           catalog={catalog}
           runs={runs}
           selected={selected}
+          disabled={busy}
           onSelect={(id) => {
             setSelected(id);
             setInvalidFields({});
@@ -477,6 +505,7 @@ function Editor({
               <button
                 type="button"
                 aria-pressed={selected === s.id}
+                disabled={busy}
                 onClick={() => {
                   setSelected(s.id);
                   setInvalidFields({});
@@ -540,7 +569,7 @@ function Editor({
             >
               Run selected path
             </button>
-            {busy && (
+            {running && (
               <button
                 type="button"
                 className="button secondary"
@@ -581,12 +610,7 @@ function Editor({
               to replay it.
             </p>
           )}
-          {output !== null && (
-            <section aria-label="Selected operation outputs">
-              <h4>Result</h4>
-              <pre>{JSON.stringify(output, null, 2)}</pre>
-            </section>
-          )}
+          {output !== null && <TypedOutputs key={output.id} result={output} />}
           <details>
             <summary>
               Execution history ·{" "}
@@ -601,6 +625,19 @@ function Editor({
                     {run.stale ? " · earlier configuration" : ""} ·{" "}
                     {new Date(run.started_ms).toLocaleString()}
                     <code>{run.id}</code>
+                    {run.status === "succeeded" &&
+                    typeof run.evidence.result_id === "string" ? (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busy}
+                        onClick={() => void open(run)}
+                      >
+                        View retained output
+                      </button>
+                    ) : run.status === "succeeded" ? (
+                      <span> · Private output was not retained</span>
+                    ) : null}
                   </li>
                 ))}
             </ol>

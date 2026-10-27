@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ExplorationLab } from "./ExplorationLab";
 import * as api from "./exploration-api";
+import { parseResult } from "./lab-api";
+import { id, outputPort, typedWire } from "./test/lab-fixture";
 
 vi.mock("./exploration-api", async (original) => ({
   ...(await original<typeof api>()),
@@ -11,6 +13,7 @@ vi.mock("./exploration-api", async (original) => ({
   executions: vi.fn(),
   saveExploration: vi.fn(),
   executeStep: vi.fn(),
+  openExecution: vi.fn(),
 }));
 const entry: api.CatalogEntry = {
   contract: {
@@ -55,7 +58,9 @@ beforeEach(() => {
     revision: value.revision + 1,
   }));
   vi.mocked(api.executeStep).mockResolvedValue({
-    id: "result",
+    id,
+    record: { ...parseResult(typedWire()), retained: false },
+    ports: [outputPort],
     output: { text: "A6" },
   });
 });

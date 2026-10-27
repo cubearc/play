@@ -6,12 +6,14 @@ export function ExplorationFlow({
   runs,
   selected,
   onSelect,
+  disabled = false,
 }: {
   exploration: Exploration;
   catalog: CatalogEntry[];
   runs: Execution[];
   selected: string | null;
   onSelect: (id: string) => void;
+  disabled?: boolean;
 }) {
   const width = Math.max(
     680,
@@ -58,6 +60,7 @@ export function ExplorationFlow({
           return (
             <button
               type="button"
+              disabled={disabled}
               key={step.id}
               className={`flow-node ${selected === step.id ? "selected" : ""}`}
               style={{ left: step.position[0], top: step.position[1] }}
