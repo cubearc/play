@@ -33,6 +33,32 @@ test("builds a typed substitution exploration and restores its immutable result"
   await expect(
     lab.getByRole("region", { name: "Selected operation outputs" }),
   ).toContainText("CAB");
+  await lab
+    .getByRole("combobox", { name: "Parameter form", exact: true })
+    .selectOption("1");
+  await lab
+    .getByRole("button", { name: "Use empty text for keyword", exact: true })
+    .click();
+  await lab
+    .getByRole("button", { name: "Save configuration", exact: true })
+    .click();
+  await lab
+    .getByRole("button", { name: "Run selected path", exact: true })
+    .click();
+  await expect(
+    lab.getByRole("region", { name: "Selected operation outputs" }),
+  ).toContainText("ABC");
+  await lab.getByLabel("text value *", { exact: true }).fill("A");
+  await lab.getByLabel("text value *", { exact: true }).clear();
+  await lab
+    .getByRole("button", { name: "Save configuration", exact: true })
+    .click();
+  await lab
+    .getByRole("button", { name: "Run selected path", exact: true })
+    .click();
+  await expect(
+    lab.getByRole("region", { name: "Selected operation outputs" }),
+  ).toContainText(/"text":\s*""/);
   await page.reload();
   await expect(lab.getByLabel("Exploration name", { exact: true })).toHaveValue(
     title,
@@ -41,7 +67,7 @@ test("builds a typed substitution exploration and restores its immutable result"
     "A reproducible mapping with named text ports",
   );
   await lab.getByText(/Execution history/).click();
-  await expect(lab.getByText(/succeeded ·/)).toBeVisible();
+  await expect(lab.getByText(/succeeded ·/)).toHaveCount(3);
   const response = await page.request.get("/api/explorations");
   expect(response.ok()).toBe(true);
   const value = await response.json();
@@ -50,6 +76,11 @@ test("builds a typed substitution exploration and restores its immutable result"
   );
   expect(exploration.steps[0].parameters).toEqual({
     source: "ABC",
-    target: "CAB",
+    keyword: "",
+    unmapped: "reject",
+  });
+  expect(exploration.steps[0].inputs.text).toEqual({
+    type: "literal",
+    value: "",
   });
 });

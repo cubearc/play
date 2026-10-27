@@ -150,6 +150,22 @@ export function SchemaField({
         />
       )}
       {description && <small>{description}</small>}
+      {type === "string" &&
+        !choices &&
+        value === undefined &&
+        !(typeof field.minLength === "number" && field.minLength > 0) && (
+          <button
+            type="button"
+            className="button secondary"
+            aria-label={`Use empty text for ${label}`}
+            onClick={() => {
+              onChange("");
+              report(null);
+            }}
+          >
+            Use empty text
+          </button>
+        )}
       {type === "exact_integer" && (
         <small>Large integers are preserved as exact decimal strings.</small>
       )}

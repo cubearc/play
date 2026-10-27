@@ -47,3 +47,41 @@ it("resolves local typed definitions and rejects cyclic aliases", () => {
     ),
   ).toThrow();
 });
+
+it("distinguishes an explicit empty string from an unset field without retaining old text", async () => {
+  const user = userEvent.setup(),
+    changed = vi.fn();
+  const { rerender } = render(
+    <SchemaField
+      label="keyword"
+      schema={{ type: "string" }}
+      value={undefined}
+      onChange={changed}
+    />,
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Use empty text for keyword" }),
+  );
+  expect(changed).toHaveBeenLastCalledWith("");
+  rerender(
+    <SchemaField
+      label="keyword"
+      schema={{ type: "string" }}
+      value="A"
+      onChange={changed}
+    />,
+  );
+  await user.clear(screen.getByLabelText("keyword"));
+  expect(changed).toHaveBeenLastCalledWith("");
+  rerender(
+    <SchemaField
+      label="source"
+      schema={{ type: "string", minLength: 1 }}
+      value={undefined}
+      onChange={changed}
+    />,
+  );
+  expect(
+    screen.queryByRole("button", { name: /Use empty text/ }),
+  ).not.toBeInTheDocument();
+});

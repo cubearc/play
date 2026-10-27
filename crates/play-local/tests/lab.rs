@@ -1168,19 +1168,21 @@ async fn typed_invocations_reject_wrong_types_paths_versions_and_unsafe_graphs()
 async fn substitution_parameter_variants_are_saved_and_executed_by_the_real_named_worker() {
     let directory = tempfile::tempdir().unwrap();
     let server = Server::start(directory.path(), Uuid::new_v4());
-    for parameters in [
-        json!({"source":"ABC","target":"CAB"}),
-        json!({"source":"ABC","keyword":"CAB"}),
+    for (parameters, source, expected) in [
+        (json!({"source":"ABC","target":"CAB"}), "ABC", "CAB"),
+        (json!({"source":"ABC","keyword":"CAB"}), "ABC", "CAB"),
+        (json!({"source":"ABC","keyword":""}), "ABC", "ABC"),
+        (json!({"source":"ABC","keyword":""}), "", ""),
     ] {
         let id = Uuid::new_v4();
         let step = Uuid::new_v4();
-        let inputs = json!({"text":{"type":"literal","value":"ABC"}});
+        let inputs = json!({"text":{"type":"literal","value":source}});
         let definition = json!({"schema_version":1,"id":id,"revision":0,"title":"Substitution hypothesis","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.substitution.encode","operation_version":1,"inputs":inputs,"parameters":parameters,"position":[0,0]}]});
         let (status, saved) = server.api("PUT", "/api/explorations", definition).await;
         assert_eq!(status, 200, "{saved}");
         let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.substitution.encode","operation_version":1,"inputs":inputs,"parameters":parameters,"exploration":{"id":id,"revision":1,"step":step}});
         let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
         assert_eq!(status, 200, "{result}");
-        assert_eq!(result["inline"]["data"]["text"], "CAB");
+        assert_eq!(result["inline"]["data"]["text"], expected);
     }
 }

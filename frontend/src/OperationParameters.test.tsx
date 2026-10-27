@@ -38,12 +38,26 @@ it.each(["cipher.substitution.encode", "cipher.substitution.decode"])(
     ).toEqual({ source: "ABC", target: "CAB" });
     await user.selectOptions(screen.getByLabelText("Parameter form"), "1");
     expect(screen.queryByLabelText(/^target/)).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Use empty text for keyword" }),
+    );
+    expect(
+      JSON.parse(
+        screen.getByLabelText("Configured parameters").textContent ?? "{}",
+      ).keyword,
+    ).toBe("");
     await user.type(screen.getByLabelText(/^keyword/), "CAB");
     expect(
       JSON.parse(
         screen.getByLabelText("Configured parameters").textContent ?? "{}",
       ),
     ).toEqual({ source: "ABC", keyword: "CAB", unmapped: "reject" });
+    await user.clear(screen.getByLabelText(/^keyword/));
+    expect(
+      JSON.parse(
+        screen.getByLabelText("Configured parameters").textContent ?? "{}",
+      ).keyword,
+    ).toBe("");
   },
 );
 

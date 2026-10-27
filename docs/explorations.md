@@ -15,6 +15,8 @@ Parameters and choices come from Core schemas. **Parameter form** selects an
 alternative contract, such as substitution by an explicit target alphabet or a
 keyword. Complex values use bounded JSON. Integers outside JavaScript's exact
 numeric range use decimal strings. Bytes use explicit Base64 objects.
+Use **Use empty text** to supply an intentional empty string. Clearing an existing
+text value also preserves an explicit empty string; an unset field stays absent.
 
 For text investigations, use `text.normalize` with an explicit Unicode form,
 `text.extract` with a scalar-index list or stride, and `text.statistics` for Core
