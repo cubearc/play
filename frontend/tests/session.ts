@@ -5,6 +5,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { startLocalServer } from "./global-setup";
+
 export { expect } from "@playwright/test";
 
 export async function openSection(page: Page, name: string) {
@@ -28,7 +30,25 @@ export async function openQuickTools(page: Page) {
 
 // API assertions use a separate client. Browser requests must prove that the
 // application itself supplies authorization; no test header is injected there.
-export const test = base.extend<{ api: APIRequestContext }>({
+export const test = base.extend<
+  { api: APIRequestContext },
+  { investigationServer: undefined }
+>({
+  investigationServer: [
+    async ({ browserName: _browserName }, use) => {
+      if (process.env.CUBE_PLAY_DOCKER_TEST_URL) {
+        await use(undefined);
+        return;
+      }
+      const stop = await startLocalServer();
+      try {
+        await use(undefined);
+      } finally {
+        await stop();
+      }
+    },
+    { scope: "worker", auto: true },
+  ],
   api: async ({ playwright }, use) => {
     const link = process.env.CUBE_PLAY_TEST_URL;
     if (!link) throw new Error("The local test session is unavailable.");

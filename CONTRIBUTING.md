@@ -92,7 +92,10 @@ Playwright suite against the real two-container workspace on desktop/mobile. It
 checks known-answer CLI output, errors, PTY resizing/closure, accessibility, previews,
 notes/conflicts, exports, RGB/palette counts, transforms/comparison, challenge import,
 progress and candidate association. It then recreates the containers and checks
-named artifacts, candidate revisions and SQLite recovery. Source hashes must remain
+named artifacts, candidate revisions and SQLite recovery. Desktop and mobile use
+separate fixture investigations within the production retention limits. Native
+browser workers likewise own their temporary server/data directories.
+Source hashes must remain
 unchanged. The native browser suite intentionally skips its two container-only PTY cases.
 
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and

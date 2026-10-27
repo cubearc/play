@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -314,7 +315,17 @@ fn main(){
                 (source / "over-limit.png").write_bytes(bytes(4 * 1024 * 1024 + 1))
                 source_hashes = {str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}
                 if (ROOT / "frontend/node_modules/.bin/playwright").exists():
-                    subprocess.run(["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(source)}, timeout=480, check=True)
+                    # Each project owns a private investigation instead of accumulating
+                    # both full suites against the unchanged 64-result retention limit.
+                    subprocess.run(["npm", "run", "test:e2e", "--", "--project", "chromium"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(source)}, timeout=480, check=True)
+                    mobile_parent = base / "mobile fixture"
+                    mobile_parent.mkdir()
+                    mobile_source = mobile_parent / source.name
+                    shutil.copytree(source, mobile_source)
+                    mobile_url = launch(mobile_source)
+                    authenticate(mobile_url)
+                    subprocess.run(["npm", "run", "test:e2e", "--", "--project", "mobile"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": mobile_url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(mobile_source)}, timeout=480, check=True)
+                    self.assertEqual({str(path.relative_to(mobile_source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in mobile_source.rglob("*") if path.is_file()}, source_hashes)
                 snapshot = files_api(origin, "/api/investigation")
                 save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
                 save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
