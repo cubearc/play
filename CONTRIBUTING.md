@@ -7,12 +7,10 @@ The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
 terminal. See [terminal boundaries](docs/terminal.md).
 Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
 Cargo consumes its exact-version library directly. The matching reference revision is
-`a8fc3c0842d7164c79292539fe762ffc04f13a15` (or a compatible descendant).
-CI checks out a pinned Cube revision beside Play. While Core is private,
-hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
-configured by a maintainer. No key enters application containers or build contexts.
-Source access and GitHub Actions billing are prerequisites for hosted checks;
-passing local tests do not imply CI passed.
+`07e58b4442dd9eeebfbc9ff4a2289c38ed6feaf7` (or a compatible descendant).
+CI checks out the public Cube repository at a pinned revision beside Play using
+HTTPS. No deploy key or cross-repository secret is required. Local checks and
+hosted CI record separate results; passing locally does not imply CI passed.
 
 ## Development
 
@@ -105,6 +103,15 @@ limits after asserting the production values; memory and descriptor exhaustion
 are also checked. It runs without a shell and never ships in the runtime image. The Docker `runner-tests`
 target reproduces them on macOS/Windows. Native API development does not start a
 host terminal; configure a private Linux runner socket explicitly when needed.
+The Docker smoke suite also runs a real CLI command while unrelated fixture
+processes share its UID, verifying that the container PID budget remains scoped.
+
+Windows background launches use a Windows-only safe process wrapper with an
+explicit handle list, since stable `std::process::Command` otherwise inherits
+unrelated handles even with standard streams redirected. They do not use a shell
+or elevation; this workspace continues to forbid unsafe code. The launcher
+integration test requires output EOF within 20 seconds while its chooser remains
+alive, then verifies chooser reuse.
 
 Rust integration tests also use a controlled Docker CLI fixture for unavailable
 engines, incompatible images, unsafe reuse, ownership failures, bounded output and

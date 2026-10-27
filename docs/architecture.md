@@ -95,12 +95,15 @@ checkout. Docker's `cube_engine` context contains workspace metadata, Core/CLI
 sources and the minimal Python member manifest/entry point needed by Cargo.
 Credentials, history, fixtures and build caches are excluded. Only compiled Rust
 binaries enter the runtime image.
-A maintainer must configure read-only source access for hosted CI while Core is private.
+Hosted CI checks out the public Core repository over HTTPS at a pinned revision.
 
 The [typed Lab API](lab-api.md) derives discovery from Core, resolves authorized
 inputs and executes one bounded operation in a short-lived backend worker. It
 terminates and reaps workers on timeout/cancellation; generated result bundles
 use the existing artifact volume, separate from source and private SQLite state.
+Bundle writes retain their directory capability until both files are flushed,
+then close it before the atomic publication rename. Recovery closes each pending
+directory before removing it, preserving Windows capability-handle semantics.
 
 Use the versioned direct `cube-core` dependency for algorithms, semantic types,
 validation and operation metadata. Descriptors describe functions, not universal

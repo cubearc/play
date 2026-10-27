@@ -12,6 +12,9 @@ use std::{
 
 use crate::{Error, Result};
 
+mod background;
+pub use background::{BackgroundChild, spawn_background};
+
 const OUTPUT_LIMIT: u64 = 256 * 1024;
 
 /// Search only absolute host PATH entries, never relative entries or workspace binaries.

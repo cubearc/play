@@ -90,10 +90,15 @@ cube play --offline ./investigation
 ```
 
 An installed runtime works without Cloud services or application image downloads.
+The chooser runs independently of the invoking CLI. Capturing launcher output
+returns after startup, while the chooser remains available for reuse. On Windows,
+background helpers receive no inherited caller handles or output pipes.
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 18 adds explicit terminal-to-Lab captures and field-based artifact
+Runtime revision 19 uses the verified container PID budget for Runner sessions,
+so unrelated host/browser processes sharing its UID do not prevent terminal startup.
+It retains revision 18's explicit terminal-to-Lab captures and field-based artifact
 connections. It includes the complete typed Core catalog, explicit per-run
 private inputs and private output retention. Private values and input fingerprints
 stay outside saved configurations and execution provenance. It retains immutable private solutions and their local final-value

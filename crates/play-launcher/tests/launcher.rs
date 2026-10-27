@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use std::{
     ffi::OsStr,
     fs,
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, atomic::AtomicBool},
@@ -49,7 +50,18 @@ fn compile_fixture(target: &Path) {
     assert!(command.status().unwrap().success());
 }
 
+#[track_caller]
 fn launch(fixture: &Path, home: &Path, workspace: &Path, executable: &Path) -> Command {
+    // Direct stderr keeps a stalled hosted process identifiable even while the
+    // test harness captures ordinary output. No paths or capabilities are logged.
+    let mut diagnostics = std::io::stderr().lock();
+    writeln!(
+        diagnostics,
+        "Launcher fixture at line {}: mode={}",
+        std::panic::Location::caller().line(),
+        fs::read_to_string(fixture.join("mode")).unwrap_or_default()
+    )
+    .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_cube-play"));
     command
         .current_dir(workspace)
@@ -77,6 +89,23 @@ fn error(command: &mut Command, code: &str) {
         )
     });
     assert_eq!(diagnostic["error"]["code"], code);
+}
+
+fn background_output(mut command: Command, home: &Path) -> std::process::Output {
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let reader = std::thread::spawn(move || {
+        let _ = send.send(command.output());
+    });
+    let output = receive
+        .recv_timeout(Duration::from_secs(20))
+        .unwrap_or_else(|error| {
+            // Release the fixture daemon's handles before reporting a regression.
+            let _ = play_launcher::host::stop(home);
+            panic!("Launcher output did not close while the chooser stayed alive: {error}");
+        })
+        .unwrap();
+    reader.join().unwrap();
+    output
 }
 
 #[test]
@@ -229,16 +258,12 @@ fn launch_contract_reuse_recovery_and_security_failures() {
     }
     fs::write(fixture.join("mode"), "").unwrap();
     let record = fixture.join("browser-record");
-    assert!(
-        launch(&fixture, &home, &source, &executable)
-            .arg("--offline")
-            .env("CUBE_PLAY_BROWSER", &executable)
-            .env("CUBE_PLAY_BROWSER_RECORD", &record)
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
+    let mut browser_launch = launch(&fixture, &home, &source, &executable);
+    browser_launch
+        .arg("--offline")
+        .env("CUBE_PLAY_BROWSER", &executable)
+        .env("CUBE_PLAY_BROWSER_RECORD", &record);
+    assert!(background_output(browser_launch, &home).status.success());
     let deadline = Instant::now() + Duration::from_secs(5);
     while !record.exists() {
         assert!(Instant::now() < deadline);
@@ -446,6 +471,9 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         cancelled: Arc::new(AtomicBool::new(false)),
     };
     for scenario in ["hang", "orphan-pipe"] {
+        let mut diagnostics = std::io::stderr().lock();
+        writeln!(diagnostics, "Host process cleanup: {scenario}").unwrap();
+        drop(diagnostics);
         let started = Instant::now();
         assert_eq!(
             process
