@@ -3,10 +3,12 @@ use play_launcher::{
     Error, Result, process,
     runtime::{self, Options as Args},
 };
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
-    process::{Command, ExitCode, Stdio},
+    process::ExitCode,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -16,14 +18,7 @@ use std::{
 fn open_browser(url: &str, workspace: &Path, home: &Path) -> Result<()> {
     if let Some(path) = std::env::var_os("CUBE_PLAY_BROWSER") {
         let browser = process::executable("", Some(PathBuf::from(path)), Some(workspace))?;
-        Command::new(browser)
-            .arg(url)
-            .current_dir(home)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(Error::io)?;
+        process::spawn_background(&browser, &[url.into()], home).map_err(Error::io)?;
         return Ok(());
     }
     #[cfg(target_os = "macos")]

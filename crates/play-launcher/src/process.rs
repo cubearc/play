@@ -12,6 +12,9 @@ use std::{
 
 use crate::{Error, Result};
 
+mod background;
+pub use background::{BackgroundChild, spawn_background};
+
 const OUTPUT_LIMIT: u64 = 256 * 1024;
 
 /// Search only absolute host PATH entries, never relative entries or workspace binaries.
@@ -83,22 +86,6 @@ fn drain(mut stream: impl Read) -> io::Result<(Vec<u8>, bool)> {
     Ok((output, exceeded))
 }
 
-fn terminate(child: &mut dyn process_wrap::std::ChildWrapper) {
-    #[cfg(windows)]
-    {
-        // Terminate the complete job, then reap its immediate process. The job
-        // wrapper's try_wait already consumes completion notifications; waiting
-        // for another notification after termination can block indefinitely.
-        let _ = child.start_kill();
-        let _ = child.inner_mut().wait();
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-}
-
 impl HostProcess {
     pub fn run(&self, args: &[&OsStr], cwd: &Path, timeout: Duration) -> Result<Output> {
         if self.cancelled.load(Ordering::Relaxed) {
@@ -139,7 +126,8 @@ impl HostProcess {
         let mut completed = None;
         let status = loop {
             if self.cancelled.load(Ordering::Relaxed) || Instant::now() >= deadline {
-                terminate(child.as_mut());
+                let _ = child.kill();
+                let _ = child.wait();
                 let _ = output_thread.join();
                 let _ = error_thread.join();
                 return Err(if self.cancelled.load(Ordering::Relaxed) {
@@ -155,7 +143,8 @@ impl HostProcess {
                 Ok(Some(status)) => completed = Some(status),
                 Ok(None) => std::thread::sleep(Duration::from_millis(30)),
                 Err(_) => {
-                    terminate(child.as_mut());
+                    let _ = child.kill();
+                    let _ = child.wait();
                     let _ = output_thread.join();
                     let _ = error_thread.join();
                     return Err(Error::new(

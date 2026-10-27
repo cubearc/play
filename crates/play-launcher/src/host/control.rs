@@ -1,16 +1,16 @@
 //! Private host-only control records. No control capability enters a container.
 use crate::{
-    Error, Result,
+    Error, Result, process,
     runtime::{self, Options},
     state,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    ffi::OsString,
     io::{Read, Write},
     net::{Ipv4Addr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -160,30 +160,26 @@ pub fn ensure(options: &Options, application: &str, cancelled: &Arc<AtomicBool>)
         }
         stop(&home)?;
     }
-    let mut command = Command::new(std::env::current_exe().map_err(Error::io)?);
-    command
-        .arg("--workspace-host")
-        .arg("--state-home")
-        .arg(&home)
-        .arg("--runtime-source")
-        .arg(runtime::runtime_source(options)?)
-        .current_dir(&home)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let mut arguments: Vec<OsString> = vec![
+        "--workspace-host".into(),
+        "--state-home".into(),
+        home.as_os_str().to_owned(),
+        "--runtime-source".into(),
+        runtime::runtime_source(options)?.into_os_string(),
+    ];
     if options.offline {
-        command.arg("--offline");
+        arguments.push("--offline".into());
     }
     if let Some(image) = &options.image {
-        command.arg("--image").arg(image);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
+        arguments.extend(["--image".into(), image.into()]);
     }
     let profile = Profile::new(options)?;
-    let mut child = command.spawn().map_err(Error::io)?;
+    let mut child = process::spawn_background(
+        &std::env::current_exe().map_err(Error::io)?,
+        &arguments,
+        &home,
+    )
+    .map_err(Error::io)?;
     let result = (|| {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -194,7 +190,7 @@ pub fn ensure(options: &Options, application: &str, cancelled: &Arc<AtomicBool>)
                     unavailable()
                 });
             }
-            if child.try_wait().map_err(Error::io)?.is_some() {
+            if child.has_exited().map_err(Error::io)? {
                 return Err(unavailable());
             }
             if let Some(control) = read(&home)?
@@ -207,8 +203,7 @@ pub fn ensure(options: &Options, application: &str, cancelled: &Arc<AtomicBool>)
         }
     })();
     if result.is_err() {
-        let _ = child.kill();
-        let _ = child.wait();
+        let _ = child.terminate();
     }
     result
 }

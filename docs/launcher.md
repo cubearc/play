@@ -90,6 +90,9 @@ cube play --offline ./investigation
 ```
 
 An installed runtime works without Cloud services or application image downloads.
+The chooser runs independently of the invoking CLI. Capturing launcher output
+returns after startup, while the chooser remains available for reuse. On Windows,
+background helpers receive no inherited caller handles or output pipes.
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.

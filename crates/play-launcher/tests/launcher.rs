@@ -91,6 +91,23 @@ fn error(command: &mut Command, code: &str) {
     assert_eq!(diagnostic["error"]["code"], code);
 }
 
+fn background_output(mut command: Command, home: &Path) -> std::process::Output {
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let reader = std::thread::spawn(move || {
+        let _ = send.send(command.output());
+    });
+    let output = receive
+        .recv_timeout(Duration::from_secs(20))
+        .unwrap_or_else(|error| {
+            // Release the fixture daemon's handles before reporting a regression.
+            let _ = play_launcher::host::stop(home);
+            panic!("Launcher output did not close while the chooser stayed alive: {error}");
+        })
+        .unwrap();
+    reader.join().unwrap();
+    output
+}
+
 #[test]
 fn launch_contract_reuse_recovery_and_security_failures() {
     let directory = tempfile::tempdir().unwrap();
@@ -241,16 +258,12 @@ fn launch_contract_reuse_recovery_and_security_failures() {
     }
     fs::write(fixture.join("mode"), "").unwrap();
     let record = fixture.join("browser-record");
-    assert!(
-        launch(&fixture, &home, &source, &executable)
-            .arg("--offline")
-            .env("CUBE_PLAY_BROWSER", &executable)
-            .env("CUBE_PLAY_BROWSER_RECORD", &record)
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
+    let mut browser_launch = launch(&fixture, &home, &source, &executable);
+    browser_launch
+        .arg("--offline")
+        .env("CUBE_PLAY_BROWSER", &executable)
+        .env("CUBE_PLAY_BROWSER_RECORD", &record);
+    assert!(background_output(browser_launch, &home).status.success());
     let deadline = Instant::now() + Duration::from_secs(5);
     while !record.exists() {
         assert!(Instant::now() < deadline);
