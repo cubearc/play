@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use std::{
     ffi::OsStr,
     fs,
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, atomic::AtomicBool},
@@ -49,7 +50,18 @@ fn compile_fixture(target: &Path) {
     assert!(command.status().unwrap().success());
 }
 
+#[track_caller]
 fn launch(fixture: &Path, home: &Path, workspace: &Path, executable: &Path) -> Command {
+    // Direct stderr keeps a stalled hosted process identifiable even while the
+    // test harness captures ordinary output. No paths or capabilities are logged.
+    let mut diagnostics = std::io::stderr().lock();
+    writeln!(
+        diagnostics,
+        "Launcher fixture at line {}: mode={}",
+        std::panic::Location::caller().line(),
+        fs::read_to_string(fixture.join("mode")).unwrap_or_default()
+    )
+    .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_cube-play"));
     command
         .current_dir(workspace)
@@ -446,6 +458,9 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         cancelled: Arc::new(AtomicBool::new(false)),
     };
     for scenario in ["hang", "orphan-pipe"] {
+        let mut diagnostics = std::io::stderr().lock();
+        writeln!(diagnostics, "Host process cleanup: {scenario}").unwrap();
+        drop(diagnostics);
         let started = Instant::now();
         assert_eq!(
             process

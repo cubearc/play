@@ -22,7 +22,9 @@ pub(super) fn prepare(path: &Path, source: &Path, imports: &Path) -> Result<(Pat
     {
         return Err(failed());
     }
-    let mut builder = fs::DirBuilder::new();
+    let builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    let mut builder = builder;
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
