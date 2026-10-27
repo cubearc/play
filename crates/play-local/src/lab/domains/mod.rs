@@ -1,4 +1,5 @@
 //! Explicit adapters call typed Core APIs; descriptors never dispatch algorithms.
+mod fraction;
 mod images;
 mod linear;
 mod mono;
@@ -11,9 +12,10 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
-    cube_core::ciphers::mono::OPERATIONS
-        .iter()
-        .any(|d| d.id == operation)
+    fraction::supported(operation)
+        || cube_core::ciphers::mono::OPERATIONS
+            .iter()
+            .any(|d| d.id == operation)
         || cube_core::ciphers::poly::OPERATIONS
             .iter()
             .any(|d| d.id == operation)
@@ -54,6 +56,7 @@ pub(super) fn execute(
             let input: String = field(&inputs, "input")?;
             Ok(json!({"output":cube_core::encoding::base58check::decode(&input)?}))
         }
+        _ if fraction::supported(operation) => fraction::execute(operation, inputs, parameters),
         _ if linear::supported(operation) => linear::execute(operation, inputs, parameters),
         _ if numbers::supported(operation) => numbers::execute(operation, inputs, parameters),
         _ if text::supported(operation) => text::execute(operation, inputs, parameters),

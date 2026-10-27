@@ -151,3 +151,16 @@ permit. They do not decode images, execute graphs or scan unrelated workspace fi
 Legacy result bundles and notes keep their original identifiers. Their history is
 unassigned to an exploration, and missing or redacted replay parameters remain
 unknown rather than being inferred from terminal text.
+
+The typed Core bridge also executes the bounded transposition/fractionation
+profiles: exact scalar rail/column/sequence/route/grille permutations and explicit
+coordinate/Morse hybrids. All 48 new operations retain canonical named ports;
+none requires a pipeline adapter to execute directly. Complete Columnar keeps
+`original_length`/`padding_count`, Cardan overlays retain `positions` and
+`original_selected`, and Morse returns separate `text`, `ciphertext`, `morse`,
+`padding_count` and `padding_ambiguous` fields. An unresolved Morse inverse has
+`text: null`; the structured viewer preserves this evidence without inventing
+plaintext. Parameters, source literals and artifact references are validated by
+Core schemas and the existing capability-gated worker. No network access or
+upload is introduced. See the pinned Core guide `docs/cipher-permutations.md`
+for exact keyword ties, shapes, route directions, alphabets and pad conventions.

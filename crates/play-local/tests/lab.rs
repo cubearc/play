@@ -1411,3 +1411,85 @@ async fn substitution_parameter_variants_are_saved_and_executed_by_the_real_name
         assert_eq!(result["inline"]["data"]["text"], expected);
     }
 }
+
+#[tokio::test]
+async fn transposition_fractionation_keep_evidence_across_real_worker_and_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let request = |op: &str, inputs: Value, parameters: Value| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":1,"inputs":inputs,"parameters":parameters});
+    let (status, encoded) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.rail_fence.encode",
+                json!({"text":{"type":"literal","value":"WEAREDISCOVEREDFLEEATONCE"}}),
+                json!({"rails":3,"initial_rail":0,"direction":"down"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(
+        encoded["inline"]["data"]["text"],
+        "WECRLTEERDSOEEFEAOCAIVDEN"
+    );
+    let id = encoded["result"]["id"].clone();
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (status, decoded) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.rail_fence.decode",
+                json!({"text":{"type":"artifact","id":id,"port":"text"}}),
+                json!({"rails":3,"initial_rail":0,"direction":"down"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{decoded}");
+    assert_eq!(
+        decoded["inline"]["data"]["text"],
+        "WEAREDISCOVEREDFLEEATONCE"
+    );
+    let (status, ambiguous) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.morbit.decode",
+                json!({"text":{"type":"literal","value":"1"}}),
+                json!({"digits":"123456789"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{ambiguous}");
+    assert!(ambiguous["inline"]["data"]["text"].is_null());
+    assert_eq!(ambiguous["inline"]["data"]["padding_ambiguous"], true);
+    let (status, exact) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.skip.encode",
+                json!({"text":{"type":"literal","value":"ABCDE"}}),
+                json!({"start":"0","step":"-9223372036854775808"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{exact}");
+    assert_eq!(exact["inline"]["data"]["text"], "ACEBD");
+    let (status, bad) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            request(
+                "cipher.skip.encode",
+                json!({"text":{"type":"literal","value":"ABCD"}}),
+                json!({"start":0,"step":2}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 400, "{bad}");
+}

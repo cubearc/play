@@ -1,0 +1,912 @@
+[
+  {
+    "function": "scytale_encode",
+    "operation": "cipher.scytale.encode",
+    "command": "scytale",
+    "parameters": {
+      "columns": 3
+    },
+    "inputs": {
+      "text": "ABCDEFGH"
+    },
+    "outputs": {
+      "text": "ADGBEHCF"
+    }
+  },
+  {
+    "function": "scytale_decode",
+    "operation": "cipher.scytale.decode",
+    "command": "scytale",
+    "parameters": {
+      "columns": 3
+    },
+    "inputs": {
+      "text": "ADGBEHCF"
+    },
+    "outputs": {
+      "text": "ABCDEFGH"
+    }
+  },
+  {
+    "function": "rail_fence_encode",
+    "operation": "cipher.rail_fence.encode",
+    "command": "rail-fence",
+    "parameters": {
+      "rails": 3,
+      "initial_rail": 0,
+      "direction": "down"
+    },
+    "inputs": {
+      "text": "WEAREDISCOVEREDFLEEATONCE"
+    },
+    "outputs": {
+      "text": "WECRLTEERDSOEEFEAOCAIVDEN"
+    }
+  },
+  {
+    "function": "rail_fence_decode",
+    "operation": "cipher.rail_fence.decode",
+    "command": "rail-fence",
+    "parameters": {
+      "rails": 3,
+      "initial_rail": 0,
+      "direction": "down"
+    },
+    "inputs": {
+      "text": "WECRLTEERDSOEEFEAOCAIVDEN"
+    },
+    "outputs": {
+      "text": "WEAREDISCOVEREDFLEEATONCE"
+    }
+  },
+  {
+    "function": "redefence_encode",
+    "operation": "cipher.redefence.encode",
+    "command": "redefence",
+    "parameters": {
+      "rails": 3,
+      "initial_rail": 0,
+      "direction": "down",
+      "order": [
+        2,
+        0,
+        1
+      ]
+    },
+    "inputs": {
+      "text": "ABCDEFGH"
+    },
+    "outputs": {
+      "text": "CGAEBDFH"
+    }
+  },
+  {
+    "function": "redefence_decode",
+    "operation": "cipher.redefence.decode",
+    "command": "redefence",
+    "parameters": {
+      "rails": 3,
+      "initial_rail": 0,
+      "direction": "down",
+      "order": [
+        2,
+        0,
+        1
+      ]
+    },
+    "inputs": {
+      "text": "CGAEBDFH"
+    },
+    "outputs": {
+      "text": "ABCDEFGH"
+    }
+  },
+  {
+    "function": "sequence_transposition_encode",
+    "operation": "cipher.sequence_transposition.encode",
+    "command": "sequence-transposition",
+    "parameters": {
+      "order": [
+        2,
+        0,
+        3,
+        1
+      ]
+    },
+    "inputs": {
+      "text": "A😀β!"
+    },
+    "outputs": {
+      "text": "βA!😀"
+    }
+  },
+  {
+    "function": "sequence_transposition_decode",
+    "operation": "cipher.sequence_transposition.decode",
+    "command": "sequence-transposition",
+    "parameters": {
+      "order": [
+        2,
+        0,
+        3,
+        1
+      ]
+    },
+    "inputs": {
+      "text": "βA!😀"
+    },
+    "outputs": {
+      "text": "A😀β!"
+    }
+  },
+  {
+    "function": "skip_encode",
+    "operation": "cipher.skip.encode",
+    "command": "skip",
+    "parameters": {
+      "start": "0",
+      "step": "-9223372036854775808"
+    },
+    "inputs": {
+      "text": "ABCDE"
+    },
+    "outputs": {
+      "text": "ACEBD"
+    }
+  },
+  {
+    "function": "skip_decode",
+    "operation": "cipher.skip.decode",
+    "command": "skip",
+    "parameters": {
+      "start": "0",
+      "step": "-9223372036854775808"
+    },
+    "inputs": {
+      "text": "ACEBD"
+    },
+    "outputs": {
+      "text": "ABCDE"
+    }
+  },
+  {
+    "function": "columnar_encode",
+    "operation": "cipher.columnar.encode",
+    "command": "columnar",
+    "parameters": {
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "ABCDEFGH"
+    },
+    "outputs": {
+      "text": "BEHCFADG"
+    }
+  },
+  {
+    "function": "columnar_decode",
+    "operation": "cipher.columnar.decode",
+    "command": "columnar",
+    "parameters": {
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "BEHCFADG"
+    },
+    "outputs": {
+      "text": "ABCDEFGH"
+    }
+  },
+  {
+    "function": "complete_columnar_encode",
+    "operation": "cipher.complete_columnar.encode",
+    "command": "complete-columnar",
+    "parameters": {
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      },
+      "padding": "X",
+      "original_length": 11
+    },
+    "inputs": {
+      "text": "FILLEDBLOCK"
+    },
+    "outputs": {
+      "text": "IELKLDOXFLBC",
+      "original_length": 11,
+      "padding_count": 1
+    }
+  },
+  {
+    "function": "complete_columnar_decode",
+    "operation": "cipher.complete_columnar.decode",
+    "command": "complete-columnar",
+    "parameters": {
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      },
+      "padding": "X",
+      "original_length": 11
+    },
+    "inputs": {
+      "text": "IELKLDOXFLBC"
+    },
+    "outputs": {
+      "text": "FILLEDBLOCK",
+      "original_length": 11,
+      "padding_count": 1
+    }
+  },
+  {
+    "function": "double_columnar_encode",
+    "operation": "cipher.double_columnar.encode",
+    "command": "double-columnar",
+    "parameters": {
+      "first": {
+        "kind": "keyword",
+        "text": "CAB"
+      },
+      "second": {
+        "kind": "keyword",
+        "text": "BA"
+      }
+    },
+    "inputs": {
+      "text": "ABCDEF"
+    },
+    "outputs": {
+      "text": "EFDBCA"
+    }
+  },
+  {
+    "function": "double_columnar_decode",
+    "operation": "cipher.double_columnar.decode",
+    "command": "double-columnar",
+    "parameters": {
+      "first": {
+        "kind": "keyword",
+        "text": "CAB"
+      },
+      "second": {
+        "kind": "keyword",
+        "text": "BA"
+      }
+    },
+    "inputs": {
+      "text": "EFDBCA"
+    },
+    "outputs": {
+      "text": "ABCDEF"
+    }
+  },
+  {
+    "function": "myszkowski_encode",
+    "operation": "cipher.myszkowski.encode",
+    "command": "myszkowski",
+    "parameters": {
+      "keyword": "BANANA"
+    },
+    "inputs": {
+      "text": "ABCDEFGHIJ"
+    },
+    "outputs": {
+      "text": "BDFHJAGCEI"
+    }
+  },
+  {
+    "function": "myszkowski_decode",
+    "operation": "cipher.myszkowski.decode",
+    "command": "myszkowski",
+    "parameters": {
+      "keyword": "BANANA"
+    },
+    "inputs": {
+      "text": "BDFHJAGCEI"
+    },
+    "outputs": {
+      "text": "ABCDEFGHIJ"
+    }
+  },
+  {
+    "function": "amsco_encode",
+    "operation": "cipher.amsco.encode",
+    "command": "amsco",
+    "parameters": {
+      "key": {
+        "kind": "permutation",
+        "order": [
+          1,
+          3,
+          2,
+          0,
+          4
+        ]
+      },
+      "initial_cell": 2,
+      "pattern": "aca"
+    },
+    "inputs": {
+      "text": "INCOMPLETECOLUMNARWITHALTERNATINGSINGLELETTERSANDDIGRAPHS"
+    },
+    "outputs": {
+      "text": "CECRTEGLENPHPLUTNANTEIOMOWIRSITDDSINTNALINESAALEMHATGLRGR"
+    }
+  },
+  {
+    "function": "amsco_decode",
+    "operation": "cipher.amsco.decode",
+    "command": "amsco",
+    "parameters": {
+      "key": {
+        "kind": "permutation",
+        "order": [
+          1,
+          3,
+          2,
+          0,
+          4
+        ]
+      },
+      "initial_cell": 2,
+      "pattern": "aca"
+    },
+    "inputs": {
+      "text": "CECRTEGLENPHPLUTNANTEIOMOWIRSITDDSINTNALINESAALEMHATGLRGR"
+    },
+    "outputs": {
+      "text": "INCOMPLETECOLUMNARWITHALTERNATINGSINGLELETTERSANDDIGRAPHS"
+    }
+  },
+  {
+    "function": "route_encode",
+    "operation": "cipher.route.encode",
+    "command": "route",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "fill": {
+        "kind": "rows",
+        "corner": "top_left"
+      },
+      "read": {
+        "kind": "columns",
+        "corner": "top_left"
+      }
+    },
+    "inputs": {
+      "text": "ABCDEF"
+    },
+    "outputs": {
+      "text": "ADBECF"
+    }
+  },
+  {
+    "function": "route_decode",
+    "operation": "cipher.route.decode",
+    "command": "route",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "fill": {
+        "kind": "rows",
+        "corner": "top_left"
+      },
+      "read": {
+        "kind": "columns",
+        "corner": "top_left"
+      }
+    },
+    "inputs": {
+      "text": "ADBECF"
+    },
+    "outputs": {
+      "text": "ABCDEF"
+    }
+  },
+  {
+    "function": "spiral_encode",
+    "operation": "cipher.spiral.encode",
+    "command": "spiral",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "fill": {
+        "kind": "rows",
+        "corner": "top_left"
+      },
+      "read": {
+        "kind": "clockwise",
+        "corner": "top_left"
+      }
+    },
+    "inputs": {
+      "text": "ABCDEF"
+    },
+    "outputs": {
+      "text": "ABCFED"
+    }
+  },
+  {
+    "function": "spiral_decode",
+    "operation": "cipher.spiral.decode",
+    "command": "spiral",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "fill": {
+        "kind": "rows",
+        "corner": "top_left"
+      },
+      "read": {
+        "kind": "clockwise",
+        "corner": "top_left"
+      }
+    },
+    "inputs": {
+      "text": "ABCFED"
+    },
+    "outputs": {
+      "text": "ABCDEF"
+    }
+  },
+  {
+    "function": "caesar_box_encode",
+    "operation": "cipher.caesar_box.encode",
+    "command": "caesar-box",
+    "parameters": {
+      "side": 2
+    },
+    "inputs": {
+      "text": "ABCD"
+    },
+    "outputs": {
+      "text": "ACBD"
+    }
+  },
+  {
+    "function": "caesar_box_decode",
+    "operation": "cipher.caesar_box.decode",
+    "command": "caesar-box",
+    "parameters": {
+      "side": 2
+    },
+    "inputs": {
+      "text": "ACBD"
+    },
+    "outputs": {
+      "text": "ABCD"
+    }
+  },
+  {
+    "function": "turning_grille_encode",
+    "operation": "cipher.turning_grille.encode",
+    "command": "turning-grille",
+    "parameters": {
+      "side": 4,
+      "holes": [
+        0,
+        7,
+        9,
+        11
+      ],
+      "orientations": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "inputs": {
+      "text": "THETURNINGGRILLE"
+    },
+    "outputs": {
+      "text": "TILUNRGHGELTENIR"
+    }
+  },
+  {
+    "function": "turning_grille_decode",
+    "operation": "cipher.turning_grille.decode",
+    "command": "turning-grille",
+    "parameters": {
+      "side": 4,
+      "holes": [
+        0,
+        7,
+        9,
+        11
+      ],
+      "orientations": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "inputs": {
+      "text": "TILUNRGHGELTENIR"
+    },
+    "outputs": {
+      "text": "THETURNINGGRILLE"
+    }
+  },
+  {
+    "function": "cardan_extract",
+    "operation": "cipher.cardan.extract",
+    "command": "cardan-extract",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "holes": [
+        0,
+        4
+      ]
+    },
+    "inputs": {
+      "text": "ABCDEF"
+    },
+    "outputs": {
+      "text": "AE"
+    }
+  },
+  {
+    "function": "cardan_overlay",
+    "operation": "cipher.cardan.overlay",
+    "command": "cardan-overlay",
+    "parameters": {
+      "rows": 2,
+      "columns": 3,
+      "holes": [
+        0,
+        4
+      ],
+      "replacements": "xy"
+    },
+    "inputs": {
+      "text": "ABCDEF"
+    },
+    "outputs": {
+      "text": "xBCDyF",
+      "positions": [
+        0,
+        4
+      ],
+      "original_selected": "AE"
+    }
+  },
+  {
+    "function": "bifid_encode",
+    "operation": "cipher.bifid.encode",
+    "command": "bifid",
+    "parameters": {
+      "square": "EXTRAKLMPOHWZQDGVUSIFCBYN",
+      "period": 7
+    },
+    "inputs": {
+      "text": "ODDPERIODSAREPOPULAR"
+    },
+    "outputs": {
+      "text": "MWEINGIMGEOYYRLVEYWY"
+    }
+  },
+  {
+    "function": "bifid_decode",
+    "operation": "cipher.bifid.decode",
+    "command": "bifid",
+    "parameters": {
+      "square": "EXTRAKLMPOHWZQDGVUSIFCBYN",
+      "period": 7
+    },
+    "inputs": {
+      "text": "MWEINGIMGEOYYRLVEYWY"
+    },
+    "outputs": {
+      "text": "ODDPERIODSAREPOPULAR"
+    }
+  },
+  {
+    "function": "trifid_encode",
+    "operation": "cipher.trifid.encode",
+    "command": "trifid",
+    "parameters": {
+      "alphabet": "EXTRAODINYBCFGHJKLMPQSUVWZ#",
+      "period": 10
+    },
+    "inputs": {
+      "text": "TRIFIDSAREFRACTIONATEDCIPHERS"
+    },
+    "outputs": {
+      "text": "EYMXVUCRYYYYEAYVYOVVXITDPATHE"
+    }
+  },
+  {
+    "function": "trifid_decode",
+    "operation": "cipher.trifid.decode",
+    "command": "trifid",
+    "parameters": {
+      "alphabet": "EXTRAODINYBCFGHJKLMPQSUVWZ#",
+      "period": 10
+    },
+    "inputs": {
+      "text": "EYMXVUCRYYYYEAYVYOVVXITDPATHE"
+    },
+    "outputs": {
+      "text": "TRIFIDSAREFRACTIONATEDCIPHERS"
+    }
+  },
+  {
+    "function": "adfgx_encode",
+    "operation": "cipher.adfgx.encode",
+    "command": "adfgx",
+    "parameters": {
+      "square": "ABCDEFGHIKLMNOPQRSTUVWXYZ",
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "ABC"
+    },
+    "outputs": {
+      "text": "AAAFAD"
+    }
+  },
+  {
+    "function": "adfgx_decode",
+    "operation": "cipher.adfgx.decode",
+    "command": "adfgx",
+    "parameters": {
+      "square": "ABCDEFGHIKLMNOPQRSTUVWXYZ",
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "AAAFAD"
+    },
+    "outputs": {
+      "text": "ABC"
+    }
+  },
+  {
+    "function": "adfgvx_encode",
+    "operation": "cipher.adfgvx.encode",
+    "command": "adfgvx",
+    "parameters": {
+      "square": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "AZ09"
+    },
+    "outputs": {
+      "text": "AVXVFADX"
+    }
+  },
+  {
+    "function": "adfgvx_decode",
+    "operation": "cipher.adfgvx.decode",
+    "command": "adfgvx",
+    "parameters": {
+      "square": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "key": {
+        "kind": "keyword",
+        "text": "CAB"
+      }
+    },
+    "inputs": {
+      "text": "AVXVFADX"
+    },
+    "outputs": {
+      "text": "AZ09"
+    }
+  },
+  {
+    "function": "nihilist_substitution_encode",
+    "operation": "cipher.nihilist_substitution.encode",
+    "command": "nihilist-substitution",
+    "parameters": {
+      "square": "SIMPLEABCDFGHKNOQRTUVWXYZ",
+      "key": "EASY"
+    },
+    "inputs": {
+      "text": "THEEARLYBIRD"
+    },
+    "outputs": {
+      "tokens": [
+        65,
+        55,
+        32,
+        75,
+        43,
+        65,
+        26,
+        108,
+        44,
+        34,
+        54,
+        79
+      ]
+    }
+  },
+  {
+    "function": "nihilist_substitution_decode",
+    "operation": "cipher.nihilist_substitution.decode",
+    "command": "nihilist-substitution",
+    "parameters": {
+      "square": "SIMPLEABCDFGHKNOQRTUVWXYZ",
+      "key": "EASY"
+    },
+    "inputs": {
+      "tokens": [
+        65,
+        55,
+        32,
+        75,
+        43,
+        65,
+        26,
+        108,
+        44,
+        34,
+        54,
+        79
+      ]
+    },
+    "outputs": {
+      "text": "THEEARLYBIRD"
+    }
+  },
+  {
+    "function": "bazeries_encode",
+    "operation": "cipher.bazeries.encode",
+    "command": "bazeries",
+    "parameters": {
+      "key": 3752,
+      "square": "THREOUSANDVFIYWBCGKLMPQXZ"
+    },
+    "inputs": {
+      "text": "SIMPLESUBSTITUTIONPLUSTRANSPOSITION"
+    },
+    "outputs": {
+      "text": "ACYYUXYMRQKXKCKGCRQIYITNKYXKCYGQGCI"
+    }
+  },
+  {
+    "function": "bazeries_decode",
+    "operation": "cipher.bazeries.decode",
+    "command": "bazeries",
+    "parameters": {
+      "key": 3752,
+      "square": "THREOUSANDVFIYWBCGKLMPQXZ"
+    },
+    "inputs": {
+      "text": "ACYYUXYMRQKXKCKGCRQIYITNKYXKCYGQGCI"
+    },
+    "outputs": {
+      "text": "SIMPLESUBSTITUTIONPLUSTRANSPOSITION"
+    }
+  },
+  {
+    "function": "fractionated_morse_encode",
+    "operation": "cipher.fractionated_morse.encode",
+    "command": "fractionated-morse",
+    "parameters": {
+      "alphabet": "ROUNDTABLECFGHIJKMPQSVWXYZ"
+    },
+    "inputs": {
+      "text": "COME AT ONCE"
+    },
+    "outputs": {
+      "text": "COME AT ONCE",
+      "ciphertext": "CBIILTMHVVFL",
+      "morse": "-.-.x---x--x.xx.-x-xx---x-.x-.-.x.xx",
+      "padding_count": 2,
+      "padding_ambiguous": false
+    }
+  },
+  {
+    "function": "fractionated_morse_decode",
+    "operation": "cipher.fractionated_morse.decode",
+    "command": "fractionated-morse",
+    "parameters": {
+      "alphabet": "ROUNDTABLECFGHIJKMPQSVWXYZ",
+      "padding_count": 2
+    },
+    "inputs": {
+      "text": "CBIILTMHVVFL"
+    },
+    "outputs": {
+      "text": "COME AT ONCE",
+      "ciphertext": "CBIILTMHVVFL",
+      "morse": "-.-.x---x--x.xx.-x-xx---x-.x-.-.x.xx",
+      "padding_count": 2,
+      "padding_ambiguous": false
+    }
+  },
+  {
+    "function": "morbit_encode",
+    "operation": "cipher.morbit.encode",
+    "command": "morbit",
+    "parameters": {
+      "digits": "958427136"
+    },
+    "inputs": {
+      "text": "ONCE UPON A TIME"
+    },
+    "outputs": {
+      "text": "ONCE UPON A TIME",
+      "ciphertext": "27435881512827465679378",
+      "morse": "---x-.x-.-.x.xx..-x.--.x---x-.xx.-xx-x..x--x.x",
+      "padding_count": 1,
+      "padding_ambiguous": false
+    }
+  },
+  {
+    "function": "morbit_decode",
+    "operation": "cipher.morbit.decode",
+    "command": "morbit",
+    "parameters": {
+      "digits": "958427136",
+      "padding_count": 1
+    },
+    "inputs": {
+      "text": "27435881512827465679378"
+    },
+    "outputs": {
+      "text": "ONCE UPON A TIME",
+      "ciphertext": "27435881512827465679378",
+      "morse": "---x-.x-.-.x.xx..-x.--.x---x-.xx.-xx-x..x--x.x",
+      "padding_count": 1,
+      "padding_ambiguous": false
+    }
+  },
+  {
+    "function": "pollux_encode",
+    "operation": "cipher.pollux.encode",
+    "command": "pollux",
+    "parameters": {
+      "classes": ".x-.x.--x."
+    },
+    "inputs": {
+      "text": "LUCK HELPS"
+    },
+    "outputs": {
+      "text": "LUCK HELPS",
+      "ciphertext": "023519064732586971403598013259406738590",
+      "morse": ".-..x..-x-.-.x-.-xx....x.x.-..x.--.x...",
+      "padding_count": 0,
+      "padding_ambiguous": false
+    }
+  },
+  {
+    "function": "pollux_decode",
+    "operation": "cipher.pollux.decode",
+    "command": "pollux",
+    "parameters": {
+      "classes": ".x-.x.--x."
+    },
+    "inputs": {
+      "text": "023519064732586971403598013259406738590"
+    },
+    "outputs": {
+      "text": "LUCK HELPS",
+      "ciphertext": "023519064732586971403598013259406738590",
+      "morse": ".-..x..-x-.-.x-.-xx....x.x.-..x.--.x...",
+      "padding_count": 0,
+      "padding_ambiguous": false
+    }
+  }
+]
