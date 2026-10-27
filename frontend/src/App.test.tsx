@@ -24,7 +24,7 @@ it.each(["file", "challenge"])(
         .mockResolvedValueOnce(
           Response.json({
             status: "ok",
-            version: "0.1.0",
+            version: "0.2.0",
             workspace: { id: "local-id", name: "Investigation 空" },
           }),
         ),
@@ -48,7 +48,7 @@ it("shows a launched workspace without pretending discovery has selected a file"
     vi.fn().mockResolvedValue(
       Response.json({
         status: "ok",
-        version: "0.1.0",
+        version: "0.2.0",
         workspace: { id: "local-id", name: "Investigation" },
       }),
     ),
@@ -60,14 +60,14 @@ it("shows a launched workspace without pretending discovery has selected a file"
 it("shows the real connection and version without external requests", async () => {
   const fetcher = vi
     .fn()
-    .mockResolvedValue(Response.json({ status: "ok", version: "0.1.0" }));
+    .mockResolvedValue(Response.json({ status: "ok", version: "0.2.0" }));
   vi.stubGlobal("fetch", fetcher);
   render(<App />);
   expect(
     screen.getByRole("heading", { level: 1, name: "Investigation workspace" }),
   ).toBeVisible();
   expect(await screen.findByText("Your connection is ready")).toBeVisible();
-  expect(screen.getByText("Cube Play 0.1.0")).toBeVisible();
+  expect(screen.getByText("Cube Play 0.2.0")).toBeVisible();
   expect(fetcher).toHaveBeenCalledWith(
     "/api/health",
     expect.objectContaining({ credentials: "omit" }),
@@ -86,7 +86,7 @@ it("recovers from a connection failure using the keyboard", async () => {
   const fetcher = vi
     .fn()
     .mockRejectedValueOnce(new Error("offline"))
-    .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.1.0" }));
+    .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.2.0" }));
   vi.stubGlobal("fetch", fetcher);
   const user = userEvent.setup();
   render(<App />);
@@ -126,7 +126,7 @@ it("accepts a fresh launcher capability while recovering in the same document", 
     .fn()
     .mockResolvedValueOnce(new Response(null, { status: 401 }))
     .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.1.0" }));
+    .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.2.0" }));
   vi.stubGlobal("fetch", fetcher);
   render(<App />);
   await screen.findByRole("button", { name: "Try again" });
@@ -141,7 +141,7 @@ it("keeps an active investigation mounted until the received session is explicit
   const fetcher = vi.fn(async (url: string) =>
     url === "/api/session"
       ? new Response(null, { status: 204 })
-      : Response.json({ status: "ok", version: "0.1.0" }),
+      : Response.json({ status: "ok", version: "0.2.0" }),
   );
   vi.stubGlobal("fetch", fetcher);
   const user = userEvent.setup();

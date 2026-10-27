@@ -19,8 +19,8 @@ private progress and explicit Lab-result candidate associations. Planning stays 
 
 ## Start an investigation
 
-The v0.1.0 acceptance scope uses the recorded macOS and Linux-container validation.
-Native Windows and WSL/Docker Desktop validation is deferred to
+Recorded validation covers native macOS checks and Linux-container workflows.
+Native Windows and WSL/Docker Desktop validation remains deferred to
 [the platform follow-up](https://github.com/cubearc/play/issues/24); the platform
 instructions describe intended behavior, not verified results in those environments.
 
@@ -122,3 +122,14 @@ newer. The host launcher manages ordinary-user startup and shutdown.
 See [CONTRIBUTING](CONTRIBUTING.md) for development and quality commands,
 [Architecture](docs/architecture.md) for boundaries, and [SECURITY](SECURITY.md)
 for vulnerability reporting. Licensed under [Apache-2.0](LICENSE).
+
+Build typed investigations in **Explorations**: choose named inputs, connect steps
+in Flow or keyboard-accessible Steps, explicitly select structured string fields,
+and revisit immutable execution attempts. Save a result with an artifact name to
+reuse its named outputs in another exploration. Private solutions preserve the
+chosen path and explanation without discarding alternative attempts.
+
+The optional terminal can publish supported computed results explicitly with
+`--lab-capture` and **Send to Lab**. Capture publication never reruns a command;
+unverified CLI provenance and missing replay inputs remain visible. See
+[typed explorations](docs/explorations.md) and [terminal publication](docs/terminal.md#send-a-computed-result-to-the-lab).

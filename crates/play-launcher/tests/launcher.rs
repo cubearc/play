@@ -55,7 +55,7 @@ fn launch(fixture: &Path, home: &Path, workspace: &Path, executable: &Path) -> C
         .current_dir(workspace)
         .env("CUBE_PLAY_HOME", home)
         .env("CUBE_PLAY_DOCKER", executable)
-        .env("CUBE_PLAY_IMAGE", "cube-play-local:0.1.0")
+        .env("CUBE_PLAY_IMAGE", "cube-play-local:0.2.0")
         .env(
             "CUBE_PLAY_FIXTURE_USER",
             play_launcher::docker::runtime_user().unwrap(),

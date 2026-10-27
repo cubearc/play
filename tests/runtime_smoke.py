@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -149,6 +150,11 @@ fn main(){
             subprocess.run(["rustc", "--edition=2024", str(probe_source), "-o", str(probe)], check=True, capture_output=True)
             picker = base / ("folder-picker.exe" if os.name == "nt" else "folder-picker")
             subprocess.run(["rustc", "--edition=2024", str(ROOT / "crates/play-launcher/tests/support/folder_picker.rs"), "-o", str(picker)], check=True, capture_output=True)
+            if sys.platform == "darwin":
+                # Fresh unsigned fixture executables can spend seconds in host
+                # validation before main; sign only our temporary test probes.
+                for executable in (probe, picker):
+                    subprocess.run(["codesign", "--force", "--sign", "-", str(executable)], check=True, capture_output=True)
             (base / "selection").write_text("")
             environment.update(CUBE_PLAY_BROWSER=str(probe), CUBE_PLAY_BROWSER_RECORD=str(record))
             environment.update(CUBE_PLAY_PICKER=str(picker), CUBE_PLAY_PICKER_FIXTURE=str(base))
@@ -313,6 +319,13 @@ fn main(){
                 save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
                 save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
                 named_before = files_api(origin, "/api/lab/library")
+                typed_before = files_api(origin, "/api/explorations")
+                typed_runs = {item["id"]: files_api(origin, "/api/explorations/" + item["id"] + "/executions") for item in typed_before["explorations"]}
+                captured = {entry["entry"]["id"]: files_api(origin, "/api/lab/results/" + entry["entry"]["id"]) for entry in named_before["entries"] if entry["record"] and entry["record"].get("metadata", {}).get("terminal_capture")}
+                if (ROOT / "frontend/node_modules/.bin/playwright").exists():
+                    self.assertTrue(captured)
+                for capture in captured.values():
+                    self.assertEqual(capture["result"]["metadata"]["terminal_capture"]["trust"], "unverified_cli_declaration")
                 solutions_before = files_api(origin, "/api/solutions")
                 self.assertTrue(solutions_before["solutions"])
                 solution_snapshots = {s["id"]: files_api(origin, "/api/solutions/" + s["id"])["solution"] for s in solutions_before["solutions"]}
@@ -353,6 +366,14 @@ fn main(){
                 self.assertEqual(recovered["title"], "Persistent case")
                 self.assertEqual(recovered["view"], saved_view)
                 self.assertEqual(files_api(recovered_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(recovered_origin, "/api/explorations"), typed_before)
+                for graph, runs in typed_runs.items():
+                    self.assertEqual(files_api(recovered_origin, "/api/explorations/" + graph + "/executions"), runs)
+                for artifact, capture in captured.items():
+                    self.assertEqual(files_api(recovered_origin, "/api/lab/results/" + artifact), capture)
+                    replay = files_api(recovered_origin, "/api/lab/results/" + artifact + "/replay")
+                    self.assertEqual(replay["status"], "gaps")
+                    self.assertTrue(any(gap["code"] == "cli_declaration" for gap in replay["gaps"]))
                 self.assertEqual(files_api(recovered_origin, "/api/solutions"), solutions_before)
                 self.assertEqual({key: files_api(recovered_origin, "/api/solutions/" + key)["solution"] for key in solution_snapshots}, solution_snapshots)
                 self.assertEqual(files_api(recovered_origin, "/api/challenges"), challenge_before)

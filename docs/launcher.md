@@ -87,7 +87,8 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 17 includes the complete typed Core catalog, explicit per-run
+Runtime revision 18 adds explicit terminal-to-Lab captures and field-based artifact
+connections. It includes the complete typed Core catalog, explicit per-run
 private inputs and private output retention. Private values and input fingerprints
 stay outside saved configurations and execution provenance. It retains immutable private solutions and their local final-value
 inspector, and notes linked to exact execution attempts and output ports.
@@ -118,7 +119,7 @@ separate from the SQLite investigation persistence capability.
 
 ## Platforms and permissions
 
-For v0.1.0, recorded validation covers native macOS checks and real Linux-container
+Recorded validation covers native macOS checks and real Linux-container
 workflows on Docker Desktop. The maintainer deferred native Windows and WSL/Docker
 Desktop testing on 2026-10-27. The Windows and WSL rows below describe intended
 behavior; validation remains open in [the platform follow-up](https://github.com/cubearc/play/issues/24).

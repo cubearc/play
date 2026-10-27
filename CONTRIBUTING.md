@@ -145,7 +145,12 @@ On Intel macOS, unsigned rebuilt native binaries can delay worker startup beyond
 the integration-test deadline. After building the exact executable under test,
 `codesign --force --sign - target/debug/play-local` applies a local ad-hoc signature
 without a signing identity or host security-policy change. Rebuilds replace it.
+Before rerunning Cargo, also sign its matching executable under `target/debug/deps`;
+Cargo can restore the final binary from that artifact.
 This is a native development diagnostic; the ordinary launcher uses Linux containers.
+The host API and runtime suites also ad-hoc sign their own temporary browser and
+folder-picker probes on macOS so host validation does not consume the UI response
+deadline.
 
 ## Changes and review
 

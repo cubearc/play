@@ -166,7 +166,10 @@ test("publishes exact CLI byte, image and report captures through their trusted 
       `image histogram /workspace/data/imports/${name} --channels red --max-colors 4 --json`,
     ],
   ]) {
-    await input.pressSequentially(`cube --lab-capture ${command}`);
+    // Exercise real key events without exceeding the existing 200-frame/s limit.
+    await input.pressSequentially(`cube --lab-capture ${command}`, {
+      delay: 10,
+    });
     await input.press("Enter");
     await expect
       .poll(async () => {
