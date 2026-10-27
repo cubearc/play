@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import {
   connect,
   type Health,
@@ -22,17 +22,19 @@ export default function App() {
     state: "connecting",
   });
   const [pendingLaunch, setPendingLaunch] = useState<LaunchLink | null>(null);
+  // A committed ready state must govern links even before passive effects run.
+  // Keep the listener installed while reading the latest connection state.
+  const receive = useEffectEvent(() => {
+    const link = takeLaunchLink();
+    if (!link.session && !link.selection) return;
+    if (connection.state !== "ready") setConnectionRequest(link);
+    else if (link.selection || link.session !== sessionToken())
+      setPendingLaunch(link);
+  });
   useEffect(() => {
-    const receive = () => {
-      const link = takeLaunchLink();
-      if (!link.session && !link.selection) return;
-      if (connection.state !== "ready") setConnectionRequest(link);
-      else if (link.selection || link.session !== sessionToken())
-        setPendingLaunch(link);
-    };
     window.addEventListener("hashchange", receive);
     return () => window.removeEventListener("hashchange", receive);
-  }, [connection.state]);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
