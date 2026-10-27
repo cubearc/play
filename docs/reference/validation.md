@@ -68,6 +68,15 @@ limits after asserting the production values; memory and descriptor exhaustion
 are also checked. It runs without a shell and never ships in the runtime image. The Docker `runner-tests`
 target reproduces them on macOS/Windows. Native API development does not start a
 host terminal; configure a private Linux runner socket explicitly when needed.
+The Docker smoke suite also runs a real CLI command while unrelated fixture
+processes share its UID, verifying that the container PID budget remains scoped.
+
+Windows background launches use a Windows-only safe process wrapper with an
+explicit handle list, since stable `std::process::Command` otherwise inherits
+unrelated handles even with standard streams redirected. They do not use a shell
+or elevation; this workspace continues to forbid unsafe code. The launcher
+integration test requires output EOF within 20 seconds while its chooser remains
+alive, then verifies chooser reuse.
 
 Rust integration tests also use a controlled Docker CLI fixture for unavailable
 engines, incompatible images, unsafe reuse, ownership failures, bounded output and

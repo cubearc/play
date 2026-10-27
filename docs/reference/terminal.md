@@ -21,8 +21,10 @@ escape handlers. It loads no remote addons or scripts.
 | Temporary storage | Private per-session directory in a 16 MiB noexec/nosuid tmpfs |
 
 The console also bounds command lines to 8 KiB/128 arguments, file descriptors to
-64, disables core dumps and applies a secondary per-user process limit. Process
-limits complement Docker cgroups. EOF, invalid frames, resource limits, connection
+64 and disables core dumps. A verified cgroup PID budget of at most 128 bounds
+processes within the container (the runtime uses 64). Without that scoped budget,
+the console applies a 128-process per-user limit. This avoids counting unrelated
+host/browser threads against a container's terminal budget. EOF, invalid frames, resource limits, connection
 loss and shutdown terminate the session and clean child processes. Working data
 and source files are retained. Docker and Landlock are defense in depth, not a
 claim of an absolute boundary against a compromised host/kernel.

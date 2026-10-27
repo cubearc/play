@@ -35,6 +35,8 @@ retries. Corrupt registry data, unexpected owners, changed images and unsafe con
 configuration fail clearly; the launcher never silently deletes state or broadens mounts.
 After an image update, stop that workspace explicitly before restarting it.
 
+On Windows, background helpers use an explicit handle list and inherit no caller handles or output pipes. The chooser remains independent of the invoking CLI.
+
 ## Runtime source and private state
 
 Source builds consume a trusted sibling Cube 0.18.0 checkout. Set
@@ -49,7 +51,7 @@ directories require owner-only access; existing shared directories and symlinked
 files are rejected. Registry writes are atomic. This small host configuration is
 separate from the SQLite investigation persistence capability.
 
-Runtime revision 18 requires the current typed operations, explicit terminal captures, retained results and field connections described in the [Lab API](../lab-api.md) and [explorations](../explorations.md). Older foundation images cannot satisfy that contract.
+Runtime revision 19 uses the verified container PID budget for Runner sessions, so unrelated host/browser processes sharing its UID do not prevent terminal startup. It retains the typed operations, explicit terminal captures, retained results and field connections described in the [Lab API](../lab-api.md) and [explorations](../explorations.md). Older foundation images cannot satisfy that contract.
 
 ## Platform boundaries
 

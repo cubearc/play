@@ -492,9 +492,6 @@ button:focus-visible {
   .connection-badge {
     font-size: 10px;
   }
-  .header-actions .connection-badge {
-    display: none;
-  }
   .welcome-panel {
     grid-template-columns: 1fr;
   }

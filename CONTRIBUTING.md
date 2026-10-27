@@ -22,7 +22,7 @@ cargo build --workspace --locked
 
 Browser, Docker, coverage and complete contract-conformance procedures are in [Contributor verification](docs/reference/validation.md). Keep the 80% Rust/frontend coverage gates, denied warnings and exact operation-ID checks intact.
 
-The checked-in CI workflow pins Cube and currently uses `CUBE_CORE_READ_KEY` for that checkout. Source/runtime containers receive no deploy key. Report local validation separately from hosted CI; a workflow definition does not establish a passing run.
+The [CI workflow](.github/workflows/ci.yml) checks out public Cube at a pinned revision over HTTPS; no deploy key or cross-repository secret is required. Report local validation separately from hosted CI; a workflow definition does not establish a passing run.
 
 ## Documentation
 
