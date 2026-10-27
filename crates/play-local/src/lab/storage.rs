@@ -32,12 +32,14 @@ fn private(path: &Path) -> Result<()> {
     Ok(())
 }
 fn create(path: &Path) -> Result<()> {
-    let mut builder = std::fs::DirBuilder::new();
+    let builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt;
+        let mut builder = builder;
         builder.mode(0o700);
-    }
+        builder
+    };
     match builder.create(path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -136,6 +138,7 @@ impl Storage {
             for file in files {
                 directory.remove_file(file).map_err(|_| Error::storage())?;
             }
+            drop(directory);
             self.root.remove_dir(name).map_err(|_| Error::storage())?;
         }
         Ok(())
@@ -334,6 +337,8 @@ impl Storage {
                     .and_then(|_| file.sync_all())
                     .map_err(|_| Error::storage())?;
             }
+            // Windows requires the staging directory handle to be closed before rename.
+            drop(directory);
             self.root
                 .rename(&pending, &self.root, &name)
                 .map_err(|_| Error::storage())?;
@@ -345,8 +350,10 @@ impl Storage {
             Ok(record)
         })();
         if saved.is_err() && self.root.symlink_metadata(&pending).is_ok() {
-            let _ = directory.remove_file("record.json");
-            let _ = directory.remove_file("value.bin");
+            if let Ok(directory) = self.root.open_dir(&pending) {
+                let _ = directory.remove_file("record.json");
+                let _ = directory.remove_file("value.bin");
+            }
             let _ = self.root.remove_dir(pending);
         }
         saved

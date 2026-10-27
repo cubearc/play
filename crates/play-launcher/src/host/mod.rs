@@ -269,8 +269,9 @@ async fn intent(State(host): State<Host>, request: Request) -> Response {
                 let Some(parent)=picker::choose(&host.home,true,cancelled.clone())? else{return Ok(json!({"schema_version":1,"cancelled":true}));};
                 let root=parent.join(name);
                 if root.starts_with(&host.home)||host.home.starts_with(&root){return Err(Error::new("unsafe_source","Choose a source directory separate from the private launcher state"));}
-                let mut builder=std::fs::DirBuilder::new();
-                #[cfg(unix)]{use std::os::unix::fs::DirBuilderExt;builder.mode(0o700);}
+                let builder=std::fs::DirBuilder::new();
+                #[cfg(unix)]
+                let builder={use std::os::unix::fs::DirBuilderExt;let mut builder=builder;builder.mode(0o700);builder};
                 builder.create(&root).map_err(|e|if e.kind()==std::io::ErrorKind::AlreadyExists{Error::new("folder_exists","This folder already exists. Use Open workspace or choose a different name; existing files were preserved.")}else{Error::io(e)})?;
                 root
             }

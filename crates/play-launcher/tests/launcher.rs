@@ -67,6 +67,21 @@ fn launch(fixture: &Path, home: &Path, workspace: &Path, executable: &Path) -> C
     command
 }
 
+fn chooser_output(mut command: Command, executable: &Path, record: &Path) -> std::process::Output {
+    command
+        .arg("--offline")
+        .env("CUBE_PLAY_BROWSER", executable)
+        .env("CUBE_PLAY_BROWSER_RECORD", record);
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _ = sender.send(command.output());
+    });
+    receiver
+        .recv_timeout(Duration::from_secs(20))
+        .expect("The chooser must release the launcher's captured output pipes")
+        .unwrap()
+}
+
 fn error(command: &mut Command, code: &str) {
     let output = command.output().unwrap();
     assert!(!output.status.success(), "unexpected success");
@@ -230,14 +245,13 @@ fn launch_contract_reuse_recovery_and_security_failures() {
     fs::write(fixture.join("mode"), "").unwrap();
     let record = fixture.join("browser-record");
     assert!(
-        launch(&fixture, &home, &source, &executable)
-            .arg("--offline")
-            .env("CUBE_PLAY_BROWSER", &executable)
-            .env("CUBE_PLAY_BROWSER_RECORD", &record)
-            .output()
-            .unwrap()
-            .status
-            .success()
+        chooser_output(
+            launch(&fixture, &home, &source, &executable),
+            &executable,
+            &record,
+        )
+        .status
+        .success()
     );
     let deadline = Instant::now() + Duration::from_secs(5);
     while !record.exists() {
@@ -249,14 +263,13 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();
     let chooser_registry = fs::read(home.join("workspaces.json")).unwrap();
     assert!(
-        launch(&fixture, &home, &source, &executable)
-            .arg("--offline")
-            .env("CUBE_PLAY_BROWSER", &executable)
-            .env("CUBE_PLAY_BROWSER_RECORD", &record)
-            .output()
-            .unwrap()
-            .status
-            .success()
+        chooser_output(
+            launch(&fixture, &home, &source, &executable),
+            &executable,
+            &record,
+        )
+        .status
+        .success()
     );
     let reused: Value =
         serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();
@@ -274,14 +287,13 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         fs::read(home.join("workspaces.json")).unwrap()
     );
     assert!(
-        launch(&fixture, &home, &source, &executable)
-            .arg("--offline")
-            .env("CUBE_PLAY_BROWSER", &executable)
-            .env("CUBE_PLAY_BROWSER_RECORD", &record)
-            .output()
-            .unwrap()
-            .status
-            .success()
+        chooser_output(
+            launch(&fixture, &home, &source, &executable),
+            &executable,
+            &record,
+        )
+        .status
+        .success()
     );
     let restarted: Value =
         serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();

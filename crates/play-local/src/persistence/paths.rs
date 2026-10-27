@@ -22,12 +22,14 @@ pub(super) fn prepare(path: &Path, source: &Path, imports: &Path) -> Result<(Pat
     {
         return Err(failed());
     }
-    let mut builder = fs::DirBuilder::new();
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt;
+        let mut builder = builder;
         builder.mode(0o700);
-    }
+        builder
+    };
     match fs::symlink_metadata(path) {
         Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
             return Err(failed());

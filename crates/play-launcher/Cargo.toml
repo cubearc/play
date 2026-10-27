@@ -31,6 +31,7 @@ nix = { version = "0.31.3", default-features = false, features = ["user"] }
 
 [target.'cfg(windows)'.dependencies]
 webbrowser = "1.2.5"
+winsafe = { version = "0.0.29", features = ["kernel"] }
 
 [lints]
 workspace = true

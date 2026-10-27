@@ -56,6 +56,12 @@ Each application lifetime records a session; graceful shutdown records its end,
 and the next start marks previously running sessions interrupted without inventing
 an end time. Browser credentials are ephemeral and never stored in SQLite.
 
+Lab results are published as complete bundles: write and sync both files in a
+private staging directory, close its handle, then rename the directory atomically.
+Closing directory handles before rename or recovery cleanup also allows native
+Windows to save results and remove abandoned staging directories. Source files
+and previously published bundles are never replaced during this process.
+
 Import publication orders its writes: stream to a private temporary file, sync the
 bytes, reserve a pending database reference, create the destination exclusively,
 sync the directory on Unix, then mark the reference ready. A disconnected client

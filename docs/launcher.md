@@ -118,17 +118,27 @@ separate from the SQLite investigation persistence capability.
 
 ## Platforms and permissions
 
-For v0.1.0, recorded validation covers native macOS checks and real Linux-container
-workflows on Docker Desktop. The maintainer deferred native Windows and WSL/Docker
-Desktop testing on 2026-10-27. The Windows and WSL rows below describe intended
-behavior; validation remains open in [the platform follow-up](https://github.com/cubearc/play/issues/24).
+The original v0.1.0 acceptance deferred Windows validation. Subsequent local
+checks on 2026-10-27 exercised native Windows/MSVC builds, Rust/API tests and
+Windows Chromium, plus real Linux containers on Docker Engine inside Ubuntu WSL.
+This Engine workflow does not require Docker Desktop. The Windows Docker Desktop
+named-pipe/shared-drive workflow remains a separate, untested configuration.
+[The platform follow-up](https://github.com/cubearc/play/issues/24) tracks integration
+and the exact scope of that evidence; local results do not establish hosted CI success.
 
 | Environment | Behavior |
 | --- | --- |
 | Linux local Engine | Uses the calling user's UID and primary GID in a non-root image; source ownership and modes remain unchanged. Use a normal account with Docker access. |
 | macOS Docker Desktop | Uses Linux containers and host UID/GID with Docker Desktop file sharing. Exact `/host_mnt` VM translations are recognized during recreation. Paths with spaces, Unicode and dollar signs remain literal. |
 | Windows Docker Desktop | Uses Linux containers through a local named-pipe context, an unprivileged runtime UID and explicit drive-path conversion. Use a local shared drive; UNC mounts are rejected. |
-| WSL | Run Cube, the launcher and Docker CLI inside the same WSL environment with Docker Desktop integration enabled. Windows/native and WSL installations have separate local registries. |
+| WSL | Run Cube, the launcher and Docker CLI inside the same WSL environment, using its local Docker Engine or Docker Desktop integration. Windows/native and WSL installations have separate local registries. |
+
+On Windows without Docker Desktop, install the Linux toolchain and Docker Engine
+inside WSL and run `cube play` from that distribution. The engine must provide the
+Landlock support required by the Runner. Windows drives can be selected through
+their WSL paths, such as `/mnt/d/investigation`. A native Windows executable does
+not gain access to the WSL Unix socket or Windows-to-Linux mount translation merely
+by installing the Windows Docker CLI; its local named-pipe connection is separate.
 
 Docker TCP/SSH contexts are rejected, including loopback TCP endpoints; use a local
 Unix socket or Docker Desktop named pipe. A filesystem root, special file or directory
@@ -161,6 +171,10 @@ and Cube waits for its conventional exit status. Ctrl+C/termination interrupts s
 kills owned host-command groups (Unix) or jobs (Windows), and stops a newly started
 owned runtime when necessary. Canceling reuse does not stop an existing investigation.
 An explicit `--stop` affects only the registered workspace and preserves its volumes.
+On Windows, the background workspace chooser starts without inheriting caller
+handles, so capturing the launcher's output does not wait for the chooser to
+close. Closing the invoking terminal does not require closing a ready chooser;
+`--stop-chooser` shuts it down explicitly without stopping investigations.
 
 The launcher starts/stops both owned containers and checks Runner privileges,
 network isolation, private mounts and health before reusing them. Runtime setup

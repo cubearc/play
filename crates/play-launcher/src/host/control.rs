@@ -1,4 +1,6 @@
 //! Private host-only control records. No control capability enters a container.
+#[cfg(windows)]
+mod windows;
 use crate::{
     Error, Result,
     runtime::{self, Options},
@@ -183,7 +185,10 @@ pub fn ensure(options: &Options, application: &str, cancelled: &Arc<AtomicBool>)
         command.creation_flags(0x08000000);
     }
     let profile = Profile::new(options)?;
+    #[cfg(not(windows))]
     let mut child = command.spawn().map_err(Error::io)?;
+    #[cfg(windows)]
+    let mut child = windows::spawn(&command).map_err(Error::io)?;
     let result = (|| {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
