@@ -63,6 +63,66 @@ pub(crate) struct Definition {
     pub steps: Vec<Step>,
 }
 impl Definition {
+    /// Check persisted structure without requiring the current operation version.
+    pub(super) fn validate_archive(&self) -> Result<()> {
+        if self.schema_version != 1
+            || self.id.get_version_num() != 4
+            || self.revision < 1
+            || self.title.trim().is_empty()
+            || self.title.len() > 512
+            || self.title.contains('\0')
+            || self.hypothesis.len() > 8192
+            || self.steps.len() > 64
+            || serde_json::to_vec(self)
+                .map_err(|_| super::invalid())?
+                .len()
+                > 65536
+        {
+            return Err(super::invalid());
+        }
+        let mut ids = BTreeSet::new();
+        for step in &self.steps {
+            if step.id.get_version_num() != 4
+                || !ids.insert(step.id)
+                || step.operation.is_empty()
+                || step.operation.len() > 128
+                || step.operation_version == 0
+                || step.inputs.len() > 32
+                || !step.parameters.is_object()
+                || step.private_parameters.len() > 32
+                || step
+                    .position
+                    .iter()
+                    .any(|p| !(-100000..=100000).contains(p))
+            {
+                return Err(super::invalid());
+            }
+            for (port, source) in &step.inputs {
+                if port.is_empty() || port.len() > 128 {
+                    return Err(super::invalid());
+                }
+                match source {
+                    Source::File {
+                        path,
+                        representation,
+                        ..
+                    } => {
+                        workspace::validate(path, false)?;
+                        if !matches!(representation.as_str(), "text" | "bytes" | "image") {
+                            return Err(super::invalid());
+                        }
+                    }
+                    Source::Artifact { id, port } | Source::Step { step: id, port } => {
+                        if id.get_version_num() != 4 || port.is_empty() || port.len() > 128 {
+                            return Err(super::invalid());
+                        }
+                    }
+                    Source::Literal { .. } => {}
+                }
+            }
+        }
+        Ok(())
+    }
     pub(super) fn validate(&self) -> Result<()> {
         if self.schema_version != 1
             || self.id.get_version_num() != 4

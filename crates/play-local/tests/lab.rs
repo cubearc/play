@@ -10,6 +10,141 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 #[tokio::test]
+async fn replay_checks_follow_actual_dependencies_and_report_changed_missing_and_private_inputs() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let source = directory.path().join("source/replay.txt");
+    std::fs::write(&source, b"original evidence").unwrap();
+    let graph = Uuid::new_v4();
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    let file = json!({"type":"file","store":"source","path":"replay.txt","representation":"text"});
+    let step = |id, input| json!({"id":id,"operation":"text.reverse","operation_version":1,"inputs":{"input":input},"parameters":{},"private_parameters":[],"position":[0,0]});
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Replay branch","hypothesis":"","scope":null,"steps":[step(a,file.clone()),step(b,json!({"type":"step","step":a,"port":"output"}))]});
+    let (status, saved) = server.api("PUT", "/api/explorations", definition).await;
+    assert_eq!(status, 200, "{saved}");
+    let invoke = |id, step, input| json!({"schema_version":2,"id":id,"operation":"text.reverse","operation_version":1,"inputs":{"input":input},"parameters":{},"exploration":{"id":graph,"revision":1,"step":step}});
+    let first = Uuid::new_v4();
+    let (status, result) = server
+        .api("POST", "/api/lab/v2/execute", invoke(first, a, file))
+        .await;
+    assert_eq!(status, 200, "{result}");
+    let second = Uuid::new_v4();
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(
+                second,
+                b,
+                json!({"type":"artifact","id":first,"port":"output"}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    let uri = format!("/api/lab/results/{second}/replay");
+    let (status, available) = server.api("GET", &uri, Value::Null).await;
+    assert_eq!(status, 200, "{available}");
+    assert_eq!(available["status"], "inputs_available");
+    assert_eq!(available["checked_artifacts"], 2);
+    std::fs::write(&source, b"changed original").unwrap();
+    let (_, changed) = server.api("GET", &uri, Value::Null).await;
+    assert!(
+        changed["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "source_changed")
+    );
+    assert_eq!(std::fs::read(&source).unwrap(), b"changed original");
+    std::fs::remove_file(&source).unwrap();
+    let (_, missing) = server.api("GET", &uri, Value::Null).await;
+    assert!(
+        missing["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "source_unavailable")
+    );
+    let (_, runs) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/{graph}/executions"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        runs.as_array().unwrap().len(),
+        2,
+        "Checks must not execute operations"
+    );
+    let private = Uuid::new_v4();
+    let (status, private_result) = server.api("POST", "/api/lab/v2/execute", json!({"schema_version":2,"id":private,"operation":"cipher.vigenere.encode","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABC"}},"parameters":{"key":"SECRET"},"retain_private_output":true})).await;
+    assert_eq!(status, 200, "{private_result}");
+    let (_, gaps) = server
+        .api(
+            "GET",
+            &format!("/api/lab/results/{private}/replay"),
+            Value::Null,
+        )
+        .await;
+    for code in ["private_parameters_required", "input_unavailable"] {
+        assert!(
+            gaps["gaps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|g| g["code"] == code),
+            "{gaps}"
+        );
+    }
+    assert!(!gaps.to_string().contains("SECRET"));
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, recovered) = server.api("GET", &uri, Value::Null).await;
+    assert_eq!(recovered["status"], "gaps");
+    let (status, retained) = server
+        .api("GET", &format!("/api/lab/results/{second}"), Value::Null)
+        .await;
+    assert_eq!(status, 200, "{retained}");
+    assert_eq!(retained["inline"], result["inline"]);
+    let record_path = directory
+        .path()
+        .join(format!("artifacts/lab/{first}/record.json"));
+    let original_record = std::fs::read(&record_path).unwrap();
+    let mut drifted: Value = serde_json::from_slice(&original_record).unwrap();
+    drifted["metadata"]["ports"][0]["schema_sha256"] = json!("0".repeat(64));
+    std::fs::write(&record_path, drifted.to_string()).unwrap();
+    let (_, drift) = server.api("GET", &uri, Value::Null).await;
+    assert!(
+        drift["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "contract_changed"),
+        "{drift}"
+    );
+    std::fs::write(&record_path, original_record).unwrap();
+    std::fs::write(
+        directory
+            .path()
+            .join(format!("artifacts/lab/{first}/value.bin")),
+        b"corrupted",
+    )
+    .unwrap();
+    let (_, corrupt) = server.api("GET", &uri, Value::Null).await;
+    assert!(
+        corrupt["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "artifact_unavailable"),
+        "{corrupt}"
+    );
+}
+
+#[tokio::test]
 async fn named_image_outputs_preserve_samples_multiple_ports_and_restart_references() {
     let directory = tempfile::tempdir().unwrap();
     let workspace = Uuid::new_v4();
@@ -147,13 +282,26 @@ impl Server {
             let _ = BufReader::new(stdout).read_line(&mut line);
             let _ = send.send(line);
         });
-        let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
-        let secret = line
-            .split("#session=")
-            .nth(1)
-            .expect("the real local server must print a session URL after startup")
-            .trim()
-            .to_owned();
+        let line = match receive.recv_timeout(Duration::from_secs(10)) {
+            Ok(line) => line,
+            Err(error) => {
+                let _ = process.kill();
+                let _ = process.wait();
+                panic!(
+                    "The real local server did not report readiness within ten seconds: {error}"
+                );
+            }
+        };
+        let Some(secret) = line.split("#session=").nth(1) else {
+            let status = process.try_wait();
+            let _ = process.kill();
+            let _ = process.wait();
+            panic!(
+                "The real local server failed before readiness ({status:?}): {}",
+                line.chars().take(1024).collect::<String>()
+            );
+        };
+        let secret = secret.trim().to_owned();
         Self {
             process,
             address,

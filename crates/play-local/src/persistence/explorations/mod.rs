@@ -11,7 +11,7 @@ use axum::{
     routing::get,
 };
 pub(crate) use model::Context;
-use model::{Definition, Source};
+pub(crate) use model::{Definition, Source};
 use serde_json::{Value, json};
 use sqlx::Row;
 use uuid::Uuid;
@@ -68,11 +68,32 @@ impl Database {
     async fn exploration(&self, id: Uuid, revision: i64) -> Result<Definition> {
         let encoded:String=sqlx::query_scalar("SELECT definition_json FROM exploration_configurations WHERE exploration_id=? AND revision=?").bind(id.to_string()).bind(revision).fetch_optional(&self.pool).await?.ok_or_else(invalid)?;
         let definition: Definition = serde_json::from_str(&encoded).map_err(|_| failed())?;
-        definition.validate().map_err(|_| failed())?;
+        definition.validate_archive().map_err(|_| failed())?;
         if definition.id != id || definition.revision != revision {
             return Err(failed());
         }
         Ok(definition)
+    }
+    /// Historical configuration remains readable after an operation changes.
+    pub(crate) async fn result_configuration(
+        &self,
+        result: Uuid,
+    ) -> Result<Option<(Definition, Uuid)>> {
+        let rows = sqlx::query("SELECT exploration_id,configuration_revision,step_id FROM exploration_executions WHERE status='succeeded' AND json_extract(evidence_json,'$.result_id')=? LIMIT 2")
+            .bind(result.to_string()).fetch_all(&self.pool).await?;
+        if rows.len() > 1 {
+            return Err(failed());
+        }
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        let id = Uuid::parse_str(row.try_get("exploration_id")?).map_err(|_| failed())?;
+        let step = Uuid::parse_str(row.try_get("step_id")?).map_err(|_| failed())?;
+        Ok(Some((
+            self.exploration(id, row.try_get("configuration_revision")?)
+                .await?,
+            step,
+        )))
     }
     async fn explorations(&self) -> Result<Vec<Definition>> {
         let rows = sqlx::query(

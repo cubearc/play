@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import type { Json, OperationResult } from "./exploration-api";
 import { histogram } from "./lab-api";
+import { ReplayStatus } from "./ReplayStatus";
 import { SavedResultActions } from "./SavedResultActions";
 import { TypedImage } from "./TypedImage";
 
@@ -128,6 +129,9 @@ export function TypedOutputs({ result }: { result: OperationResult }) {
         )}
       </details>
       {result.record.retained && <SavedResultActions result={result.record} />}
+      {result.record.retained && (
+        <ReplayStatus key={result.id} id={result.id} />
+      )}
     </section>
   );
 }

@@ -21,7 +21,12 @@ each request. For example, with an authenticated browser session:
 ```js
 const response = await fetch('/api/lab/execute', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  credentials: 'omit',
+  redirect: 'error',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${sessionStorage.getItem('cube-play-session-capability')}`,
+  },
   body: JSON.stringify({
     id: crypto.randomUUID(),
     operation: 'encoding.base64.decode',

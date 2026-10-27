@@ -67,6 +67,9 @@ test("chains real image decoding and channel outputs through typed ports", async
   await expect(
     outputs.getByLabel("Base64 byte output", { exact: true }),
   ).toHaveValue(Buffer.from([20, 230, 120, 40]).toString("base64"));
+  await expect(
+    outputs.getByRole("region", { name: "Replay availability", exact: true }),
+  ).toContainText("Recorded inputs are currently available.");
 });
 
 test("builds a typed substitution exploration and restores its immutable result", async ({
@@ -148,6 +151,9 @@ test("builds a typed substitution exploration and restores its immutable result"
   await expect(
     lab.getByRole("combobox", { name: "Output port", exact: true }),
   ).toHaveValue("text");
+  await expect(
+    lab.getByRole("region", { name: "Replay availability", exact: true }),
+  ).toContainText("Recorded inputs are currently available.");
   await expect(lab.getByText(/succeeded ·/)).toHaveCount(3);
   const response = await api.get("/api/explorations");
   expect(response.ok()).toBe(true);

@@ -19,6 +19,169 @@ struct Fixture {
     config: Config,
     running: Option<(Router, PersistenceHandle)>,
 }
+
+#[tokio::test]
+async fn populated_v01_migration_preserves_identities_notes_results_stages_and_candidate_revisions()
+{
+    let mut fixture = Fixture::new();
+    fixture.stop().await;
+    let migrations = tempfile::tempdir().unwrap();
+    for name in [
+        "0001_investigations.sql",
+        "0002_artifact_references.sql",
+        "0003_notebook.sql",
+        "0004_challenges.sql",
+        "0005_candidates.sql",
+    ] {
+        fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("migrations")
+                .join(name),
+            migrations.path().join(name),
+        )
+        .unwrap();
+    }
+    let state = fixture.path().parent().unwrap().to_path_buf();
+    fs::create_dir(&state).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let mut sql = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(fixture.path())
+            .create_if_missing(true)
+            .foreign_keys(true),
+    )
+    .await
+    .unwrap();
+    sqlx::migrate::Migrator::new(migrations.path())
+        .await
+        .unwrap()
+        .run(&mut sql)
+        .await
+        .unwrap();
+    let workspace = fixture.config.workspace.as_ref().unwrap().id;
+    let investigation = Uuid::new_v4().to_string();
+    let note = Uuid::new_v4().to_string();
+    let result = Uuid::new_v4().to_string();
+    let key = "c".repeat(64);
+    let manifest = json!({"kind":"cube-play-challenge","format_version":1,"id":"legacy-challenge","title":"Existing challenge","stages":[{"id":"first","title":"Existing stage","instructions":"Keep the evidence"}]});
+    let definition = json!({"key":key,"store":"source","path":"legacy.cube","manifest":manifest});
+    fs::write(
+        fixture
+            .config
+            .source_dir
+            .as_ref()
+            .unwrap()
+            .join("legacy.cube"),
+        manifest.to_string(),
+    )
+    .unwrap();
+    sqlx::query("INSERT INTO workspace VALUES(1,?,0)")
+        .bind(workspace.to_string())
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO investigation(singleton,id,workspace_id,title,created_ms,updated_ms) VALUES(1,?,?,'Existing case',0,0)").bind(&investigation).bind(workspace.to_string()).execute(&mut sql).await.unwrap();
+    sqlx::query("INSERT INTO notes(id,investigation_id,title,body,revision,updated_ms,target_json) VALUES(?,?,'Existing note','Exact private notes',4,0,?)").bind(&note).bind(&investigation).bind(r#"{"store":"source","path":"original.txt"}"#).execute(&mut sql).await.unwrap();
+    sqlx::query("INSERT INTO saved_results VALUES(?,?,'Existing named result',3,0)")
+        .bind(&result)
+        .bind(&investigation)
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO challenges VALUES(?,?,?,'first',2,0)")
+        .bind(&key)
+        .bind(&investigation)
+        .bind(definition.to_string())
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE investigation SET active_challenge=?")
+        .bind(&key)
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO progress VALUES(?,'first',?,'completed',3,0)")
+        .bind(&key)
+        .bind(&investigation)
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    let bytes = b"existing evidence";
+    let digest = cube_core::hashing::sha256(bytes);
+    for revision in 1..=2 {
+        let candidate = json!({"revision":revision,"result_id":result,"selection":{"kind":"whole"},"representation":"text","byte_size":bytes.len(),"sha256":digest,"artifact_sha256":digest,"artifact_operation":"text.reverse","core_version":"0.18.0","status":"private_unverified"});
+        sqlx::query("INSERT INTO candidates VALUES(?,'first',?,?,?,0)")
+            .bind(&key)
+            .bind(revision)
+            .bind(&result)
+            .bind(candidate.to_string())
+            .execute(&mut sql)
+            .await
+            .unwrap();
+    }
+    sql.close().await.unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(fixture.path(), fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let root = fixture.config.data_dir.as_ref().unwrap().parent().unwrap();
+    let artifacts = root.join("artifacts");
+    let bundle = artifacts.join("lab").join(&result);
+    fs::create_dir_all(&bundle).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for dir in [&artifacts, &artifacts.join("lab"), &bundle] {
+            fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+    let record = json!({"id":result,"workspace_id":workspace,"representation":"text","semantic_type":"text","byte_size":bytes.len(),"sha256":digest,"metadata":null,"provenance":{"operation":"text.reverse","adapter_api":1,"pipeline_adapter":null,"engine_api":1,"core_version":"0.18.0","parameters":[],"inputs":[],"created_ms":0}});
+    fs::write(bundle.join("record.json"), record.to_string()).unwrap();
+    fs::write(bundle.join("value.bin"), bytes).unwrap();
+    for _ in 0..2 {
+        fixture.start();
+        let (status, state) = fixture.get("/api/investigation").await;
+        assert_eq!(status, StatusCode::OK, "{state}");
+        assert_eq!(state["id"], investigation);
+        assert_eq!(state["workspace_id"], workspace.to_string());
+        assert_eq!(state["title"], "Existing case");
+        let (_, notes) = fixture.get("/api/investigation/notes").await;
+        assert_eq!(notes[0]["id"], note);
+        assert_eq!(notes[0]["revision"], 4);
+        assert_eq!(notes[0]["body"], "Exact private notes");
+        let (_, library) = fixture.get("/api/lab/library").await;
+        assert_eq!(library["entries"][0]["entry"]["id"], result);
+        assert_eq!(library["entries"][0]["entry"]["revision"], 3);
+        assert!(library["entries"][0]["error"].is_null());
+        let (_, challenge) = fixture.get("/api/challenges").await;
+        assert_eq!(challenge["active"]["definition"]["key"], key);
+        assert_eq!(challenge["active"]["revision"], 2);
+        assert_eq!(
+            challenge["active"]["progress"][0]["local_status"],
+            "completed"
+        );
+        let (_, candidates) = fixture
+            .get(&format!("/api/challenges/candidates?key={key}&stage=first"))
+            .await;
+        assert_eq!(candidates["history"].as_array().unwrap().len(), 2);
+        assert_eq!(candidates["candidate"]["revision"], 2);
+        assert!(candidates["error"].is_null(), "{candidates}");
+        let (_, replay) = fixture
+            .get(&format!("/api/lab/results/{result}/replay"))
+            .await;
+        assert_eq!(replay["gaps"][0]["code"], "legacy_history");
+        let (_, explorations) = fixture.get("/api/explorations").await;
+        assert_eq!(explorations["legacy_history"]["assignment"], "unassigned");
+        assert!(explorations["explorations"].as_array().unwrap().is_empty());
+        fixture.stop().await;
+    }
+    assert_eq!(fs::read(bundle.join("value.bin")).unwrap(), bytes);
+}
 impl Fixture {
     fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
@@ -916,6 +1079,40 @@ async fn exploration_revisions_privacy_recovery_and_storage_limits_preserve_lega
         )
         .unwrap(),
         b"original private source"
+    );
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn archived_configuration_remains_readable_when_its_contract_version_is_unavailable() {
+    let mut fixture = Fixture::new();
+    let (_, investigation) = fixture.get("/api/investigation").await;
+    let id = Uuid::new_v4();
+    let step = Uuid::new_v4();
+    let historical = json!({"schema_version":1,"id":id,"revision":1,"title":"Historical configuration","hypothesis":"Keep exact evidence","scope":null,"steps":[{"id":step,"operation":"text.reverse","operation_version":999,"inputs":{"input":{"type":"literal","value":"evidence"}},"parameters":{},"private_parameters":[],"position":[0,0]}]});
+    let mut sql = fixture.sql().await;
+    sqlx::query("INSERT INTO explorations VALUES(?,?,1,0,0)")
+        .bind(id.to_string())
+        .bind(investigation["id"].as_str().unwrap())
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO exploration_configurations VALUES(?,1,?,0)")
+        .bind(id.to_string())
+        .bind(historical.to_string())
+        .execute(&mut sql)
+        .await
+        .unwrap();
+    drop(sql);
+    fixture.stop().await;
+    fixture.start();
+    let (status, loaded) = fixture.get(&format!("/api/explorations/{id}")).await;
+    assert_eq!(status, StatusCode::OK, "{loaded}");
+    assert_eq!(loaded, historical);
+    assert_eq!(fixture.get("/api/explorations").await.0, StatusCode::OK);
+    assert_eq!(
+        fixture.put("/api/explorations", loaded).await.0,
+        StatusCode::BAD_REQUEST
     );
     fixture.stop().await;
 }

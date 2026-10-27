@@ -213,7 +213,7 @@ pub(super) fn run(mut worker: Worker) -> Result<WorkerOutput> {
         parameters,
     })
 }
-async fn resolve(
+pub(super) async fn resolve(
     app: &AppState,
     storage: Arc<storage::Storage>,
     binding: Binding,

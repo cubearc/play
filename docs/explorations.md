@@ -16,6 +16,15 @@ run without executing it again. The stored artifact identity, hash and named-por
 schemas must match the immutable execution evidence. Missing or private unretained
 outputs remain visible as history; reopening never replaces them or runs a repair.
 
+**Replay inputs** checks the retained dependency path when a typed result opens.
+It compares current authorized file bytes and named artifact values with their
+recorded digests, checks operation/schema identities and reports private parameters
+or unretained literals. Changed, missing or corrupt sources remain explicit gaps.
+**Check replay inputs again** repeats the check without executing an operation or
+copying originals. Available inputs do not establish determinism, an identical
+rerun or a correct solution. Historical configurations remain readable when their
+operation versions are unavailable; saving/running still requires current contracts.
+
 Use **Output port** to select a named result. Text remains inert, bytes retain
 explicit Base64 transport, and known histogram results offer a chart and semantic
 table. Other reports use a structured fallback; resembling a histogram does not
@@ -71,13 +80,21 @@ The original [Lab API](lab-api.md) remains available. Named-port clients use:
 - `GET /api/explorations/{id}` and `/executions`: reopen a configuration and its
   actual execution attempts. Completed attempts are immutable; interrupted runs
   are recovered explicitly on restart.
+- `GET /api/lab/results/{id}/replay`: inspect availability of a retained result's
+  actual inputs and dependencies. Returns schema version 1, `artifact_id`,
+  `status` (`inputs_available` or `gaps`), bounded check counters and typed gaps.
 
 For example, in an authenticated browser session:
 
 ```js
 const response = await fetch('/api/lab/v2/execute', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  credentials: 'omit',
+  redirect: 'error',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${sessionStorage.getItem('cube-play-session-capability')}`,
+  },
   body: JSON.stringify({
     schema_version: 2,
     id: crypto.randomUUID(),
@@ -125,6 +142,11 @@ each. Binary results reuse the existing 64-bundle / 64 MiB artifact budget. Quot
 errors preserve previous records; no evidence is silently evicted. Failed,
 cancelled and interrupted attempts retain their real status. Missing or corrupt
 artifacts fail explicitly, and historical references remain intact.
+
+Replay checks inspect at most 64 distinct retained bundles, stop at a cumulative
+64 MiB reading budget (one final bounded 4 MiB read may cross that threshold), and
+return at most 256 gaps. They use the existing authorized resolver and shared read
+permit. They do not decode images, execute graphs or scan unrelated workspace files.
 
 Legacy result bundles and notes keep their original identifiers. Their history is
 unassigned to an exploration, and missing or redacted replay parameters remain

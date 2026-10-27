@@ -3,6 +3,7 @@ mod candidates;
 mod domains;
 mod execute;
 mod library;
+mod replay;
 mod storage;
 mod typed;
 pub(crate) mod types;
@@ -76,6 +77,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/lab/executions/{id}", delete(cancel))
         .route("/lab/results/{id}", get(result))
         .route("/lab/results/{id}/content", get(content))
+        .route("/lab/results/{id}/replay", get(replay::inspect))
 }
 async fn catalog() -> Json<Value> {
     Json(
