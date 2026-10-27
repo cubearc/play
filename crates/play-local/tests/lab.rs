@@ -2655,3 +2655,126 @@ async fn structured_field_connections_preserve_selection_and_replay_without_coer
         selection
     );
 }
+
+fn same_fixture_value(actual: &Value, expected: &Value) -> bool {
+    match (actual, expected) {
+        (Value::Number(a), Value::Number(b)) if a.is_f64() || b.is_f64() => {
+            let a = a.as_f64().unwrap();
+            let b = b.as_f64().unwrap();
+            (a - b).abs() <= 1e-12 * a.abs().max(b.abs()).max(1.0)
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_fixture_value(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(k, a)| b.get(k).is_some_and(|b| same_fixture_value(a, b)))
+        }
+        _ => actual == expected,
+    }
+}
+#[tokio::test]
+async fn every_installed_operation_has_an_authorized_real_api_conformance_result() {
+    use std::collections::BTreeSet;
+    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    let ids: BTreeSet<_> = fixtures
+        .iter()
+        .map(|v| v["operation"].as_str().unwrap())
+        .collect();
+    let expected: BTreeSet<_> = cube_core::operations::catalog()
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(ids, expected);
+    assert_eq!(ids.len(), fixtures.len());
+    let mut report = Vec::new();
+    // Each fixture-owned investigation stays below existing retention quotas.
+    for batch in fixtures.chunks(32) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Server::start(directory.path(), Uuid::new_v4());
+        std::fs::write(directory.path().join("source/fixture.bin"), [0]).unwrap();
+        let (status, catalog) = server
+            .api("GET", "/api/lab/v2/operations", Value::Null)
+            .await;
+        assert_eq!(status, 200);
+        let operations = catalog["operations"].as_array().unwrap();
+        assert_eq!(
+            operations
+                .iter()
+                .map(|e| e["contract"]["operation"].as_str().unwrap())
+                .collect::<BTreeSet<_>>(),
+            expected
+        );
+        for fixture in batch {
+            let op = fixture["operation"].as_str().unwrap();
+            let entry = operations
+                .iter()
+                .find(|e| e["contract"]["operation"] == op)
+                .unwrap();
+            assert_eq!(entry["execution"]["available"], true, "{op}");
+            let c = cube_core::operations::require(op)
+                .unwrap()
+                .contract()
+                .unwrap();
+            assert_eq!(
+                fixture["contract_sha256"],
+                cube_core::hashing::sha256(&serde_json::to_vec(&c).unwrap()),
+                "{op}"
+            );
+            let mut inputs: serde_json::Map<String, Value> = fixture["inputs"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), json!({"type":"literal","value":v})))
+                .collect();
+            if op == "file.info.inspect" {
+                inputs.insert("input".into(),json!({"type":"file","store":"source","path":"fixture.bin","representation":"bytes"}));
+            }
+            let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":fixture["operation_version"],"inputs":inputs,"parameters":fixture["parameters"],"retain_private_output":true});
+            let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+            assert_eq!(status, 200, "{op}: {result}");
+            assert_eq!(result["retained"], true, "{op}");
+            let mut actual = if result["inline"]["type"] == "structured" {
+                result["inline"]["data"].clone()
+            } else {
+                let id = result["result"]["id"].as_str().unwrap();
+                server
+                    .api(
+                        "GET",
+                        &format!("/api/lab/results/{id}/content"),
+                        Value::Null,
+                    )
+                    .await
+                    .1
+            };
+            c.validate_outputs(&actual)
+                .unwrap_or_else(|e| panic!("{op}: {e}"));
+            if op == "file.info.inspect" {
+                actual["output"]["modified"] = Value::Null;
+                actual["output"]["created"] = Value::Null;
+            }
+            assert!(
+                same_fixture_value(&actual, &fixture["outputs"]),
+                "{op}: actual {actual} expected {}",
+                fixture["outputs"]
+            );
+            assert_eq!(
+                std::fs::read(directory.path().join("source/fixture.bin")).unwrap(),
+                [0]
+            );
+            report.push(json!({"operation":op,"operation_version":fixture["operation_version"],"contract_sha256":fixture["contract_sha256"],"authorized_api_execution":true,"exact_named_outputs":true,"ports":result["result"]["metadata"]["ports"],"result_sha256":result["result"]["sha256"]}));
+        }
+    }
+    assert_eq!(report.len(), expected.len());
+    let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(
+        target.join("play-operation-conformance.json"),
+        serde_json::to_vec_pretty(&report).unwrap(),
+    )
+    .unwrap();
+}

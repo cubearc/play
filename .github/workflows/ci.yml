@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3f8b4beec423704941bf8e4f3d7fc24d937bf32e
+          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3f8b4beec423704941bf8e4f3d7fc24d937bf32e
+          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -83,6 +83,12 @@ jobs:
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 80 --ignore-filename-regex '/tests/'
       - run: cargo llvm-cov report --lcov --output-path lcov.info --ignore-filename-regex '/tests/'
+      - name: Preserve exact typed API conformance evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: play-operation-conformance
+          path: play/target/play-operation-conformance.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: rust-coverage
@@ -104,7 +110,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3f8b4beec423704941bf8e4f3d7fc24d937bf32e
+          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
@@ -139,7 +145,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 3f8b4beec423704941bf8e4f3d7fc24d937bf32e
+          ref: a8fc3c0842d7164c79292539fe762ffc04f13a15
           path: cube
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false

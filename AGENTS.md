@@ -9,6 +9,8 @@
   named input/output schemas, generated reference, real conformance fixture and
   tested Play adapter/viewer handling. Catalog presence does not grant execution.
   Preserve direct-only operations and never duplicate metadata in the frontend.
+  The real API conformance matrix must execute every installed catalog ID and
+  match the reviewed Core fixture/version/schema identity; no count threshold.
 - Preserve loopback exposure, Host/Origin checks, local session authorization,
   read-only sources, bounded processing and no implicit network reporting. Never
   add a Docker socket, privileged container or automatic challenge execution.
