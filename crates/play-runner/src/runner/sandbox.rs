@@ -6,8 +6,27 @@ use landlock::{
 use nix::sys::resource::{Resource, setrlimit};
 use std::{io, path::Path};
 
+const PROCESS_LIMIT: u64 = 128;
+
+fn bounded_process_group(value: &str) -> bool {
+    value
+        .trim()
+        .parse::<u64>()
+        .is_ok_and(|limit| (1..=PROCESS_LIMIT).contains(&limit))
+}
+
+fn scoped_process_limit() -> bool {
+    // Kernel cgroup files are read before Landlock restricts filesystem access.
+    // Docker's PID budget counts this container, while RLIMIT_NPROC counts the
+    // host UID, including unrelated browsers and other workspaces.
+    ["/sys/fs/cgroup/pids.max", "/sys/fs/cgroup/pids/pids.max"]
+        .iter()
+        .any(|path| std::fs::read_to_string(path).is_ok_and(|value| bounded_process_group(&value)))
+}
+
 /// Called in the single-threaded console before threads or CLI children are created.
 pub(super) fn apply(config: &Config, temporary: &Path) -> io::Result<()> {
+    let scoped_process_limit = scoped_process_limit();
     let fail = || {
         io::Error::other(
             "Runner filesystem isolation is unavailable. Use a Linux kernel with Landlock ABI 3 and an enabled Landlock LSM; no unrestricted terminal was started.",
@@ -84,12 +103,15 @@ pub(super) fn apply(config: &Config, temporary: &Path) -> io::Result<()> {
     for (resource, limit) in [
         (Resource::RLIMIT_CORE, 0),
         (Resource::RLIMIT_NOFILE, 64),
-        (Resource::RLIMIT_NPROC, 128),
         (Resource::RLIMIT_AS, 256 * 1024 * 1024),
         (Resource::RLIMIT_FSIZE, 32 * 1024 * 1024),
         (Resource::RLIMIT_CPU, 20),
     ] {
         setrlimit(resource, limit, limit)
+            .map_err(|_| io::Error::other("Runner process limits could not be enforced"))?;
+    }
+    if !scoped_process_limit {
+        setrlimit(Resource::RLIMIT_NPROC, PROCESS_LIMIT, PROCESS_LIMIT)
             .map_err(|_| io::Error::other("Runner process limits could not be enforced"))?;
     }
     Ok(())
@@ -98,6 +120,23 @@ pub(super) fn apply(config: &Config, temporary: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn process_group_budget_must_be_explicit_positive_and_no_weaker_than_the_uid_budget() {
+        for value in [
+            "",
+            "max",
+            "0",
+            "129",
+            "-1",
+            "64 extra",
+            "18446744073709551616",
+        ] {
+            assert!(!bounded_process_group(value), "{value}");
+        }
+        for value in ["1", "64\n", "128"] {
+            assert!(bounded_process_group(value), "{value}");
+        }
+    }
     use nix::sys::resource::getrlimit;
     use std::process::Command;
 
@@ -157,6 +196,7 @@ mod tests {
         std::fs::write(&source, b"unchanged").unwrap();
         std::fs::write(&private, b"private").unwrap();
         std::os::unix::fs::symlink(&private, config.source.join("escape")).unwrap();
+        let scoped_process_limit = scoped_process_limit();
         apply(&config, &temporary).unwrap();
         assert_eq!(std::fs::read(&source).unwrap(), b"unchanged");
         for path in [&private, &config.source.join("escape")] {
@@ -176,7 +216,8 @@ mod tests {
             (256 * 1024 * 1024, 256 * 1024 * 1024)
         );
         assert_eq!(getrlimit(Resource::RLIMIT_CPU).unwrap(), (20, 20));
-        assert_eq!(getrlimit(Resource::RLIMIT_NPROC).unwrap(), (128, 128));
+        let process_limits = getrlimit(Resource::RLIMIT_NPROC).unwrap();
+        assert!(scoped_process_limit || process_limits == (128, 128));
         assert_eq!(
             getrlimit(Resource::RLIMIT_FSIZE).unwrap(),
             (32 * 1024 * 1024, 32 * 1024 * 1024)
@@ -196,7 +237,7 @@ mod tests {
         // RLIMIT_NPROC counts every process/thread owned by this UID, including
         // the hosted runner. A zero soft budget tests rejection independently
         // of its existing workload, after checking the production limit above.
-        setrlimit(Resource::RLIMIT_NPROC, 0, 128).unwrap();
+        setrlimit(Resource::RLIMIT_NPROC, 0, process_limits.1).unwrap();
         assert_eq!(
             Command::new(&config.cube)
                 .arg("exit")
@@ -205,7 +246,7 @@ mod tests {
                 .kind(),
             io::ErrorKind::WouldBlock
         );
-        setrlimit(Resource::RLIMIT_NPROC, 128, 128).unwrap();
+        setrlimit(Resource::RLIMIT_NPROC, process_limits.0, process_limits.1).unwrap();
         setrlimit(Resource::RLIMIT_FSIZE, 1024 * 1024, 32 * 1024 * 1024).unwrap();
         let status = Command::new(&config.cube)
             .arg("file")

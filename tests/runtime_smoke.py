@@ -428,6 +428,29 @@ fn main(){
                                 # Only these fresh fixture-owned projects and test volumes are removed.
                                 subprocess.run(["docker", "compose", "--project-name", f"cube-play-{identifier}", "--file", str(folder / "compose.json"), "--env-file", str(folder / "empty.env"), "down", "--volumes", "--remove-orphans"], env=environment, capture_output=True, timeout=60, check=True)
 
+    def test_terminal_budget_is_scoped_to_its_container_under_a_busy_uid(self):
+        image = self.compose("images", "--quiet", "play-local").strip()
+        companion = self.project + "-busy-uid"
+        isolated = ["--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true"]
+        # These fixed test-only sleepers reproduce unrelated browser/host threads
+        # sharing the mapped UID. They never enter the production runtime.
+        load = 'i=0; while [ "$i" -lt 140 ]; do sleep 90 & i=$((i+1)); done; echo ready; wait'
+        try:
+            subprocess.run(["docker", "run", "--detach", "--name", companion, *isolated, "--pids-limit", "192", "--memory", "128m", "--cpus", "1", "--entrypoint", "/bin/sh", image, "-c", load], check=True, capture_output=True, timeout=15)
+            deadline = time.monotonic() + 10
+            while True:
+                logs = subprocess.check_output(["docker", "logs", companion], timeout=5)
+                if b"ready" in logs:
+                    break
+                self.assertLess(time.monotonic(), deadline, "The busy-UID fixture did not start")
+                time.sleep(0.05)
+            console = 'mkdir -m 700 /tmp/console; export TMPDIR=/tmp/console; exec /usr/local/bin/cube-runner --console \'{"store":"source","path":""}\''
+            result = subprocess.run(["docker", "run", "--rm", "--interactive", *isolated, "--pids-limit", "64", "--memory", "256m", "--cpus", "1", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--entrypoint", "/bin/sh", image, "-c", console], input="cube encode base64 hello\nexit\n", capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("aGVsbG8=", result.stdout, result.stdout + result.stderr)
+        finally:
+            subprocess.run(["docker", "rm", "--force", companion], capture_output=True, timeout=15)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
