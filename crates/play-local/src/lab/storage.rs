@@ -138,6 +138,8 @@ impl Storage {
             for file in files {
                 directory.remove_file(file).map_err(|_| Error::storage())?;
             }
+            // Windows capability handles prevent renaming or deleting an open directory.
+            drop(directory);
             self.root.remove_dir(name).map_err(|_| Error::storage())?;
         }
         Ok(())
@@ -336,6 +338,12 @@ impl Storage {
                     .and_then(|_| file.sync_all())
                     .map_err(|_| Error::storage())?;
             }
+            Ok(())
+        })();
+        // Keep the pending directory pinned while writing, then release its handle
+        // before the atomic rename (required by cap-std on Windows).
+        drop(directory);
+        let saved = saved.and_then(|()| {
             self.root
                 .rename(&pending, &self.root, &name)
                 .map_err(|_| Error::storage())?;
@@ -345,10 +353,13 @@ impl Storage {
                 .and_then(|file| file.sync_all())
                 .map_err(|_| Error::storage())?;
             Ok(record)
-        })();
-        if saved.is_err() && self.root.symlink_metadata(&pending).is_ok() {
+        });
+        if saved.is_err()
+            && let Ok(directory) = self.root.open_dir(&pending)
+        {
             let _ = directory.remove_file("record.json");
             let _ = directory.remove_file("value.bin");
+            drop(directory);
             let _ = self.root.remove_dir(pending);
         }
         saved
@@ -418,6 +429,7 @@ mod tests {
             .join(format!("artifacts/lab/pending-{}", Uuid::new_v4()));
         std::fs::create_dir(&pending).unwrap();
         std::fs::write(pending.join("value.bin"), b"interrupted").unwrap();
+        std::fs::write(pending.join("record.json"), b"interrupted").unwrap();
         assert_eq!(store.history().unwrap().len(), 1);
         drop(store);
         let store = Storage::open(&config).unwrap();
