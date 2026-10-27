@@ -322,7 +322,7 @@ fn host_authority_is_separate_bounded_and_resolves_only_native_choices_or_regist
         host.request("GET", "/launcher.js", None, false, &[])
             .unwrap()
             .2
-            .contains("Your investigations")
+            .contains("Your workspaces")
     );
 }
 

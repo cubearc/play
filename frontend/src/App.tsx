@@ -65,7 +65,7 @@ export default function App() {
         Skip to content
       </a>
       <header className="app-header">
-        <a href="/" className="brand" aria-label="Cube Play home">
+        <a href="/" className="brand" aria-label="CubePlay home">
           <Brand />
         </a>
         {workspace && (
