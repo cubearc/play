@@ -31,41 +31,6 @@ fn check(root: &Dir, name: &str) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn staging_rejects_paths_links_special_files_and_excessive_counts_or_bytes() {
-        let temporary = tempfile::tempdir().unwrap();
-        let root = temporary.path().join("captures");
-        std::fs::create_dir(&root).unwrap();
-        std::fs::write(root.join("one.json"), b"exact bytes").unwrap();
-        assert_eq!(list(temporary.path()).unwrap(), ["one"]);
-        assert_eq!(read(temporary.path(), "one").unwrap(), b"exact bytes");
-        for id in ["../one", "/etc/passwd", "one.json", ""] {
-            assert!(read(temporary.path(), id).is_err());
-        }
-        std::os::unix::fs::symlink(root.join("one.json"), root.join("link.json")).unwrap();
-        assert!(read(temporary.path(), "link").is_err());
-        assert!(list(temporary.path()).is_err());
-        std::fs::remove_file(root.join("link.json")).unwrap();
-        std::fs::hard_link(root.join("one.json"), root.join("hard.json")).unwrap();
-        assert!(read(temporary.path(), "hard").is_err());
-        std::fs::remove_file(root.join("hard.json")).unwrap();
-        std::fs::write(root.join("large.json"), vec![0; CAPTURE_LIMIT + 1]).unwrap();
-        assert!(read(temporary.path(), "large").is_err());
-        std::fs::remove_file(root.join("large.json")).unwrap();
-        for i in 0..16 {
-            std::fs::write(root.join(format!("id-{i}.json")), b"small").unwrap();
-        }
-        assert!(list(temporary.path()).is_err());
-        let elsewhere = tempfile::tempdir().unwrap();
-        std::fs::rename(&root, temporary.path().join("old-captures")).unwrap();
-        std::os::unix::fs::symlink(elsewhere.path(), &root).unwrap();
-        assert!(list(temporary.path()).is_err());
-        assert!(read(temporary.path(), "one").is_err());
-    }
-}
 pub(super) fn list(temporary: &Path) -> io::Result<Vec<String>> {
     let root = root(temporary)?;
     let mut ids = Vec::new();
@@ -111,4 +76,40 @@ pub(super) fn read(temporary: &Path, id: &str) -> io::Result<Vec<u8>> {
         return Err(denied());
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn staging_rejects_paths_links_special_files_and_excessive_counts_or_bytes() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().join("captures");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("one.json"), b"exact bytes").unwrap();
+        assert_eq!(list(temporary.path()).unwrap(), ["one"]);
+        assert_eq!(read(temporary.path(), "one").unwrap(), b"exact bytes");
+        for id in ["../one", "/etc/passwd", "one.json", ""] {
+            assert!(read(temporary.path(), id).is_err());
+        }
+        std::os::unix::fs::symlink(root.join("one.json"), root.join("link.json")).unwrap();
+        assert!(read(temporary.path(), "link").is_err());
+        assert!(list(temporary.path()).is_err());
+        std::fs::remove_file(root.join("link.json")).unwrap();
+        std::fs::hard_link(root.join("one.json"), root.join("hard.json")).unwrap();
+        assert!(read(temporary.path(), "hard").is_err());
+        std::fs::remove_file(root.join("hard.json")).unwrap();
+        std::fs::write(root.join("large.json"), vec![0; CAPTURE_LIMIT + 1]).unwrap();
+        assert!(read(temporary.path(), "large").is_err());
+        std::fs::remove_file(root.join("large.json")).unwrap();
+        for i in 0..16 {
+            std::fs::write(root.join(format!("id-{i}.json")), b"small").unwrap();
+        }
+        assert!(list(temporary.path()).is_err());
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::fs::rename(&root, temporary.path().join("old-captures")).unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), &root).unwrap();
+        assert!(list(temporary.path()).is_err());
+        assert!(read(temporary.path(), "one").is_err());
+    }
 }

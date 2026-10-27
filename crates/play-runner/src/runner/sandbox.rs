@@ -193,13 +193,17 @@ mod tests {
         let status = Command::new(&config.cube).arg("cpu").status().unwrap();
         assert_eq!(status.signal(), Some(nix::libc::SIGXCPU));
         setrlimit(Resource::RLIMIT_CPU, 20, 20).unwrap();
-        setrlimit(Resource::RLIMIT_NPROC, 32, 128).unwrap();
-        assert!(
+        // RLIMIT_NPROC counts every process/thread owned by this UID, including
+        // the hosted runner. A zero soft budget tests rejection independently
+        // of its existing workload, after checking the production limit above.
+        setrlimit(Resource::RLIMIT_NPROC, 0, 128).unwrap();
+        assert_eq!(
             Command::new(&config.cube)
-                .arg("processes")
-                .status()
-                .unwrap()
-                .success()
+                .arg("exit")
+                .output()
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::WouldBlock
         );
         setrlimit(Resource::RLIMIT_NPROC, 128, 128).unwrap();
         setrlimit(Resource::RLIMIT_FSIZE, 1024 * 1024, 32 * 1024 * 1024).unwrap();

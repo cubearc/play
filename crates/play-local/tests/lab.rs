@@ -989,6 +989,72 @@ async fn named_image_outputs_preserve_samples_multiple_ports_and_restart_referen
         channel["result"]["metadata"]
     );
 }
+// Read HTTP message framing instead of waiting for a clean TCP EOF. An early
+// rejection may close with unread request bytes and reset an otherwise complete
+// response on Linux; requests must never be retried to hide that transport race.
+fn complete_response(response: &[u8]) -> bool {
+    let Some(split) = response.windows(4).position(|w| w == b"\r\n\r\n") else {
+        return false;
+    };
+    let Ok(head) = std::str::from_utf8(&response[..split]) else {
+        return false;
+    };
+    let body = &response[split + 4..];
+    let header = |name: &str| {
+        head.lines()
+            .skip(1)
+            .filter_map(|line| line.split_once(':'))
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.trim())
+    };
+    if let Some(length) = header("content-length") {
+        return length
+            .parse::<usize>()
+            .is_ok_and(|length| body.len() >= length);
+    }
+    if header("transfer-encoding") == Some("chunked") {
+        let mut rest = body;
+        loop {
+            let Some(line) = rest.windows(2).position(|w| w == b"\r\n") else {
+                return false;
+            };
+            let Some(length) = std::str::from_utf8(&rest[..line])
+                .ok()
+                .and_then(|line| usize::from_str_radix(line, 16).ok())
+            else {
+                return false;
+            };
+            rest = &rest[line + 2..];
+            if length == 0 {
+                return rest.starts_with(b"\r\n");
+            }
+            let Some(end) = length.checked_add(2) else {
+                return false;
+            };
+            if rest.get(length..end) != Some(b"\r\n") {
+                return false;
+            }
+            rest = &rest[end..];
+        }
+    }
+    matches!(head.split_whitespace().nth(1), Some("204" | "304"))
+}
+
+#[test]
+fn http_fixture_requires_a_complete_framed_response() {
+    for response in [
+        b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc".as_slice(),
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\n1\r\nc\r\n0\r\n\r\n"
+            .as_slice(),
+        b"HTTP/1.1 204 No Content\r\n\r\n".as_slice(),
+    ] {
+        for end in 0..response.len() {
+            assert!(!complete_response(&response[..end]));
+        }
+        assert!(complete_response(response));
+    }
+}
+
 struct Server {
     process: Child,
     address: String,
@@ -1089,13 +1155,31 @@ impl Server {
             self.address,
             body.len()
         );
-        socket.write_all(head.as_bytes()).await.unwrap();
-        socket.write_all(body).await.unwrap();
+        let mut request = head.into_bytes();
+        request.extend_from_slice(body);
+        socket.write_all(&request).await.unwrap();
         let mut response = Vec::new();
-        tokio::time::timeout(Duration::from_secs(12), socket.read_to_end(&mut response))
-            .await
-            .unwrap_or_else(|_| panic!("{method} {path} exceeded the real HTTP deadline"))
-            .unwrap();
+        tokio::time::timeout(Duration::from_secs(12), async {
+            let mut chunk = [0; 8192];
+            loop {
+                let count = socket.read(&mut chunk).await?;
+                if count == 0 {
+                    break;
+                }
+                response.extend_from_slice(&chunk[..count]);
+                if complete_response(&response) {
+                    break;
+                }
+            }
+            Ok::<_, std::io::Error>(())
+        })
+        .await
+        .unwrap_or_else(|_| panic!("{method} {path} exceeded the real HTTP deadline"))
+        .unwrap();
+        assert!(
+            complete_response(&response),
+            "{method} {path} was truncated"
+        );
         let split = response.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
         let head = std::str::from_utf8(&response[..split]).unwrap();
         let status = head.split_whitespace().nth(1).unwrap().parse().unwrap();
@@ -1120,9 +1204,12 @@ impl Server {
         (status, body)
     }
     async fn api(&self, method: &str, path: &str, body: Value) -> (u16, Value) {
-        let (status, body) = self
-            .raw(method, path, &serde_json::to_vec(&body).unwrap(), true)
-            .await;
+        let bytes = if method == "GET" && body.is_null() {
+            Vec::new()
+        } else {
+            serde_json::to_vec(&body).unwrap()
+        };
+        let (status, body) = self.raw(method, path, &bytes, true).await;
         (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
     }
     async fn execute(&self, operation: &str, input: Value, parameters: Value) -> (u16, Value) {
