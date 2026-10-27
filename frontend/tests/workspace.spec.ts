@@ -163,6 +163,7 @@ test("restores investigation name and file selection across browser reload", asy
   page,
 }) => {
   const name = `Case ${test.info().project.name}`;
+  await page.getByText("Rename", { exact: true }).click();
   await page.getByLabel("Investigation name").fill(name);
   const renamed = page.waitForResponse(
     (response) =>

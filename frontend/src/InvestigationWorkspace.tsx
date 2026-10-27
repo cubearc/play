@@ -126,6 +126,7 @@ function SavedWorkspace({
   );
   const [titleRevision, setTitleRevision] = useState(investigation.revision);
   const [renaming, setRenaming] = useState(false);
+  const renameDetails = useRef<HTMLDetailsElement | null>(null);
   useEffect(() => {
     if (title === savedTitle && !renaming) return;
     const guard = (event: BeforeUnloadEvent) => {
@@ -215,6 +216,10 @@ function SavedWorkspace({
       if (active.current) {
         setTitleRevision(revision);
         setSavedTitle(title);
+        if (renameDetails.current) {
+          renameDetails.current.open = false;
+          renameDetails.current.querySelector("summary")?.focus();
+        }
       }
     } catch (error) {
       if (active.current)
@@ -230,23 +235,30 @@ function SavedWorkspace({
   return (
     <>
       <section className="investigation-state" aria-label="Saved investigation">
-        <form onSubmit={rename}>
-          <label htmlFor="investigation-name">Investigation name</label>
-          <input
-            id="investigation-name"
-            required
-            maxLength={512}
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <button
-            type="submit"
-            className="button secondary"
-            disabled={renaming}
-          >
-            {renaming ? "Saving name…" : "Save name"}
-          </button>
-        </form>
+        <details ref={renameDetails} className="investigation-rename">
+          <summary>
+            <span className="investigation-caption">Investigation</span>
+            <strong>{savedTitle}</strong>
+            <span className="rename-hint">Rename</span>
+          </summary>
+          <form onSubmit={rename}>
+            <label htmlFor="investigation-name">Investigation name</label>
+            <input
+              id="investigation-name"
+              required
+              maxLength={512}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <button
+              type="submit"
+              className="button secondary"
+              disabled={renaming}
+            >
+              {renaming ? "Saving name…" : "Save name"}
+            </button>
+          </form>
+        </details>
         {investigation.interrupted_sessions > 0 && (
           <p>
             Previous investigation data recovered after an interrupted session.

@@ -8,34 +8,13 @@ import {
 } from "./api";
 import { sessionToken } from "./capability";
 import { chooserOrigin } from "./chooser-origin";
+import { Brand } from "./InterfaceIcon";
 import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
 type Connection =
   | { state: "connecting" }
   | { state: "ready"; health: Health }
   | { state: "error"; message: string };
-
-function CubeMark({ large = false }: { large?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      aria-hidden="true"
-      className={large ? "cube-mark large" : "cube-mark"}
-    >
-      <path
-        d="m24 4 18 10v20L24 44 6 34V14L24 4Z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path
-        d="m6 14 18 10 18-10M24 24v20M15 9l18 10v20"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
 
 export default function App() {
   const [connectionRequest, setConnectionRequest] = useState(takeLaunchLink);
@@ -78,36 +57,45 @@ export default function App() {
   }, [connectionRequest]);
 
   const ready = connection.state === "ready";
+  const workspace = ready ? connection.health.workspace : undefined;
   const chooser = chooserOrigin();
   return (
-    <div className="app-shell">
+    <div className={`app-shell${workspace ? " workbench-shell" : ""}`}>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       <header className="app-header">
         <a href="/" className="brand" aria-label="Cube Play home">
-          <CubeMark />
-          <span>
-            Cube <span className="brand-light">Play</span>
-          </span>
+          <Brand />
         </a>
+        {workspace && (
+          <div className="header-workspace">
+            <span aria-hidden="true">/</span>
+            <h1>{workspace.name}</h1>
+          </div>
+        )}
         <div className="header-actions">
           {chooser && (
             <a className="button secondary" href={`${chooser}/`}>
               Workspaces
             </a>
           )}
-          <span className="privacy-badge">
-            <span className="privacy-icon" aria-hidden="true">
-              ⌁
-            </span>{" "}
-            Local by design
+          <span className={`connection-badge ${ready ? "connected" : ""}`}>
+            <span className="status-dot" />
+            {ready
+              ? "Connected locally"
+              : connection.state === "error"
+                ? "Connection unavailable"
+                : "Connecting"}
           </span>
         </div>
       </header>
-      <main
-        id="main-content"
-        className="workspace mx-auto w-full max-w-6xl px-6 py-6 sm:px-8 sm:py-8"
-      >
+      <main id="main-content" className="workspace">
         {pendingLaunch && (
-          <section aria-label="Received launcher link">
+          <section
+            className="pending-launch"
+            aria-label="Received launcher link"
+          >
             <p>
               A new launcher link is ready. Save any edits before opening it.
             </p>
@@ -123,29 +111,16 @@ export default function App() {
             </button>
           </section>
         )}
-        <div className="workspace-heading">
-          <div>
-            <p className="eyebrow">YOUR LOCAL LABORATORY</p>
-            <h1>
-              {connection.state === "ready" && connection.health.workspace
-                ? connection.health.workspace.name
-                : "Investigation workspace"}
-            </h1>
+        {!workspace && (
+          <div className="workspace-heading">
+            <div>
+              <p className="eyebrow">CUBE PLAY / CONNECTION</p>
+              <h1>Investigation workspace</h1>
+            </div>
           </div>
-          <span className={`connection-badge ${ready ? "connected" : ""}`}>
-            <span className="status-dot" />
-            {ready
-              ? "Connected locally"
-              : connection.state === "error"
-                ? "Connection unavailable"
-                : "Connecting"}
-          </span>
-        </div>
+        )}
         {connection.state === "ready" && connection.health.workspace ? (
-          <section
-            className="session-panel workspace-context"
-            aria-label="Open workspace"
-          >
+          <section className="workspace-context" aria-label="Open workspace">
             <div>
               <p>
                 <strong>Source files are read-only.</strong> Notes and results
@@ -166,24 +141,8 @@ export default function App() {
           </section>
         ) : (
           <section className="welcome-panel" aria-labelledby="welcome-title">
-            <div className="illustration" aria-hidden="true">
-              <div className="orbit orbit-one" />
-              <div className="orbit orbit-two" />
-              <div className="cube-tile">
-                <CubeMark large />
-              </div>
-              <span className="coordinate coordinate-top">01 / LOCAL</span>
-              <span className="coordinate coordinate-bottom">CUBE · PLAY</span>
-            </div>
             <div className="welcome-copy">
-              <span className="section-label">
-                A SPACE TO FOLLOW THE EVIDENCE
-              </span>
-              <h2 id="welcome-title">
-                Stay curious.
-                <br />
-                <span>Keep it local.</span>
-              </h2>
+              <h2 id="welcome-title">Your files. Your workspace.</h2>
               <p>
                 A private workspace for investigating files, exploring ideas,
                 and keeping discoveries together.
@@ -239,7 +198,7 @@ export default function App() {
           </section>
         </details>
         <footer className="workspace-footer">
-          <span>Private files. Local execution. Your investigation.</span>
+          <span>Files stay on this device.</span>
           <span>POWERED BY CUBE</span>
         </footer>
       </main>

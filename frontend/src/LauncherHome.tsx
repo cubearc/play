@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Brand, InterfaceIcon } from "./InterfaceIcon";
 import {
   openWorkspace,
   type RecentWorkspace,
@@ -32,6 +33,12 @@ export function LauncherHome({
     [generation, setGeneration] = useState(0);
   const items = loaded?.generation === generation ? loaded.items : [];
   const active = useRef<AbortController | null>(null);
+  const [naming, setNaming] = useState(false);
+  const nameInput = useRef<HTMLInputElement | null>(null);
+  const newButton = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (naming) nameInput.current?.focus();
+  }, [naming]);
   useEffect(() => {
     const controller = new AbortController();
     if (!initialError || generation > 0)
@@ -93,94 +100,150 @@ export function LauncherHome({
     }
   }
   return (
-    <div className="app-shell">
+    <div className="app-shell launcher-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       <header className="app-header">
         <span className="brand">
-          Cube<span className="brand-light">Play</span>
+          <Brand />
         </span>
-        <span className="privacy-badge">Local by design</span>
+        <span className="privacy-badge">
+          <span className="status-dot" /> Local workspace
+        </span>
       </header>
-      <main className="launcher-home">
-        <p className="eyebrow">FOLLOW THE EVIDENCE</p>
-        <h1>Your investigations</h1>
-        <p>
-          Start with an empty workspace, open a local directory or resume an
-          investigation.
-        </p>
-        <div className="launcher-actions">
-          <section>
-            <h2>New workspace</h2>
-            <p>
-              Choose its parent folder in the system dialog. Notes and generated
-              results stay separate from source files.
+      <main id="main-content" className="launcher-home">
+        <div className="launcher-heading">
+          <div>
+            <p className="eyebrow">CUBE PLAY / WORKSPACES</p>
+            <h1>Your workspaces</h1>
+            <p className="launcher-subtitle">
+              Pick up an investigation, or start with something new.
             </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void open({ intent: "new", name });
-              }}
+          </div>
+          <div className="launcher-actions">
+            <button
+              ref={newButton}
+              type="button"
+              className="button"
+              disabled={busy}
+              aria-expanded={naming}
+              aria-controls="new-workspace"
+              onClick={() => setNaming(true)}
             >
-              <label htmlFor="workspace-name">Workspace folder name</label>
-              <input
-                id="workspace-name"
-                value={name}
-                maxLength={128}
-                required
-                disabled={busy}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="button"
-                disabled={busy || !name.trim()}
-              >
-                Create workspace
-              </button>
-            </form>
-          </section>
-          <section>
-            <h2>Open workspace</h2>
-            <p>
-              Use an existing directory, including one that has no files.
-              Previous local notes and results are restored when available.
-            </p>
+              <InterfaceIcon name="plus" /> New workspace
+            </button>
             <button
               type="button"
               className="button secondary"
               disabled={busy}
               onClick={() => void open({ intent: "open" })}
             >
-              Choose local directory
+              <InterfaceIcon name="files" /> Open folder
             </button>
-          </section>
+          </div>
         </div>
-        <p role="status" aria-live="polite">
+        {naming && (
+          <section
+            id="new-workspace"
+            className="launcher-create"
+            aria-labelledby="new-workspace-title"
+          >
+            <div>
+              <h2 id="new-workspace-title">Create a workspace</h2>
+              <p>Name your folder. Next, choose where to create it.</p>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void open({ intent: "new", name });
+              }}
+            >
+              <div className="launcher-name-field">
+                <label htmlFor="workspace-name">Workspace folder name</label>
+                <input
+                  id="workspace-name"
+                  ref={nameInput}
+                  value={name}
+                  maxLength={128}
+                  required
+                  disabled={busy}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                className="button"
+                disabled={busy || !name.trim()}
+              >
+                {busy ? "Opening folder selection…" : "Create workspace"}
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                disabled={busy}
+                onClick={() => {
+                  setNaming(false);
+                  newButton.current?.focus();
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          </section>
+        )}
+        <p
+          className={`launcher-status${busy ? " is-busy" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
           {status}
         </p>
-        {error && <p role="alert">{error}</p>}
-        <section aria-label="Recent workspaces">
+        {error && (
+          <p className="interface-error" role="alert">
+            {error}
+          </p>
+        )}
+        <section
+          className="launcher-recent-panel"
+          aria-label="Recent workspaces"
+          aria-busy={busy}
+        >
           <div className="launcher-recents-heading">
-            <h2>Recent workspaces</h2>
+            <h2>
+              Recent workspaces{" "}
+              {loaded?.generation === generation && (
+                <span className="item-count">{items.length}</span>
+              )}
+            </h2>
             <button
               type="button"
-              className="button secondary"
+              className="button ghost"
+              aria-label="Refresh recent workspaces"
               disabled={busy}
               onClick={() => {
                 setError(null);
                 setGeneration((v) => v + 1);
               }}
             >
-              Refresh recent workspaces
+              <InterfaceIcon name="refresh" /> Refresh
             </button>
           </div>
           {loaded?.generation !== generation ? (
-            <p>
+            <p className="launcher-empty">
               {error
                 ? "Recent workspaces are unavailable."
                 : "Loading recent workspaces…"}
             </p>
           ) : items.length === 0 ? (
-            <p>No local workspaces are registered yet.</p>
+            <div className="launcher-empty">
+              <span className="empty-folder">
+                <InterfaceIcon name="files" />
+              </span>
+              <h3>A fresh place to start</h3>
+              <p>No local workspaces are registered yet.</p>
+              <p>Create a workspace or open a folder to begin.</p>
+            </div>
           ) : (
             <ul className="launcher-recents">
               {items.map((item) => (
@@ -190,11 +253,19 @@ export function LauncherHome({
                     disabled={busy || !item.available}
                     onClick={() => void open({ intent: "recent", id: item.id })}
                   >
-                    <strong>{item.name}</strong>
-                    <span className="launcher-recent-status">
-                      {item.available
-                        ? "Resume local investigation"
-                        : "Source directory unavailable — restore it, then refresh"}
+                    <span className="recent-folder">
+                      <InterfaceIcon name="files" />
+                    </span>
+                    <span className="launcher-recent-copy">
+                      <strong>{item.name}</strong>
+                      <span className="launcher-recent-status">
+                        {item.available
+                          ? "Resume local investigation"
+                          : "Source directory unavailable — restore it, then refresh"}
+                      </span>
+                    </span>
+                    <span className="recent-arrow">
+                      <InterfaceIcon name="arrow" />
                     </span>
                   </button>
                 </li>
@@ -202,6 +273,14 @@ export function LauncherHome({
             </ul>
           )}
         </section>
+        <footer className="launcher-footer">
+          <span>
+            <span className="status-dot" /> Files stay on this device.
+          </span>
+          <span>
+            Source files are read-only. Notes and results are saved separately.
+          </span>
+        </footer>
       </main>
     </div>
   );

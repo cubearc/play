@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { InterfaceIcon } from "./InterfaceIcon";
 import type { Panel } from "./investigation-api";
 
 const panels: { id: Panel; label: string; description: string }[] = [
@@ -90,38 +91,51 @@ export function WorkspacePanels({
         aria-orientation={vertical ? "vertical" : "horizontal"}
       >
         {panels.map((panel, index) => (
-          <button
-            key={panel.id}
-            type="button"
-            role="tab"
-            id={`${id}-tab-${panel.id}`}
-            aria-controls={`${id}-panel-${panel.id}`}
-            aria-selected={panel.id === active}
-            tabIndex={panel.id === active ? 0 : -1}
-            ref={(button) => {
-              buttons.current[index] = button;
-            }}
-            onClick={() => onChange(panel.id)}
-            onKeyDown={(event) => {
-              const next = vertical ? "ArrowDown" : "ArrowRight";
-              const previous = vertical ? "ArrowUp" : "ArrowLeft";
-              let target: number;
-              if (event.key === next) target = (index + 1) % panels.length;
-              else if (event.key === previous)
-                target = (index + panels.length - 1) % panels.length;
-              else if (event.key === "Home") target = 0;
-              else if (event.key === "End") target = panels.length - 1;
-              else return;
-              event.preventDefault();
-              const panel = panels[target];
-              if (panel) {
-                onChange(panel.id);
-                buttons.current[target]?.focus();
-              }
-            }}
-          >
-            {panel.label}
-          </button>
+          <div className="workspace-nav-item" key={panel.id}>
+            {(index === 0 ||
+              panel.id === "artifacts" ||
+              panel.id === "challenges") && (
+              <span className="workspace-nav-group" aria-hidden="true">
+                {index === 0
+                  ? "Investigate"
+                  : panel.id === "artifacts"
+                    ? "Library"
+                    : "Tools"}
+              </span>
+            )}
+            <button
+              type="button"
+              role="tab"
+              id={`${id}-tab-${panel.id}`}
+              aria-controls={`${id}-panel-${panel.id}`}
+              aria-selected={panel.id === active}
+              tabIndex={panel.id === active ? 0 : -1}
+              ref={(button) => {
+                buttons.current[index] = button;
+              }}
+              onClick={() => onChange(panel.id)}
+              onKeyDown={(event) => {
+                const next = vertical ? "ArrowDown" : "ArrowRight";
+                const previous = vertical ? "ArrowUp" : "ArrowLeft";
+                let target: number;
+                if (event.key === next) target = (index + 1) % panels.length;
+                else if (event.key === previous)
+                  target = (index + panels.length - 1) % panels.length;
+                else if (event.key === "Home") target = 0;
+                else if (event.key === "End") target = panels.length - 1;
+                else return;
+                event.preventDefault();
+                const panel = panels[target];
+                if (panel) {
+                  onChange(panel.id);
+                  buttons.current[target]?.focus();
+                }
+              }}
+            >
+              <InterfaceIcon name={panel.id} />
+              <span>{panel.label}</span>
+            </button>
+          </div>
         ))}
       </div>
       <div className="workspace-panels">
