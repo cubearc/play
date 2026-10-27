@@ -32,6 +32,40 @@ launcher operation deletes volumes. Moving a source creates a different path ide
 the old volumes are retained for explicit recovery. If the original directory disappears,
 stop it by its original absolute directory path.
 
+## Choose a workspace in the browser
+
+After a normal `cube play` launch, **Workspaces** in the application header opens
+the trusted host chooser. **Create workspace** creates exactly one new directory
+under the parent selected in the system folder dialog. Existing directories are
+never overwritten. **Choose local directory** authorizes an existing folder,
+including an empty one. Recent entries reuse the registered identity and volumes;
+unavailable sources remain listed with explicit recovery guidance. A recent root
+that now resolves through a different symlink must be authorized again with Open.
+
+The chooser starts or reuses the same two-container runtime and redirects only
+after application readiness. Cancelling a dialog preserves all investigation data.
+If startup fails after creating a folder, the folder is retained; choose Open to
+retry it. Linux desktop selection requires `zenity`; macOS uses the system folder
+dialog and Windows uses its native folder browser. WSL requires a desktop dialog
+environment or an explicit path through `cube play [path]`.
+
+The chooser is a separate loopback origin served by the native launcher, with its
+own per-tab capability. Its React assets are built into the launcher from trusted
+sources. Neither this credential nor host paths are passed to the application
+containers. The application receives only a non-secret return origin. Requests
+are closed versioned intents (`open`, `new` with a portable folder name, or `recent`
+with a registered UUID), never arbitrary browser-supplied host paths or commands.
+Exact Host/Origin validation, omitted cookies, bounded bodies, a five-second body
+deadline and one active action protect the boundary. The native folder picker and
+Docker commands retain bounded output, deadlines and process-group cleanup.
+
+`--no-browser` prints the direct application URL without starting a chooser.
+Development sessions and these direct links have no Workspaces button unless
+they previously received a chooser handoff. To stop the idle host chooser without
+stopping containers or removing data, run `cube-play --stop-chooser`. A later normal
+launch restarts it. Preserve private launcher state if its control record or
+registry is invalid. These boundaries do not isolate a compromised host account.
+
 Workspaces run independently. Concurrent starts for one workspace are locked; a startup
 already in progress returns bounded retry guidance. Port collisions receive bounded
 retries. Corrupt registry data, unexpected owners, changed images and unsafe container
@@ -53,8 +87,8 @@ An installed runtime works without Cloud services or application image downloads
 `--offline` never starts a build or pull. Setup downloads are separate from investigations.
 `CUBE_PLAY_IMAGE` can select an explicitly trusted preinstalled image; its protocol,
 version and non-root user must match. Images are pinned by immutable ID for each start.
-Runtime revision 12 adds the section-based workspace shell and persistent section
-navigation. It includes bounded replay-input diagnostics and preserves historical
+Runtime revision 13 adds the host workspace chooser handoff to the section-based
+workspace shell and persistent section navigation. It includes bounded replay-input diagnostics and preserves historical
 configurations independently of current operation versions. It requires origin-scoped header authorization, restricted media
 links and browser WebSocket authorization. It also includes typed explorations and
 the current canonical operation catalog, private candidate revisions, non-executable challenges

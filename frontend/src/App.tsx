@@ -7,6 +7,7 @@ import {
   takeLaunchLink,
 } from "./api";
 import { sessionToken } from "./capability";
+import { chooserOrigin } from "./chooser-origin";
 import { InvestigationWorkspace } from "./InvestigationWorkspace";
 
 type Connection =
@@ -77,6 +78,7 @@ export default function App() {
   }, [connectionRequest]);
 
   const ready = connection.state === "ready";
+  const chooser = chooserOrigin();
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -86,12 +88,19 @@ export default function App() {
             Cube<span className="brand-light">Play</span>
           </span>
         </a>
-        <span className="privacy-badge">
-          <span className="privacy-icon" aria-hidden="true">
-            ⌁
-          </span>{" "}
-          Local by design
-        </span>
+        <div className="header-actions">
+          {chooser && (
+            <a className="button secondary" href={`${chooser}/`}>
+              Workspaces
+            </a>
+          )}
+          <span className="privacy-badge">
+            <span className="privacy-icon" aria-hidden="true">
+              ⌁
+            </span>{" "}
+            Local by design
+          </span>
+        </div>
       </header>
       <main
         id="main-content"

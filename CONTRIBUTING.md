@@ -39,11 +39,13 @@ server and real Core worker, including cancellation, binary results and restart 
 
 ## Quality checks
 
-From the root:
+From the root, build the trusted launcher assets before Cargo checks:
 
 ```sh
+npm ci --prefix frontend
+npm run build --prefix frontend
 cargo fmt --all -- --check
-rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-runner/tests/support/resource_probe.rs
+rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-launcher/tests/support/folder_picker.rs crates/play-runner/tests/support/resource_probe.rs
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
 cargo test --workspace --all-features --locked

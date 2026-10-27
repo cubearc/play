@@ -248,15 +248,9 @@ pub fn docker_path(path: &Path) -> Result<String> {
     }
 }
 
-pub fn workspace(
-    home: &Path,
-    root: &Path,
-    create: bool,
-    cancelled: &Arc<AtomicBool>,
-) -> Result<Workspace> {
-    let _lock = lock(&home.join("registry.lock"), cancelled)?;
+fn registry(home: &Path) -> Result<Registry> {
     let path = home.join("workspaces.json");
-    let mut registry = if path.exists() {
+    let registry = if path.exists() {
         read_json::<Registry>(&path)?
     } else {
         Registry {
@@ -269,9 +263,11 @@ pub fn workspace(
     if registry.version != 1
         || registry.workspaces.len() > 256
         || registry.workspaces.iter().any(|workspace| {
-            !workspace.root.is_absolute()
+            workspace.id.get_version_num() != 4
+                || !workspace.root.is_absolute()
                 || workspace.root.parent().is_none()
                 || workspace.name.is_empty()
+                || workspace.name.contains('\0')
                 || workspace.name.len() > 4096
                 || !ids.insert(workspace.id)
                 || !roots.insert(&workspace.root)
@@ -282,10 +278,38 @@ pub fn workspace(
             "Launcher workspace registry is incompatible or inconsistent; preserve it for recovery",
         ));
     }
-    if let Some(workspace) = registry.workspaces.iter().find(|workspace| {
-        workspace.root == root || same_file::is_same_file(&workspace.root, root).unwrap_or(false)
+    Ok(registry)
+}
+
+pub fn recent_workspaces(home: &Path, cancelled: &Arc<AtomicBool>) -> Result<Vec<Workspace>> {
+    let _lock = lock(&home.join("registry.lock"), cancelled)?;
+    Ok(registry(home)?.workspaces.into_iter().rev().collect())
+}
+
+pub fn workspace(
+    home: &Path,
+    root: &Path,
+    create: bool,
+    cancelled: &Arc<AtomicBool>,
+) -> Result<Workspace> {
+    let _lock = lock(&home.join("registry.lock"), cancelled)?;
+    let path = home.join("workspaces.json");
+    let mut registry = registry(home)?;
+    if let Some(index) = registry.workspaces.iter().position(|workspace| {
+        workspace.root == root
+            || (workspace
+                .root
+                .canonicalize()
+                .is_ok_and(|current| current == workspace.root)
+                && same_file::is_same_file(&workspace.root, root).unwrap_or(false))
     }) {
-        return Ok(workspace.clone());
+        let workspace = registry.workspaces[index].clone();
+        if create && index + 1 != registry.workspaces.len() {
+            registry.workspaces.remove(index);
+            registry.workspaces.push(workspace.clone());
+            write_json(&path, &registry)?;
+        }
+        return Ok(workspace);
     }
     if !create {
         return Err(Error::new(

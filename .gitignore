@@ -3,6 +3,7 @@
 /lcov.info
 /frontend/node_modules/
 /frontend/dist/
+/frontend/launcher-dist/
 /frontend/coverage/
 /frontend/playwright-report/
 /frontend/test-results/

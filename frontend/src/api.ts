@@ -1,4 +1,5 @@
 import { apiFetch, setSessionToken } from "./capability";
+import { chooserOrigin } from "./chooser-origin";
 
 export type Health = {
   status: "ok";
@@ -23,6 +24,8 @@ export function takeLaunchLink(): LaunchLink {
   }
   if (hash.length > 16384) return { session: null, selection: null };
   const parameters = new URLSearchParams(hash);
+  if (parameters.has("launcher_origin"))
+    chooserOrigin(parameters.get("launcher_origin"));
   const name = parameters.get("file");
   const selection =
     name &&

@@ -21,10 +21,13 @@ private progress and explicit Lab-result candidate associations. Planning stays 
 
 Install a Landlock-capable Docker Engine with Compose v2, or Docker Desktop 4.94.0+
 with Linux containers, and start the local engine. For source installation, use
-Rust stable through rustup. With Cube
+Rust stable through rustup and Node.js 24 with npm. Build the trusted launcher UI
+before compiling the launcher. With Cube
 and Play checked out side by side, run from this repository:
 
 ```sh
+npm ci --prefix frontend
+npm run build --prefix frontend
 cargo install --locked --path ../cube/crates/cube-cli
 cargo install --locked --path crates/play-launcher
 cube play
@@ -55,6 +58,11 @@ capability; selecting `.cube` never executes it. Read the
 Use `--no-browser` to print a private session link or `--offline` to require an
 already installed runtime without setup downloads. See the [launcher guide](docs/launcher.md)
 for platform support, recovery and the invocation contract.
+
+Use **Workspaces** in the application header to create an empty directory, open an
+existing one through the system folder dialog, or resume a recent investigation.
+These actions run in the trusted host launcher; containers receive no host-management
+authority. A source installation needs `zenity` on Linux for the folder dialog.
 
 ## Developer quick start
 

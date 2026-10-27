@@ -6,6 +6,7 @@ coverage
 lcov.info
 frontend/node_modules
 frontend/dist
+frontend/launcher-dist
 frontend/coverage
 frontend/test-results
 frontend/playwright-report

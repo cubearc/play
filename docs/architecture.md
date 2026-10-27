@@ -80,6 +80,14 @@ data/artifacts use separate named volumes, and no shutdown removes them. Ownersh
 labels and runtime configuration are checked before reuse. Remote Docker contexts
 and source roots containing Docker control sockets are rejected.
 
+The launcher's separate loopback workspace chooser owns native folder dialogs and
+new/open/recent intents. Trusted React assets are embedded at build time; container
+assets never acquire host authority. Its bearer capability remains in that origin's
+per-tab storage. Application handoffs include only the ready application's own
+capability and a non-secret chooser return origin. The chooser reuses the launcher's
+runtime lifecycle and private registry rather than introducing another storage layer.
+Source roots must remain separate from private launcher state.
+
 ## Core and storage boundaries
 
 The prerelease consumes the sibling Cube 0.18.0 library directly, with a pinned CI

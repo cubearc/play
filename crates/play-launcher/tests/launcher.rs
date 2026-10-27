@@ -9,6 +9,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+struct ChooserCleanup(PathBuf);
+impl Drop for ChooserCleanup {
+    fn drop(&mut self) {
+        let _ = play_launcher::host::stop(&self.0);
+    }
+}
+
 fn compile_fixture(target: &Path) {
     let deps = std::env::current_exe()
         .unwrap()
@@ -81,6 +88,7 @@ fn launch_contract_reuse_recovery_and_security_failures() {
     let source = directory.join("files $private 空");
     fs::create_dir(&source).unwrap();
     let home = directory.join("state $local");
+    let _chooser_cleanup = ChooserCleanup(home.clone());
     let executable = directory.join(format!("docker-fixture{}", std::env::consts::EXE_SUFFIX));
     compile_fixture(&executable);
     let protocol = Command::new(env!("CARGO_BIN_EXE_cube-play"))
@@ -237,6 +245,50 @@ fn launch_contract_reuse_recovery_and_security_failures() {
         std::thread::sleep(Duration::from_millis(20));
     }
     assert_eq!(fs::read(&record).unwrap(), b"opened");
+    let control: Value =
+        serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();
+    let chooser_registry = fs::read(home.join("workspaces.json")).unwrap();
+    assert!(
+        launch(&fixture, &home, &source, &executable)
+            .arg("--offline")
+            .env("CUBE_PLAY_BROWSER", &executable)
+            .env("CUBE_PLAY_BROWSER_RECORD", &record)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let reused: Value =
+        serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();
+    assert_eq!(control, reused, "A compatible host chooser must be reused");
+    assert!(
+        launch(&fixture, &home, &source, &executable)
+            .arg("--stop-chooser")
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    assert_eq!(
+        chooser_registry,
+        fs::read(home.join("workspaces.json")).unwrap()
+    );
+    assert!(
+        launch(&fixture, &home, &source, &executable)
+            .arg("--offline")
+            .env("CUBE_PLAY_BROWSER", &executable)
+            .env("CUBE_PLAY_BROWSER_RECORD", &record)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let restarted: Value =
+        serde_json::from_slice(&fs::read(home.join("chooser.json")).unwrap()).unwrap();
+    assert_ne!(
+        control["instance"], restarted["instance"],
+        "A stale control record must not prevent recovery"
+    );
     fs::write(fixture.join("mode"), "owned-volume").unwrap();
     assert!(
         launch(&fixture, &home, &source, &executable)

@@ -40,6 +40,13 @@ jobs:
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: play/frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo test --workspace --all-features --locked
 
@@ -62,8 +69,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy, llvm-tools-preview
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: play/frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
       - run: cargo fmt --all -- --check
-      - run: rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-runner/tests/support/resource_probe.rs
+      - run: rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-launcher/tests/support/folder_picker.rs crates/play-runner/tests/support/resource_probe.rs
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo install cargo-llvm-cov --version 0.9.1 --locked
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
@@ -130,7 +144,6 @@ jobs:
           ssh-key: ${{ secrets.CUBE_CORE_READ_KEY }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - run: cargo build --locked -p play-launcher
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -138,6 +151,8 @@ jobs:
           cache: npm
           cache-dependency-path: play/frontend/package-lock.json
       - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
+      - run: cargo build --locked -p play-launcher
       - run: cd frontend && npx playwright install --with-deps chromium
       - run: docker build --target runner-tests --build-context cube_engine=../cube .
       - run: docker build --target lab-tests --build-context cube_engine=../cube .

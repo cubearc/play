@@ -147,11 +147,17 @@ fn main(){
 }
 ''')
             subprocess.run(["rustc", "--edition=2024", str(probe_source), "-o", str(probe)], check=True, capture_output=True)
+            picker = base / ("folder-picker.exe" if os.name == "nt" else "folder-picker")
+            subprocess.run(["rustc", "--edition=2024", str(ROOT / "crates/play-launcher/tests/support/folder_picker.rs"), "-o", str(picker)], check=True, capture_output=True)
+            (base / "selection").write_text("")
             environment.update(CUBE_PLAY_BROWSER=str(probe), CUBE_PLAY_BROWSER_RECORD=str(record))
+            environment.update(CUBE_PLAY_PICKER=str(picker), CUBE_PLAY_PICKER_FIXTURE=str(base))
+            chooser_url = None
             capabilities = LocalCapabilities()
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), capabilities)
 
             def launch(*args, cwd=source, browser=False):
+                nonlocal chooser_url
                 binary = [os.environ["CUBE_PLAY_CUBE"], "play"] if os.environ.get("CUBE_PLAY_CUBE") else [str(launcher)]
                 result = subprocess.run([*binary, "--offline", *([] if browser else ["--no-browser"]), *map(str, args)], cwd=cwd, env=environment, capture_output=True, text=True, timeout=150)
                 diagnostics = re.sub(r"#session=[a-f0-9-]+", "#session=[redacted]", result.stdout + result.stderr)
@@ -165,6 +171,10 @@ fn main(){
                 self.assertEqual(result.returncode, 0, diagnostics)
                 match = re.search(r"Open Cube Play: (http://127\.0\.0\.1:\d+/#[^\s]+)", result.stdout)
                 self.assertIsNotNone(match, "Launcher did not provide a ready local session")
+                if browser:
+                    chooser = re.search(r"Open workspace chooser: (http://127\.0\.0\.1:\d+/#[^\s]+)", result.stdout)
+                    self.assertIsNotNone(chooser, "Launcher did not provide the private host chooser")
+                    chooser_url = chooser[1]
                 return match[1]
 
             def authenticate(url):
@@ -294,7 +304,7 @@ fn main(){
                 (source / "over-limit.png").write_bytes(bytes(4 * 1024 * 1024 + 1))
                 source_hashes = {str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}
                 if (ROOT / "frontend/node_modules/.bin/playwright").exists():
-                    subprocess.run(["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url}, timeout=360, check=True)
+                    subprocess.run(["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(source)}, timeout=480, check=True)
                 snapshot = files_api(origin, "/api/investigation")
                 save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
                 save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
@@ -363,14 +373,17 @@ fn main(){
 
                 self.assertEqual(files_api(crash_origin, "/api/investigation/notes")[0]["body"], "Retained across real container recreation")
             finally:
-                registry_file = home / "workspaces.json"
-                if registry_file.exists():
-                    for workspace in json.loads(registry_file.read_text())["workspaces"]:
-                        identifier = workspace["id"].replace("-", "")
-                        folder = home / identifier
-                        if (folder / "compose.json").exists():
-                            # Only these fresh fixture-owned projects and test volumes are removed.
-                            subprocess.run(["docker", "compose", "--project-name", f"cube-play-{identifier}", "--file", str(folder / "compose.json"), "--env-file", str(folder / "empty.env"), "down", "--volumes", "--remove-orphans"], env=environment, capture_output=True, timeout=60, check=True)
+                try:
+                    subprocess.run([str(launcher), "--stop-chooser"], env=environment, capture_output=True, timeout=15, check=True)
+                finally:
+                    registry_file = home / "workspaces.json"
+                    if registry_file.exists():
+                        for workspace in json.loads(registry_file.read_text())["workspaces"]:
+                            identifier = workspace["id"].replace("-", "")
+                            folder = home / identifier
+                            if (folder / "compose.json").exists():
+                                # Only these fresh fixture-owned projects and test volumes are removed.
+                                subprocess.run(["docker", "compose", "--project-name", f"cube-play-{identifier}", "--file", str(folder / "compose.json"), "--env-file", str(folder / "empty.env"), "down", "--volumes", "--remove-orphans"], env=environment, capture_output=True, timeout=60, check=True)
 
 
 if __name__ == "__main__":

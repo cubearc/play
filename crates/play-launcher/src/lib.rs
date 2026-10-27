@@ -1,7 +1,9 @@
 //! Host-side runtime ownership. No investigation algorithms execute here.
 pub mod docker;
+pub mod host;
 pub mod process;
 mod runner;
+pub mod runtime;
 pub mod state;
 
 use std::fmt;
