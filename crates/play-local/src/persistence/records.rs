@@ -13,6 +13,7 @@ pub(crate) enum Panel {
     Explorations,
     Notes,
     Artifacts,
+    Solutions,
     Challenges,
     Terminal,
 }

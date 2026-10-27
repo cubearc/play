@@ -27,6 +27,12 @@ const panels: { id: Panel; label: string; description: string }[] = [
       "Reopen named results, inspect provenance and export explicitly.",
   },
   {
+    id: "solutions",
+    label: "Solutions",
+    description:
+      "Preserve private findings and curated execution paths in immutable revisions.",
+  },
+  {
     id: "challenges",
     label: "Local challenges",
     description:
@@ -49,6 +55,16 @@ export function WorkspacePanels({
 }) {
   const id = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const previous = useRef(active),
+    focusedPanel = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      previous.current !== active &&
+      focusedPanel.current === previous.current
+    )
+      buttons.current[panels.findIndex((p) => p.id === active)]?.focus();
+    previous.current = active;
+  }, [active]);
   const [vertical, setVertical] = useState(() => window.innerWidth >= 960);
   useEffect(() => {
     const resize = () => setVertical(window.innerWidth >= 960);
@@ -56,7 +72,17 @@ export function WorkspacePanels({
     return () => window.removeEventListener("resize", resize);
   }, []);
   return (
-    <div className="workspace-layout">
+    <div
+      className="workspace-layout"
+      onFocusCapture={(event) => {
+        focusedPanel.current =
+          event.target instanceof HTMLElement
+            ? (event.target
+                .closest("[data-workspace-panel]")
+                ?.getAttribute("data-workspace-panel") ?? null)
+            : null;
+      }}
+    >
       <div
         className="workspace-navigation"
         role="tablist"
@@ -103,6 +129,7 @@ export function WorkspacePanels({
           <div
             key={panel.id}
             role="tabpanel"
+            data-workspace-panel={panel.id}
             id={`${id}-panel-${panel.id}`}
             aria-labelledby={`${id}-tab-${panel.id}`}
             hidden={active !== panel.id}

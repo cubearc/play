@@ -19,6 +19,7 @@ import {
   type View,
 } from "./investigation-api";
 import type { EvidenceTarget } from "./notebook-api";
+import { type SolutionIntent, SolutionsPanel } from "./SolutionsPanel";
 import { WorkspacePanels } from "./WorkspacePanels";
 
 function panelView(view: View, panel: Panel): View {
@@ -103,6 +104,9 @@ function SavedWorkspace({
 }) {
   const [title, setTitle] = useState(investigation.title);
   const [noteEvidence, setNoteEvidence] = useState<EvidenceTarget | null>(null);
+  const [solutionIntent, setSolutionIntent] = useState<SolutionIntent | null>(
+    null,
+  );
   const [savedTitle, setSavedTitle] = useState(investigation.title);
   const [panel, setPanel] = useState<Panel>(
     initialSelection
@@ -313,6 +317,10 @@ function SavedWorkspace({
                   setNoteEvidence(target);
                   changePanel("notes");
                 }}
+                onPreserve={(id, port) => {
+                  setSolutionIntent({ result_id: id, port });
+                  changePanel("solutions");
+                }}
               />
               <details className="quick-tools">
                 <summary>Quick text and byte tools</summary>
@@ -331,6 +339,12 @@ function SavedWorkspace({
             <InvestigationNotes target={selection} evidence={noteEvidence} />
           ),
           artifacts: <ArtifactLibrary />,
+          solutions: (
+            <SolutionsPanel
+              wanted={solutionIntent}
+              onExplore={() => changePanel("explorations")}
+            />
+          ),
           challenges: (
             <ChallengePanel
               selected={selection}

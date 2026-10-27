@@ -29,6 +29,11 @@ History also offers **Annotate execution** for observations about successful or
 failed attempts. A linked note can inspect the original output after subsequent
 graph edits, runs and restarts. See [private notes](notebook.md).
 
+**Preserve as solution** carries a retained output into **Solutions**. Write an
+explanation to freeze its actual dependency path in an immutable private revision
+while continuing the exploration. See [private solutions](solutions.md) for
+revision history, explicit field conversions and optional local stage association.
+
 **Replay inputs** checks the retained dependency path when a typed result opens.
 It compares current authorized file bytes and named artifact values with their
 recorded digests, checks operation/schema identities and reports private parameters

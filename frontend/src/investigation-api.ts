@@ -6,6 +6,7 @@ export type Panel =
   | "explorations"
   | "notes"
   | "artifacts"
+  | "solutions"
   | "challenges"
   | "terminal";
 export type View = {
@@ -78,6 +79,7 @@ export async function loadInvestigation(
         "explorations",
         "notes",
         "artifacts",
+        "solutions",
         "challenges",
         "terminal",
       ].includes(view.panel))

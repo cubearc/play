@@ -15,10 +15,15 @@ function Harness() {
     <WorkspacePanels active={panel} onChange={setPanel}>
       {{
         files: (
-          <label>
-            File draft
-            <input defaultValue="" />
-          </label>
+          <>
+            <button type="button" onClick={() => setPanel("solutions")}>
+              Preserve this finding
+            </button>
+            <label>
+              File draft
+              <input defaultValue="" />
+            </label>
+          </>
         ),
         explorations: (
           <label>
@@ -28,6 +33,7 @@ function Harness() {
         ),
         notes: <p>Private observations</p>,
         artifacts: <p>Preserved artifacts</p>,
+        solutions: <p>Private findings</p>,
         challenges: <p>Local instructions</p>,
         terminal: <p>Real Cube terminal</p>,
       }}
@@ -59,6 +65,15 @@ it("switches accessible sections without unmounting drafts and supports vertical
   );
   await user.keyboard("{End}");
   expect(screen.getByRole("tabpanel", { name: "Terminal" })).toBeVisible();
+});
+it("moves keyboard focus to the destination when a panel action opens another section", async () => {
+  const user = userEvent.setup();
+  render(<Harness />);
+  await user.click(
+    screen.getByRole("button", { name: "Preserve this finding" }),
+  );
+  expect(screen.getByRole("tab", { name: "Solutions" })).toHaveFocus();
+  expect(screen.getByRole("tabpanel", { name: "Solutions" })).toBeVisible();
 });
 it("uses horizontal arrow navigation on narrow layouts and updates orientation on resize", async () => {
   Object.defineProperty(window, "innerWidth", {

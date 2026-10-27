@@ -4,6 +4,7 @@ mod domains;
 mod execute;
 mod library;
 mod replay;
+mod solutions;
 mod storage;
 mod typed;
 pub(crate) mod types;
@@ -65,6 +66,7 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .merge(library::routes())
         .merge(candidates::routes())
+        .merge(solutions::routes())
         .merge(typed::routes())
         .route("/lab/operations", get(catalog))
         .route("/lab/operations/{id}", get(describe))

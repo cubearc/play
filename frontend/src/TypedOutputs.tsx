@@ -18,7 +18,13 @@ function viewer(
   if (semantic === "image.histogram") return "histogram";
   return "structured";
 }
-function Content({ semantic, value }: { semantic: string; value: Json }) {
+export function TypedValue({
+  semantic,
+  value,
+}: {
+  semantic: string;
+  value: Json;
+}) {
   const kind = viewer(semantic);
   if (kind === "image") return <TypedImage value={value} />;
   if (kind === "text" && typeof value === "string")
@@ -79,10 +85,12 @@ export function TypedOutputs({
   result,
   initialPort,
   onAnnotate,
+  onPreserve,
 }: {
   result: OperationResult;
   initialPort?: string | undefined;
   onAnnotate?: ((port: string) => void) | undefined;
+  onPreserve?: ((port: string) => void) | undefined;
 }) {
   const [selected, setSelected] = useState(
     initialPort ?? result.ports[0]?.name ?? "",
@@ -113,7 +121,11 @@ export function TypedOutputs({
         </p>
       )}
       {port && value !== undefined ? (
-        <Content key={port.name} semantic={port.semantic_type} value={value} />
+        <TypedValue
+          key={port.name}
+          semantic={port.semantic_type}
+          value={value}
+        />
       ) : (
         <p>This optional output was not produced.</p>
       )}
@@ -124,6 +136,15 @@ export function TypedOutputs({
           onClick={() => onAnnotate(port.name)}
         >
           Annotate selected output
+        </button>
+      )}
+      {onPreserve && result.record.retained && port && value !== undefined && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => onPreserve(port.name)}
+        >
+          Preserve as solution
         </button>
       )}
       <p>

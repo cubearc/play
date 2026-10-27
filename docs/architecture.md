@@ -140,3 +140,10 @@ from actual execution attempts. Named-port schemas come from versioned Core
 contracts; Play adds tested interface adapters, capability resolution and UI
 controls. Execution evidence points to existing immutable artifact bundles instead
 of duplicating result bytes or private parameters in SQLite.
+
+[Private solutions](solutions.md) append immutable explanations and snapshots of
+the actual selected artifact dependency path. Configuration projections contain
+only its executed steps; the original exploration keeps all branches. Optional
+stage associations freeze existing local candidate revisions without changing
+progress or submitting answers. Binary data stays in the shared filesystem
+bundles, and missing evidence produces explicit replay gaps.

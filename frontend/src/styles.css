@@ -1293,6 +1293,52 @@ summary:focus-visible {
   padding-top: 16px;
   border-top: 1px solid #e2e7e5;
 }
+.solutions-panel {
+  min-width: 0;
+  margin-block: 28px;
+}
+.solution-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 16px;
+}
+.solution-list button,
+.solution-results button {
+  max-width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.solution-results,
+.solution-evidence {
+  list-style: none;
+  padding: 0;
+  margin-block: 16px;
+}
+.solution-results li {
+  margin-block: 8px;
+}
+.solution-evidence li {
+  border-top: 1px solid #e2e7e5;
+  padding-block: 16px;
+}
+.notebook-panel .solution-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.solution-check input[type="checkbox"] {
+  width: auto;
+  margin-top: 4px;
+}
+.solution-image {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  margin-block: 16px;
+}
 .step-inspector code {
   display: block;
   font-size: 11px;

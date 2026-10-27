@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum Selection {
+pub(super) enum Selection {
     Whole,
     Field {
         pointer: String,
@@ -20,7 +20,7 @@ enum Selection {
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum Conversion {
+pub(super) enum Conversion {
     Text,
     Base64Bytes,
 }
@@ -53,7 +53,7 @@ pub(super) fn routes() -> Router<AppState> {
 async fn database(app: &AppState) -> Result<std::sync::Arc<crate::persistence::Database>> {
     app.database().await?.ok_or_else(Error::storage)
 }
-fn value(
+pub(super) fn value(
     record: &Record,
     bytes: &[u8],
     selection: &Selection,

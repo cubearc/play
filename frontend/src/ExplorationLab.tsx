@@ -26,9 +26,11 @@ import type { Store } from "./workspace-api";
 export function ExplorationLab({
   asset,
   onAnnotate,
+  onPreserve,
 }: {
   asset: { store: Store; path: string } | null;
   onAnnotate?: ((target: EvidenceTarget) => void) | undefined;
+  onPreserve?: ((id: string, port: string) => void) | undefined;
 }) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [items, setItems] = useState<Exploration[]>([]);
@@ -140,6 +142,7 @@ export function ExplorationLab({
               onSaved={saved}
               onEditingChange={setEditing}
               onAnnotate={onAnnotate}
+              onPreserve={onPreserve}
             />
           ) : (
             <p className="exploration-empty">
@@ -192,6 +195,7 @@ function Editor({
   onSaved,
   onEditingChange,
   onAnnotate,
+  onPreserve,
 }: {
   initial: Exploration;
   catalog: CatalogEntry[];
@@ -199,6 +203,7 @@ function Editor({
   onSaved: (value: Exploration) => void;
   onEditingChange: (editing: boolean) => void;
   onAnnotate?: ((target: EvidenceTarget) => void) | undefined;
+  onPreserve?: ((id: string, port: string) => void) | undefined;
 }) {
   const formId = useId();
   const [draft, setDraft] = useState(initial);
@@ -629,6 +634,9 @@ function Editor({
             <TypedOutputs
               key={output.id}
               result={output}
+              onPreserve={
+                onPreserve ? (port) => onPreserve(output.id, port) : undefined
+              }
               onAnnotate={
                 onAnnotate &&
                 runs.some((r) => r.evidence.result_id === output.id)

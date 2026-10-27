@@ -31,7 +31,13 @@ pub(super) struct Report {
     gaps: Vec<Gap>,
 }
 impl Report {
-    fn gap(&mut self, id: Uuid, port: Option<&str>, code: &'static str, message: &'static str) {
+    pub(super) fn gap(
+        &mut self,
+        id: Uuid,
+        port: Option<&str>,
+        code: &'static str,
+        message: &'static str,
+    ) {
         // A stored bundle has at most 32 inputs; keep failures bounded too.
         if self.gaps.len() < 256 {
             self.gaps.push(Gap {
@@ -52,6 +58,9 @@ pub(super) async fn inspect(
     check(&app, id).await.map(Json)
 }
 pub(super) async fn check(app: &AppState, id: Uuid) -> Result<Report> {
+    Ok(retained_path(app, id).await?.0)
+}
+pub(super) async fn retained_path(app: &AppState, id: Uuid) -> Result<(Report, Vec<Record>)> {
     let storage = app.lab.storage(app).await?;
     let mut report = Report {
         schema_version: 1,
@@ -63,6 +72,7 @@ pub(super) async fn check(app: &AppState, id: Uuid) -> Result<Report> {
     };
     let mut queue = VecDeque::from([id]);
     let mut seen = BTreeSet::new();
+    let mut records = Vec::new();
     while let Some(id) = queue.pop_front() {
         if !seen.insert(id) {
             continue;
@@ -89,13 +99,33 @@ pub(super) async fn check(app: &AppState, id: Uuid) -> Result<Report> {
         };
         report.checked_artifacts += 1;
         report.checked_bytes += bytes.len();
+        records.push(record.clone());
         if record.semantic_type != "operation.outputs" || record.metadata["schema_version"] != 2 {
             report.gap(id, None, "legacy_history", "Legacy history has no complete typed configuration or schema evidence; it remains unassigned.");
+            if record.provenance.inputs.len() > 32 {
+                report.gap(
+                    id,
+                    None,
+                    "check_limit",
+                    "Legacy dependency metadata exceeds the bounded path limit.",
+                );
+            }
+            for input in record.provenance.inputs.iter().take(32) {
+                if input.reference["type"] == "artifact" {
+                    if let Ok(parent) =
+                        serde_json::from_value::<Uuid>(input.reference["id"].clone())
+                    {
+                        queue.push_back(parent);
+                    } else {
+                        report.gap(id,None,"artifact_unavailable","A legacy dependency reference is invalid. Existing history was preserved.");
+                    }
+                }
+            }
             continue;
         }
         inspect_record(app, storage.clone(), &record, &mut report, &mut queue).await?;
     }
-    Ok(report)
+    Ok((report, records))
 }
 async fn inspect_record(
     app: &AppState,

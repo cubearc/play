@@ -13,6 +13,449 @@ use uuid::Uuid;
 static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
+async fn solutions_keep_sensitive_parameters_redacted_and_require_retained_evidence() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let graph = Uuid::new_v4();
+    let step = Uuid::new_v4();
+    let secret = "PRIVATEVIGENEREKEY";
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Private key test","hypothesis":"","scope":null,"steps":[{"id":step,"operation":"cipher.vigenere.encode","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABC"}},"parameters":{},"private_parameters":["key"],"position":[0,0]}]});
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        200
+    );
+    let result = Uuid::new_v4();
+    let (status,output)=server.api("POST","/api/lab/v2/execute",json!({"schema_version":2,"id":result,"operation":"cipher.vigenere.encode","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABC"}},"parameters":{"key":secret},"retain_private_output":true,"exploration":{"id":graph,"revision":1,"step":step}})).await;
+    assert_eq!(status, 200, "{output}");
+    let request = json!({"id":Uuid::new_v4(),"revision":0,"title":"Private parameter evidence","explanation":"The private key must be supplied again for replay.","source":{"type":"result","selection":{"result_id":result,"port":"output"}}});
+    let (status, saved) = server.api("PUT", "/api/solutions", request.clone()).await;
+    assert_eq!(status, 200, "{saved}");
+    assert!(!saved.to_string().contains(secret));
+    assert_eq!(
+        saved["solution"]["configurations"][0]["steps"][0]["private_parameters"],
+        json!(["key"])
+    );
+    assert!(
+        saved["replay_current"]["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "private_parameters_required")
+    );
+    for patch in [
+        json!({"explanation":""}),
+        json!({"local_status":"verified"}),
+        json!({"verification":"verified"}),
+    ] {
+        let mut invalid = request.clone();
+        for (key, value) in patch.as_object().unwrap() {
+            invalid[key] = value.clone();
+        }
+        assert_eq!(server.api("PUT", "/api/solutions", invalid).await.0, 400);
+    }
+    let mut absent = request;
+    absent["id"] = json!(Uuid::new_v4());
+    absent["source"]["selection"]["result_id"] = json!(Uuid::new_v4());
+    assert_ne!(server.api("PUT", "/api/solutions", absent).await.0, 200);
+    let (_, list) = server.api("GET", "/api/solutions", Value::Null).await;
+    assert_eq!(list["solutions"].as_array().unwrap().len(), 1);
+    let (_, snapshot) = server
+        .api(
+            "GET",
+            &format!(
+                "/api/solutions/{}",
+                saved["solution"]["id"].as_str().unwrap()
+            ),
+            Value::Null,
+        )
+        .await;
+    assert!(!snapshot.to_string().contains(secret));
+}
+
+#[tokio::test]
+async fn solutions_reuse_exact_candidate_revisions_binary_values_and_explicit_report_fields() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let source = directory.path().join("source");
+    std::fs::write(source.join("rabbit.cube"), challenge_manifest().to_string()).unwrap();
+    std::fs::write(
+        source.join("sample.png"),
+        include_bytes!("../../../tests/fixtures/sample.png"),
+    )
+    .unwrap();
+    let (status, challenge) = server
+        .api(
+            "POST",
+            "/api/challenges/import",
+            json!({"store":"source","path":"rabbit.cube"}),
+        )
+        .await;
+    assert_eq!(status, 200, "{challenge}");
+    let key = challenge["active"]["definition"]["key"].as_str().unwrap();
+    let binary = Uuid::new_v4();
+    let (status,result)=server.api("POST","/api/lab/v2/execute",json!({"schema_version":2,"id":binary,"operation":"encoding.base64.decode","operation_version":1,"inputs":{"input":{"type":"literal","value":"AP8="}},"parameters":{}})).await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":binary,"revision":0,"title":"Binary candidate"})
+            )
+            .await
+            .0,
+        200
+    );
+    let candidate = json!({"key":key,"stage":"first","result_id":binary,"revision":0,"selection":{"kind":"field","pointer":"/output/base64","conversion":"base64_bytes"}});
+    let (status, state) = server
+        .api("PUT", "/api/challenges/candidates", candidate)
+        .await;
+    assert_eq!(status, 200, "{state}");
+    let id = Uuid::new_v4();
+    let request = json!({"id":id,"revision":0,"title":"Binary solution","explanation":"Select the exact two decoded bytes.","local_status":"resolved","source":{"type":"result","selection":{"result_id":binary,"port":"output"},"candidate":{"key":key,"stage":"first","revision":1}}});
+    let (status, saved) = server.api("PUT", "/api/solutions", request).await;
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(
+        saved["solution"]["final_metadata"]["representation"],
+        "bytes"
+    );
+    assert_eq!(
+        saved["solution"]["final_metadata"]["sha256"],
+        cube_core::hashing::sha256(&[0, 255])
+    );
+    assert_eq!(saved["solution"]["candidate"]["record"], state["candidate"]);
+    assert_eq!(saved["solution"]["verification"], "unverified");
+    assert!(
+        saved["replay_current"]["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "input_unavailable")
+    );
+    let (_, value) = server
+        .api("GET", &format!("/api/solutions/{id}/final"), Value::Null)
+        .await;
+    assert_eq!(value["value"]["base64"], "AP8=");
+    let (_, image) = server
+        .execute(
+            "image.decode",
+            json!({"type":"file","store":"source","path":"sample.png","representation":"bytes"}),
+            json!([]),
+        )
+        .await;
+    let (_, histogram) = server
+        .execute(
+            "image.histogram",
+            json!({"type":"artifact","id":image["result"]["id"]}),
+            json!([]),
+        )
+        .await;
+    let histogram_id = histogram["result"]["id"].as_str().unwrap();
+    assert_eq!(
+        server
+            .api(
+                "PUT",
+                "/api/lab/library",
+                json!({"id":histogram_id,"revision":0,"title":"Histogram candidate"})
+            )
+            .await
+            .0,
+        200
+    );
+    let (status,text_candidate)=server.api("PUT","/api/challenges/candidates",json!({"key":key,"stage":"second","result_id":histogram_id,"revision":0,"selection":{"kind":"field","pointer":"/channels/0","conversion":"text"}})).await;
+    assert_eq!(status, 200, "{text_candidate}");
+    let text = Uuid::new_v4();
+    let request = json!({"id":text,"revision":0,"title":"Selected report field","explanation":"The report explicitly identifies its first channel.","source":{"type":"result","selection":{"result_id":histogram_id,"field":{"pointer":"/channels/0","conversion":"text"}},"candidate":{"key":key,"stage":"second","revision":1}}});
+    let (status, text_saved) = server.api("PUT", "/api/solutions", request.clone()).await;
+    assert_eq!(status, 200, "{text_saved}");
+    assert_eq!(
+        text_saved["solution"]["final_metadata"]["representation"],
+        "text"
+    );
+    assert_eq!(
+        text_saved["solution"]["evidence_path"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(text_saved["solution"]["configurations"], json!([]));
+    assert_eq!(text_saved["solution"]["executions"], json!([]));
+    assert!(
+        text_saved["replay_current"]["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "legacy_history")
+    );
+    let (_, value) = server
+        .api("GET", &format!("/api/solutions/{text}/final"), Value::Null)
+        .await;
+    assert_eq!(value["value"], "red");
+    for pointer in ["/pixels", "/missing"] {
+        let mut invalid = request.clone();
+        invalid["id"] = json!(Uuid::new_v4());
+        invalid["source"]["selection"]["field"]["pointer"] = json!(pointer);
+        assert_ne!(server.api("PUT", "/api/solutions", invalid).await.0, 200);
+    }
+    let mut mismatch = request;
+    mismatch["id"] = json!(Uuid::new_v4());
+    mismatch["source"]["candidate"]["stage"] = json!("first");
+    assert_ne!(server.api("PUT", "/api/solutions", mismatch).await.0, 200);
+    let (_, after) = server.api("GET", "/api/challenges", Value::Null).await;
+    assert_eq!(
+        after, challenge,
+        "Saving a solution must not unlock or change local stage progress"
+    );
+    let other = tempfile::tempdir().unwrap();
+    let other = Server::start(other.path(), Uuid::new_v4());
+    assert_ne!(other.api("PUT","/api/solutions",json!({"id":Uuid::new_v4(),"revision":0,"title":"Wrong workspace","explanation":"An artifact from another workspace is inaccessible.","source":{"type":"result","selection":{"result_id":binary,"port":"output"}}})).await.0,200);
+}
+
+#[tokio::test]
+async fn solutions_freeze_actual_paths_and_keep_immutable_revisions_when_inputs_or_artifacts_change()
+ {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    std::fs::write(directory.path().join("source/solution.txt"), b"ABC").unwrap();
+    let graph = Uuid::new_v4();
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    let unused = Uuid::new_v4();
+    let file =
+        json!({"type":"file","store":"source","path":"solution.txt","representation":"text"});
+    let step = |id, input| json!({"id":id,"operation":"text.reverse","operation_version":1,"inputs":{"input":input},"parameters":{},"private_parameters":[],"position":[0,0]});
+    let mut definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Curated path","hypothesis":"Try alternatives without rewriting the result","scope":null,"steps":[step(a,file.clone()),step(b,json!({"type":"step","step":a,"port":"output"})),step(unused,json!({"type":"literal","value":"unused"}))]});
+    assert_eq!(
+        server
+            .api("PUT", "/api/explorations", definition.clone())
+            .await
+            .0,
+        200
+    );
+    let invoke = |id, revision, step, input| json!({"schema_version":2,"id":id,"operation":"text.reverse","operation_version":1,"inputs":{"input":input},"parameters":{},"exploration":{"id":graph,"revision":revision,"step":step}});
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    let alternative = Uuid::new_v4();
+    assert_eq!(
+        server
+            .api("POST", "/api/lab/v2/execute", invoke(first, 1, a, file))
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                invoke(
+                    alternative,
+                    1,
+                    unused,
+                    json!({"type":"literal","value":"unused"})
+                )
+            )
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                invoke(
+                    second,
+                    1,
+                    b,
+                    json!({"type":"artifact","id":first,"port":"output"})
+                )
+            )
+            .await
+            .0,
+        200
+    );
+    let id = Uuid::new_v4();
+    let request = json!({"id":id,"revision":0,"title":"Two actual reversals","explanation":"Reverse the authorized file, then reverse that retained output.","local_status":"resolved","source":{"type":"result","selection":{"result_id":second,"port":"output"}}});
+    let (status, created) = server.api("PUT", "/api/solutions", request.clone()).await;
+    assert_eq!(status, 200, "{created}");
+    let original = created["solution"].clone();
+    assert_eq!(original["privacy"], "private");
+    assert_eq!(original["verification"], "unverified");
+    assert_eq!(original["local_status"], "resolved");
+    assert_eq!(
+        original["final_metadata"]["sha256"],
+        cube_core::hashing::sha256(b"ABC")
+    );
+    assert_eq!(original["evidence_path"].as_array().unwrap().len(), 2);
+    assert!(
+        !original["evidence_path"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == alternative.to_string())
+    );
+    assert_eq!(original["configurations"].as_array().unwrap().len(), 1);
+    assert_eq!(original["configuration_scope"], "executed_path");
+    assert_eq!(
+        original["configurations"][0]["steps"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(original["executions"].as_array().unwrap().len(), 2);
+    assert_eq!(original["replay_at_save"]["status"], "inputs_available");
+    let current = server
+        .api("GET", &format!("/api/solutions/{id}"), Value::Null)
+        .await;
+    assert_eq!(current.0, 200, "{}", current.1);
+    assert_eq!(current.1["solution"], original);
+    let (status, final_value) = server
+        .api("GET", &format!("/api/solutions/{id}/final"), Value::Null)
+        .await;
+    assert_eq!(status, 200, "{final_value}");
+    assert_eq!(final_value["value"], "ABC");
+    assert_eq!(final_value["metadata"], original["final_metadata"]);
+    definition["revision"] = json!(1);
+    definition["steps"][0]["inputs"]["input"] = json!({"type":"literal","value":"NEW"});
+    assert_eq!(
+        server.api("PUT", "/api/explorations", definition).await.0,
+        200
+    );
+    let next_a = Uuid::new_v4();
+    let next_b = Uuid::new_v4();
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                invoke(next_a, 2, a, json!({"type":"literal","value":"NEW"}))
+            )
+            .await
+            .0,
+        200
+    );
+    assert_eq!(
+        server
+            .api(
+                "POST",
+                "/api/lab/v2/execute",
+                invoke(
+                    next_b,
+                    2,
+                    b,
+                    json!({"type":"artifact","id":next_a,"port":"output"})
+                )
+            )
+            .await
+            .0,
+        200
+    );
+    std::fs::write(directory.path().join("source/solution.txt"), b"XYZ").unwrap();
+    let (_, changed) = server
+        .api("GET", &format!("/api/solutions/{id}"), Value::Null)
+        .await;
+    assert_eq!(changed["solution"], original);
+    assert!(
+        changed["replay_current"]["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "source_changed")
+    );
+    let revise = json!({"id":id,"revision":1,"title":"Revised explanation","explanation":"The original input has changed; the original derivation remains preserved.","local_status":"finding","source":{"type":"revision","revision":1}});
+    let (status, revised) = server.api("PUT", "/api/solutions", revise.clone()).await;
+    assert_eq!(status, 200, "{revised}");
+    assert_eq!(revised["solution"]["revision"], 2);
+    assert_eq!(
+        revised["solution"]["evidence_path"],
+        original["evidence_path"]
+    );
+    assert_eq!(revised["solution"]["derived_from_revision"], 1);
+    assert_eq!(revised["history"].as_array().unwrap().len(), 2);
+    assert_eq!(server.api("PUT", "/api/solutions", revise).await.0, 409);
+    let (_, old) = server
+        .api(
+            "GET",
+            &format!("/api/solutions/{id}?revision=1"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(old["solution"], original);
+    assert_eq!(old["latest_revision"], 2);
+    let (_, graph_after) = server
+        .api("GET", &format!("/api/explorations/{graph}"), Value::Null)
+        .await;
+    assert_eq!(graph_after["steps"].as_array().unwrap().len(), 3);
+    let (_, runs) = server
+        .api(
+            "GET",
+            &format!("/api/explorations/{graph}/executions"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(runs.as_array().unwrap().len(), 5);
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    let (_, recovered) = server
+        .api("GET", &format!("/api/solutions/{id}"), Value::Null)
+        .await;
+    assert_eq!(recovered["solution"], revised["solution"]);
+    use sqlx::Connection;
+    let mut sql = sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(directory.path().join("state/investigation.sqlite3")),
+    )
+    .await
+    .unwrap();
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM solution_revisions WHERE solution_id=?")
+            .bind(id.to_string())
+            .fetch_one(&mut sql)
+            .await
+            .unwrap();
+    assert_eq!(count, 2);
+    assert!(
+        sqlx::query("UPDATE solution_revisions SET snapshot_json='{}'")
+            .execute(&mut sql)
+            .await
+            .is_err()
+    );
+    assert!(
+        sqlx::query("DELETE FROM solution_revisions")
+            .execute(&mut sql)
+            .await
+            .is_err()
+    );
+    sql.close().await.unwrap();
+    std::fs::write(
+        directory
+            .path()
+            .join(format!("artifacts/lab/{second}/value.bin")),
+        b"corrupt",
+    )
+    .unwrap();
+    let (_, missing) = server
+        .api("GET", &format!("/api/solutions/{id}"), Value::Null)
+        .await;
+    assert_eq!(missing["solution"], revised["solution"]);
+    assert_eq!(missing["replay_current"]["status"], "gaps");
+    assert_ne!(
+        server
+            .api("GET", &format!("/api/solutions/{id}/final"), Value::Null)
+            .await
+            .0,
+        200
+    );
+    let third = json!({"id":id,"revision":2,"title":"Recovery notes","explanation":"Retain the snapshot while restoring its artifact.","source":{"type":"revision","revision":2}});
+    assert_eq!(server.api("PUT", "/api/solutions", third).await.0, 200);
+    assert_ne!(server.api("PUT","/api/solutions",json!({"id":Uuid::new_v4(),"revision":0,"title":"Invalid new snapshot","explanation":"This artifact is corrupt.","source":{"type":"result","selection":{"result_id":second,"port":"output"}}})).await.0,200);
+}
+
+#[tokio::test]
 async fn notes_bind_actual_attempts_and_ports_without_following_a_later_graph_revision() {
     let directory = tempfile::tempdir().unwrap();
     let workspace = Uuid::new_v4();

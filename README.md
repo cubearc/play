@@ -89,6 +89,7 @@ local session. A plain browser visit without the session link shows recovery gui
 Open an image with **Open visual Lab** for Core-backed pixel values, histograms,
 channel previews and exact transformations. See the [visual Lab guide](docs/visual-lab.md).
 
+Preserve findings and their actual execution paths as [private solution revisions](docs/solutions.md).
 Use [typed explorations](docs/explorations.md) to save hypotheses, connect operation
 ports in Flow or Steps view and preserve execution history across restarts.
 

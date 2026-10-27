@@ -6,6 +6,7 @@ mod http;
 pub(crate) mod library;
 mod paths;
 mod records;
+pub(crate) mod solutions;
 
 use crate::{
     config::Config,

@@ -219,6 +219,10 @@ fn main(){
                     lab_result = json.load(response)
                     self.assertEqual(lab_result["inline"]["data"], "AP+A")
                 self.assertEqual(files_api(origin, "/api/lab/results/" + operation_id)["result"], lab_result["result"])
+                solution_id = str(uuid.uuid4())
+                solution = save_record(origin, "/api/solutions", {"id": solution_id, "revision": 0, "title": "Container recovery finding", "explanation": "Keep the real encoded byte result across environment recreation.", "source": {"type": "result", "selection": {"result_id": operation_id, "port": None, "field": None}}})
+                self.assertEqual(solution["solution"]["verification"], "unverified")
+                self.assertEqual(files_api(origin, "/api/solutions/" + solution_id + "/final")["value"], "AP+A")
                 investigation = files_api(origin, "/api/investigation")
                 saved_view = {"store": "imports", "path": "", "offset": 0, "selected": {"store": "imports", "path": "private-notes.txt"}}
                 self.assertEqual(save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": investigation["revision"]})["revision"], 2)
@@ -309,6 +313,9 @@ fn main(){
                 save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
                 save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
                 named_before = files_api(origin, "/api/lab/library")
+                solutions_before = files_api(origin, "/api/solutions")
+                self.assertTrue(solutions_before["solutions"])
+                solution_snapshots = {s["id"]: files_api(origin, "/api/solutions/" + s["id"])["solution"] for s in solutions_before["solutions"]}
                 challenge_before = files_api(origin, "/api/challenges")
                 challenge_key = challenge_before["active"]["definition"]["key"]
                 candidate_path = "/api/challenges/candidates?" + urllib.parse.urlencode({"key": challenge_key, "stage": "record"})
@@ -346,6 +353,8 @@ fn main(){
                 self.assertEqual(recovered["title"], "Persistent case")
                 self.assertEqual(recovered["view"], saved_view)
                 self.assertEqual(files_api(recovered_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(recovered_origin, "/api/solutions"), solutions_before)
+                self.assertEqual({key: files_api(recovered_origin, "/api/solutions/" + key)["solution"] for key in solution_snapshots}, solution_snapshots)
                 self.assertEqual(files_api(recovered_origin, "/api/challenges"), challenge_before)
                 self.assertEqual(files_api(recovered_origin, candidate_path), candidate_before)
 
@@ -368,6 +377,8 @@ fn main(){
                 self.assertEqual(after_crash["interrupted_sessions"], 1)
                 self.assertEqual(after_crash["view"], saved_view)
                 self.assertEqual(files_api(crash_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(crash_origin, "/api/solutions"), solutions_before)
+                self.assertEqual({key: files_api(crash_origin, "/api/solutions/" + key)["solution"] for key in solution_snapshots}, solution_snapshots)
                 self.assertEqual(files_api(crash_origin, candidate_path), candidate_before)
                 self.assertEqual({str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}, source_hashes)
 
