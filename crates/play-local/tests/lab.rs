@@ -2544,3 +2544,114 @@ async fn private_input_literals_are_per_run_and_never_enter_configuration_or_inp
         200
     );
 }
+
+#[tokio::test]
+async fn structured_field_connections_preserve_selection_and_replay_without_coercion() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let upstream = Uuid::new_v4();
+    let downstream = Uuid::new_v4();
+    let graph = Uuid::new_v4();
+    let selection = json!({"pointer":"/extracted","conversion":"text"});
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Selected evidence","hypothesis":"","scope":null,"steps":[
+        {"id":upstream,"operation":"text.josephus.extract","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABCDE"}},"parameters":{"steps":[1],"count":1},"private_parameters":[],"position":[0,0]},
+        {"id":downstream,"operation":"text.reverse","operation_version":1,"inputs":{"input":{"type":"step","step":upstream,"port":"output","selection":selection}},"parameters":{},"private_parameters":[],"position":[300,0]}
+    ]});
+    let (status, saved) = server
+        .api("PUT", "/api/explorations", definition.clone())
+        .await;
+    assert_eq!(status, 200, "{saved}");
+    let invoke = |id, step, op, input, p| json!({"schema_version":2,"id":id,"operation":op,"operation_version":1,"inputs":{"input":input},"parameters":p,"exploration":{"id":graph,"revision":1,"step":step}});
+    let id = Uuid::new_v4();
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(
+                id,
+                upstream,
+                "text.josephus.extract",
+                json!({"type":"literal","value":"ABCDE"}),
+                json!({"steps":[1],"count":1}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    let consumer = Uuid::new_v4();
+    let binding = json!({"type":"artifact","id":id,"port":"output","selection":selection});
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(consumer, downstream, "text.reverse", binding, json!({})),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["inline"]["data"]["output"], "A");
+    assert_eq!(
+        result["result"]["provenance"]["inputs"][0]["reference"]["selection"],
+        selection
+    );
+    let (_, replay) = server
+        .api(
+            "GET",
+            &format!("/api/lab/results/{consumer}/replay"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(replay["status"], "inputs_available", "{replay}");
+    for (pointer, conversion) in [
+        ("/missing", "text"),
+        ("/steps", "text"),
+        ("/extracted", "base64_bytes"),
+        ("/bad~2escape", "text"),
+    ] {
+        let bad = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"text.reverse","operation_version":1,"inputs":{"input":{"type":"artifact","id":id,"port":"output","selection":{"pointer":pointer,"conversion":conversion}}},"parameters":{}});
+        assert_ne!(server.api("POST", "/api/lab/v2/execute", bad).await.0, 200);
+    }
+    let mut cycle = definition;
+    cycle["revision"] = json!(1);
+    cycle["steps"][0]["inputs"]["input"] = json!({"type":"step","step":downstream,"port":"output"});
+    assert_ne!(server.api("PUT", "/api/explorations", cycle).await.0, 200);
+    let solution = Uuid::new_v4();
+    let preserve = json!({"id":solution,"revision":0,"title":"Selected field finding","explanation":"Retain the exact field conversion and actual path.","source":{"type":"result","selection":{"result_id":consumer,"port":"output"}}});
+    let (status, snapshot) = server.api("PUT", "/api/solutions", preserve).await;
+    assert_eq!(status, 200, "{snapshot}");
+    assert!(
+        snapshot["solution"]["configurations"]
+            .to_string()
+            .contains("/extracted")
+    );
+    assert_eq!(
+        server
+            .api(
+                "GET",
+                &format!("/api/solutions/{solution}/final"),
+                Value::Null
+            )
+            .await
+            .1["value"],
+        "A"
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    assert_eq!(
+        server
+            .api(
+                "GET",
+                &format!("/api/solutions/{solution}/final"),
+                Value::Null
+            )
+            .await
+            .1["value"],
+        "A"
+    );
+    let (_, loaded) = server
+        .api("GET", &format!("/api/explorations/{graph}"), Value::Null)
+        .await;
+    assert_eq!(
+        loaded["steps"][1]["inputs"]["input"]["selection"],
+        selection
+    );
+}

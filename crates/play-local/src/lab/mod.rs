@@ -3,6 +3,7 @@ mod candidates;
 mod domains;
 mod execute;
 mod library;
+pub(crate) mod projection;
 mod replay;
 mod solutions;
 mod storage;

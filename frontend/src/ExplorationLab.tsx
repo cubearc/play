@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ExplorationFlow } from "./ExplorationFlow";
+import { ExplorationFlow, stepState } from "./ExplorationFlow";
+import { InputField } from "./ExplorationInput";
+import { ExplorationScope } from "./ExplorationScope";
 import {
   type CatalogEntry,
   type Execution,
@@ -11,15 +13,12 @@ import {
   explorations as loadExplorations,
   type OperationResult,
   openExecution,
-  type Port,
   type Schema,
-  type Source,
   type Step,
   saveExploration,
 } from "./exploration-api";
 import type { EvidenceTarget } from "./notebook-api";
 import { OperationParameters } from "./OperationParameters";
-import { SchemaField } from "./SchemaField";
 import { TypedOutputs } from "./TypedOutputs";
 import type { Store } from "./workspace-api";
 
@@ -222,6 +221,7 @@ function Editor({
   );
   const [output, setOutput] = useState<OperationResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [pathStates, setPathStates] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("Saved locally");
@@ -275,6 +275,7 @@ function Editor({
     try {
       const saved = await saveExploration(draft);
       setDraft(saved);
+      setPathStates({});
       onSaved(saved);
       setStatus("Configuration saved locally");
     } catch (error) {
@@ -310,6 +311,29 @@ function Editor({
     setRunning(true);
     setError(null);
     setOutput(null);
+    const deadline = window.setTimeout(() => controller.abort(), 60_000);
+    const queued: Record<string, string> = {};
+    function queue(current: Step) {
+      if (queued[current.id]) return;
+      const cached =
+        current.id !== step?.id &&
+        runs.some(
+          (r) =>
+            r.step === current.id &&
+            r.configuration_revision === draft.revision &&
+            r.status === "succeeded" &&
+            typeof r.evidence.result_id === "string",
+        );
+      queued[current.id] = cached ? "succeeded" : "queued";
+      if (cached) return;
+      for (const source of Object.values(current.inputs))
+        if (source.type === "step") {
+          const producer = draft.steps.find((s) => s.id === source.step);
+          if (producer) queue(producer);
+        }
+    }
+    queue(step);
+    setPathStates(queued);
     let history = runs;
     let selectedRetained = false;
     const visited = new Set<string>();
@@ -347,6 +371,8 @@ function Editor({
           )
             await execute(producer);
         }
+      if (controller.signal.aborted) throw new Error("Execution cancelled.");
+      setPathStates((states) => ({ ...states, [current.id]: "running" }));
       setStatus(`Running ${current.operation}…`);
       const result = await executeStep(
         draft,
@@ -357,6 +383,7 @@ function Editor({
         current.id === step?.id && retainPrivateOutput,
         current.id === step?.id ? privateInputs : {},
       );
+      setPathStates((states) => ({ ...states, [current.id]: "succeeded" }));
       history = await executions(draft.id, controller.signal);
       if (mounted.current) {
         setRuns(history);
@@ -376,6 +403,20 @@ function Editor({
         );
     } catch (error) {
       if (mounted.current) {
+        setPathStates((states) =>
+          Object.fromEntries(
+            Object.entries(states).map(([id, state]) => [
+              id,
+              state === "succeeded"
+                ? state
+                : controller.signal.aborted
+                  ? "cancelled"
+                  : state === "running"
+                    ? "failed"
+                    : "not run",
+            ]),
+          ),
+        );
         setError(
           controller.signal.aborted
             ? "Execution cancelled; prior results were preserved."
@@ -386,6 +427,7 @@ function Editor({
           .catch(() => {});
       }
     } finally {
+      window.clearTimeout(deadline);
       active.current = null;
       if (mounted.current) {
         setBusy(false);
@@ -417,13 +459,25 @@ function Editor({
       if (mounted.current) setBusy(false);
     }
   }
-  const matches = catalog.filter(
-    (e) =>
-      e.execution.available &&
-      `${e.contract.operation} ${e.contract.description}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+  const matches = catalog.filter((e) =>
+    `${e.contract.operation} ${e.contract.description}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
   );
+  const chosenOperation = catalog.find(
+    (e) => e.contract.operation === operation,
+  );
+  const outputTypes = new Set(
+    entry?.contract.outputs.map((p) => p.semantic_type) ?? [],
+  );
+  const compatibleMatches = matches.filter((e) =>
+    e.contract.inputs.some(
+      (p) =>
+        outputTypes.has(p.semantic_type) ||
+        (p.semantic_type === "byte_reader" && outputTypes.has("bytes")),
+    ),
+  );
+  const otherMatches = matches.filter((e) => !compatibleMatches.includes(e));
   return (
     <div className="exploration-editor" aria-busy={busy}>
       <div className="exploration-heading">
@@ -467,6 +521,11 @@ function Editor({
         )}
       </div>
       <div className="hypothesis">
+        <ExplorationScope
+          scope={draft.scope}
+          disabled={busy}
+          onChange={(scope) => setDraft({ ...draft, scope })}
+        />
         <label htmlFor={`${formId}-hypothesis`}>Hypothesis</label>
         <textarea
           id={`${formId}-hypothesis`}
@@ -485,7 +544,10 @@ function Editor({
           <input
             value={query}
             disabled={busy}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOperation("");
+            }}
             placeholder="Search by name or purpose"
           />
         </label>
@@ -497,22 +559,55 @@ function Editor({
             onChange={(event) => setOperation(event.target.value)}
           >
             <option value="">Choose an operation…</option>
-            {matches.map((e) => (
-              <option key={e.contract.operation} value={e.contract.operation}>
-                {e.contract.operation}
-              </option>
-            ))}
+            {compatibleMatches.length > 0 && (
+              <optgroup label="Compatible with selected step outputs">
+                {compatibleMatches.map((e) => (
+                  <option
+                    key={e.contract.operation}
+                    value={e.contract.operation}
+                  >
+                    {e.contract.operation}
+                    {e.execution.available ? "" : " · unavailable"}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="All other operations">
+              {otherMatches.map((e) => (
+                <option key={e.contract.operation} value={e.contract.operation}>
+                  {e.contract.operation}
+                  {e.execution.available ? "" : " · unavailable"}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <button
           type="button"
           className="button secondary"
-          disabled={busy || !operation || draft.steps.length >= 64}
+          disabled={
+            busy ||
+            !operation ||
+            chosenOperation?.execution.available !== true ||
+            draft.steps.length >= 64
+          }
           onClick={add}
         >
           Add step
         </button>
       </div>
+      {chosenOperation && !chosenOperation.execution.available && (
+        <p role="status">
+          {chosenOperation.execution.reason ??
+            "This operation is unavailable in the current runtime."}
+        </p>
+      )}
+      {entry && (
+        <p>
+          Suggestions match declared named-port types. Actual formats,
+          dimensions and processing limits are checked when the operation runs.
+        </p>
+      )}
       <div className="exploration-toolbar">
         <fieldset className="view-switch" aria-label="Exploration view">
           <button
@@ -541,6 +636,8 @@ function Editor({
           exploration={draft}
           catalog={catalog}
           runs={runs}
+          pathStates={pathStates}
+          dirty={dirty}
           selected={selected}
           disabled={busy}
           onSelect={(id) => {
@@ -571,6 +668,9 @@ function Editor({
               >
                 {s.operation}
               </button>
+              <span aria-live="polite">
+                {stepState(draft.revision, s.id, runs, pathStates, dirty)}
+              </span>
             </li>
           ))}
         </ol>
@@ -765,8 +865,10 @@ function Editor({
                       </button>
                     )}
                     {run.status}
-                    {run.stale ? " · earlier configuration" : ""} ·{" "}
-                    {new Date(run.started_ms).toLocaleString()}
+                    {run.stale || run.configuration_revision !== draft.revision
+                      ? " · earlier configuration"
+                      : ""}{" "}
+                    · {new Date(run.started_ms).toLocaleString()}
                     <code>{run.id}</code>
                     {run.status === "succeeded" &&
                     typeof run.evidence.result_id === "string" ? (
@@ -788,153 +890,6 @@ function Editor({
         </div>
       )}
       {error && <p role="alert">{error}</p>}
-    </div>
-  );
-}
-function InputField({
-  port,
-  step,
-  exploration,
-  catalog,
-  asset,
-  onChange,
-  onValidityChange,
-  privateValue,
-  privateInput,
-}: {
-  privateValue: Json | undefined;
-  privateInput: boolean;
-  port: Port;
-  step: Step;
-  exploration: Exploration;
-  catalog: CatalogEntry[];
-  asset: { store: Store; path: string } | null;
-  onChange: (value: Source) => void;
-  onValidityChange: (valid: boolean) => void;
-}) {
-  const source = step.inputs[port.name];
-  const options = exploration.steps
-    .filter((s) => s.id !== step.id)
-    .flatMap(
-      (s) =>
-        catalog
-          .find((e) => e.contract.operation === s.operation)
-          ?.contract.outputs.filter(
-            (p) => p.semantic_type === port.semantic_type,
-          )
-          .map((p) => ({
-            step: s.id,
-            port: p.name,
-            label: `${s.operation} → ${p.name}`,
-          })) ?? [],
-    );
-  const fileRepresentation =
-    port.semantic_type === "text"
-      ? "text"
-      : port.semantic_type === "image.samples"
-        ? "image"
-        : port.semantic_type === "bytes" ||
-            port.semantic_type === "byte_reader" ||
-            port.semantic_type === "file_path"
-          ? "bytes"
-          : null;
-  const chosen =
-    source?.type === "step"
-      ? `${source.step}:${source.port}`
-      : source?.type === "file"
-        ? asset?.path === source.path && asset.store === source.store
-          ? "file"
-          : "saved_file"
-        : "literal";
-  return (
-    <div className="port-input">
-      <label>
-        {port.name} · {port.semantic_type}
-        <select
-          value={chosen}
-          onChange={(event) => {
-            onValidityChange(true);
-            if (event.target.value === "literal")
-              onChange({
-                type: "literal",
-                value: port.schema.type === "string" ? "" : null,
-              });
-            else if (
-              event.target.value === "file" &&
-              asset &&
-              fileRepresentation
-            )
-              onChange({
-                type: "file",
-                ...asset,
-                representation: fileRepresentation,
-              });
-            else {
-              const option = options.find(
-                (o) => `${o.step}:${o.port}` === event.target.value,
-              );
-              if (option)
-                onChange({
-                  type: "step",
-                  step: option.step,
-                  port: option.port,
-                });
-            }
-          }}
-        >
-          <option value="literal" disabled={port.semantic_type === "file_path"}>
-            {port.semantic_type === "file_path"
-              ? "Choose a workspace file"
-              : privateInput
-                ? "Private value for this run"
-                : "Enter a value"}
-          </option>
-          {asset && fileRepresentation && (
-            <option value="file">Selected asset: {asset.path}</option>
-          )}
-          {source?.type === "file" &&
-            (!asset ||
-              asset.path !== source.path ||
-              asset.store !== source.store) && (
-              <option value="saved_file">{source.path}</option>
-            )}
-          {options.map((o) => (
-            <option key={`${o.step}:${o.port}`} value={`${o.step}:${o.port}`}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {port.semantic_type === "file_path" && chosen === "literal" && (
-        <p>
-          Select an asset in Files. Typed paths do not grant filesystem access.
-        </p>
-      )}
-      {privateInput && (!source || source.type === "literal") && (
-        <p>
-          This private value is used only for this run. It is not saved in the
-          configuration and must be entered again.
-        </p>
-      )}
-      {port.semantic_type !== "file_path" &&
-        (!source || source.type === "literal") && (
-          <SchemaField
-            label={`${port.name} value`}
-            schema={port.schema}
-            value={
-              privateInput
-                ? privateValue
-                : source?.type === "literal"
-                  ? source.value
-                  : undefined
-            }
-            required={port.required}
-            onValidityChange={onValidityChange}
-            onChange={(value) => {
-              onChange({ type: "literal", value: value ?? null });
-            }}
-          />
-        )}
     </div>
   );
 }

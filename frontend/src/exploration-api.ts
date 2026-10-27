@@ -40,6 +40,10 @@ export type CatalogEntry = {
     adapter_version: number;
   };
 };
+export type Projection = {
+  pointer: string;
+  conversion: "text" | "base64_bytes";
+};
 export type Source =
   | { type: "literal"; value: Json }
   | {
@@ -48,8 +52,8 @@ export type Source =
       path: string;
       representation: "bytes" | "text" | "image";
     }
-  | { type: "artifact"; id: string; port: string }
-  | { type: "step"; step: string; port: string };
+  | { type: "artifact"; id: string; port: string; selection?: Projection }
+  | { type: "step"; step: string; port: string; selection?: Projection };
 export type Step = {
   id: string;
   operation: string;
@@ -224,6 +228,7 @@ export function parseExploration(value: unknown): Exploration {
               type: "step",
               step: text(b.step),
               port: text(b.port),
+              ...parseProjection(b.selection),
             };
             break;
           case "artifact":
@@ -231,6 +236,7 @@ export function parseExploration(value: unknown): Exploration {
               type: "artifact",
               id: text(b.id),
               port: text(b.port),
+              ...parseProjection(b.selection),
             };
             break;
           case "file":
@@ -266,6 +272,24 @@ export function parseExploration(value: unknown): Exploration {
         position: position as [number, number],
       };
     }),
+  };
+}
+function parseProjection(value: unknown): { selection?: Projection } {
+  if (value === undefined) return {};
+  const p = object(value);
+  if (
+    typeof p.pointer !== "string" ||
+    !p.pointer.startsWith("/") ||
+    p.pointer.length > 512 ||
+    p.pointer.split("/").length > 17 ||
+    !["text", "base64_bytes"].includes(String(p.conversion))
+  )
+    throw invalid();
+  return {
+    selection: {
+      pointer: p.pointer,
+      conversion: p.conversion as Projection["conversion"],
+    },
   };
 }
 async function request(
@@ -394,6 +418,7 @@ export async function executeStep(
       type: "artifact",
       id: run.evidence.result_id,
       port: source.port,
+      ...(source.selection ? { selection: source.selection } : {}),
     };
   }
   for (const [name, value] of Object.entries(privateInputs)) {

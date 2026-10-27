@@ -214,3 +214,28 @@ saved configuration. Authorized file and artifact references can still be saved.
 Execution evidence omits private input values and fingerprints and reports a
 replay gap. An unretained private output also leaves no output digest in saved
 execution history. Retention remains an explicit, separate choice for each run.
+
+## Reuse named outputs and structured fields
+
+For each named input, **Load saved inputs** lists the named ports of retained typed
+artifacts in this workspace. Select a compatible whole output, or explicitly select
+a string field with **Field conversion** and **Field JSON Pointer**. Pointers are
+relative to that named output: `/extracted`, `/items/0/name`, or `/samples/base64`.
+Use `~1` for a literal slash and `~0` for a tilde. Text preserves the selected string
+exactly; Base64-byte conversion uses Core and rejects invalid data. Numeric coercion,
+expressions and implicit UTF-8 decoding are unavailable.
+
+The same inputs work in Flow and keyboard-accessible Steps. Cycles are rejected,
+connections to descendants are omitted, and required values remain visible. Save
+configuration changes before running. A selected path displays queued/running and
+final states, has at most 64 steps and a 60-second total deadline, and retains
+completed evidence if a later step fails or is cancelled. A field's actual type and
+the consumer's complete contract are checked before its operation executes.
+Selections and exact projected-input digests persist in provenance and replay checks.
+
+Under **Investigation scope**, keep a free exploration or use **Load local stages**
+to associate a stage from the active, already imported local challenge. Switch the
+active challenge in Local challenges to choose another. Save the configuration to
+preserve this association. Loading/choosing a stage does not import anything, run
+operations, update progress or submit a solution; existing associations survive
+restart even when another challenge is active.

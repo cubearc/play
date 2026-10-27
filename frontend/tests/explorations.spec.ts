@@ -177,3 +177,135 @@ test("builds a typed substitution exploration and restores its immutable result"
   expect(runs.ok()).toBe(true);
   expect(await runs.json()).toHaveLength(3);
 });
+
+for (const mode of ["Flow", "Steps"]) {
+  test(`reuses a retained structured field through ${mode} with exact replay evidence`, async ({
+    page,
+    api,
+  }, info) => {
+    const origin = new URL(process.env.CUBE_PLAY_TEST_URL ?? "").origin;
+    const seed = await api.post("/api/lab/v2/execute", {
+      headers: { Origin: origin },
+      data: {
+        schema_version: 2,
+        id: crypto.randomUUID(),
+        operation: "text.josephus.extract",
+        operation_version: 1,
+        inputs: { input: { type: "literal", value: "ABCDE" } },
+        parameters: { steps: [1], count: 2 },
+      },
+    });
+    expect(seed.ok()).toBeTruthy();
+    const result = await seed.json();
+    const id = result.result.id;
+    const title = `Extracted letters ${mode} ${info.project.name}`;
+    expect(
+      (
+        await api.put("/api/lab/library", {
+          headers: { Origin: origin },
+          data: { id, title, revision: 0 },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await page.goto(process.env.CUBE_PLAY_TEST_URL ?? "");
+    await openSection(page, "Explorations");
+    const lab = page.getByRole("region", { name: "Explorations", exact: true });
+    await lab
+      .getByRole("button", { name: "New exploration", exact: true })
+      .click();
+    await lab
+      .getByLabel("Exploration name", { exact: true })
+      .fill(`Field chain ${mode} ${info.project.name}`);
+    await lab
+      .getByRole("combobox", { name: "Operation", exact: true })
+      .selectOption("text.reverse");
+    await lab.getByRole("button", { name: "Add step", exact: true }).click();
+    await lab.getByRole("button", { name: mode, exact: true }).click();
+    await lab
+      .getByRole("button", { name: "Load saved inputs", exact: true })
+      .click();
+    await lab
+      .getByRole("combobox", { name: "input · text", exact: true })
+      .selectOption(`artifact:${id}:output`);
+    await lab
+      .getByRole("textbox", { name: "Field JSON Pointer", exact: true })
+      .fill("/extracted");
+    await lab
+      .getByRole("button", { name: "Save configuration", exact: true })
+      .click();
+    await lab
+      .getByRole("button", { name: "Run selected path", exact: true })
+      .click();
+    await expect(
+      lab.getByLabel("Exact text output", { exact: true }),
+    ).toHaveValue("BA");
+    await page.reload();
+    await expect(
+      lab.getByLabel("Field JSON Pointer", { exact: true }),
+    ).toHaveValue("/extracted");
+    await lab.getByText(/Execution history ·/).click();
+    await lab
+      .getByRole("button", { name: "View retained output", exact: true })
+      .click();
+    await expect(
+      lab.getByLabel("Exact text output", { exact: true }),
+    ).toHaveValue("BA");
+  });
+}
+
+test("associates a saved exploration with a local stage without executing or changing progress", async ({
+  page,
+  api,
+}, info) => {
+  const link = process.env.CUBE_PLAY_TEST_URL;
+  if (!link) throw new Error("Local session unavailable");
+  const origin = new URL(link).origin;
+  const response = await api.post("/api/challenges/import", {
+    headers: { Origin: origin },
+    data: { store: "source", path: "rabbit.cube" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const before = await response.json();
+  const key = before.active.definition.key;
+  const stage = before.active.definition.manifest.stages[0].id;
+  await page.goto(link);
+  await openSection(page, "Explorations");
+  const lab = page.getByRole("region", { name: "Explorations", exact: true });
+  await lab
+    .getByRole("button", { name: "New exploration", exact: true })
+    .click();
+  const title = `Local stage exploration ${info.project.name}`;
+  await lab.getByLabel("Exploration name", { exact: true }).fill(title);
+  await lab
+    .getByRole("button", { name: "Load local stages", exact: true })
+    .click();
+  await expect(
+    lab.getByRole("option", {
+      name: `${before.active.definition.manifest.title} → ${before.active.definition.manifest.stages[0].title}`,
+      exact: true,
+    }),
+  ).toHaveAttribute("value", `${key}:${stage}`);
+  await lab
+    .getByRole("combobox", { name: "Exploration scope", exact: true })
+    .selectOption(`${key}:${stage}`);
+  await lab
+    .getByRole("button", { name: "Save configuration", exact: true })
+    .click();
+  await expect(
+    lab.getByRole("button", { name: "Save configuration", exact: true }),
+  ).toBeDisabled();
+  const graphs = await (await api.get("/api/explorations")).json();
+  const graph = graphs.explorations.find(
+    (item: { title: string }) => item.title === title,
+  );
+  expect(graph.scope).toEqual({ challenge: key, stage });
+  expect(
+    await (await api.get(`/api/explorations/${graph.id}/executions`)).json(),
+  ).toEqual([]);
+  const after = await (await api.get("/api/challenges")).json();
+  expect(after.active.progress).toEqual(before.active.progress);
+  await page.reload();
+  await expect(
+    lab.getByRole("combobox", { name: "Exploration scope", exact: true }),
+  ).toHaveValue(`${key}:${stage}`);
+});

@@ -254,7 +254,16 @@ async fn inspect_record(
                     .as_str()
                     .ok_or_else(Error::storage)?
                     .to_owned();
-                Some(typed::Binding::Artifact { id: upstream, port })
+                let selection = input
+                    .reference
+                    .get("selection")
+                    .map(|v| serde_json::from_value(v.clone()).map_err(|_| Error::storage()))
+                    .transpose()?;
+                Some(typed::Binding::Artifact {
+                    id: upstream,
+                    port,
+                    selection,
+                })
             }
             Some("literal") if input.reference["digest_representation"] == "json_wire_value" => {
                 port.and_then(|p| step.and_then(|step| step.inputs.get(p)))

@@ -27,6 +27,8 @@ pub(super) enum Binding {
     Artifact {
         id: Uuid,
         port: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selection: Option<super::projection::Projection>,
     },
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -267,7 +269,11 @@ pub(super) async fn resolve(
             };
             Ok((value, record))
         }
-        Binding::Artifact { id, port } => {
+        Binding::Artifact {
+            id,
+            port,
+            selection,
+        } => {
             if port.is_empty() || port.len() > 128 {
                 return Err(Error::invalid());
             }
@@ -277,8 +283,13 @@ pub(super) async fn resolve(
                 let value:Value=serde_json::from_slice(&bytes).map_err(|_|Error::storage())?;
                 let metadata=record.metadata["ports"].as_array().and_then(|ports|ports.iter().find(|p|p["name"]==port)).ok_or_else(Error::storage)?;
                 let value=value.get(&port).cloned().ok_or_else(Error::storage)?;
+                let semantic_type = selection.as_ref().map(|s| s.semantic_type().to_owned())
+                    .or_else(|| metadata["semantic_type"].as_str().map(str::to_owned)).ok_or_else(Error::storage)?;
+                let value = match &selection {Some(s) => s.select(&value)?, None => value};
                 let bytes=execute::json_bytes(&value,MAX_INPUT)?;
-                Ok((value,InputRecord {reference:json!({"type":"artifact","id":id,"port":port,"digest_representation":"json_wire_value"}),semantic_type:metadata["semantic_type"].as_str().ok_or_else(Error::storage)?.into(),byte_size:bytes.len(),sha256:cube_core::hashing::sha256(&bytes)}))
+                let mut reference=json!({"type":"artifact","id":id,"port":port,"digest_representation":"json_wire_value"});
+                if let Some(selection)=selection {reference["selection"]=json!(selection);}
+                Ok((value,InputRecord {reference,semantic_type,byte_size:bytes.len(),sha256:cube_core::hashing::sha256(&bytes)}))
             }).await.map_err(|_|Error::storage())?
         }
     }
