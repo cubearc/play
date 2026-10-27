@@ -79,12 +79,49 @@ runtime user. Runner receives no host Docker control socket.
 The browser connects to `/api/terminal/ws` with `cube-play.v1` and a separate
 `cube-play.auth.<capability>` subprotocol. The server selects only the former;
 the credential never enters the URL or reflected protocol. The exact Host and Origin, selected root and initial size are checked
-before upgrade. Browser messages only send PTY input, resize or close; executable
+before upgrade. Browser messages send PTY input, resize, close or explicit session-capture controls; executable
 paths and environment overrides are never accepted. Untrusted requests cannot
-create host processes. Probe/status messages reveal only resource availability,
+create host processes. Explicit capture controls select only an ID in the current
+session's private staging directory. Probe/status messages reveal only resource availability,
 not commands, output, notes or host paths.
 
 Native frontend/API development reports Runner unavailable until a compatible
 Linux runner socket is explicitly configured. Windows/macOS ordinary users use
 Linux containers managed by the launcher. The Vite development proxy supports
 WebSockets when an authorized native Linux runner is configured.
+
+## Send a computed result to the Lab
+
+Request capture explicitly on a supported command:
+
+```sh
+cube --lab-capture text reverse --text CUBE
+cube --lab-capture decode hex --text 00ff80 --output raw
+cube --lab-capture image histogram sample.png --max-colors 100 --json
+```
+
+`image invert` also supports capture with its ordinary explicit output option.
+Other commands remain available without capture. **Refresh staged captures** lists
+only this terminal session's private staging directory. **Send to Lab** validates
+the selected capture and publishes its exact named outputs without rerunning the
+command. Inspect the typed result and save a named artifact to reuse it in an
+exploration. Repeated publication of identical captured bytes returns the same
+immutable artifact. Publication failures preserve existing artifacts and staging.
+
+Staging is limited to 16 capture files, each at most 128 KiB; the existing private
+session tmpfs also bounds storage. Ending/disconnecting the terminal removes
+unpublished staging and its processes. Published artifacts persist separately and
+survive restart/recreation. No capture is made unless requested, and refreshing
+never publishes it. PTY bytes and ANSI presentation are never parsed as results.
+
+The private Runner transport sends bounded capture chunks only from the current
+session directory; IDs cannot authorize other sessions or arbitrary paths. Play
+checks format/operation/schema/Core versions, named outputs and exact digests with
+the canonical Core capture validator. Sources, private database paths and terminal
+history are not imported. A CLI capture is an **unverified declaration**, even when
+its structure and digests pass. Missing original input values and incomplete command
+history remain explicit replay gaps; publication does not infer replay sources.
+
+Outside Runner, use `--lab-capture=PATH`, then explicitly select that file in Files
+and use **Import selected CLI capture** in Explorations. Only already authorized
+source/import files are read, with the same bounds and unverified provenance policy.

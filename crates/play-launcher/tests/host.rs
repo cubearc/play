@@ -37,6 +37,18 @@ impl Host {
                 .unwrap()
                 .success()
         );
+        // Keep host validation of fresh unsigned macOS fixtures outside the
+        // response deadline; production binaries and security policy are unchanged.
+        #[cfg(target_os = "macos")]
+        assert!(
+            Command::new("codesign")
+                .args(["--force", "--sign", "-"])
+                .arg(&picker)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
         fs::write(root.join("selection"), "").unwrap();
         let child = Command::new(env!("CARGO_BIN_EXE_cube-play"))
             .arg("--workspace-host")

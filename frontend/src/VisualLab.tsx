@@ -289,7 +289,7 @@ export default function VisualLab({
             <figure>
               <img
                 className="image-preview"
-                src={imageLink.url ?? ""}
+                src={imageLink.url ?? undefined}
                 alt="Active Lab raster"
               />
               <figcaption>

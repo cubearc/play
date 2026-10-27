@@ -2544,3 +2544,324 @@ async fn private_input_literals_are_per_run_and_never_enter_configuration_or_inp
         200
     );
 }
+
+#[tokio::test]
+async fn explicit_capture_import_is_binary_safe_idempotent_unverified_and_survives_restart() {
+    use cube_core::investigation::session::typed_capture::TypedCapture;
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let capture = TypedCapture::from_result(
+        "encoding.hex.decode",
+        "capture-fixture",
+        &json!({"input":"00ff80"}),
+        &json!({}),
+        &json!({"output":{"base64":"AP+A"}}),
+    )
+    .unwrap();
+    let file = directory.path().join("source/capture.json");
+    std::fs::write(&file, capture.to_json().unwrap()).unwrap();
+    let request = json!({"store":"source","path":"capture.json"});
+    let (status, published) = server
+        .api("POST", "/api/lab/captures/import", request.clone())
+        .await;
+    assert_eq!(status, 200, "{published}");
+    let (_, again) = server
+        .api("POST", "/api/lab/captures/import", request.clone())
+        .await;
+    assert_eq!(again, published);
+    let id = published["id"].as_str().unwrap();
+    let path = format!("/api/lab/results/{id}");
+    let (_, result) = server.api("GET", &path, Value::Null).await;
+    assert_eq!(result["inline"]["data"]["output"]["base64"], "AP+A");
+    assert_eq!(
+        result["result"]["metadata"]["terminal_capture"]["trust"],
+        "unverified_cli_declaration"
+    );
+    let (_, replay) = server
+        .api("GET", &format!("{path}/replay"), Value::Null)
+        .await;
+    assert_eq!(replay["status"], "gaps");
+    assert!(
+        replay["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["code"] == "cli_declaration")
+    );
+    let consumer = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"encoding.hex.encode","operation_version":1,"inputs":{"input":{"type":"artifact","id":id,"port":"output"}},"parameters":{}});
+    let (status, encoded) = server.api("POST", "/api/lab/v2/execute", consumer).await;
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(encoded["inline"]["data"]["output"], "00ff80");
+    let mut forged = serde_json::to_value(&capture).unwrap();
+    forged["outputs"]["output"]["base64"] = json!("AAAA");
+    std::fs::write(&file, forged.to_string()).unwrap();
+    assert_ne!(
+        server
+            .api("POST", "/api/lab/captures/import", request.clone())
+            .await
+            .0,
+        200
+    );
+    for path in ["../capture.json", "/etc/passwd"] {
+        assert_ne!(
+            server
+                .api(
+                    "POST",
+                    "/api/lab/captures/import",
+                    json!({"store":"source","path":path})
+                )
+                .await
+                .0,
+            200
+        );
+    }
+    std::fs::write(&file, "x".repeat(128 * 1024 + 1)).unwrap();
+    assert_ne!(
+        server
+            .api("POST", "/api/lab/captures/import", request)
+            .await
+            .0,
+        200
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    assert_eq!(
+        server.api("GET", &path, Value::Null).await.1["result"]["id"],
+        id
+    );
+}
+
+#[tokio::test]
+async fn structured_field_connections_preserve_selection_and_replay_without_coercion() {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Uuid::new_v4();
+    let server = Server::start(directory.path(), workspace);
+    let upstream = Uuid::new_v4();
+    let downstream = Uuid::new_v4();
+    let graph = Uuid::new_v4();
+    let selection = json!({"pointer":"/extracted","conversion":"text"});
+    let definition = json!({"schema_version":1,"id":graph,"revision":0,"title":"Selected evidence","hypothesis":"","scope":null,"steps":[
+        {"id":upstream,"operation":"text.josephus.extract","operation_version":1,"inputs":{"input":{"type":"literal","value":"ABCDE"}},"parameters":{"steps":[1],"count":1},"private_parameters":[],"position":[0,0]},
+        {"id":downstream,"operation":"text.reverse","operation_version":1,"inputs":{"input":{"type":"step","step":upstream,"port":"output","selection":selection}},"parameters":{},"private_parameters":[],"position":[300,0]}
+    ]});
+    let (status, saved) = server
+        .api("PUT", "/api/explorations", definition.clone())
+        .await;
+    assert_eq!(status, 200, "{saved}");
+    let invoke = |id, step, op, input, p| json!({"schema_version":2,"id":id,"operation":op,"operation_version":1,"inputs":{"input":input},"parameters":p,"exploration":{"id":graph,"revision":1,"step":step}});
+    let id = Uuid::new_v4();
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(
+                id,
+                upstream,
+                "text.josephus.extract",
+                json!({"type":"literal","value":"ABCDE"}),
+                json!({"steps":[1],"count":1}),
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    let consumer = Uuid::new_v4();
+    let binding = json!({"type":"artifact","id":id,"port":"output","selection":selection});
+    let (status, result) = server
+        .api(
+            "POST",
+            "/api/lab/v2/execute",
+            invoke(consumer, downstream, "text.reverse", binding, json!({})),
+        )
+        .await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["inline"]["data"]["output"], "A");
+    assert_eq!(
+        result["result"]["provenance"]["inputs"][0]["reference"]["selection"],
+        selection
+    );
+    let (_, replay) = server
+        .api(
+            "GET",
+            &format!("/api/lab/results/{consumer}/replay"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(replay["status"], "inputs_available", "{replay}");
+    for (pointer, conversion) in [
+        ("/missing", "text"),
+        ("/steps", "text"),
+        ("/extracted", "base64_bytes"),
+        ("/bad~2escape", "text"),
+    ] {
+        let bad = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"text.reverse","operation_version":1,"inputs":{"input":{"type":"artifact","id":id,"port":"output","selection":{"pointer":pointer,"conversion":conversion}}},"parameters":{}});
+        assert_ne!(server.api("POST", "/api/lab/v2/execute", bad).await.0, 200);
+    }
+    let mut cycle = definition;
+    cycle["revision"] = json!(1);
+    cycle["steps"][0]["inputs"]["input"] = json!({"type":"step","step":downstream,"port":"output"});
+    assert_ne!(server.api("PUT", "/api/explorations", cycle).await.0, 200);
+    let solution = Uuid::new_v4();
+    let preserve = json!({"id":solution,"revision":0,"title":"Selected field finding","explanation":"Retain the exact field conversion and actual path.","source":{"type":"result","selection":{"result_id":consumer,"port":"output"}}});
+    let (status, snapshot) = server.api("PUT", "/api/solutions", preserve).await;
+    assert_eq!(status, 200, "{snapshot}");
+    assert!(
+        snapshot["solution"]["configurations"]
+            .to_string()
+            .contains("/extracted")
+    );
+    assert_eq!(
+        server
+            .api(
+                "GET",
+                &format!("/api/solutions/{solution}/final"),
+                Value::Null
+            )
+            .await
+            .1["value"],
+        "A"
+    );
+    drop(server);
+    let server = Server::start(directory.path(), workspace);
+    assert_eq!(
+        server
+            .api(
+                "GET",
+                &format!("/api/solutions/{solution}/final"),
+                Value::Null
+            )
+            .await
+            .1["value"],
+        "A"
+    );
+    let (_, loaded) = server
+        .api("GET", &format!("/api/explorations/{graph}"), Value::Null)
+        .await;
+    assert_eq!(
+        loaded["steps"][1]["inputs"]["input"]["selection"],
+        selection
+    );
+}
+
+fn same_fixture_value(actual: &Value, expected: &Value) -> bool {
+    match (actual, expected) {
+        (Value::Number(a), Value::Number(b)) if a.is_f64() || b.is_f64() => {
+            let a = a.as_f64().unwrap();
+            let b = b.as_f64().unwrap();
+            (a - b).abs() <= 1e-12 * a.abs().max(b.abs()).max(1.0)
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_fixture_value(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(k, a)| b.get(k).is_some_and(|b| same_fixture_value(a, b)))
+        }
+        _ => actual == expected,
+    }
+}
+#[tokio::test]
+async fn every_installed_operation_has_an_authorized_real_api_conformance_result() {
+    use std::collections::BTreeSet;
+    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    let ids: BTreeSet<_> = fixtures
+        .iter()
+        .map(|v| v["operation"].as_str().unwrap())
+        .collect();
+    let expected: BTreeSet<_> = cube_core::operations::catalog()
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(ids, expected);
+    assert_eq!(ids.len(), fixtures.len());
+    let mut report = Vec::new();
+    // Each fixture-owned investigation stays below existing retention quotas.
+    for batch in fixtures.chunks(32) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Server::start(directory.path(), Uuid::new_v4());
+        std::fs::write(directory.path().join("source/fixture.bin"), [0]).unwrap();
+        let (status, catalog) = server
+            .api("GET", "/api/lab/v2/operations", Value::Null)
+            .await;
+        assert_eq!(status, 200);
+        let operations = catalog["operations"].as_array().unwrap();
+        assert_eq!(
+            operations
+                .iter()
+                .map(|e| e["contract"]["operation"].as_str().unwrap())
+                .collect::<BTreeSet<_>>(),
+            expected
+        );
+        for fixture in batch {
+            let op = fixture["operation"].as_str().unwrap();
+            let entry = operations
+                .iter()
+                .find(|e| e["contract"]["operation"] == op)
+                .unwrap();
+            assert_eq!(entry["execution"]["available"], true, "{op}");
+            let c = cube_core::operations::require(op)
+                .unwrap()
+                .contract()
+                .unwrap();
+            assert_eq!(
+                fixture["contract_sha256"],
+                cube_core::hashing::sha256(&serde_json::to_vec(&c).unwrap()),
+                "{op}"
+            );
+            let mut inputs: serde_json::Map<String, Value> = fixture["inputs"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), json!({"type":"literal","value":v})))
+                .collect();
+            if op == "file.info.inspect" {
+                inputs.insert("input".into(),json!({"type":"file","store":"source","path":"fixture.bin","representation":"bytes"}));
+            }
+            let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":fixture["operation_version"],"inputs":inputs,"parameters":fixture["parameters"],"retain_private_output":true});
+            let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+            assert_eq!(status, 200, "{op}: {result}");
+            assert_eq!(result["retained"], true, "{op}");
+            let mut actual = if result["inline"]["type"] == "structured" {
+                result["inline"]["data"].clone()
+            } else {
+                let id = result["result"]["id"].as_str().unwrap();
+                server
+                    .api(
+                        "GET",
+                        &format!("/api/lab/results/{id}/content"),
+                        Value::Null,
+                    )
+                    .await
+                    .1
+            };
+            c.validate_outputs(&actual)
+                .unwrap_or_else(|e| panic!("{op}: {e}"));
+            if op == "file.info.inspect" {
+                actual["output"]["modified"] = Value::Null;
+                actual["output"]["created"] = Value::Null;
+            }
+            assert!(
+                same_fixture_value(&actual, &fixture["outputs"]),
+                "{op}: actual {actual} expected {}",
+                fixture["outputs"]
+            );
+            assert_eq!(
+                std::fs::read(directory.path().join("source/fixture.bin")).unwrap(),
+                [0]
+            );
+            report.push(json!({"operation":op,"operation_version":fixture["operation_version"],"contract_sha256":fixture["contract_sha256"],"authorized_api_execution":true,"exact_named_outputs":true,"ports":result["result"]["metadata"]["ports"],"result_sha256":result["result"]["sha256"]}));
+        }
+    }
+    assert_eq!(report.len(), expected.len());
+    let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(
+        target.join("play-operation-conformance.json"),
+        serde_json::to_vec_pretty(&report).unwrap(),
+    )
+    .unwrap();
+}

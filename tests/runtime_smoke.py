@@ -5,8 +5,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -149,6 +151,11 @@ fn main(){
             subprocess.run(["rustc", "--edition=2024", str(probe_source), "-o", str(probe)], check=True, capture_output=True)
             picker = base / ("folder-picker.exe" if os.name == "nt" else "folder-picker")
             subprocess.run(["rustc", "--edition=2024", str(ROOT / "crates/play-launcher/tests/support/folder_picker.rs"), "-o", str(picker)], check=True, capture_output=True)
+            if sys.platform == "darwin":
+                # Fresh unsigned fixture executables can spend seconds in host
+                # validation before main; sign only our temporary test probes.
+                for executable in (probe, picker):
+                    subprocess.run(["codesign", "--force", "--sign", "-", str(executable)], check=True, capture_output=True)
             (base / "selection").write_text("")
             environment.update(CUBE_PLAY_BROWSER=str(probe), CUBE_PLAY_BROWSER_RECORD=str(record))
             environment.update(CUBE_PLAY_PICKER=str(picker), CUBE_PLAY_PICKER_FIXTURE=str(base))
@@ -308,11 +315,28 @@ fn main(){
                 (source / "over-limit.png").write_bytes(bytes(4 * 1024 * 1024 + 1))
                 source_hashes = {str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source.rglob("*") if path.is_file()}
                 if (ROOT / "frontend/node_modules/.bin/playwright").exists():
-                    subprocess.run(["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(source)}, timeout=480, check=True)
+                    # Each project owns a private investigation instead of accumulating
+                    # both full suites against the unchanged 64-result retention limit.
+                    subprocess.run(["npm", "run", "test:e2e", "--", "--project", "chromium"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(source)}, timeout=480, check=True)
+                    mobile_parent = base / "mobile fixture"
+                    mobile_parent.mkdir()
+                    mobile_source = mobile_parent / source.name
+                    shutil.copytree(source, mobile_source)
+                    mobile_url = launch(mobile_source)
+                    authenticate(mobile_url)
+                    subprocess.run(["npm", "run", "test:e2e", "--", "--project", "mobile"], cwd=ROOT / "frontend", env={**os.environ, "CUBE_PLAY_DOCKER_TEST_URL": mobile_url, "CUBE_PLAY_CHOOSER_URL": chooser_url, "CUBE_PLAY_CHOOSER_PARENT": str(base), "CUBE_PLAY_CHOOSER_SOURCE": str(mobile_source)}, timeout=480, check=True)
+                    self.assertEqual({str(path.relative_to(mobile_source)): hashlib.sha256(path.read_bytes()).hexdigest() for path in mobile_source.rglob("*") if path.is_file()}, source_hashes)
                 snapshot = files_api(origin, "/api/investigation")
                 save_record(origin, "/api/investigation", {"title": "Persistent case", "revision": snapshot["revision"]})
                 save_record(origin, "/api/investigation/view", {"view": saved_view, "revision": snapshot["view_revision"]})
                 named_before = files_api(origin, "/api/lab/library")
+                typed_before = files_api(origin, "/api/explorations")
+                typed_runs = {item["id"]: files_api(origin, "/api/explorations/" + item["id"] + "/executions") for item in typed_before["explorations"]}
+                captured = {entry["entry"]["id"]: files_api(origin, "/api/lab/results/" + entry["entry"]["id"]) for entry in named_before["entries"] if entry["record"] and (entry["record"].get("metadata") or {}).get("terminal_capture")}
+                if (ROOT / "frontend/node_modules/.bin/playwright").exists():
+                    self.assertTrue(captured)
+                for capture in captured.values():
+                    self.assertEqual(capture["result"]["metadata"]["terminal_capture"]["trust"], "unverified_cli_declaration")
                 solutions_before = files_api(origin, "/api/solutions")
                 self.assertTrue(solutions_before["solutions"])
                 solution_snapshots = {s["id"]: files_api(origin, "/api/solutions/" + s["id"])["solution"] for s in solutions_before["solutions"]}
@@ -353,6 +377,14 @@ fn main(){
                 self.assertEqual(recovered["title"], "Persistent case")
                 self.assertEqual(recovered["view"], saved_view)
                 self.assertEqual(files_api(recovered_origin, "/api/lab/library"), named_before)
+                self.assertEqual(files_api(recovered_origin, "/api/explorations"), typed_before)
+                for graph, runs in typed_runs.items():
+                    self.assertEqual(files_api(recovered_origin, "/api/explorations/" + graph + "/executions"), runs)
+                for capture_id, capture in captured.items():
+                    self.assertEqual(files_api(recovered_origin, "/api/lab/results/" + capture_id), capture)
+                    replay = files_api(recovered_origin, "/api/lab/results/" + capture_id + "/replay")
+                    self.assertEqual(replay["status"], "gaps")
+                    self.assertTrue(any(gap["code"] == "cli_declaration" for gap in replay["gaps"]))
                 self.assertEqual(files_api(recovered_origin, "/api/solutions"), solutions_before)
                 self.assertEqual({key: files_api(recovered_origin, "/api/solutions/" + key)["solution"] for key in solution_snapshots}, solution_snapshots)
                 self.assertEqual(files_api(recovered_origin, "/api/challenges"), challenge_before)

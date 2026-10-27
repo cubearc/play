@@ -7,7 +7,7 @@ The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
 terminal. See [terminal boundaries](docs/terminal.md).
 Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
 Cargo consumes its exact-version library directly. The matching reference revision is
-`3f8b4beec423704941bf8e4f3d7fc24d937bf32e` (or a compatible descendant).
+`a8fc3c0842d7164c79292539fe762ffc04f13a15` (or a compatible descendant).
 CI checks out a pinned Cube revision beside Play. While Core is private,
 hosted CI requires a read-only Cube deploy key in `CUBE_CORE_READ_KEY`,
 configured by a maintainer. No key enters application containers or build contexts.
@@ -92,7 +92,10 @@ Playwright suite against the real two-container workspace on desktop/mobile. It
 checks known-answer CLI output, errors, PTY resizing/closure, accessibility, previews,
 notes/conflicts, exports, RGB/palette counts, transforms/comparison, challenge import,
 progress and candidate association. It then recreates the containers and checks
-named artifacts, candidate revisions and SQLite recovery. Source hashes must remain
+named artifacts, candidate revisions and SQLite recovery. Desktop and mobile use
+separate fixture investigations within the production retention limits. Native
+browser workers likewise own their temporary server/data directories.
+Source hashes must remain
 unchanged. The native browser suite intentionally skips its two container-only PTY cases.
 
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
@@ -133,12 +136,24 @@ only with its canonical Core contract/reference, actual result-conformance tests
 and validated Play adapter/viewer handling. Regenerate contracts in the Core
 checkout using `cargo run --locked -p cube-core --example operation_contracts`;
 never maintain a second handwritten frontend catalog.
+The Lab integration matrix reads Core's packaged synthetic conformance fixtures
+and executes every installed ID through the authorized API with real workers.
+It rejects missing/duplicate IDs, contract/version drift and incorrect named
+outputs, and writes `target/play-operation-conformance.json` for CI. Fixture-owned
+investigations are batched within existing retention quotas. File metadata times
+are validated but excluded from known-answer equality; floating-point analyses
+use a relative tolerance of 1e-12. Integers, decimal strings and bytes stay exact.
 
 On Intel macOS, unsigned rebuilt native binaries can delay worker startup beyond
 the integration-test deadline. After building the exact executable under test,
 `codesign --force --sign - target/debug/play-local` applies a local ad-hoc signature
 without a signing identity or host security-policy change. Rebuilds replace it.
+Before rerunning Cargo, also sign its matching executable under `target/debug/deps`;
+Cargo can restore the final binary from that artifact.
 This is a native development diagnostic; the ordinary launcher uses Linux containers.
+The host API and runtime suites also ad-hoc sign their own temporary browser and
+folder-picker probes on macOS so host validation does not consume the UI response
+deadline.
 
 ## Changes and review
 

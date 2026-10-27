@@ -100,6 +100,9 @@ pub(super) async fn retained_path(app: &AppState, id: Uuid) -> Result<(Report, V
         report.checked_artifacts += 1;
         report.checked_bytes += bytes.len();
         records.push(record.clone());
+        if record.metadata.get("terminal_capture").is_some() {
+            report.gap(id,None,"cli_declaration","This explicit CLI capture is an unverified declaration. Original inputs and complete command history were not retained; publication did not rerun the operation.");
+        }
         if record.semantic_type != "operation.outputs" || record.metadata["schema_version"] != 2 {
             report.gap(id, None, "legacy_history", "Legacy history has no complete typed configuration or schema evidence; it remains unassigned.");
             if record.provenance.inputs.len() > 32 {
@@ -254,7 +257,16 @@ async fn inspect_record(
                     .as_str()
                     .ok_or_else(Error::storage)?
                     .to_owned();
-                Some(typed::Binding::Artifact { id: upstream, port })
+                let selection = input
+                    .reference
+                    .get("selection")
+                    .map(|v| serde_json::from_value(v.clone()).map_err(|_| Error::storage()))
+                    .transpose()?;
+                Some(typed::Binding::Artifact {
+                    id: upstream,
+                    port,
+                    selection,
+                })
             }
             Some("literal") if input.reference["digest_representation"] == "json_wire_value" => {
                 port.and_then(|p| step.and_then(|step| step.inputs.get(p)))

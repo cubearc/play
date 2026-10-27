@@ -24,6 +24,23 @@ pub(super) fn execute(
     inputs: Value,
     parameters: Value,
 ) -> Result<Value, OperationError> {
+    // The direct Core contract accepts full-width u64 counts; pipeline integers
+    // have a smaller signed range. Preserve the declared direct contract here.
+    if matches!(operation, "binary.rotate_left" | "binary.rotate_right") {
+        let data = super::bytes(&inputs["input"])?;
+        let count = parameters["count"]
+            .as_u64()
+            .or_else(|| parameters["count"].as_str()?.parse().ok())
+            .ok_or_else(invalid)?;
+        let unit = parameters["unit_bytes"].as_u64().ok_or_else(invalid)?;
+        let unit = usize::try_from(unit).map_err(|_| invalid())?;
+        let output = if operation == "binary.rotate_left" {
+            cube_core::binary::transform::rotate_left(&data, count, unit)?
+        } else {
+            cube_core::binary::transform::rotate_right(&data, count, unit)?
+        };
+        return Ok(json!({"output":{"base64":cube_core::encoding::base64_encode(&output)}}));
+    }
     let descriptor = operations::describe(operation).ok_or_else(invalid)?;
     let input = match descriptor.input_type {
         "bytes" => pipeline::Value::Bytes {

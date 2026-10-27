@@ -384,3 +384,60 @@ describe("exploration transport and replay boundaries", () => {
     );
   });
 });
+
+it("preserves an explicit structured-field conversion while resolving an upstream step", async () => {
+  const graph: import("./exploration-api").Exploration = {
+    schema_version: 1,
+    id: "graph",
+    revision: 1,
+    title: "Fields",
+    hypothesis: "",
+    scope: null,
+    steps: [],
+  };
+  const selection = {
+    pointer: "/payload/base64",
+    conversion: "base64_bytes" as const,
+  };
+  const step: Step = {
+    id: "consumer",
+    operation: "encoding.hex.encode",
+    operation_version: 1,
+    inputs: {
+      input: { type: "step", step: "producer", port: "report", selection },
+    },
+    parameters: {},
+    private_parameters: [],
+    position: [0, 0],
+  };
+  graph.steps = [step];
+  expect(parseExploration(graph).steps[0]?.inputs.input).toEqual(
+    step.inputs.input,
+  );
+  const fetch = vi.fn().mockResolvedValue(Response.json(typedWire()));
+  vi.stubGlobal("fetch", fetch);
+  await executeStep(
+    graph,
+    step,
+    [
+      {
+        id: "run",
+        configuration_revision: 1,
+        step: "producer",
+        status: "succeeded",
+        stale: false,
+        evidence: { result_id: id },
+        started_ms: 1,
+        ended_ms: 2,
+      },
+    ],
+    {},
+    new AbortController().signal,
+  );
+  expect(JSON.parse(fetch.mock.calls[0]?.[1].body).inputs.input).toEqual({
+    type: "artifact",
+    id,
+    port: "report",
+    selection,
+  });
+});

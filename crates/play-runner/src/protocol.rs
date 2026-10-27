@@ -8,6 +8,7 @@ pub const SESSION_LIMIT: usize = 2;
 pub const IDLE_SECONDS: u64 = 300;
 pub const LIFETIME_SECONDS: u64 = 1800;
 pub const COMMAND_SECONDS: u64 = 30;
+pub const CAPTURE_LIMIT: usize = 128 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -56,16 +57,47 @@ pub enum Client {
     Input { data: String },
     Resize { size: Size },
     Close,
+    CaptureList,
+    CaptureRead { id: String },
 }
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Server {
-    Status { active: usize, limit: usize },
-    Ready { id: uuid::Uuid, size: Size },
-    Resized { size: Size },
-    Output { data: Vec<u8> },
-    End { reason: String },
-    Error { code: String },
+    Status {
+        active: usize,
+        limit: usize,
+    },
+    Ready {
+        id: uuid::Uuid,
+        size: Size,
+    },
+    Resized {
+        size: Size,
+    },
+    Output {
+        data: Vec<u8>,
+    },
+    End {
+        reason: String,
+    },
+    Error {
+        code: String,
+    },
+    Captures {
+        ids: Vec<String>,
+    },
+    CaptureData {
+        id: String,
+        data: Vec<u8>,
+        done: bool,
+    },
+}
+pub fn valid_capture(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 96
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 impl Server {
     pub fn error(code: &str) -> Self {

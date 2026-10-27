@@ -33,10 +33,14 @@ pub(crate) enum Source {
     Artifact {
         id: Uuid,
         port: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selection: Option<crate::lab::projection::Projection>,
     },
     Step {
         step: Uuid,
         port: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selection: Option<crate::lab::projection::Projection>,
     },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -112,8 +116,21 @@ impl Definition {
                             return Err(super::invalid());
                         }
                     }
-                    Source::Artifact { id, port } | Source::Step { step: id, port } => {
-                        if id.get_version_num() != 4 || port.is_empty() || port.len() > 128 {
+                    Source::Artifact {
+                        id,
+                        port,
+                        selection,
+                    }
+                    | Source::Step {
+                        step: id,
+                        port,
+                        selection,
+                    } => {
+                        if id.get_version_num() != 4
+                            || port.is_empty()
+                            || port.len() > 128
+                            || selection.as_ref().is_some_and(|s| !s.valid())
+                        {
                             return Err(super::invalid());
                         }
                     }
@@ -240,13 +257,35 @@ impl Definition {
                             return Err(super::invalid());
                         }
                     }
-                    Source::Artifact { id, port } => {
-                        if id.get_version_num() != 4 || port.is_empty() || port.len() > 128 {
+                    Source::Artifact {
+                        id,
+                        port,
+                        selection,
+                    } => {
+                        if id.get_version_num() != 4
+                            || port.is_empty()
+                            || port.len() > 128
+                            || selection.as_ref().is_some_and(|s| {
+                                !s.valid()
+                                    || !compatible(port_type(&contract, name), s.semantic_type())
+                            })
+                        {
                             return Err(super::invalid());
                         }
                     }
-                    Source::Step { step, port } => {
-                        if step.get_version_num() != 4 || port.is_empty() || port.len() > 128 {
+                    Source::Step {
+                        step,
+                        port,
+                        selection,
+                    } => {
+                        if step.get_version_num() != 4
+                            || port.is_empty()
+                            || port.len() > 128
+                            || selection.as_ref().is_some_and(|s| {
+                                !s.valid()
+                                    || !compatible(port_type(&contract, name), s.semantic_type())
+                            })
+                        {
                             return Err(super::invalid());
                         }
                     }
@@ -274,6 +313,7 @@ impl Definition {
                 if let Source::Step {
                     step: upstream,
                     port,
+                    selection,
                 } = source
                 {
                     let producer = ids.get(upstream).ok_or_else(super::invalid)?;
@@ -286,7 +326,13 @@ impl Definition {
                         .iter()
                         .find(|p| p.name == *port)
                         .ok_or_else(super::invalid)?;
-                    if !contract.accepts(input, &output.semantic_type) {
+                    if !compatible(
+                        port_type(&contract, input),
+                        selection
+                            .as_ref()
+                            .map(|s| s.semantic_type())
+                            .unwrap_or(&output.semantic_type),
+                    ) {
                         return Err(super::invalid());
                     }
                     visit(*upstream, ids, active, done)?;
@@ -309,4 +355,16 @@ impl Definition {
         }
         Ok(())
     }
+}
+fn port_type<'a>(contract: &'a operations::contracts::Contract, name: &str) -> &'a str {
+    contract
+        .inputs
+        .iter()
+        .find(|p| p.name == name)
+        .map(|p| p.semantic_type.as_str())
+        .unwrap_or("")
+}
+
+fn compatible(target: &str, source: &str) -> bool {
+    target == source || (target == "byte_reader" && source == "bytes")
 }

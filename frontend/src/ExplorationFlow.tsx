@@ -7,6 +7,8 @@ export function ExplorationFlow({
   selected,
   onSelect,
   disabled = false,
+  pathStates = {},
+  dirty = false,
 }: {
   exploration: Exploration;
   catalog: CatalogEntry[];
@@ -14,6 +16,8 @@ export function ExplorationFlow({
   selected: string | null;
   onSelect: (id: string) => void;
   disabled?: boolean;
+  pathStates?: Record<string, string>;
+  dirty?: boolean;
 }) {
   const width = Math.max(
     680,
@@ -56,7 +60,6 @@ export function ExplorationFlow({
           const contract = catalog.find(
             (e) => e.contract.operation === step.operation,
           )?.contract;
-          const run = runs.filter((r) => r.step === step.id).at(-1);
           return (
             <button
               type="button"
@@ -69,7 +72,13 @@ export function ExplorationFlow({
             >
               <span className="flow-node-caption">
                 Step {index + 1} ·{" "}
-                {run ? (run.stale ? "Changed" : run.status) : "Not run"}
+                {stepState(
+                  exploration.revision,
+                  step.id,
+                  runs,
+                  pathStates,
+                  dirty,
+                )}
               </span>
               <strong>{step.operation}</strong>
               <small>
@@ -83,4 +92,21 @@ export function ExplorationFlow({
       </div>
     </section>
   );
+}
+
+export function stepState(
+  revision: number,
+  id: string,
+  runs: Execution[],
+  states: Record<string, string>,
+  dirty: boolean,
+): string {
+  if (dirty) return "Changed";
+  if (states[id]) return states[id];
+  const run = runs.filter((r) => r.step === id).at(-1);
+  return !run
+    ? "Not run"
+    : run.stale || run.configuration_revision !== revision
+      ? "Changed"
+      : run.status;
 }

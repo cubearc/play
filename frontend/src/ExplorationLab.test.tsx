@@ -441,3 +441,38 @@ it("keeps private inputs outside saved configuration and clears them after each 
   await waitFor(() => expect(input).toHaveValue(""));
   expect(api.saveExploration).not.toHaveBeenCalled();
 });
+
+it("keeps unavailable contracts discoverable and explains why they cannot execute", async () => {
+  vi.mocked(api.catalog).mockResolvedValue([
+    {
+      ...entry,
+      execution: {
+        available: false,
+        adapter_version: 2,
+        reason: "Runtime capability unavailable",
+      },
+    },
+  ]);
+  vi.mocked(api.explorations).mockResolvedValue([
+    {
+      schema_version: 1,
+      id: "unavailable",
+      revision: 1,
+      title: "Availability",
+      hypothesis: "",
+      scope: null,
+      steps: [],
+    },
+  ]);
+  const user = userEvent.setup();
+  render(<ExplorationLab asset={null} />);
+  await user.selectOptions(
+    await screen.findByRole("combobox", { name: "Operation" }),
+    entry.contract.operation,
+  );
+  expect(
+    await screen.findByText("Runtime capability unavailable"),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Add step" })).toBeDisabled();
+  expect(api.executeStep).not.toHaveBeenCalled();
+});

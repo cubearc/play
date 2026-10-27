@@ -5,12 +5,13 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-export default async function setup() {
-  if (process.env.CUBE_PLAY_DOCKER_TEST_URL) {
+export default function setup() {
+  if (process.env.CUBE_PLAY_DOCKER_TEST_URL)
     process.env.CUBE_PLAY_TEST_URL = process.env.CUBE_PLAY_DOCKER_TEST_URL;
-    return;
-  }
+}
 
+// Each serial project worker owns an investigation within the production quotas.
+export async function startLocalServer() {
   const directory = await mkdtemp(resolve(tmpdir(), "cube-play-browser-"));
   const source = resolve(directory, "source");
   await mkdir(source);

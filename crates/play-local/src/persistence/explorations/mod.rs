@@ -187,11 +187,17 @@ impl Database {
                 Source::Step {
                     step: upstream,
                     port,
+                    selection,
                 } => {
                     let evidence:Option<String>=sqlx::query_scalar("SELECT evidence_json FROM exploration_executions WHERE exploration_id=? AND configuration_revision=? AND step_id=? AND status='succeeded' ORDER BY started_ms DESC,id DESC LIMIT 1").bind(context.id.to_string()).bind(context.revision).bind(upstream.to_string()).fetch_optional(&self.pool).await?;
                     let evidence: Value = serde_json::from_str(&evidence.ok_or_else(conflict)?)
                         .map_err(|_| failed())?;
-                    json!({"type":"artifact","id":evidence["result_id"],"port":port})
+                    let mut binding =
+                        json!({"type":"artifact","id":evidence["result_id"],"port":port});
+                    if let Some(selection) = selection {
+                        binding["selection"] = json!(selection);
+                    }
+                    binding
                 }
                 _ => serde_json::to_value(source).map_err(|_| failed())?,
             };

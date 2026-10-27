@@ -46,7 +46,7 @@ describe("local connection", () => {
       vi.fn().mockResolvedValue(
         Response.json({
           status: "ok",
-          version: "0.1.0",
+          version: "0.2.0",
           workspace: { id: "local-id", name: "Investigation" },
         }),
       ),
@@ -69,7 +69,7 @@ describe("local connection", () => {
       vi
         .fn()
         .mockResolvedValue(
-          Response.json({ status: "ok", version: "0.1.0", workspace }),
+          Response.json({ status: "ok", version: "0.2.0", workspace }),
         ),
     );
     await expect(connect(null, new AbortController().signal)).rejects.toThrow(
@@ -94,12 +94,12 @@ describe("local connection", () => {
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.1.0" }));
+      .mockResolvedValueOnce(Response.json({ status: "ok", version: "0.2.0" }));
     vi.stubGlobal("fetch", fetcher);
     const signal = new AbortController().signal;
     expect(await connect("capability", signal)).toEqual({
       status: "ok",
-      version: "0.1.0",
+      version: "0.2.0",
     });
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/session", {
       method: "POST",
@@ -121,7 +121,7 @@ describe("local connection", () => {
     setSessionToken("remembered");
     const fetcher = vi
       .fn()
-      .mockResolvedValue(Response.json({ status: "ok", version: "0.1.0" }));
+      .mockResolvedValue(Response.json({ status: "ok", version: "0.2.0" }));
     vi.stubGlobal("fetch", fetcher);
     await connect(null, new AbortController().signal);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -157,7 +157,7 @@ describe("local connection", () => {
     null,
     {},
     "ok",
-    { status: "failed", version: "0.1.0" },
+    { status: "failed", version: "0.2.0" },
     { status: "ok", version: 1 },
   ])("rejects malformed health %#", async (data) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(data)));
