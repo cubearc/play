@@ -3,7 +3,9 @@
 Use Rust stable through rustup, Node.js 24 and npm. Docker Compose v2 and Python 3.11+
 are required for container tests. Start with the [README quick start](README.md#developer-quick-start).
 The engine must support Landlock ABI 3 with its LSM enabled; use Docker Desktop
-4.94.0 or newer on macOS/Windows. Unsupported isolation fails before starting a
+4.94.0 or newer for the native macOS/Windows container workflow. Windows users
+can instead run the Linux toolchain and a local Docker Engine inside WSL; the
+Runner has the same Landlock requirement. Unsupported isolation fails before starting a
 terminal. See [terminal boundaries](docs/terminal.md).
 Keep a trusted Cube 0.18.0 checkout with canonical operation contracts at `../cube`;
 Cargo consumes its exact-version library directly. The matching reference revision is
@@ -39,6 +41,10 @@ server and real Core worker, including cancellation, binary results and restart 
 
 ## Quality checks
 
+The repository enforces LF line endings through `.gitattributes`, including on
+Windows. Keep this checkout policy so Rustfmt and Biome inspect the same source
+bytes across platforms; do not override formatter settings to accommodate CRLF.
+
 From the root, build the trusted launcher assets before Cargo checks:
 
 ```sh
@@ -55,6 +61,19 @@ npm run build --prefix frontend
 npm run test:coverage --prefix frontend
 cargo build --workspace --locked
 ```
+
+On Windows/MSVC with Rust 1.99.1, the unoptimized Cube CLI can exceed the
+main-thread stack while constructing its large command tree. Build the trusted
+CLI with optimization before checking its commands or launcher delegation:
+
+```sh
+cargo rustc --locked --manifest-path ../cube/Cargo.toml -p cube-cli -- -C opt-level=1
+```
+
+Inside WSL, keep the real Runner test CLI executable on the Linux filesystem.
+Set `CUBE_RUNNER_CUBE` to its absolute path if build outputs were moved to a
+Windows drive; do not grant the terminal additional filesystem access to work
+around an execution failure.
 
 For real desktop/mobile browser smoke tests, run from `frontend/`:
 
@@ -94,11 +113,15 @@ notes/conflicts, exports, RGB/palette counts, transforms/comparison, challenge i
 progress and candidate association. It then recreates the containers and checks
 named artifacts, candidate revisions and SQLite recovery. Source hashes must remain
 unchanged. The native browser suite intentionally skips its two container-only PTY cases.
+When running a Windows browser against a WSL host chooser, set
+`CUBE_PLAY_CHOOSER_SELECTION` to the fixture selection file accessible from
+Windows. Keep `CUBE_PLAY_CHOOSER_PARENT` and `CUBE_PLAY_CHOOSER_SOURCE` as Linux
+paths, because their values are consumed by the Linux folder-picker fixture.
 
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
 exercise PTY sessions, read isolation, output exhaustion and process cleanup.
-A test-only executable probes inherited CPU/process/file limits with lower soft
-limits after asserting the production values; memory and descriptor exhaustion
+A test-only executable probes the inherited production process limit and lower
+soft CPU/file limits after asserting the production values; memory and descriptor exhaustion
 are also checked. It runs without a shell and never ships in the runtime image. The Docker `runner-tests`
 target reproduces them on macOS/Windows. Native API development does not start a
 host terminal; configure a private Linux runner socket explicitly when needed.
@@ -180,7 +203,10 @@ The CI matrix includes native Rust tests on Linux, macOS and Windows, plus Linux
 quality/coverage, frontend and Docker jobs. For v0.1.0, the maintainer accepts the
 recorded local checks and explicitly deferred native Windows/WSL/Docker Desktop
 validation on 2026-10-27; retain that work in [the platform follow-up](https://github.com/cubearc/play/issues/24).
-Local macOS tests and Linux containers do not establish native Windows validation.
+Subsequent local Windows/MSVC Rust/API/browser tests and an Ubuntu WSL Docker
+Engine workflow were exercised on 2026-10-27, including Windows Chromium against
+the real Linux containers. This does not establish Docker Desktop named-pipe/shared-drive
+behavior or a hosted CI pass. Record integration and hosted results separately.
 Hosted jobs blocked by account billing/spending limits are accepted as a temporary
 integration exception, with no passing hosted result claimed. Keep the workflows,
 warnings policy, coverage gates and security checks intact. Record actual commit/run

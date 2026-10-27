@@ -187,13 +187,14 @@ mod tests {
                 .try_reserve_exact(512 * 1024 * 1024)
                 .is_err()
         );
-        // Verify production values above, then lower soft limits for bounded stress tests.
+        // Verify production values above, then lower CPU/file soft limits for bounded stress tests.
         use std::os::unix::process::ExitStatusExt;
         setrlimit(Resource::RLIMIT_CPU, 1, 20).unwrap();
         let status = Command::new(&config.cube).arg("cpu").status().unwrap();
         assert_eq!(status.signal(), Some(nix::libc::SIGXCPU));
         setrlimit(Resource::RLIMIT_CPU, 20, 20).unwrap();
-        setrlimit(Resource::RLIMIT_NPROC, 32, 128).unwrap();
+        // Exercise the production process limit; a smaller per-UID soft limit can
+        // already be exhausted by unrelated processes in a developer session.
         assert!(
             Command::new(&config.cube)
                 .arg("processes")
@@ -201,7 +202,6 @@ mod tests {
                 .unwrap()
                 .success()
         );
-        setrlimit(Resource::RLIMIT_NPROC, 128, 128).unwrap();
         setrlimit(Resource::RLIMIT_FSIZE, 1024 * 1024, 32 * 1024 * 1024).unwrap();
         let status = Command::new(&config.cube)
             .arg("file")

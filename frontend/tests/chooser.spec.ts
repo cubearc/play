@@ -16,6 +16,8 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
   const source = process.env.CUBE_PLAY_CHOOSER_SOURCE;
   if (!link || !parent || !source)
     throw new Error("Host chooser fixture unavailable");
+  const selection =
+    process.env.CUBE_PLAY_CHOOSER_SELECTION ?? join(parent, "selection");
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const hostOrigin = new URL(link).origin;
@@ -42,7 +44,7 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
       fullPage: true,
     });
 
-  await writeFile(join(parent, "selection"), "");
+  await writeFile(selection, "");
   await page
     .getByRole("button", { name: "Choose local directory", exact: true })
     .click();
@@ -58,7 +60,7 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
   await expect(page.getByRole("alert")).toContainText("portable folder name");
 
   const folder = `Chooser ${info.project.name} $ 空`;
-  await writeFile(join(parent, "selection"), parent);
+  await writeFile(selection, parent);
   await page.getByLabel("Workspace folder name", { exact: true }).fill(folder);
   await page
     .getByRole("button", { name: "Create workspace", exact: true })
@@ -99,7 +101,7 @@ test("creates, opens and resumes workspaces through the trusted host chooser", a
       .getByRole("button")
       .filter({ has: page.getByText(folder, { exact: true }) }),
   ).toBeEnabled();
-  await writeFile(join(parent, "selection"), source);
+  await writeFile(selection, source);
   await page
     .getByRole("button", { name: "Choose local directory", exact: true })
     .click();

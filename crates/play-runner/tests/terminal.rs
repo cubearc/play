@@ -141,7 +141,7 @@ fn real_cli_is_isolated_and_session_resources_are_released() {
         .await
         .unwrap();
         let encoded = until(&mut first, "source:/> ").await;
-        assert!(encoded.contains("aGVsbG8="));
+        assert!(encoded.contains("aGVsbG8="), "Unexpected CLI output: {encoded}");
         // A burst of small keyboard messages must wait for the bounded writer queue.
         for character in "cube encode base64 burst\r".chars() {
             send(&mut first, &Client::Input {data:character.to_string()}).await.unwrap();

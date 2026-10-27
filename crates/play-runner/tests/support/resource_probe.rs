@@ -30,7 +30,7 @@ fn main() {
         }
         Some("processes") => {
             let mut children = Children(Vec::new());
-            for _ in 0..64 {
+            for _ in 0..256 {
                 match Command::new(std::env::current_exe().unwrap())
                     .arg("wait")
                     .stdin(Stdio::null())

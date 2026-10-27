@@ -25,7 +25,10 @@ Native Windows and WSL/Docker Desktop validation is deferred to
 instructions describe intended behavior, not verified results in those environments.
 
 Install a Landlock-capable Docker Engine with Compose v2, or Docker Desktop 4.94.0+
-with Linux containers, and start the local engine. For source installation, use
+with Linux containers, and start the local engine. On Windows, a local Linux
+Docker Engine inside WSL is also supported: run Cube, Play and Docker from that
+distribution, as described in the [launcher guide](docs/launcher.md#platforms-and-permissions).
+For source installation, use
 Rust stable through rustup and Node.js 24 with npm. Build the trusted launcher UI
 before compiling the launcher. With Cube
 and Play checked out side by side, run from this repository:
