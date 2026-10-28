@@ -1,5 +1,11 @@
 # Cube Play
 
+> [!WARNING]
+> **Beta software.** CubeArc projects are under active development and are not yet
+> stable. Features, APIs, file formats and workflows may change without backward
+> compatibility. Bugs and incomplete features are expected. Keep backups of
+> important data and independently verify results before relying on them.
+
 A local investigation workspace powered by [Cube](https://github.com/cubearc/cube).
 Use the visual Lab, a real Cube terminal, private notes and retained findings.
 Structured challenges are optional.
