@@ -1,0 +1,2 @@
+# Keep formatter inputs identical on every development platform.
+* text=auto eol=lf

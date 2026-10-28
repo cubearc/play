@@ -61,6 +61,16 @@ browser workers likewise own their temporary server/data directories.
 Source hashes must remain
 unchanged. The native browser suite intentionally skips its two container-only PTY cases.
 
+When a Windows browser runs against the WSL host chooser, set
+`CUBE_PLAY_CHOOSER_SELECTION` to the fixture selection file accessible from
+Windows. Keep `CUBE_PLAY_CHOOSER_PARENT` and `CUBE_PLAY_CHOOSER_SOURCE` as Linux
+paths; the Linux folder-picker fixture consumes their values. This override
+controls only the test fixture and does not authorize application UNC mounts.
+
+Keep the real Linux Runner test CLI executable on the Linux filesystem. Set
+`CUBE_RUNNER_CUBE` to its absolute path if build outputs were moved to a Windows
+drive; do not grant the sandbox additional filesystem access to fix execution.
+
 Linux Runner integration tests use the real built CLI (or `CUBE_RUNNER_CUBE`) and
 exercise PTY sessions, read isolation, output exhaustion and process cleanup.
 A test-only executable probes inherited CPU/process/file limits with lower soft
@@ -147,12 +157,13 @@ PATH for the launcher browser-readiness fixture.
 | Session, Host/Origin, paths, symlinks, quotas and failed writes | HTTP/workspace/persistence tests and Docker/Runner checks |
 
 The CI matrix includes native Rust tests on Linux, macOS and Windows, plus Linux
-quality/coverage, frontend and Docker jobs. For v0.1.0, the maintainer accepts the
-recorded local checks and explicitly deferred native Windows/WSL/Docker Desktop
-validation on 2026-10-27; retain that work in [the platform follow-up](https://github.com/cubearc/play/issues/24).
-Local macOS tests and Linux containers do not establish native Windows validation.
-Hosted jobs blocked by account billing/spending limits are accepted as a temporary
-integration exception, with no passing hosted result claimed. Keep the workflows,
-warnings policy, coverage gates and security checks intact. Record actual commit/run
-evidence and scope decisions in the GitHub milestone. The v0.1.0 exception does not
-waive functional or conformance requirements for subsequent milestones.
+quality/coverage, frontend and Docker jobs. Record actual revisions and results in
+[the Windows/WSL validation issue](https://github.com/cubearc/play/issues/24).
+The maintainer selected local Docker Engine inside WSL for that workflow;
+Docker Desktop installation, named-pipe sharing and Desktop integration are
+separate configurations and are not required by this validation scope.
+
+Native Windows build/API/browser checks and real WSL Linux-container journeys
+must be reported separately. Preserve source hashes, private volumes and all
+warning, coverage and contract-conformance checks. Local passing results do not
+establish a hosted CI pass; report actual workflow runs and conclusions separately.

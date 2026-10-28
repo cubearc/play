@@ -4,6 +4,11 @@ Use stable Rust through rustup, Node.js 24.15+ with npm and a running local Dock
 engine with Compose v2. The Linux engine must support Landlock ABI 3; for Docker
 Desktop use 4.94.0 or newer with Linux containers.
 
+On Windows with Docker Engine installed inside WSL, run the installation and
+`cube play` commands inside that distribution. Select Windows files through their
+WSL paths, such as `/mnt/d/investigation`. Docker Desktop is optional for this
+workflow; the Engine must provide the same Linux isolation requirements.
+
 Keep trusted Cube and Play checkouts side by side. Play consumes
 `cube-core = 0.18.0` directly from `../cube`; no published crate or application
 image is assumed. From the Play repository:
@@ -21,10 +26,10 @@ local runtime image and can download pinned base images and dependencies.
 Keep the Play checkout available until setup completes, or set
 `CUBE_PLAY_RUNTIME_SOURCE` to its absolute path.
 
-Linux folder selection also needs `zenity`. Native Windows and WSL/Docker
-Desktop validation remains deferred in [the platform follow-up](https://github.com/cubearc/play/issues/24);
-the platform instructions describe intended behavior.
-Recorded validation covers native macOS and Linux-container workflows.
+Linux folder selection also needs `zenity`. In WSL, use a desktop dialog
+environment or pass an explicit source path. See [platform permissions](launcher.md#platforms-and-permissions)
+for the native Windows and WSL connection boundaries, and [verification](reference/validation.md)
+for the recorded scope of local checks.
 
 Continue with [your first inspection](getting-started.md).
 See [launcher options](launcher.md) for explicit runtime installation, offline use

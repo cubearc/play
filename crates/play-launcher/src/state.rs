@@ -377,6 +377,25 @@ mod tests {
         .unwrap();
         assert!(workspace(&home, &cwd, true, &cancelled).is_err());
     }
+    #[cfg(windows)]
+    #[test]
+    fn local_drive_paths_stay_literal_and_unc_paths_are_rejected_without_io() {
+        let local = r"D:\investigation $private 空";
+        assert_eq!(docker_path(Path::new(local)).unwrap(), local);
+        assert_eq!(
+            docker_path(Path::new(r"\\?\D:\investigation $private 空")).unwrap(),
+            local
+        );
+        for path in [
+            r"\\server\share\investigation",
+            r"\\?\UNC\server\share\investigation",
+        ] {
+            assert_eq!(
+                docker_path(Path::new(path)).unwrap_err().code,
+                "unsupported_path"
+            );
+        }
+    }
     #[cfg(unix)]
     #[test]
     fn refuses_special_paths_and_state_symlinks() {
