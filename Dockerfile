@@ -16,6 +16,7 @@ COPY --from=cube_engine /bindings/python/Cargo.toml /cube/bindings/python/Cargo.
 COPY --from=cube_engine /bindings/python/src/lib.rs /cube/bindings/python/src/lib.rs
 COPY --from=cube_engine /crates/cube-core/Cargo.toml /cube/crates/cube-core/Cargo.toml
 COPY --from=cube_engine /crates/cube-core/src/ /cube/crates/cube-core/src/
+COPY --from=cube_engine /vendor/salsa20/ /cube/vendor/salsa20/
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ ./crates/
 # COPY snapshots can have older mtimes than cached outputs; refresh local sources.
