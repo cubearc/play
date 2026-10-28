@@ -65,6 +65,9 @@ async function checkNotebook(
   await page
     .getByLabel("Stage note", { exact: true })
     .fill("The caption belongs with the image.");
+  await expect(page.getByRole("combobox", { name: "Operation" })).toHaveText(
+    "ROT13",
+  );
   await page.getByRole("button", { name: "Run cell", exact: true }).click();
   const expected =
     process.platform === "darwin"
@@ -103,7 +106,7 @@ async function checkNotebook(
     .fill("Independent notes.");
   await page.getByRole("combobox", { name: "Operation" }).click();
   await page
-    .getByRole("option", { name: "esolang.brainfuck.execute", exact: true })
+    .getByRole("option", { name: "esolang brainfuck run", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Spiral signal", exact: true })
@@ -111,7 +114,7 @@ async function checkNotebook(
   await expect(canvas).toBeVisible();
   await expect(canvas.getByRole("status")).toContainText(expected);
   await expect(page.getByRole("combobox", { name: "Operation" })).toHaveText(
-    "cipher.rot13",
+    "ROT13",
   );
   await page
     .getByRole("tab", { name: "Image and caption", exact: true })

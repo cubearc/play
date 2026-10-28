@@ -26,11 +26,14 @@ const probe = fileURLToPath(
 );
 const mac = process.platform === "darwin";
 
-test("negotiates the real Rust binary and obtains actual Core versions", async () => {
+test("negotiates the real Rust binary and obtains Core names and versions", async () => {
   await verifyNative(directory);
   const engine = await Engine.connect(binary);
   try {
     const catalog = await engine.catalog();
+    const rot13 = catalog.find((entry) => entry.operation === "cipher.rot13");
+    assert.ok(rot13);
+    assert.equal(rot13.name, "ROT13");
     assert.equal(
       catalog.find((entry) => entry.operation === "esolang.brainfuck.execute")
         ?.operation_version,

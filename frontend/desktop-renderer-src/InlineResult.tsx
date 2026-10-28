@@ -34,8 +34,8 @@ export function InlineResult({ attempts }: { attempts: readonly Attempt[] }) {
         </code>
         <ol>
           {attempts.map((attempt) => (
-            <li key={attempt.id}>
-              {attempt.operation.operation} ·{" "}
+            <li key={attempt.id} title={attempt.operation.operation}>
+              {attempt.operation.name} ·{" "}
               {attempt.running
                 ? "Running"
                 : (attempt.result?.status ?? "Rejected")}{" "}

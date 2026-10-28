@@ -30,7 +30,8 @@ and reusable pipeline definitions at Workspace level.
 1. Open **Image and caption** in **Spiral signal**. Its notebook groups the image
    and its caption in one image block, followed by a reasoning block. The caption
    remains an independently referencable text Asset.
-2. Choose **Run cell** below the caption. On macOS the real Core operation decodes
+2. Select **ROT13** and choose **Run cell** below the caption. On macOS the real
+   Core operation decodes
    `Gur xrl vf va gur cvkryf.` to `The key is in the pixels.` The result appears
    beside the cell, with its source Asset revision and session attempts.
 3. Click either asset to open its own **Trail canvas** tab. The caption canvas

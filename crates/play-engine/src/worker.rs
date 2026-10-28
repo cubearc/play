@@ -55,9 +55,12 @@ pub fn catalog() -> Result<Value> {
         .filter(|descriptor| Probe::parse(descriptor.id).is_ok())
         .map(|descriptor| {
             let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
+            let name = descriptor
+                .metadata()
+                .map_or(descriptor.command, |metadata| metadata.canonical_name);
             Ok(
                 json!({"operation":descriptor.id, "operation_version":contract.operation_version,
-                "description":descriptor.description}),
+                "name":name, "description":descriptor.description}),
             )
         })
         .collect::<Result<Vec<_>>>()?;

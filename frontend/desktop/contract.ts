@@ -12,6 +12,7 @@ export interface Invocation {
 
 export interface Operation {
   operation: string;
+  name: string;
   operation_version: number;
   description: string;
 }

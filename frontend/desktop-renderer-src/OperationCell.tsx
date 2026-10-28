@@ -28,6 +28,7 @@ export function OperationCell({
           <VscodeSingleSelect
             ref={selector}
             label="Operation"
+            title={operation?.operation}
             value={operation?.operation ?? ""}
             disabled={running}
             onChange={() =>
@@ -36,7 +37,7 @@ export function OperationCell({
           >
             {executions.operations.map((entry) => (
               <VscodeOption key={entry.operation} value={entry.operation}>
-                {entry.operation}
+                {entry.name}
               </VscodeOption>
             ))}
           </VscodeSingleSelect>

@@ -24,7 +24,9 @@ corresponding shell, storage, worker and packaging deliveries.
 
 The proof adapters invoke `cube-core`'s `cipher.rot13` and
 `esolang.brainfuck.execute`. Their descriptions and versions come from actual Core
-descriptors; this is not a replacement operation catalog. The complete current
+descriptors. Display names use Core's canonical name, such as **ROT13**, or its
+human CLI spelling when no profile name exists. Stable IDs still identify
+invocations; this is not a replacement operation catalog. The complete current
 typed API conformance matrix remains required. Input is UTF-8 text, and the proof
 result envelope holds `text` or `bytes`; it is not a saved Asset or PipelineRun.
 
