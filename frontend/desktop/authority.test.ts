@@ -4,6 +4,7 @@ import { APP_URL, ownsFrame, resourceName } from "./authority.ts";
 
 test("opens only a named packaged resource", () => {
   assert.equal(resourceName("cube-play://app/index.html"), "index.html");
+  assert.equal(resourceName("cube-play://app/app.ttf"), "app.ttf");
 });
 
 test("requires both the registered window and its current top frame", () => {

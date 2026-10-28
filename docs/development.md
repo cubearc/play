@@ -21,6 +21,21 @@ execution is refused until native policy validation is implemented. See the
 [IPC and native execution contract](reference/desktop-runtime.md) for its exact
 scope, resource accounting and remaining release requirements.
 
+The workbench uses [VSCode Elements](https://vscode-elements.github.io/) with its
+typed React components, Codicons and VS Code theme variables. The Explorer,
+resizable editor/output panes, tabs, command palette and status bar operate on an
+in-memory scratch buffer. They do not imply that a source folder is open.
+
+| Action | macOS | Windows/Linux |
+| --- | --- | --- |
+| Toggle Explorer | Cmd+B | Ctrl+B |
+| Toggle Output | Cmd+J | Ctrl+J |
+| Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
+| Run the selected operation | Cmd+Enter | Ctrl+Enter |
+
+Choose the operation, edit the input and run it. Output shows the actual value;
+Details shows the engine response. The buffer is unsaved and remains in memory.
+
 ## Developer quick start
 
 ```sh
