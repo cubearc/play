@@ -15,26 +15,43 @@ npm run desktop:smoke --prefix frontend
 npm run desktop:proof --prefix frontend
 ```
 
-The proof runs packaged React, Electron, Rust and Core over private pipes, with no
-server or Docker. It uses ephemeral text and no Workspace data. Windows/Linux
-execution is refused until native policy validation is implemented. See the
-[IPC and native execution contract](reference/desktop-runtime.md) for its exact
-scope, resource accounting and remaining release requirements.
+The preview runs packaged React, Electron, Rust and Core over private pipes, with
+no server or Docker. Windows/Linux execution is refused until native policy
+validation is implemented. See the [IPC and native execution contract](reference/desktop-runtime.md)
+for its exact scope, resource accounting and remaining release requirements.
 
-The workbench uses [VSCode Elements](https://vscode-elements.github.io/) with its
-typed React components, Codicons and VS Code theme variables. The Explorer,
-resizable editor/output panes, tabs, command palette and status bar operate on an
-in-memory scratch buffer. They do not imply that a source folder is open.
+### Explore the notebook preview
+
+The workbench uses [VSCode Elements](https://vscode-elements.github.io/) with typed
+React components, Codicons and VS Code theme variables. The resizable Explorer
+shows **Workspace → Explorations → Stages**, with trails inside each Exploration
+and reusable pipeline definitions at Workspace level.
+
+1. Open **Image and caption** in **Spiral signal**. Its notebook contains separate
+   image, caption and reasoning blocks.
+2. Choose **Run cell** below the caption. On macOS the real Core operation decodes
+   `Gur xrl vf va gur cvkryf.` to `The key is in the pixels.` The result appears
+   beside the cell, with its source Asset revision and session attempts.
+3. Click either asset to open its own **Trail canvas** tab. The caption canvas
+   shows the source binding, pipeline operation and the same result. The image
+   canvas supports inspection and zoom; native image execution is unavailable.
+4. Write a reasoning note, then switch to **Alternative hypothesis**. Each
+   Exploration retains its own notes, open tabs, operation selection and results
+   for the current session.
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
 | Toggle Explorer | Cmd+B | Ctrl+B |
-| Toggle Output | Cmd+J | Ctrl+J |
 | Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
-| Run the selected operation | Cmd+Enter | Ctrl+Enter |
+| Run the active text cell | Cmd+Enter | Ctrl+Enter |
 
-Choose the operation, edit the input and run it. Output shows the actual value;
-Details shows the engine response. The buffer is unsaved and remains in memory.
+This is an explicitly labeled example workspace built from read-only view data.
+Notes, configuration drafts and execution responses remain in memory. It does
+not create native Workspace, Stage, Asset, PipelineRun, Candidate or Solution
+records, and does not claim official Challenge validation. The renderer is a
+presentation adapter; persistent ownership and scoped commands belong to the
+Rust engine under the [desktop domain contract](reference/desktop-domain.md).
+There is no global Output panel: each cell or canvas keeps its own result.
 
 ## Developer quick start
 

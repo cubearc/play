@@ -1,78 +1,62 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
-import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
-import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/VscodeSplitLayout.js";
-import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AssetCanvas } from "./AssetCanvas";
 import { CommandPalette, type WorkbenchCommand } from "./CommandPalette";
 import { Explorer } from "./Explorer";
-import { OutputPanel } from "./OutputPanel";
-import { useProbe } from "./useProbe";
+import {
+  type ExplorationView,
+  exampleWorkspace,
+  type TrailView,
+} from "./exampleWorkspace";
+import { Notebook } from "./Notebook";
+import { useExecutions } from "./useExecutions";
 
 const mac = navigator.userAgent.includes("Mac");
 const modifier = mac ? "⌘" : "Ctrl+";
 
 export function Workbench() {
-  const probe = useProbe();
+  const executions = useExecutions();
+  const [exploration, setExploration] = useState<ExplorationView>(
+    exampleWorkspace.explorations[0],
+  );
+  const [tabs, setTabs] = useState<Record<string, readonly string[]>>({});
+  const [selection, setSelection] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [sidebar, setSidebar] = useState(true);
-  const [output, setOutput] = useState(true);
   const [palette, setPalette] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(240);
-  const [editorPercent, setEditorPercent] = useState(65);
-  const [cursor, setCursor] = useState({ line: 1, column: 1 });
-  const editor = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
-  const selector = useRef<HTMLElementTagNameMap["vscode-single-select"]>(null);
-  const gutter = useRef<HTMLPreElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(258);
   const sidebarSplit =
     useRef<HTMLElementTagNameMap["vscode-split-layout"]>(null);
-  const editorSplit =
-    useRef<HTMLElementTagNameMap["vscode-split-layout"]>(null);
-  const focusEditor = useCallback(
-    () => editor.current?.wrappedElement.focus(),
-    [],
+  const activeTab = selection[exploration.id] ?? "notebook";
+  const activeTrail = exploration.trails.find(
+    (entry) => entry.id === activeTab,
   );
-  const run = useCallback(() => {
-    setOutput(true);
-    void probe.run();
-  }, [probe.run]);
+  const captionTrail = exploration.trails.find(
+    (entry) => entry.source.content.kind === "text",
+  );
+  const runnableTrail = activeTrail ?? captionTrail;
+  const openTabs = exploration.trails.filter((entry) =>
+    tabs[exploration.id]?.includes(entry.id),
+  );
   const toggleSidebar = useCallback(() => setSidebar((value) => !value), []);
-  const toggleOutput = useCallback(() => setOutput((value) => !value), []);
-  const updateCursor = () => {
-    const field = editor.current?.wrappedElement;
-    if (!field) return;
-    const position =
-      field.selectionDirection === "backward"
-        ? field.selectionStart
-        : field.selectionEnd;
-    const lines = field.value.slice(0, position).split("\n");
-    setCursor({ line: lines.length, column: (lines.at(-1)?.length ?? 0) + 1 });
+  const openNotebook = () =>
+    setSelection((previous) => ({ ...previous, [exploration.id]: "notebook" }));
+  const openTrail = (trail: TrailView) => {
+    setTabs((previous) => ({
+      ...previous,
+      [exploration.id]: [
+        ...new Set([...(previous[exploration.id] ?? []), trail.id]),
+      ],
+    }));
+    setSelection((previous) => ({ ...previous, [exploration.id]: trail.id }));
   };
-
-  useEffect(() => {
-    let disposed = false;
-    let cleanup = () => {};
-    const control = editor.current;
-    void control?.updateComplete.then(() => {
-      if (disposed) return;
-      const field = control.wrappedElement;
-      field.wrap = "off";
-      field.spellcheck = false;
-      field.style.lineHeight = "20px";
-      field.style.padding = "8px 0";
-      field.style.border = "0";
-      const scroll = () => {
-        if (gutter.current) gutter.current.scrollTop = field.scrollTop;
-      };
-      field.addEventListener("scroll", scroll);
-      cleanup = () => field.removeEventListener("scroll", scroll);
-    });
-    return () => {
-      disposed = true;
-      cleanup();
-    };
-  }, []);
+  const run = () => {
+    if (runnableTrail?.source.content.kind !== "text") return;
+    const operation = executions.operationFor(runnableTrail);
+    if (operation) void executions.run(runnableTrail, operation);
+  };
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -86,9 +70,6 @@ export function Workbench() {
       if (key === "b" && !event.shiftKey) {
         event.preventDefault();
         toggleSidebar();
-      } else if (key === "j" && !event.shiftKey) {
-        event.preventDefault();
-        toggleOutput();
       } else if (key === "p" && event.shiftKey) {
         event.preventDefault();
         setPalette(true);
@@ -99,27 +80,31 @@ export function Workbench() {
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [toggleSidebar, toggleOutput, run, palette]);
+  });
 
   const commands: WorkbenchCommand[] = [
     {
       id: "run",
-      label: "Run active operation",
+      label: "Run notebook cell",
       shortcut: `${modifier}Enter`,
-      disabled: !probe.canRun,
+      disabled:
+        executions.busy ||
+        !runnableTrail ||
+        runnableTrail.source.content.kind !== "text" ||
+        !executions.operationFor(runnableTrail),
       execute: run,
+    },
+    {
+      id: "notebook",
+      label: "Open Stage notebook",
+      shortcut: "",
+      execute: openNotebook,
     },
     {
       id: "sidebar",
       label: "Toggle Primary Side Bar",
       shortcut: `${modifier}B`,
       execute: toggleSidebar,
-    },
-    {
-      id: "output",
-      label: "Toggle Output Panel",
-      shortcut: `${modifier}J`,
-      execute: toggleOutput,
     },
   ];
 
@@ -137,7 +122,7 @@ export function Workbench() {
           onClick={() => setPalette(true)}
         >
           <VscodeIcon name="search" />
-          <span>Scratch — Cube Play</span>
+          <span>{exampleWorkspace.title} — Cube Play</span>
           <kbd>{mac ? "⇧⌘P" : "Ctrl+Shift+P"}</kbd>
         </button>
         <div className="title-actions">
@@ -145,11 +130,6 @@ export function Workbench() {
             icon="layout-sidebar-left"
             label="Toggle Primary Side Bar"
             onClick={toggleSidebar}
-          />
-          <VscodeToolbarButton
-            icon="layout-panel"
-            label="Toggle Output Panel"
-            onClick={toggleOutput}
           />
         </div>
       </header>
@@ -164,32 +144,22 @@ export function Workbench() {
         >
           <VscodeIcon name="files" size={24} />
         </button>
-        <button
-          type="button"
-          className={output ? "activity active" : "activity"}
-          aria-label="Output"
-          aria-pressed={output}
-          title={`Output (${modifier}J)`}
-          onClick={toggleOutput}
-        >
-          <VscodeIcon name="output" size={24} />
-        </button>
       </nav>
       <VscodeSplitLayout
         ref={sidebarSplit}
         className="workspace-split"
         split="vertical"
         fixedPane="start"
-        initialHandlePosition="240px"
+        initialHandlePosition="258px"
         handlePosition={sidebar ? `${sidebarWidth}px` : "0px"}
-        minStart={sidebar ? "180px" : "0px"}
+        minStart={sidebar ? "210px" : "0px"}
         minEnd="400px"
         resetOnDblClick
         onVscSplitLayoutChange={(event) => {
           if (
             event.target === sidebarSplit.current &&
             sidebar &&
-            event.detail.position >= 180
+            event.detail.position >= 210
           )
             setSidebarWidth(event.detail.position);
         }}
@@ -197,151 +167,121 @@ export function Workbench() {
         <div slot="start" className="sidebar-slot">
           <Explorer
             hidden={!sidebar}
-            focusEditor={focusEditor}
-            selected={probe.selected}
+            exploration={exploration}
+            activeTab={activeTab}
+            selectExploration={setExploration}
+            openNotebook={openNotebook}
+            openTrail={openTrail}
           />
         </div>
-        <VscodeSplitLayout
-          ref={editorSplit}
-          slot="end"
-          className="editor-split"
-          split="horizontal"
-          handlePosition={output ? `${editorPercent}%` : "100%"}
-          initialHandlePosition="65%"
-          minStart="200px"
-          minEnd={output ? "100px" : "0px"}
-          resetOnDblClick
-          onVscSplitLayoutChange={(event) => {
-            if (
-              event.target === editorSplit.current &&
-              output &&
-              event.detail.positionInPercentage < 95
-            )
-              setEditorPercent(event.detail.positionInPercentage);
-          }}
-        >
-          <main slot="start" className="editor" aria-label="Editor">
-            <div className="editor-tabbar">
-              <button
-                type="button"
-                className="editor-tab"
-                aria-label="Untitled-1, unsaved"
-                onClick={focusEditor}
+        <main slot="end" className="editor" aria-label="Exploration editors">
+          <div
+            className="editor-tabbar"
+            role="tablist"
+            aria-label="Exploration tabs"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "notebook"}
+              className={`editor-tab ${activeTab === "notebook" ? "selected" : ""}`}
+              onClick={openNotebook}
+            >
+              <VscodeIcon name="notebook" />
+              {exploration.stage.title}
+            </button>
+            {openTabs.map((trail) => (
+              <div
+                className={`tab-with-close ${activeTab === trail.id ? "selected" : ""}`}
+                key={trail.id}
               >
-                <VscodeIcon name="file-text" />
-                Untitled-1
-                <span className="unsaved" aria-hidden="true">
-                  ●
-                </span>
-              </button>
-            </div>
-            <div className="breadcrumbs">
-              <span>Scratch</span>
-              <VscodeIcon name="chevron-right" />
-              <span>Untitled-1</span>
-            </div>
-            <div className="run-toolbar">
-              <label className="operation-label" htmlFor="operation">
-                Operation
-              </label>
-              <VscodeSingleSelect
-                id="operation"
-                ref={selector}
-                label="Operation"
-                value={probe.operation}
-                disabled={probe.running}
-                onChange={() =>
-                  probe.setOperation(selector.current?.value ?? "")
-                }
-              >
-                {probe.operations.map((entry) => (
-                  <VscodeOption key={entry.operation} value={entry.operation}>
-                    {entry.operation}
-                  </VscodeOption>
-                ))}
-              </VscodeSingleSelect>
-              <VscodeButton icon="play" disabled={!probe.canRun} onClick={run}>
-                Run
-              </VscodeButton>
-              <VscodeButton
-                icon="debug-stop"
-                secondary
-                disabled={!probe.running}
-                onClick={() => void window.play.cancel().catch(() => {})}
-              >
-                Cancel
-              </VscodeButton>
-            </div>
-            <div className="editor-buffer">
-              <pre ref={gutter} className="line-numbers" aria-hidden="true">
-                {Array.from(
-                  { length: probe.input.split("\n").length },
-                  (_, index) => index + 1,
-                ).join("\n")}
-              </pre>
-              <VscodeTextarea
-                ref={editor}
-                className="source-input"
-                label="Input"
-                monospace
-                resize="none"
-                value={probe.input}
-                disabled={probe.running}
-                spellCheck={false}
-                onInput={() => {
-                  probe.setInput(editor.current?.value ?? "");
-                  updateCursor();
-                }}
-                onClick={updateCursor}
-                onKeyUp={updateCursor}
-              />
-            </div>
-            {probe.bytes > probe.limit ? (
-              <div className="input-error" role="alert">
-                Input exceeds {probe.limit.toLocaleString()} UTF-8 bytes.
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === trail.id}
+                  className="editor-tab"
+                  onClick={() => openTrail(trail)}
+                >
+                  <VscodeIcon name="git-branch" />
+                  {trail.source.title}
+                </button>
+                <button
+                  type="button"
+                  className="close-tab"
+                  aria-label={`Close ${trail.source.title} canvas`}
+                  onClick={() => {
+                    setTabs((previous) => ({
+                      ...previous,
+                      [exploration.id]: (previous[exploration.id] ?? []).filter(
+                        (id) => id !== trail.id,
+                      ),
+                    }));
+                    if (activeTab === trail.id) openNotebook();
+                  }}
+                >
+                  <VscodeIcon name="close" />
+                </button>
               </div>
-            ) : null}
-          </main>
-          <div slot="end" className="panel-slot">
-            <OutputPanel
-              hidden={!output}
-              result={probe.result}
-              running={probe.running}
-              error={probe.error}
-              elapsed={probe.elapsed}
-              onClose={() => setOutput(false)}
-            />
+            ))}
           </div>
-        </VscodeSplitLayout>
+          <div className="breadcrumbs">
+            <span>{exampleWorkspace.title}</span>
+            <VscodeIcon name="chevron-right" />
+            <span>{exploration.title}</span>
+            <VscodeIcon name="chevron-right" />
+            <span>{exploration.stage.title}</span>
+            {activeTrail ? (
+              <>
+                <VscodeIcon name="chevron-right" />
+                <span>{activeTrail.title}</span>
+              </>
+            ) : null}
+          </div>
+          <div className="preview-banner">
+            <VscodeIcon name="info" />
+            Example workspace · changes stay in this session
+          </div>
+          {activeTrail ? (
+            <AssetCanvas
+              key={activeTrail.id}
+              trail={activeTrail}
+              executions={executions}
+            />
+          ) : (
+            <Notebook
+              exploration={exploration}
+              executions={executions}
+              note={notes[exploration.stage.id] ?? ""}
+              onNote={(value) =>
+                setNotes((previous) => ({
+                  ...previous,
+                  [exploration.stage.id]: value,
+                }))
+              }
+              openTrail={openTrail}
+            />
+          )}
+        </main>
       </VscodeSplitLayout>
       <footer className="statusbar">
         <span className="status-remote">
           <VscodeIcon name="remote" />
         </span>
         <span className="connection">
-          <VscodeIcon name={probe.running ? "sync" : "pass"} />
-          {probe.running
+          <VscodeIcon name={executions.busy ? "sync" : "pass"} />
+          {executions.busy
             ? "Running"
-            : probe.operations.length
+            : executions.operations.length
               ? "Engine ready"
               : "Connecting…"}
         </span>
+        <span>{exploration.title}</span>
         <span className="status-spacer" />
-        <span>
-          Ln {cursor.line}, Col {cursor.column}
-        </span>
-        <span>{probe.bytes.toLocaleString()} bytes</span>
-        <span>UTF-8</span>
-        <span>Plain Text</span>
+        <span>{activeTrail ? "Trail canvas" : "Stage notebook"}</span>
+        <span>Local · session only</span>
       </footer>
       {palette ? (
-        <CommandPalette
-          commands={commands}
-          onClose={() => {
-            setPalette(false);
-            focusEditor();
-          }}
-        />
+        <CommandPalette commands={commands} onClose={() => setPalette(false)} />
       ) : null}
     </div>
   );

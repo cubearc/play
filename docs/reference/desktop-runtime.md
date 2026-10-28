@@ -10,8 +10,10 @@ unresolved platform evidence remain in [the native contract issue](https://githu
 `npm run desktop:build --prefix frontend` builds `play-engine`, the packaged
 renderer resources and the preload. `npm run desktop:proof --prefix frontend`
 opens the actual Electron application. No web server, Docker or browser launcher
-participates in this path. It accepts ephemeral text, executes Core in a separate
-worker and retains no workspace, assets, credentials or history.
+participates in this path. The [notebook preview](../development.md#explore-the-notebook-preview)
+uses this boundary for its session-only text cells. The engine executes ephemeral
+text through Core in a separate worker; it does not persist Workspace, Asset,
+credential or execution records.
 
 The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper.
 Linux and Windows negotiate the protocol and expose Core adapter descriptions,
