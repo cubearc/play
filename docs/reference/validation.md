@@ -19,6 +19,13 @@ npm run test:coverage --prefix frontend
 cargo build --workspace --locked
 ```
 
+The native CI matrix sets `RUST_TEST_THREADS=1` so independent SQLite fixtures
+do not compete for the application's initialization deadline on shared hosts.
+To reproduce it locally, use `export RUST_TEST_THREADS=1` on Unix or
+`$env:RUST_TEST_THREADS = '1'` in PowerShell before running Cargo tests.
+Tests that exercise concurrent requests still run those requests concurrently;
+production deadlines, resource limits and coverage thresholds remain unchanged.
+
 For real desktop/mobile browser smoke tests, run from `frontend/`:
 
 ```sh
