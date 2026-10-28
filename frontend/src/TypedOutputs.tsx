@@ -26,6 +26,38 @@ export function TypedValue({
   value: Json;
 }) {
   const kind = viewer(semantic);
+  if (semantic === "analysis.report") {
+    const status =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? value.status
+        : null;
+    const incomplete =
+      status &&
+      typeof status === "object" &&
+      !Array.isArray(status) &&
+      status.complete === false;
+    return (
+      <>
+        <p>
+          Classical evidence and model scores are not probabilities of
+          correctness.
+        </p>
+        {incomplete && (
+          <p role="status">
+            Incomplete analysis:{" "}
+            {typeof status.stop === "string" ? status.stop : "bounded search"}.
+          </p>
+        )}
+        <textarea
+          className="text-preview"
+          readOnly
+          rows={8}
+          aria-label="Structured output"
+          value={JSON.stringify(value, null, 2).slice(0, PREVIEW_LIMIT)}
+        />
+      </>
+    );
+  }
   if (kind === "image") return <TypedImage value={value} />;
   if (kind === "text" && typeof value === "string")
     return (

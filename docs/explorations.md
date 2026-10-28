@@ -125,3 +125,12 @@ See the [typed exploration API](reference/explorations.md#local-api) for request
 ## Boundaries and recovery
 
 Configurations and execution attempts retain their own revisions. Missing inputs, changed contracts or unavailable evidence remain explicit gaps. See [compatibility, quotas and recovery](reference/explorations.md#boundaries-and-recovery).
+
+## Classical analysis
+
+Select a `cryptanalysis` operation and enter its typed JSON `request` input. Models
+and candidate lists are supplied explicitly and remain local. Reports show scores,
+provenance and completion status; an incomplete report displays a visible notice.
+Scores are heuristics, not probabilities of correctness. Candidate text is inert.
+The existing Cancel action terminates the worker and never publishes an invented
+completed report. The Core contract describes each request and its resource limits.

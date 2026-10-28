@@ -2,6 +2,7 @@
 mod audio;
 mod blockchain;
 mod brainfuck;
+mod cryptanalysis;
 mod files;
 mod fraction;
 mod image_analysis;
@@ -23,7 +24,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
-    workflows::supported(operation)
+    cryptanalysis::supported(operation)
+        || workflows::supported(operation)
         || video::supported(operation)
         || blockchain::supported(operation)
         || brainfuck::supported(operation)
@@ -66,6 +68,9 @@ pub(super) fn execute(
     parameters: Value,
 ) -> Result<Value, OperationError> {
     match operation {
+        _ if cryptanalysis::supported(operation) => {
+            cryptanalysis::execute(operation, inputs, parameters)
+        }
         "encoding.base58check.encode" => {
             let encoded: String = field(&inputs["input"], "base64")?;
             let bytes = cube_core::encoding::base64_decode(&encoded).map_err(|_| {
