@@ -27,8 +27,9 @@ React components, Codicons and VS Code theme variables. The resizable Explorer
 shows **Workspace → Explorations → Stages**, with trails inside each Exploration
 and reusable pipeline definitions at Workspace level.
 
-1. Open **Image and caption** in **Spiral signal**. Its notebook contains separate
-   image, caption and reasoning blocks.
+1. Open **Image and caption** in **Spiral signal**. Its notebook groups the image
+   and its caption in one image block, followed by a reasoning block. The caption
+   remains an independently referencable text Asset.
 2. Choose **Run cell** below the caption. On macOS the real Core operation decodes
    `Gur xrl vf va gur cvkryf.` to `The key is in the pixels.` The result appears
    beside the cell, with its source Asset revision and session attempts.

@@ -41,7 +41,7 @@ or filesystem path does not grant authority.
 | Workspace grants and private stores | One Workspace; many Explorations share its authorized execution/storage boundary. | Source grants are distinct from writable private storage and exports. |
 | Exploration | Exactly one Workspace. | Local work is never assigned through a default singleton or global active Challenge. |
 | Stage | Exactly one Exploration; zero or more per Exploration, in explicit order. | Optional origin identifies the source edition/stage; it does not replace the local Stage ID. |
-| Block | Exactly one Stage; zero or more in explicit order. | Content references resolve within the Stage's Exploration. An image and its caption remain separate Blocks/Assets. |
+| Block | Exactly one Stage; zero or more in explicit order. | Content references resolve within the Stage's Exploration. An image Block can include its caption; they render together while retaining independent Asset identities and revisions. |
 | Asset and its revisions | Exactly one Exploration, with an optional originating Block or node output. | Resolve an exact revision and representation through authorized storage. |
 | Imported files and retained output bundles | Private bytes belong to the Workspace store; logical Asset/result records belong to one Exploration. | Shared physical storage does not make another Exploration's records visible. |
 | Trail | Exactly one Exploration; optionally one local Stage. | Its chosen Pipeline belongs to the same Workspace. Trail bindings/evidence stay in the owning Exploration. |

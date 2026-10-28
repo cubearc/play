@@ -52,29 +52,27 @@ async function checkNotebook(
   await expect(
     page.getByRole("region", { name: "Output", exact: true }),
   ).toHaveCount(0);
-  await expect(
-    notebook.getByRole("article", { name: "signal.png block" }),
-  ).toBeVisible();
+  const imageBlock = notebook.getByRole("article", {
+    name: "signal.png block",
+  });
+  await expect(imageBlock).toBeVisible();
+  await expect(imageBlock.getByRole("figure")).toContainText(
+    "Gur xrl vf va gur cvkryf.",
+  );
   await expect(
     notebook.getByRole("article", { name: "Image caption block" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page
     .getByLabel("Stage note", { exact: true })
-    .fill("The caption is evidence, separate from the image.");
+    .fill("The caption belongs with the image.");
   await page.getByRole("button", { name: "Run cell", exact: true }).click();
   const expected =
     process.platform === "darwin"
       ? "The key is in the pixels."
       : "Execution rejected";
   await expect(notebook.getByRole("status")).toContainText(expected);
-  await expect(
-    notebook
-      .getByRole("article", { name: "Image caption block" })
-      .getByRole("status"),
-  ).toContainText(expected);
-  await notebook
-    .getByRole("article", { name: "Image caption block" })
-    .scrollIntoViewIfNeeded();
+  await expect(imageBlock.getByRole("status")).toContainText(expected);
+  await imageBlock.getByRole("status").scrollIntoViewIfNeeded();
   await capture("native-notebook-result");
   await page
     .getByRole("button", { name: "Explore Image caption", exact: true })
@@ -119,7 +117,7 @@ async function checkNotebook(
     .getByRole("tab", { name: "Image and caption", exact: true })
     .click();
   await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
-    "The caption is evidence, separate from the image.",
+    "The caption belongs with the image.",
   );
   await page
     .getByRole("button", { name: "Explore signal.png", exact: true })

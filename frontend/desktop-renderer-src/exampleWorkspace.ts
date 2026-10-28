@@ -9,9 +9,14 @@ export interface AssetView {
     | { readonly kind: "text"; readonly text: string };
 }
 
+export interface TextAssetView extends AssetView {
+  readonly content: { readonly kind: "text"; readonly text: string };
+}
+
 export interface BlockView {
   readonly id: string;
   readonly asset: AssetView;
+  readonly caption?: TextAssetView;
 }
 
 export interface StageView {
@@ -54,7 +59,7 @@ function exploration(id: string, title: string): ExplorationView {
     title: "signal.png",
     content: { kind: "image" },
   };
-  const caption: AssetView = {
+  const caption: TextAssetView = {
     id: `${id}-caption`,
     explorationId: id,
     revision: 1,
@@ -70,10 +75,7 @@ function exploration(id: string, title: string): ExplorationView {
       title: "Image and caption",
       introduction:
         "An image and a short caption. Inspect each source, follow a hypothesis and keep the evidence beside your reasoning.",
-      blocks: [
-        { id: `${id}-block-image`, asset: image },
-        { id: `${id}-block-caption`, asset: caption },
-      ],
+      blocks: [{ id: `${id}-block-image`, asset: image, caption }],
     },
     trails: [
       {

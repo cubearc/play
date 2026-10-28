@@ -1,9 +1,9 @@
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useRef } from "react";
-import type { ExplorationView, TrailView } from "./exampleWorkspace";
+import type { AssetView, ExplorationView, TrailView } from "./exampleWorkspace";
+import { NotebookAsset } from "./NotebookAsset";
 import { OperationCell } from "./OperationCell";
-import { SampleImage } from "./SampleImage";
 import type { Executions } from "./useExecutions";
 
 export function Notebook({
@@ -20,6 +20,12 @@ export function Notebook({
   openTrail: (trail: TrailView) => void;
 }) {
   const field = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
+  const openAsset = (asset: AssetView) => {
+    const trail = exploration.trails.find(
+      (entry) => entry.source.id === asset.id,
+    );
+    if (trail) openTrail(trail);
+  };
   return (
     <section className="notebook scroll-surface" aria-label="Stage notebook">
       <header className="document-heading">
@@ -29,7 +35,7 @@ export function Notebook({
       </header>
       {exploration.stage.blocks.map((block, index) => {
         const trail = exploration.trails.find(
-          (entry) => entry.source.id === block.asset.id,
+          (entry) => entry.source.id === (block.caption ?? block.asset).id,
         );
         return (
           <article
@@ -54,28 +60,7 @@ export function Notebook({
                 </span>
                 <span className="badge">Asset · r{block.asset.revision}</span>
               </div>
-              <button
-                className={`asset-content ${block.asset.content.kind}`}
-                type="button"
-                aria-label={`Explore ${block.asset.title}`}
-                onClick={() => {
-                  if (trail) openTrail(trail);
-                }}
-              >
-                {block.asset.content.kind === "image" ? (
-                  <SampleImage />
-                ) : (
-                  <code>{block.asset.content.text}</code>
-                )}
-                <span className="asset-open">
-                  <VscodeIcon name="open-preview" /> Open exploration canvas
-                </span>
-              </button>
-              {block.asset.content.kind === "image" ? (
-                <small className="image-caption">
-                  Illustrative source image · click to inspect in its own trail
-                </small>
-              ) : null}
+              <NotebookAsset block={block} openAsset={openAsset} />
               {trail?.pipelineId ? (
                 <OperationCell trail={trail} executions={executions} />
               ) : null}
@@ -84,7 +69,9 @@ export function Notebook({
         );
       })}
       <article className="notebook-cell note-cell" aria-label="Reasoning block">
-        <span className="cell-number">03</span>
+        <span className="cell-number">
+          {String(exploration.stage.blocks.length + 1).padStart(2, "0")}
+        </span>
         <div className="block-body">
           <div className="block-heading">
             <span>
