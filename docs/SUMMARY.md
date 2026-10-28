@@ -4,6 +4,7 @@
   - [Installation](installation.md)
   - [First inspection](getting-started.md)
   - [Open and resume workspaces](launcher.md)
+  - [Resume saved investigation state](persistence.md)
   - [Browse and import files](workspace.md)
   - [Visual Lab](visual-lab.md)
   - [Typed explorations](explorations.md)
