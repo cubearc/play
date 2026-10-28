@@ -2527,7 +2527,7 @@ async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart()
         .await;
     assert_eq!(status, 200);
     let ops = catalog["operations"].as_array().unwrap();
-    assert_eq!(ops.len(), 314);
+    assert_eq!(ops.len(), cube_core::operations::catalog().len());
     assert_eq!(
         ops.iter()
             .filter(|v| v["execution"]["available"] == true)
