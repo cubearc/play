@@ -4,6 +4,9 @@ Use the [developer quick start](docs/development.md) and keep the trusted Cube c
 
 ## Quality checks
 
+The repository enforces LF line endings through `.gitattributes`, including on Windows.
+Keep that checkout policy so formatters inspect the same bytes on every platform.
+
 Build the launcher assets before Cargo checks. From the root:
 
 ```sh

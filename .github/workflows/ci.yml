@@ -49,6 +49,8 @@ jobs:
       - run: npm run build --prefix frontend
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo test --workspace --all-features --locked
+        env:
+          RUST_TEST_THREADS: "1"
 
   rust-quality:
     name: Rust quality and coverage
