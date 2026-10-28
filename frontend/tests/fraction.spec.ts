@@ -7,7 +7,7 @@ test("runs a rail permutation and displays separate Morse padding evidence", asy
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   const catalog = await (await api.get("/api/lab/v2/operations")).json();
-  expect(catalog.operations).toHaveLength(304);
+  expect(catalog.operations).toHaveLength(312);
   await page.goto(url);
   await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });

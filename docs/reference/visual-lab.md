@@ -12,3 +12,11 @@ those Lab flows inside the actual local container. Original RGB and indexed PNG
 fixtures have known counts, palette values and transparency; malformed and oversized
 inputs are generated only in temporary test workspaces. Tests check source bytes,
 no external requests, result selection, keyboard controls, accessibility and overflow.
+
+## Raw stream transforms
+
+The private ChaCha, XChaCha, Salsa and educational Vernam operations accept
+explicit named byte inputs through the existing Lab execution API. Keys and pads
+are per-run inputs; output retention requires explicit choice. The byte viewer
+supports exact preview and export. Query installed Core contracts for exact
+profiles, nonce arrays, counter widths and limits. No pipeline adapter is enabled.
