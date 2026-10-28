@@ -115,7 +115,7 @@ test("cancels and reaps a real worker before accepting another invocation", {
     const run = engine.run({
       operation: "esolang.brainfuck.execute",
       operation_version: 2,
-      input: "+[+]",
+      input: "+[]",
     });
     await assert.rejects(
       engine.run({
@@ -233,7 +233,7 @@ test("cancellation acknowledgement follows actual worker reaping", {
         invocation: {
           operation: "esolang.brainfuck.execute",
           operation_version: 2,
-          input: "+[+]",
+          input: "+[]",
         },
       },
       { type: "cancel", id: 3, run_id: 2 },

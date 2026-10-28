@@ -319,7 +319,8 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(failed.status, "failed");
     assert.equal(failed.result?.code, "operation_failed");
     assert.equal(failed.attempts[0]?.status, "failed");
-    const loop = await runFixture(engine, "+[+]");
+    // Keep the control cell unchanged so Quit is tested against active work.
+    const loop = await runFixture(engine, "+[]");
     const running = await engine.startRun(loop);
     assert.equal(running.status, "running");
     const cancelled = await engine.cancelRun({
@@ -365,7 +366,7 @@ test("killing the real engine recovers a running node as interrupted without inv
   const temporary = await mkdtemp(join(tmpdir(), "play-run-crash-"));
   const root = join(temporary, "private");
   const setup = await Engine.connect(binary, worker, root);
-  const request = await runFixture(setup, "+[+]");
+  const request = await runFixture(setup, "+[]");
   await setup.close();
   const owner = spawn(
     binary,
