@@ -1,12 +1,23 @@
 {
-  "protocol": 1,
+  "protocol": 2,
   "engine": "0.2.0",
-  "frame_bytes": 65536,
+  "frame_bytes": 262144,
   "input_bytes": 8192,
   "queue_commands": 8,
   "handshake_ms": 3000,
   "run_ms": 2000,
   "cpu_seconds": 1,
   "vm_growth_bytes": 134217728,
-  "output_bytes": 16384
+  "output_bytes": 16384,
+  "storage_generation": 2,
+  "schema_version": 1,
+  "workspace_limit": 16,
+  "exploration_limit": 32,
+  "stage_limit": 16,
+  "block_limit": 8,
+  "text_bytes": 1024,
+  "note_bytes": 2048,
+  "image_bytes": 131072,
+  "store_bytes": 16777216,
+  "exploration_bytes": 4194304
 }

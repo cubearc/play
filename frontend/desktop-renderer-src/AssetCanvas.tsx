@@ -1,9 +1,9 @@
 import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import { useState } from "react";
-import { type TrailView, textPipeline } from "./exampleWorkspace";
+import type { TrailView } from "../desktop/workspace-contract";
+import { AssetImage } from "./AssetImage";
 import { OperationCell } from "./OperationCell";
-import { SampleImage } from "./SampleImage";
 import type { Executions } from "./useExecutions";
 
 export function AssetCanvas({
@@ -29,7 +29,7 @@ export function AssetCanvas({
           <span>
             {image
               ? "Image inspection"
-              : `Pipeline · ${textPipeline.title} · r${textPipeline.revision}`}
+              : `Pipeline · ${trail.pipeline?.title} · r${trail.pipeline?.revision}`}
           </span>
         </div>
       </header>
@@ -46,7 +46,14 @@ export function AssetCanvas({
           {trail.source.content.kind === "image" ? (
             <div className="image-viewport">
               <div style={{ width: `${zoom}%` }}>
-                <SampleImage />
+                <AssetImage
+                  asset={trail.source}
+                  context={{
+                    workspace_id: trail.workspaceId,
+                    exploration_id: trail.explorationId,
+                    stage_id: trail.stageId,
+                  }}
+                />
               </div>
             </div>
           ) : (
@@ -82,7 +89,7 @@ export function AssetCanvas({
         ) : (
           <>
             <div className="canvas-connection">
-              <span /> <code>text → {textPipeline.input}</code>{" "}
+              <span /> <code>text → {trail.pipeline?.input}</code>{" "}
               <VscodeIcon name="arrow-down" />
             </div>
             <article

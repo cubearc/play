@@ -1,56 +1,58 @@
+import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/VscodeSplitLayout.js";
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TrailView } from "../desktop/workspace-contract";
 import { AssetCanvas } from "./AssetCanvas";
 import { CommandPalette, type WorkbenchCommand } from "./CommandPalette";
+import { ContentDialog, type DialogKind } from "./ContentDialog";
 import { Explorer } from "./Explorer";
-import {
-  type ExplorationView,
-  exampleWorkspace,
-  type TrailView,
-} from "./exampleWorkspace";
 import { Notebook } from "./Notebook";
 import { useExecutions } from "./useExecutions";
+import { useWorkspace } from "./useWorkspace";
+import { WorkspaceWelcome } from "./WorkspaceWelcome";
 
 const mac = navigator.userAgent.includes("Mac");
 const modifier = mac ? "⌘" : "Ctrl+";
 
 export function Workbench() {
   const executions = useExecutions();
-  const [exploration, setExploration] = useState<ExplorationView>(
-    exampleWorkspace.explorations[0],
-  );
+  const state = useWorkspace();
+  const { workspace, exploration } = state;
+  const [welcome, setWelcome] = useState(false);
+  const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [tabs, setTabs] = useState<Record<string, readonly string[]>>({});
   const [selection, setSelection] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState<Record<string, string>>({});
   const [sidebar, setSidebar] = useState(true);
   const [palette, setPalette] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(258);
   const sidebarSplit =
     useRef<HTMLElementTagNameMap["vscode-split-layout"]>(null);
-  const activeTab = selection[exploration.id] ?? "notebook";
-  const activeTrail = exploration.trails.find(
+  const contextKey = exploration
+    ? `${exploration.id}/${exploration.stage.id}`
+    : "";
+  const activeTab = selection[contextKey] ?? "notebook";
+  const activeTrail = exploration?.trails.find(
     (entry) => entry.id === activeTab,
   );
-  const captionTrail = exploration.trails.find(
+  const captionTrail = exploration?.trails.find(
     (entry) => entry.source.content.kind === "text",
   );
   const runnableTrail = activeTrail ?? captionTrail;
-  const openTabs = exploration.trails.filter((entry) =>
-    tabs[exploration.id]?.includes(entry.id),
-  );
+  const openTabs =
+    exploration?.trails.filter((entry) =>
+      tabs[contextKey]?.includes(entry.id),
+    ) ?? [];
   const toggleSidebar = useCallback(() => setSidebar((value) => !value), []);
   const openNotebook = () =>
-    setSelection((previous) => ({ ...previous, [exploration.id]: "notebook" }));
+    setSelection((previous) => ({ ...previous, [contextKey]: "notebook" }));
   const openTrail = (trail: TrailView) => {
     setTabs((previous) => ({
       ...previous,
-      [exploration.id]: [
-        ...new Set([...(previous[exploration.id] ?? []), trail.id]),
-      ],
+      [contextKey]: [...new Set([...(previous[contextKey] ?? []), trail.id])],
     }));
-    setSelection((previous) => ({ ...previous, [exploration.id]: trail.id }));
+    setSelection((previous) => ({ ...previous, [contextKey]: trail.id }));
   };
   const run = () => {
     if (runnableTrail?.source.content.kind !== "text") return;
@@ -73,6 +75,9 @@ export function Workbench() {
       } else if (key === "p" && event.shiftKey) {
         event.preventDefault();
         setPalette(true);
+      } else if (key === "s" && !event.shiftKey && !palette) {
+        event.preventDefault();
+        void state.saveNote();
       } else if (key === "enter" && !event.shiftKey && !palette) {
         event.preventDefault();
         run();
@@ -122,7 +127,7 @@ export function Workbench() {
           onClick={() => setPalette(true)}
         >
           <VscodeIcon name="search" />
-          <span>{exampleWorkspace.title} — Cube Play</span>
+          <span>{workspace?.title ?? "Cube Play"} — Cube Play</span>
           <kbd>{mac ? "⇧⌘P" : "Ctrl+Shift+P"}</kbd>
         </button>
         <div className="title-actions">
@@ -167,99 +172,144 @@ export function Workbench() {
         <div slot="start" className="sidebar-slot">
           <Explorer
             hidden={!sidebar}
+            workspace={workspace}
             exploration={exploration}
             activeTab={activeTab}
-            selectExploration={setExploration}
+            busy={state.busy}
+            selectExploration={(id) => {
+              setWelcome(false);
+              void state.selectExploration(id);
+            }}
+            selectStage={(id) => void state.selectStage(id)}
+            newExploration={() => setDialog("exploration")}
+            newStage={() => setDialog("stage")}
+            chooseWorkspace={() => setWelcome(true)}
             openNotebook={openNotebook}
             openTrail={openTrail}
           />
         </div>
         <main slot="end" className="editor" aria-label="Exploration editors">
-          <div
-            className="editor-tabbar"
-            role="tablist"
-            aria-label="Exploration tabs"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "notebook"}
-              className={`editor-tab ${activeTab === "notebook" ? "selected" : ""}`}
-              onClick={openNotebook}
-            >
-              <VscodeIcon name="notebook" />
-              {exploration.stage.title}
-            </button>
-            {openTabs.map((trail) => (
+          {state.error ? (
+            <div className="workspace-error" role="alert">
+              {state.error}
+              <button
+                type="button"
+                aria-label="Dismiss error"
+                onClick={state.clearError}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          {!workspace || welcome ? (
+            <WorkspaceWelcome
+              state={state}
+              onOpened={() => setWelcome(false)}
+            />
+          ) : !exploration ? (
+            <section className="workspace-welcome" aria-label="Empty workspace">
+              <VscodeIcon name="beaker" size={40} />
+              <h1>{workspace.title}</h1>
+              <p>Create an Exploration to start a local notebook.</p>
+              <VscodeButton
+                icon="add"
+                disabled={state.busy}
+                onClick={() => setDialog("exploration")}
+              >
+                New Exploration
+              </VscodeButton>
+            </section>
+          ) : (
+            <>
               <div
-                className={`tab-with-close ${activeTab === trail.id ? "selected" : ""}`}
-                key={trail.id}
+                className="editor-tabbar"
+                role="tablist"
+                aria-label="Exploration tabs"
               >
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={activeTab === trail.id}
-                  className="editor-tab"
-                  onClick={() => openTrail(trail)}
+                  aria-selected={activeTab === "notebook"}
+                  className={`editor-tab ${activeTab === "notebook" ? "selected" : ""}`}
+                  onClick={openNotebook}
                 >
-                  <VscodeIcon name="git-branch" />
-                  {trail.source.title}
+                  <VscodeIcon name="notebook" />
+                  {exploration.stage.title}
                 </button>
-                <button
-                  type="button"
-                  className="close-tab"
-                  aria-label={`Close ${trail.source.title} canvas`}
-                  onClick={() => {
-                    setTabs((previous) => ({
-                      ...previous,
-                      [exploration.id]: (previous[exploration.id] ?? []).filter(
-                        (id) => id !== trail.id,
-                      ),
-                    }));
-                    if (activeTab === trail.id) openNotebook();
-                  }}
-                >
-                  <VscodeIcon name="close" />
-                </button>
+                {openTabs.map((trail) => (
+                  <div
+                    className={`tab-with-close ${activeTab === trail.id ? "selected" : ""}`}
+                    key={trail.id}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === trail.id}
+                      className="editor-tab"
+                      onClick={() => openTrail(trail)}
+                    >
+                      <VscodeIcon name="git-branch" />
+                      {trail.source.title}
+                    </button>
+                    <button
+                      type="button"
+                      className="close-tab"
+                      aria-label={`Close ${trail.source.title} canvas`}
+                      onClick={() => {
+                        setTabs((previous) => ({
+                          ...previous,
+                          [contextKey]: (previous[contextKey] ?? []).filter(
+                            (id) => id !== trail.id,
+                          ),
+                        }));
+                        if (activeTab === trail.id) openNotebook();
+                      }}
+                    >
+                      <VscodeIcon name="close" />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="breadcrumbs">
-            <span>{exampleWorkspace.title}</span>
-            <VscodeIcon name="chevron-right" />
-            <span>{exploration.title}</span>
-            <VscodeIcon name="chevron-right" />
-            <span>{exploration.stage.title}</span>
-            {activeTrail ? (
-              <>
+              <div className="breadcrumbs">
+                <span>{workspace?.title ?? "Cube Play"}</span>
                 <VscodeIcon name="chevron-right" />
-                <span>{activeTrail.title}</span>
-              </>
-            ) : null}
-          </div>
-          <div className="preview-banner">
-            <VscodeIcon name="info" />
-            Example workspace · changes stay in this session
-          </div>
-          {activeTrail ? (
-            <AssetCanvas
-              key={activeTrail.id}
-              trail={activeTrail}
-              executions={executions}
-            />
-          ) : (
-            <Notebook
-              exploration={exploration}
-              executions={executions}
-              note={notes[exploration.stage.id] ?? ""}
-              onNote={(value) =>
-                setNotes((previous) => ({
-                  ...previous,
-                  [exploration.stage.id]: value,
-                }))
-              }
-              openTrail={openTrail}
-            />
+                <span>{exploration?.title ?? ""}</span>
+                <VscodeIcon name="chevron-right" />
+                <span>{exploration.stage.title}</span>
+                {activeTrail ? (
+                  <>
+                    <VscodeIcon name="chevron-right" />
+                    <span>{activeTrail.title}</span>
+                  </>
+                ) : null}
+              </div>
+              <div className="workspace-context">
+                <VscodeIcon name="lock" />
+                Private workspace · content and saved reasoning stay on this
+                machine
+              </div>
+              {activeTrail ? (
+                <AssetCanvas
+                  key={activeTrail.id}
+                  trail={activeTrail}
+                  executions={executions}
+                />
+              ) : (
+                <Notebook
+                  exploration={exploration}
+                  executions={executions}
+                  note={state.noteValue}
+                  noteDirty={state.noteDirty}
+                  noteSaving={state.noteSaving}
+                  busy={state.busy}
+                  onNote={state.editNote}
+                  saveNote={() => void state.saveNote()}
+                  addText={() => setDialog("text")}
+                  addImage={() => setDialog("image")}
+                  openTrail={openTrail}
+                />
+              )}
+            </>
           )}
         </main>
       </VscodeSplitLayout>
@@ -275,11 +325,33 @@ export function Workbench() {
               ? "Engine ready"
               : "Connecting…"}
         </span>
-        <span>{exploration.title}</span>
+        <span>{exploration?.title ?? ""}</span>
         <span className="status-spacer" />
         <span>{activeTrail ? "Trail canvas" : "Stage notebook"}</span>
-        <span>Local · session only</span>
+        <span>
+          {state.noteSaving
+            ? "Saving…"
+            : state.noteDirty
+              ? "Unsaved reasoning"
+              : workspace
+                ? "Local storage"
+                : "Local"}
+        </span>
       </footer>
+      {dialog ? (
+        <ContentDialog
+          kind={dialog}
+          error={state.error}
+          onClose={() => setDialog(null)}
+          onSubmit={async (title, text, key) => {
+            if (dialog === "exploration")
+              return state.createExploration(title, key);
+            if (dialog === "stage") return state.createStage(title, key);
+            if (dialog === "text") return state.addText(title, text, key);
+            return state.importImage(text, key);
+          }}
+        />
+      ) : null}
       {palette ? (
         <CommandPalette commands={commands} onClose={() => setPalette(false)} />
       ) : null}

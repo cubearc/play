@@ -1,12 +1,18 @@
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
-import type { AssetView, BlockView } from "./exampleWorkspace";
-import { SampleImage } from "./SampleImage";
+import type {
+  AssetView,
+  BlockView,
+  Context,
+} from "../desktop/workspace-contract";
+import { AssetImage } from "./AssetImage";
 
 export function NotebookAsset({
   block,
   openAsset,
+  context,
 }: {
   block: BlockView;
+  context: Context;
   openAsset: (asset: AssetView) => void;
 }) {
   return (
@@ -18,7 +24,7 @@ export function NotebookAsset({
         onClick={() => openAsset(block.asset)}
       >
         {block.asset.content.kind === "image" ? (
-          <SampleImage />
+          <AssetImage asset={block.asset} context={context} />
         ) : (
           <code>{block.asset.content.text}</code>
         )}

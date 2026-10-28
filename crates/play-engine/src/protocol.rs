@@ -14,6 +14,17 @@ pub struct Contract {
     pub cpu_seconds: u64,
     pub vm_growth_bytes: u64,
     pub output_bytes: usize,
+    pub storage_generation: u32,
+    pub schema_version: u32,
+    pub workspace_limit: usize,
+    pub exploration_limit: usize,
+    pub stage_limit: usize,
+    pub block_limit: usize,
+    pub text_bytes: usize,
+    pub note_bytes: usize,
+    pub image_bytes: usize,
+    pub store_bytes: usize,
+    pub exploration_bytes: usize,
 }
 
 pub fn contract() -> Contract {
@@ -37,6 +48,18 @@ pub enum Command {
     Catalog {
         id: u32,
     },
+    Workspace {
+        id: u32,
+        command: crate::workspace::Command,
+    },
+    InvokeAsset {
+        id: u32,
+        context: crate::workspace::Context,
+        asset_id: uuid::Uuid,
+        revision: i64,
+        operation: String,
+        operation_version: u32,
+    },
     Cancel {
         id: u32,
         run_id: u32,
@@ -49,7 +72,9 @@ impl Command {
             Self::Hello { id, .. }
             | Self::Invoke { id, .. }
             | Self::Catalog { id }
-            | Self::Cancel { id, .. } => *id,
+            | Self::Cancel { id, .. }
+            | Self::Workspace { id, .. }
+            | Self::InvokeAsset { id, .. } => *id,
         }
     }
 }

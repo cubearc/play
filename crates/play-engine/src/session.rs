@@ -148,10 +148,40 @@ fn reject(output: &mut impl Write, id: u32, code: &str) -> Result<()> {
     protocol::write_frame(output, &json!({"type":"rejected", "id":id, "code":code}))
 }
 
+fn launch(
+    id: u32,
+    invocation: Invocation,
+    worker: Option<&Path>,
+    active: &mut Option<Active>,
+    output: &mut impl Write,
+) -> Result<()> {
+    if let Err(code) = crate::worker::validate(&invocation) {
+        return reject(output, id, code);
+    }
+    let Some(worker) = worker.filter(|_| crate::native::available()) else {
+        return reject(output, id, "native_policy_unavailable");
+    };
+    if active.is_some() {
+        return reject(output, id, "busy");
+    }
+    match Active::spawn(id, worker, &invocation) {
+        Ok(run) => {
+            let worker_pid = run.child.id();
+            *active = Some(run);
+            protocol::write_frame(
+                output,
+                &json!({"type":"started", "id":id, "worker_pid":worker_pid}),
+            )
+        }
+        Err(code) => reject(output, id, code),
+    }
+}
+
 fn dispatch(
     command: Command,
     worker: Option<&Path>,
     active: &mut Option<Active>,
+    store: &mut Option<crate::workspace::Manager>,
     output: &mut impl Write,
 ) -> Result<()> {
     let id = command.id();
@@ -162,23 +192,56 @@ fn dispatch(
             &json!({"type":"catalog", "id":id, "operations":crate::worker::catalog()?}),
         ),
         Command::Invoke { invocation, .. } => {
-            if let Err(code) = crate::worker::validate(&invocation) {
-                return reject(output, id, code);
+            if store.is_some() {
+                return reject(output, id, "scoped_invocation_required");
             }
-            let Some(worker) = worker.filter(|_| crate::native::available()) else {
-                return reject(output, id, "native_policy_unavailable");
+            launch(id, invocation, worker, active, output)
+        }
+        Command::InvokeAsset {
+            context,
+            asset_id,
+            revision,
+            operation,
+            operation_version,
+            ..
+        } => {
+            let input = match store
+                .as_mut()
+                .ok_or("workspace_closed")
+                .and_then(|store| store.text(&context, asset_id, revision))
+            {
+                Ok(input) => input,
+                Err(code) => return reject(output, id, code),
             };
-            if active.is_some() {
+            launch(
+                id,
+                Invocation {
+                    operation,
+                    operation_version,
+                    input,
+                },
+                worker,
+                active,
+                output,
+            )
+        }
+        Command::Workspace { command, .. } => {
+            if active.is_some()
+                && matches!(
+                    command,
+                    crate::workspace::Command::Open { .. }
+                        | crate::workspace::Command::Create { .. }
+                )
+            {
                 return reject(output, id, "busy");
             }
-            match Active::spawn(id, worker, &invocation) {
-                Ok(run) => {
-                    let worker_pid = run.child.id();
-                    *active = Some(run);
-                    protocol::write_frame(
-                        output,
-                        &json!({"type":"started", "id":id, "worker_pid":worker_pid}),
-                    )
+            match store
+                .as_mut()
+                .ok_or("workspace_unavailable")
+                .and_then(|store| store.handle(command))
+            {
+                Ok(data) => {
+                    protocol::write_frame(output, &json!({"type":"workspace","id":id,"data":data}))
                 }
                 Err(code) => reject(output, id, code),
             }
@@ -200,13 +263,14 @@ fn dispatch(
     }
 }
 
-pub fn run(worker: Option<PathBuf>) -> Result<()> {
+pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
     if worker
         .as_ref()
         .is_some_and(|path| !path.is_absolute() || !path.is_file())
     {
         return Err("invalid_worker");
     }
+    let mut store = root.map(crate::workspace::Manager::new).transpose()?;
     let receiver = receive();
     let mut output = io::stdout().lock();
     let command = next(
@@ -232,7 +296,13 @@ pub fn run(worker: Option<PathBuf>) -> Result<()> {
                     reject(&mut output, id, "invalid_request_id")?;
                 } else {
                     previous_id = id;
-                    dispatch(command, worker.as_deref(), &mut active, &mut output)?;
+                    dispatch(
+                        command,
+                        worker.as_deref(),
+                        &mut active,
+                        &mut store,
+                        &mut output,
+                    )?;
                 }
             }
             Ok(None) => (),

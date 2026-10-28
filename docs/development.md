@@ -27,33 +27,40 @@ React components, Codicons and VS Code theme variables. The resizable Explorer
 shows **Workspace → Explorations → Stages**, with trails inside each Exploration
 and reusable pipeline definitions at Workspace level.
 
-1. Open **Image and caption** in **Spiral signal**. Its notebook groups the image
-   and its caption in one image block, followed by a reasoning block. The caption
-   remains an independently referencable text Asset.
-2. Select **ROT13** and choose **Run cell** below the caption. On macOS the real
-   Core operation decodes
-   `Gur xrl vf va gur cvkryf.` to `The key is in the pixels.` The result appears
-   beside the cell, with its source Asset revision and session attempts.
-3. Click either asset to open its own **Trail canvas** tab. The caption canvas
-   shows the source binding, pipeline operation and the same result. The image
-   canvas supports inspection and zoom; native image execution is unavailable.
-4. Write a reasoning note, then switch to **Alternative hypothesis**. Each
-   Exploration retains its own notes, open tabs, operation selection and results
-   for the current session.
+1. Choose **Create workspace**, enter a name, then create an **Exploration**.
+   Its first local Stage opens as a notebook. **New Stage** adds another step
+   without importing a Challenge.
+2. Choose **Add image**, enter `Gur xrl vf va gur cvkryf.` as its caption and
+   select a PNG file up to 128 KiB. The image and caption share one image Block;
+   the caption remains an independently referencable text Asset. **Add text**
+   creates a separate text Block.
+3. Keep **ROT13** selected and choose **Run cell** below the caption. On macOS the
+   real Core operation produces `The key is in the pixels.` beside the cell,
+   with its source Asset revision and session attempts.
+4. Click the image or caption to open its own **Trail canvas** tab. The caption
+   canvas shows the bound Asset, reusable Pipeline definition and session result.
+   The image canvas supports inspection and zoom.
+5. Write reasoning, then choose **Save reasoning** or press Cmd/Ctrl+S. Create a
+   second Exploration and add its own content and notes. Quit and reopen the app:
+   saved content, reasoning and the last opened Stage remain separate. Unsaved
+   reasoning requires a choice before closing or quitting.
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
 | Toggle Explorer | Cmd+B | Ctrl+B |
 | Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
 | Run the active text cell | Cmd+Enter | Ctrl+Enter |
+| Save reasoning | Cmd+S | Ctrl+S |
 
-This is an explicitly labeled example workspace built from read-only view data.
-Notes, configuration drafts and execution responses remain in memory. It does
-not create native Workspace, Stage, Asset, PipelineRun, Candidate or Solution
-records, and does not claim official Challenge validation. The renderer is a
-presentation adapter; persistent ownership and scoped commands belong to the
-Rust engine under the [desktop domain contract](reference/desktop-domain.md).
-There is no global Output panel: each cell or canvas keeps its own result.
+Workspace, Exploration, Stage, Block, Asset, Note, Trail and initial Pipeline
+records live in the engine's private SQLite store. There is no seeded example
+workspace. See [native storage](reference/desktop-storage.md) for its generation,
+immutable revisions, ownership, failure behavior and development ceilings.
+Operation selection drafts, open canvas tabs and operation responses remain in
+memory; responses are not retained PipelineRuns or official Challenge evaluation.
+The renderer is a presentation adapter under the
+[desktop domain contract](reference/desktop-domain.md). Each cell or canvas shows
+its own result.
 
 ## Developer quick start
 

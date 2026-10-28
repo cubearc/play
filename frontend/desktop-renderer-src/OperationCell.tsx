@@ -2,7 +2,7 @@ import VscodeButton from "@vscode-elements/react-elements/dist/components/Vscode
 import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
 import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import { useRef } from "react";
-import { type TrailView, textPipeline } from "./exampleWorkspace";
+import type { TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
 import type { Executions } from "./useExecutions";
 
@@ -13,6 +13,7 @@ export function OperationCell({
   trail: TrailView;
   executions: Executions;
 }) {
+  const pipeline = trail.pipeline;
   const selector = useRef<HTMLElementTagNameMap["vscode-single-select"]>(null);
   const operation = executions.operationFor(trail);
   const attempts = executions.attempts[trail.id] ?? [];
@@ -22,7 +23,7 @@ export function OperationCell({
       <div className="cell-code">
         <div className="cell-code-header">
           <span>In [{attempts.length || " "}]</span>
-          <span>Pipeline · {textPipeline.title}</span>
+          <span>Pipeline · {pipeline?.title}</span>
         </div>
         <div className="cell-controls">
           <VscodeSingleSelect
@@ -61,15 +62,14 @@ export function OperationCell({
           ) : null}
         </div>
         <p className="binding">
-          <span className="port-dot" /> {textPipeline.input} ←{" "}
-          {trail.source.title}{" "}
+          <span className="port-dot" /> {pipeline?.input} ← {trail.source.title}{" "}
           <span className="muted">@ r{trail.source.revision}</span>
         </p>
         <p className="cell-description">
           {operation?.description ??
             (executions.catalogError || "Connecting to Core…")}
         </p>
-        {operation && operation.operation !== textPipeline.initialOperation ? (
+        {operation && operation.operation !== pipeline?.initialOperation ? (
           <small>Unsaved pipeline configuration · session only</small>
         ) : null}
       </div>

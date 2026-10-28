@@ -1,29 +1,29 @@
 import { contextBridge, ipcRenderer } from "electron";
-import contract from "../../desktop/protocol.json" with { type: "json" };
+import type { PlayBridge } from "./bridge.ts";
+import {
+  assetRead,
+  assetRun,
+  imageImport,
+  request,
+} from "./workspace-contract.ts";
 
 if (process.isMainFrame) {
-  contextBridge.exposeInMainWorld("play", {
+  const bridge: PlayBridge = {
     catalog: () => ipcRenderer.invoke("play:catalog"),
-    run: (operation: unknown, version: unknown, input: unknown) => {
-      if (
-        typeof operation !== "string" ||
-        operation.length > 128 ||
-        typeof version !== "number" ||
-        !Number.isSafeInteger(version) ||
-        version < 1 ||
-        version > 0xffffffff ||
-        typeof input !== "string" ||
-        input.length > contract.input_bytes ||
-        new TextEncoder().encode(input).byteLength > contract.input_bytes
-      ) {
+    workspace: (value: unknown) =>
+      ipcRenderer.invoke("play:workspace", request(value)),
+    importImage: (value: unknown) =>
+      ipcRenderer.invoke("play:import-image", imageImport(value)),
+    image: (value: unknown) =>
+      ipcRenderer.invoke("play:image", assetRead(value)),
+    runAsset: (value: unknown) =>
+      ipcRenderer.invoke("play:run-asset", assetRun(value)),
+    dirty: (value: unknown) => {
+      if (typeof value !== "boolean")
         return Promise.reject(new Error("invalid_command"));
-      }
-      return ipcRenderer.invoke("play:run", {
-        operation,
-        operation_version: version,
-        input,
-      });
+      return ipcRenderer.invoke("play:dirty", value);
     },
     cancel: () => ipcRenderer.invoke("play:cancel"),
-  });
+  };
+  contextBridge.exposeInMainWorld("play", bridge);
 }

@@ -22,16 +22,15 @@ export class Engine {
   private closed = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
-  private constructor(binary: string, worker?: string) {
-    this.child = spawn(
-      binary,
-      worker ? ["--ipc", "--worker", worker] : ["--ipc"],
-      {
-        env: {},
-        stdio: "pipe",
-        windowsHide: true,
-      },
-    );
+  private constructor(binary: string, worker?: string, root?: string) {
+    const args = ["--ipc"];
+    if (worker) args.push("--worker", worker);
+    if (root) args.push("--data-root", root);
+    this.child = spawn(binary, args, {
+      env: {},
+      stdio: "pipe",
+      windowsHide: true,
+    });
     this.child.stdout.on("data", (chunk: Buffer) => this.receive(chunk));
     // Drain bounded diagnostic writes; never retain or forward private stderr.
     this.child.stderr.resume();
@@ -43,8 +42,12 @@ export class Engine {
     this.child.stdin.on("error", () => this.fail("engine_stopped"));
   }
 
-  static async connect(binary: string, worker?: string): Promise<Engine> {
-    const engine = new Engine(binary, worker);
+  static async connect(
+    binary: string,
+    worker?: string,
+    root?: string,
+  ): Promise<Engine> {
+    const engine = new Engine(binary, worker, root);
     const nonce = randomBytes(16).toString("hex");
     try {
       const reply = await engine.request({
@@ -87,6 +90,33 @@ export class Engine {
     if (reply.type !== "catalog" || !Array.isArray(reply.operations))
       throw new Error("invalid_response");
     return reply.operations as Operation[];
+  }
+
+  async workspace(command: object): Promise<unknown> {
+    const reply = await this.request({ type: "workspace", command });
+    if (
+      reply.type !== "workspace" ||
+      !reply.data ||
+      typeof reply.data !== "object"
+    )
+      throw new Error("invalid_response");
+    return reply.data;
+  }
+
+  runAsset(
+    value: import("./workspace-contract.ts").AssetRun,
+  ): Promise<RunResult> {
+    if (this.active !== undefined) return Promise.reject(new Error("busy"));
+    const id = this.nextId + 1;
+    this.active = id;
+    return this.request({ type: "invoke_asset", ...value })
+      .then((reply) => {
+        if (reply.type !== "finished") throw new Error("invalid_response");
+        return reply as unknown as RunResult;
+      })
+      .finally(() => {
+        if (this.active === id) this.active = undefined;
+      });
   }
 
   async cancel(): Promise<void> {
@@ -138,16 +168,28 @@ export class Engine {
         if (!pending) return this.fail("invalid_response");
         if (reply.type === "started") continue;
         if (
-          !["ready", "catalog", "finished", "cancelled", "rejected"].includes(
-            reply.type,
-          )
+          ![
+            "ready",
+            "catalog",
+            "workspace",
+            "finished",
+            "cancelled",
+            "rejected",
+          ].includes(reply.type)
         ) {
           return this.fail("invalid_response");
         }
         clearTimeout(pending.timer);
         this.pending.delete(reply.id as number);
         if (reply.type === "rejected")
-          pending.reject(new Error("command_rejected"));
+          pending.reject(
+            new Error(
+              typeof reply.code === "string" &&
+                /^[a-z_]{1,64}$/.test(reply.code)
+                ? reply.code
+                : "command_rejected",
+            ),
+          );
         else pending.resolve(reply);
       } catch {
         return this.fail("invalid_response");

@@ -2,11 +2,25 @@ import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, protocol, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  protocol,
+  session,
+} from "electron";
+import { AssetGrants, importImage } from "./assets.ts";
 import { APP_URL, ownsFrame, resourceName } from "./authority.ts";
-import { invocation } from "./contract.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
+import {
+  assetRead,
+  assetRun,
+  type ExplorationView,
+  imageImport,
+  request,
+} from "./workspace-contract.ts";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -15,10 +29,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.enableSandbox();
-app.setName("Cube Play Boundary Proof");
+app.setName("Cube Play");
 const profile =
   app.commandLine.getSwitchValue("user-data-dir") ||
-  join(app.getPath("appData"), "CubeArc", "PlayBoundaryProof");
+  join(app.getPath("appData"), "CubeArc", "Play");
 if (!isAbsolute(profile)) throw new Error("invalid_profile");
 mkdirSync(profile, { recursive: true, mode: 0o700 });
 app.setPath("userData", profile);
@@ -38,6 +52,33 @@ const workerPath =
 let engine: Engine | undefined;
 let window: BrowserWindow | undefined;
 let quitting = false;
+let dirty = false;
+let confirming = false;
+let boundWorkspaceId: string | null = null;
+const grants = new AssetGrants();
+if (!app.requestSingleInstanceLock()) app.exit(0);
+async function confirmDiscard(): Promise<boolean> {
+  if (!dirty) return true;
+  if (!window || confirming) return false;
+  confirming = true;
+  try {
+    const result = await dialog.showMessageBox(window, {
+      type: "warning",
+      message: "Reasoning has unsaved changes.",
+      detail:
+        "Keep editing to save your reasoning, or discard the unsaved draft.",
+      buttons: ["Keep editing", "Discard draft"],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (result.response !== 1) return false;
+    dirty = false;
+    window.setDocumentEdited(false);
+    return true;
+  } finally {
+    confirming = false;
+  }
+}
 
 function createWindow(): void {
   const next = new BrowserWindow({
@@ -49,7 +90,7 @@ function createWindow(): void {
     ...(process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset" as const }
       : {}),
-    title: "Cube Play — Native boundary proof",
+    title: "Cube Play",
     webPreferences: {
       preload: fileURLToPath(new URL("preload.cjs", import.meta.url)),
       sandbox: true,
@@ -63,7 +104,15 @@ function createWindow(): void {
   next.webContents.on("will-navigate", (event) => event.preventDefault());
   next.webContents.on("will-frame-navigate", (event) => event.preventDefault());
   next.webContents.on("will-attach-webview", (event) => event.preventDefault());
+  next.on("close", (event) => {
+    if (!dirty) return;
+    event.preventDefault();
+    void confirmDiscard().then((discard) => {
+      if (discard && !next.isDestroyed()) next.close();
+    });
+  });
   next.on("closed", () => {
+    grants.revoke();
     if (window === next) window = undefined;
     void engine?.cancel().catch(() => {});
   });
@@ -79,9 +128,24 @@ app
     );
     sandbox.setPermissionCheckHandler(() => false);
     sandbox.webRequest.onBeforeRequest((details, callback) => {
-      callback({ cancel: resourceName(details.url) === null });
+      callback({
+        cancel:
+          resourceName(details.url) === null &&
+          !grants.allows(details.url, details.webContentsId ?? -1),
+      });
     });
     protocol.handle("cube-play", async (request) => {
+      if (request.method === "GET") {
+        const image = grants.read(request.url);
+        if (image)
+          return new Response(new Uint8Array(image), {
+            headers: {
+              "Content-Type": "image/png",
+              "Cache-Control": "no-store",
+              "X-Content-Type-Options": "nosniff",
+            },
+          });
+      }
       const name = resourceName(request.url);
       if (request.method !== "GET" || !name)
         return new Response(null, { status: 403 });
@@ -96,23 +160,69 @@ app
         headers: {
           "Content-Type": contentType,
           "Content-Security-Policy":
-            "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'",
+            "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'",
           "X-Content-Type-Options": "nosniff",
           "Cache-Control": "no-store",
         },
       });
     });
     await verifyNative(native);
-    engine = await Engine.connect(enginePath, workerPath);
+    engine = await Engine.connect(
+      enginePath,
+      workerPath,
+      join(profile, "workspaces"),
+    );
     const authorize = (event: Electron.IpcMainInvokeEvent): Engine => {
       if (!window || !ownsFrame(event, window.webContents) || !engine) {
         throw new Error("unauthorized_frame");
       }
       return engine;
     };
-    ipcMain.handle("play:run", (event, value: unknown) =>
-      authorize(event).run(invocation(value)),
+    ipcMain.handle("play:workspace", async (event, value: unknown) => {
+      const engine = authorize(event);
+      const command = request(value);
+      if (
+        command.kind === "create" ||
+        (command.kind === "open" && command.workspace_id !== boundWorkspaceId)
+      )
+        grants.select(null);
+      const data = await engine.workspace(command);
+      if (command.kind === "create" || command.kind === "open")
+        boundWorkspaceId = (data as { id: string }).id;
+      if (command.kind === "open_exploration") {
+        const exploration = data as ExplorationView;
+        grants.select({
+          workspace_id: exploration.workspaceId,
+          exploration_id: exploration.id,
+          stage_id: exploration.stage.id,
+        });
+      }
+      return data;
+    });
+    ipcMain.handle("play:run-asset", (event, value: unknown) =>
+      authorize(event).runAsset(assetRun(value)),
     );
+    ipcMain.handle("play:import-image", (event, value: unknown) => {
+      const engine = authorize(event);
+      if (!window) throw new Error("unauthorized_frame");
+      return importImage(engine, window, imageImport(value));
+    });
+    ipcMain.handle("play:image", (event, value: unknown) => {
+      const engine = authorize(event);
+      if (!event.senderFrame) throw new Error("unauthorized_frame");
+      return grants.issue(
+        engine,
+        event.sender,
+        event.senderFrame,
+        assetRead(value),
+      );
+    });
+    ipcMain.handle("play:dirty", (event, value: unknown) => {
+      authorize(event);
+      if (typeof value !== "boolean") throw new Error("invalid_command");
+      dirty = value;
+      window?.setDocumentEdited(value);
+    });
     ipcMain.handle("play:catalog", (event) => authorize(event).catalog());
     ipcMain.handle("play:cancel", (event) => authorize(event).cancel());
     createWindow();
@@ -129,7 +239,11 @@ app.on("window-all-closed", () => {});
 app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
-  quitting = true;
-  void engine?.close().finally(() => app.exit(0));
-  if (!engine) app.exit(0);
+  void confirmDiscard().then(async (discard) => {
+    if (!discard || quitting) return;
+    quitting = true;
+    grants.revoke();
+    await engine?.close();
+    app.exit(0);
+  });
 });

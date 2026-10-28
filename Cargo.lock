@@ -2156,11 +2156,16 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 name = "play-engine"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "cube-core",
  "libproc",
  "rustix",
  "serde",
  "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

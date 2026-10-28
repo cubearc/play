@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation, RunResult } from "../desktop/contract";
-import { type TrailView, textPipeline } from "./exampleWorkspace";
+import type { TrailView } from "../desktop/workspace-contract";
 
 export interface Attempt {
   readonly id: string;
@@ -43,7 +43,7 @@ export function useExecutions() {
     operations.find(
       (entry) =>
         entry.operation ===
-        (selected[trail.id] ?? textPipeline.initialOperation),
+        (selected[trail.id] ?? trail.pipeline?.initialOperation),
     );
   const selectOperation = (trail: TrailView, operation: string) => {
     setSelected((previous) => ({ ...previous, [trail.id]: operation }));
@@ -74,11 +74,17 @@ export function useExecutions() {
     const start = performance.now();
     let finished: Attempt;
     try {
-      const result = await window.play.run(
-        operation.operation,
-        operation.operation_version,
-        content.text,
-      );
+      const result = await window.play.runAsset({
+        context: {
+          workspace_id: trail.workspaceId,
+          exploration_id: trail.explorationId,
+          stage_id: trail.stageId,
+        },
+        asset_id: trail.source.id,
+        revision: trail.source.revision,
+        operation: operation.operation,
+        operation_version: operation.operation_version,
+      });
       finished = {
         ...attempt,
         result,

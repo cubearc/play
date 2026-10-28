@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
 
@@ -222,7 +223,7 @@ test("cancellation acknowledgement follows actual worker reaping", {
       {
         type: "hello",
         id: 1,
-        protocol: 1,
+        protocol: contract.protocol,
         engine: "0.2.0",
         nonce: "0123456789abcdef0123456789abcdef",
       },
