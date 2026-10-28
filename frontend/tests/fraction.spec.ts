@@ -1,4 +1,15 @@
+import { readFileSync } from "node:fs";
 import { expect, openSection, test } from "./session";
+
+const canonical = JSON.parse(
+  readFileSync(
+    new URL("../../../cube/contracts/v1/catalog.json", import.meta.url),
+    "utf8",
+  ),
+) as { operations: { operation: string }[] };
+const operationIds = canonical.operations
+  .map((entry) => entry.operation)
+  .sort();
 
 test("runs a rail permutation and displays separate Morse padding evidence", async ({
   page,
@@ -7,7 +18,14 @@ test("runs a rail permutation and displays separate Morse padding evidence", asy
   const url = process.env.CUBE_PLAY_TEST_URL;
   if (!url) throw new Error("Local session unavailable");
   const catalog = await (await api.get("/api/lab/v2/operations")).json();
-  expect(catalog.operations).toHaveLength(312);
+  expect(
+    catalog.operations
+      .map(
+        (entry: { contract: { operation: string } }) =>
+          entry.contract.operation,
+      )
+      .sort(),
+  ).toEqual(operationIds);
   await page.goto(url);
   await openSection(page, "Explorations");
   const lab = page.getByRole("region", { name: "Explorations", exact: true });

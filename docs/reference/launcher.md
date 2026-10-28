@@ -51,7 +51,14 @@ directories require owner-only access; existing shared directories and symlinked
 files are rejected. Registry writes are atomic. This small host configuration is
 separate from the SQLite investigation persistence capability.
 
-Runtime revision 19 uses the verified container PID budget for Runner sessions, so unrelated host/browser processes sharing its UID do not prevent terminal startup. It retains the typed operations, explicit terminal captures, retained results and field connections described in the [Lab API](../lab-api.md) and [explorations](../explorations.md). Older foundation images cannot satisfy that contract.
+Runtime revision 21 includes private raw stream transforms, typed Enigma I/M3
+and classical-analysis operations.
+It retains the verified container PID budget for Runner sessions, so unrelated
+host/browser processes sharing its UID do not prevent terminal startup. Typed
+operations, explicit terminal captures, retained results and field connections
+are described in the [Lab API](../lab-api.md) and [explorations](../explorations.md).
+Older runtime images cannot satisfy that contract; the launcher selects a
+revision-specific image and rejects incompatible image labels.
 
 ## Platform boundaries
 

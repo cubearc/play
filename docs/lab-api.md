@@ -1,5 +1,10 @@
 # Typed local Lab API
 
+`cipher.enigma` executes the typed Core Enigma I/M3 transform with named `text`
+input and `text`, `final_windows` and `trace` outputs. The schema editor and text
+or structured viewers use the installed Core contract. Settings, input and state
+results are private; the per-run retention choice applies before saving output.
+
 The Lab calls the versioned Rust Core directly. It never parses terminal output or
 executes scripts. These endpoints require the local session Authorization header and exact
 Host/Origin as other workspace APIs. Files/results stay local; no network operation,

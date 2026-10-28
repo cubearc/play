@@ -3,6 +3,7 @@ mod audio;
 mod blockchain;
 mod brainfuck;
 mod cryptanalysis;
+mod enigma;
 mod files;
 mod fraction;
 mod image_analysis;
@@ -26,8 +27,8 @@ use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
     stream::supported(operation)
+        || operation == cube_core::ciphers::enigma::ID
         || cryptanalysis::supported(operation)
-        || operation == "cipher.enigma"
         || workflows::supported(operation)
         || video::supported(operation)
         || blockchain::supported(operation)
@@ -71,18 +72,11 @@ pub(super) fn execute(
     parameters: Value,
 ) -> Result<Value, OperationError> {
     match operation {
-        "cipher.enigma" => {
-            let text: String = field(&inputs, "text")?;
-            let p = cube_core::ciphers::enigma::parse_parameters(&parameters.to_string())?;
-            let report = cube_core::ciphers::enigma::transform(&text, &p)?;
-            serde_json::to_value(report).map_err(|_| {
-                OperationError::new(ErrorCode::InvalidInput, "invalid typed historical result")
-            })
-        }
         _ if stream::supported(operation) => stream::execute(operation, inputs, parameters),
         _ if cryptanalysis::supported(operation) => {
             cryptanalysis::execute(operation, inputs, parameters)
         }
+        "cipher.enigma" => enigma::execute(inputs, parameters),
         "encoding.base58check.encode" => {
             let encoded: String = field(&inputs["input"], "base64")?;
             let bytes = cube_core::encoding::base64_decode(&encoded).map_err(|_| {

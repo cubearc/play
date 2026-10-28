@@ -13,6 +13,42 @@ use uuid::Uuid;
 static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
+async fn enigma_private_states_are_transient_and_retained_provenance_redacts_keys() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    for retain in [false, true] {
+        let id = Uuid::new_v4();
+        let request = json!({"schema_version":2,"id":id,"operation":"cipher.enigma","operation_version":1,"inputs":{"text":{"type":"literal","value":"AAAAA"}},"parameters":{"profile":"enigma_i","rotors":["I","II","III"],"reflector":"B","rings":[1,1,1],"windows":"AAA","plugboard":[],"trace":true},"retain_private_output":retain});
+        let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+        assert_eq!(status, 200, "{result}");
+        assert_eq!(result["retained"], retain);
+        assert_eq!(result["inline"]["data"]["text"], "BDZGO");
+        assert_eq!(result["inline"]["data"]["final_windows"], "AAF");
+        assert_eq!(
+            result["inline"]["data"]["trace"].as_array().unwrap().len(),
+            5
+        );
+        let (status, artifact) = server
+            .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+            .await;
+        if retain {
+            assert_eq!(status, 200);
+            assert_eq!(artifact["result"]["provenance"]["inputs"], json!([]));
+            let parameters = artifact["result"]["provenance"]["parameters"]
+                .as_array()
+                .unwrap();
+            for key in ["rotors", "rings", "windows", "plugboard"] {
+                let entry = parameters.iter().find(|v| v["name"] == key).unwrap();
+                assert_eq!(entry["redacted"], true);
+                assert!(entry.get("value").is_none());
+            }
+        } else {
+            assert_ne!(status, 200);
+        }
+    }
+}
+
+#[tokio::test]
 async fn private_outputs_require_an_explicit_choice_before_retention_chaining_or_solutions() {
     let directory = tempfile::tempdir().unwrap();
     let workspace = Uuid::new_v4();
