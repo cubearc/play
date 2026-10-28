@@ -2464,7 +2464,7 @@ async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart()
         .await;
     assert_eq!(status, 200);
     let ops = catalog["operations"].as_array().unwrap();
-    assert_eq!(ops.len(), 295);
+    assert_eq!(ops.len(), 304);
     assert_eq!(
         ops.iter()
             .filter(|v| v["execution"]["available"] == true)
@@ -2951,4 +2951,24 @@ async fn every_installed_operation_has_an_authorized_real_api_conformance_result
         serde_json::to_vec_pretty(&report).unwrap(),
     )
     .unwrap();
+}
+
+#[tokio::test]
+async fn classical_analysis_preserves_wide_scores_and_marks_incomplete_evidence() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"analysis.language.score","operation_version":1,"inputs":{"request":{"type":"literal","value":{"candidates":["A".repeat(32768)],"model":{"kind":"probabilities","n":1,"entries":[{"text":"A","weight":1e-300}],"unseen_probability":1.0,"normalization":"exact"}}}},"parameters":{}});
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(
+        result["inline"]["data"]["report"]["scores"][0]["total_nanos"],
+        (-690775527898_i64 * 32768).to_string()
+    );
+    let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"analysis.period.estimate","operation_version":1,"inputs":{"request":{"type":"literal","value":{"text":"ABAB","periods":["2"],"ngram":"2","expected_ic":0.5,"limits":{"max_work":"1"}}}},"parameters":{}});
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(
+        result["inline"]["data"]["report"]["status"]["complete"],
+        false
+    );
 }
