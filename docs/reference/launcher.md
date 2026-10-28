@@ -51,7 +51,8 @@ directories require owner-only access; existing shared directories and symlinked
 files are rejected. Registry writes are atomic. This small host configuration is
 separate from the SQLite investigation persistence capability.
 
-Runtime revision 22 includes private raw AES blocks and stream transforms,
+Runtime revision 23 includes explicit Interrupted Key, Progressive Key and
+Vigenère–Multiplicative profiles alongside private raw AES blocks and stream transforms,
 typed Enigma I/M3 and classical-analysis operations.
 It retains the verified container PID budget for Runner sessions, so unrelated
 host/browser processes sharing its UID do not prevent terminal startup. Typed

@@ -824,5 +824,121 @@
     "outputs": {
       "text": "THREEKEYSQUARESUSEDX"
     }
+  },
+  {
+    "function": "interrupted_key_encode",
+    "operation": "cipher.interrupted_key.encode",
+    "command": "interrupted-key",
+    "parameters": {
+      "key": "ORANGE",
+      "resets": [
+        4,
+        10,
+        12,
+        15,
+        19,
+        22,
+        23,
+        24,
+        29,
+        30,
+        32,
+        35
+      ]
+    },
+    "inputs": {
+      "text": "THISCIPHERCANBEUSEDWITHANYOFTHEPERIODICS"
+    },
+    "outputs": {
+      "text": "HYIFQZPUKVQRBSEIJEQKZTVOBPOSZVSGSIICUIPY"
+    }
+  },
+  {
+    "function": "interrupted_key_decode",
+    "operation": "cipher.interrupted_key.decode",
+    "command": "interrupted-key",
+    "parameters": {
+      "key": "ORANGE",
+      "resets": [
+        4,
+        10,
+        12,
+        15,
+        19,
+        22,
+        23,
+        24,
+        29,
+        30,
+        32,
+        35
+      ]
+    },
+    "inputs": {
+      "text": "HYIFQZPUKVQRBSEIJEQKZTVOBPOSZVSGSIICUIPY"
+    },
+    "outputs": {
+      "text": "THISCIPHERCANBEUSEDWITHANYOFTHEPERIODICS"
+    }
+  },
+  {
+    "function": "progressive_key_encode",
+    "operation": "cipher.progressive_key.encode",
+    "command": "progressive-key",
+    "parameters": {
+      "key": "GRAPEFRUIT",
+      "increment": 1
+    },
+    "inputs": {
+      "text": "THISCIPHERCANBEUSEDWITHANYOFTHEPERIODICS"
+    },
+    "outputs": {
+      "text": "ZYIHGNGBMKJSORJAKZMQQMJRTFHBDCNJHJPWXFNO"
+    }
+  },
+  {
+    "function": "progressive_key_decode",
+    "operation": "cipher.progressive_key.decode",
+    "command": "progressive-key",
+    "parameters": {
+      "key": "GRAPEFRUIT",
+      "increment": 1
+    },
+    "inputs": {
+      "text": "ZYIHGNGBMKJSORJAKZMQQMJRTFHBDCNJHJPWXFNO"
+    },
+    "outputs": {
+      "text": "THISCIPHERCANBEUSEDWITHANYOFTHEPERIODICS"
+    }
+  },
+  {
+    "function": "vigenere_multiplicative_encode",
+    "operation": "cipher.vigenere_multiplicative.encode",
+    "command": "vigenere-multiplicative",
+    "parameters": {
+      "key": "MOBILE",
+      "multiplier": 7
+    },
+    "inputs": {
+      "text": "IAMSTUDYING"
+    },
+    "outputs": {
+      "text": "KUNACMBGLRP"
+    }
+  },
+  {
+    "function": "vigenere_multiplicative_decode",
+    "operation": "cipher.vigenere_multiplicative.decode",
+    "command": "vigenere-multiplicative",
+    "parameters": {
+      "key": "MOBILE",
+      "multiplier": 7
+    },
+    "inputs": {
+      "text": "KUNACMBGLRP"
+    },
+    "outputs": {
+      "text": "IAMSTUDYING"
+    }
   }
 ]

@@ -24,6 +24,24 @@ pub(super) fn execute(
             OperationError::new(ErrorCode::InvalidParameter, "parameters require valid JSON")
         })?;
         match op {
+            "cipher.interrupted_key.encode" | "cipher.interrupted_key.decode" => {
+                let p: poly::key_profiles::InterruptedKey = poly::parse_parameters(&document)?;
+                Ok(
+                    json!({"text":poly::key_profiles::interrupted_key(&input.text,&p,op.ends_with(".decode"))?}),
+                )
+            }
+            "cipher.progressive_key.encode" | "cipher.progressive_key.decode" => {
+                let p: poly::key_profiles::ProgressiveKey = poly::parse_parameters(&document)?;
+                Ok(
+                    json!({"text":poly::key_profiles::progressive_key(&input.text,&p,op.ends_with(".decode"))?}),
+                )
+            }
+            "cipher.vigenere_multiplicative.encode" | "cipher.vigenere_multiplicative.decode" => {
+                let p: poly::key_profiles::Multiplicative = poly::parse_parameters(&document)?;
+                Ok(
+                    json!({"text":poly::key_profiles::multiplicative(&input.text,&p,op.ends_with(".decode"))?}),
+                )
+            }
             "cipher.gronsfeld.encode" => {
                 let p: schedules::Gronsfeld = poly::parse_parameters(&document)?;
                 Ok(json!({"text":schedules::gronsfeld(&input.text,&p,false)?}))
@@ -257,9 +275,9 @@ pub(super) fn execute(
 mod tests {
     use super::*;
     #[test]
-    fn all_44_typed_bridges_match_independent_core_cli_native_vectors() {
+    fn all_50_typed_bridges_match_independent_core_cli_native_vectors() {
         let cases: Vec<Value> = serde_json::from_str(include_str!("poly_vectors.json")).unwrap();
-        assert_eq!(cases.len(), 44);
+        assert_eq!(cases.len(), 50);
         for case in cases {
             let id = case["operation"].as_str().unwrap();
             let descriptor = cube_core::operations::require(id).unwrap();
@@ -306,5 +324,31 @@ mod tests {
         .unwrap_err();
         assert!(!error.to_string().contains("PRIVATE_MESSAGE"));
         assert_eq!(error.operation, Some("cipher.solitaire.encode"));
+    }
+
+    #[test]
+    fn key_profiles_reject_invalid_parameters_without_echoing_source() {
+        for (profile, parameters) in [
+            ("interrupted_key", json!({"key":"KEY","resets":[2,1]})),
+            ("interrupted_key", json!({"key":"KEY","resets":[1000]})),
+            ("progressive_key", json!({"key":"KEY"})),
+            (
+                "progressive_key",
+                json!({"key":"KEY","increment":2147483648_i64}),
+            ),
+            (
+                "vigenere_multiplicative",
+                json!({"key":"KEY","multiplier":2}),
+            ),
+        ] {
+            for mode in ["encode", "decode"] {
+                let id = format!("cipher.{profile}.{mode}");
+                let error = execute(&id, json!({"text":"PRIVATE_MESSAGE"}), parameters.clone())
+                    .unwrap_err();
+                assert_eq!(error.code, ErrorCode::InvalidParameter);
+                assert_eq!(error.operation, Some(id.as_str()));
+                assert!(!error.to_string().contains("PRIVATE_MESSAGE"));
+            }
+        }
     }
 }
