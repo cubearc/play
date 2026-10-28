@@ -5,6 +5,20 @@ inputs/outputs and saved exploration graphs, use the
 [version-2 exploration API](reference/explorations.md#local-api). Both interfaces
 advertise their own execution availability and transport budgets.
 
+The named-port API includes these private cipher results:
+
+`cipher.aes.encrypt_blocks` and `cipher.aes.decrypt_blocks` accept named `input`
+bytes and return named `output` bytes, displayed by the byte viewer. They call
+Core's raw AES primitive, without padding or authentication. `key_hex` and literal
+input are private run-time values; key material never enters saved configurations
+or provenance. Output is transient unless private retention is explicitly chosen.
+The installed contract and runtime wire budgets govern exact lengths and limits.
+
+`cipher.enigma` executes the typed Core Enigma I/M3 transform with named `text`
+input and `text`, `final_windows` and `trace` outputs. The schema editor and text
+or structured viewers use the installed Core contract. Settings, input and state
+results are private; the per-run retention choice applies before saving output.
+
 The Lab calls Rust Core directly. Requests require the local session Authorization
 header and exact Host/Origin. Terminal output and scripts are not execution inputs.
 Files and results stay local. See [the visual Lab](visual-lab.md) for interactive controls.

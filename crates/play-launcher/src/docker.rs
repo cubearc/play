@@ -34,7 +34,7 @@ pub fn runtime_user() -> Result<String> {
     }
 }
 
-pub const RUNTIME_REVISION: &str = "21";
+pub const RUNTIME_REVISION: &str = "22";
 pub fn default_image() -> Result<String> {
     Ok(format!(
         "cube-play-local:{}-r{}-{}",

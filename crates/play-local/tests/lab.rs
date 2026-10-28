@@ -13,6 +13,33 @@ use uuid::Uuid;
 static SERVER_STARTUP: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
+async fn aes_private_key_and_inputs_never_enter_provenance() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let id = Uuid::new_v4();
+    let request = json!({"schema_version":2,"id":id,"operation":"cipher.aes.encrypt_blocks","operation_version":1,"inputs":{"input":{"type":"literal","value":{"base64":"ABEiM0RVZneImaq7zN3u/w=="}}},"parameters":{"key_hex":"000102030405060708090a0b0c0d0e0f"},"retain_private_output":false});
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["retained"], false);
+    assert_eq!(
+        result["inline"]["data"]["output"]["base64"],
+        "acTg2Gp7BDDYzbeAcLTFWg=="
+    );
+    assert!(
+        !result
+            .to_string()
+            .contains("000102030405060708090a0b0c0d0e0f")
+    );
+    let (status, _) = server
+        .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+        .await;
+    assert_eq!(status, 404);
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.aes.decrypt_blocks","operation_version":1,"inputs":{"input":{"type":"literal","value":{"base64":"acTg2Gp7BDDYzbeAcLTFWg=="}}},"parameters":{"key_hex":"SECRET"},"retain_private_output":false})).await;
+    assert_eq!(status, 400);
+    assert!(!result.to_string().contains("SECRET"));
+}
+
+#[tokio::test]
 async fn enigma_private_states_are_transient_and_retained_provenance_redacts_keys() {
     let directory = tempfile::tempdir().unwrap();
     let server = Server::start(directory.path(), Uuid::new_v4());
@@ -2500,7 +2527,7 @@ async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart()
         .await;
     assert_eq!(status, 200);
     let ops = catalog["operations"].as_array().unwrap();
-    assert_eq!(ops.len(), 312);
+    assert_eq!(ops.len(), 314);
     assert_eq!(
         ops.iter()
             .filter(|v| v["execution"]["available"] == true)

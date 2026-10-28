@@ -43,7 +43,7 @@ RUN --mount=type=cache,id=cube-play-cargo-registry,sharing=locked,target=/usr/lo
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 ARG CUBE_PLAY_UID=65532
 ARG CUBE_PLAY_GID=65532
-LABEL org.cubearc.play.protocol="1" org.cubearc.play.version="0.2.0" org.cubearc.play.runtime-revision="21"
+LABEL org.cubearc.play.protocol="1" org.cubearc.play.version="0.2.0" org.cubearc.play.runtime-revision="22"
 RUN test "${CUBE_PLAY_UID}" -gt 0 && \
     mkdir -p /var/lib/cube-play/artifacts /var/lib/cube-play/imports /workspace/data/imports /workspace/output /run/cube-play/terminal /workspace/source && \
     chown -R "${CUBE_PLAY_UID}:${CUBE_PLAY_GID}" /var/lib/cube-play /workspace/data /workspace/output /run/cube-play/terminal && \
