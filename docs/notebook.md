@@ -18,8 +18,8 @@ Choose **Inspect linked execution** to read its status, configuration revision,
 recorded evidence and retained output without running it again. Missing/corrupt
 artifacts remain explicit errors while the note reference and editable commentary
 remain available. Unretained output cannot acquire an output association.
-These notes use the existing SQLite association field; file/investigation notes
-and existing IDs remain unchanged.
+Notes use the same SQLite association field for files, investigations and
+execution references.
 
 Select any generated Lab result, enter an artifact name and choose **Save named
 artifact**. Names and optimistic revisions live in the existing SQLite database;
@@ -38,6 +38,8 @@ output or implement encoding algorithms. Use the real terminal for other paramet
 Text previews are bounded to 64 KiB; byte previews use Base64 API transport without
 implicit UTF-8 conversion. Explicit export retains all original result bytes.
 
+## Export an artifact
+
 **Export selected artifact** is a deliberate browser download. Its authenticated
 endpoint accepts a bounded portable filename, never a host destination path. Your
 browser owns destination authorization and normal collision handling; ordinary
@@ -45,16 +47,20 @@ browser downloads preserve existing names by choosing another filename. Play can
 write through host paths, follow destination symlinks or overwrite sources. Use the
 browser's save controls to choose a location; any explicit browser replacement is
 a separate user decision. The server neither mounts an export directory writable
-nor writes back into the source. Export errors leave bundles and database records
+nor writes back into the source.
+
+Export errors leave bundles and database records
 unchanged; an incomplete browser download can be discarded and retried.
+
+## Persistence and API
 
 State survives server restart and container recreation using the existing private
 volumes. Names are limited to 512 UTF-8 bytes; notes to 100 records/64 KiB body;
-results retain the existing 64-bundle/64-MiB quota. No files, notes, commands or
+results have a 64-bundle/64-MiB quota. No files, notes, commands or
 artifacts are uploaded and no telemetry is added. Preserve stopped volumes and
 SQLite/WAL files for recovery as described in [persistence](persistence.md).
 
-New endpoints use the existing local session and Host/Origin checks:
+Library endpoints use the local session and Host/Origin checks:
 `GET/PUT /api/lab/library`, `GET /api/lab/history`, and
 `GET /api/lab/results/{id}/export?name=result.bin`. Library writes use an existing
 result UUID, title and revision (0 creates; subsequent writes use the returned
@@ -66,10 +72,8 @@ attempt). Unknown attempts, other workspaces, invalid ports and mixed reference
 fields are rejected. `GET /api/explorations/executions/{id}` returns the actual
 attempt and configuration reference; it performs no operation or implicit replay.
 
-Historical cipher profiles use the same typed exploration controls and named
-ports. Gronsfeld, Autokey, Quagmire, square/matrix ciphers and the other explicit
-profiles are implemented in Core; see the [pinned Core cipher guide](https://github.com/cubearc/cube/blob/750b4b783b9d85829080e2769c29b46dd84eb414/docs/ciphers.md).
-Playfair exposes text, prepared text and filler positions separately; decode
-retains fillers. Solitaire deck/passphrase parameters stay ephemeral, and
-private results require explicit retention through the existing private-output
-flow. These direct operations add no implicit uploads or pipeline adapters.
+Historical cipher profiles use the typed exploration controls. See the
+[Core cipher reference](https://github.com/cubearc/cube/blob/main/docs/ciphers.md)
+for transformations and output fields, and
+[private inputs and retention](explorations.md#private-inputs-and-retention) for
+per-run secrets and output choices.

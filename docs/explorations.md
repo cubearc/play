@@ -18,6 +18,8 @@ after restart. **Notes**, **Artifacts**, **Local challenges** and **Terminal** e
 have their own section. Single-operation text/byte utilities remain under
 **Quick text and byte tools** in Explorations.
 
+## History and annotations
+
 Open **Execution history**, then **View retained output** to inspect an earlier
 run without executing it again. The stored artifact identity, hash and named-port
 schemas must match the immutable execution evidence. Missing or private unretained
@@ -34,6 +36,8 @@ explanation to freeze its actual dependency path in an immutable private revisio
 while continuing the exploration. See [private solutions](solutions.md) for
 revision history, explicit field conversions and optional local stage association.
 
+## Check replay inputs
+
 **Replay inputs** checks the retained dependency path when a typed result opens.
 It compares current authorized file bytes and named artifact values with their
 recorded digests, checks operation/schema identities and reports private parameters
@@ -43,6 +47,8 @@ copying originals. Available inputs do not establish determinism, an identical
 rerun or a correct solution. Historical configurations remain readable when their
 operation versions are unavailable; saving/running still requires current contracts.
 
+## Inspect named results
+
 Use **Output port** to select a named result. Text remains inert, bytes retain
 explicit Base64 transport, and known histogram results offer a chart and semantic
 table. Other reports use a structured fallback; resembling a histogram does not
@@ -50,6 +56,8 @@ grant a chart. Previews show at most 65,536 characters, and reading a retained
 bundle is limited to 4 MiB. **Output data and provenance** exposes the recorded
 parameters, source references and schema digest. Name or explicitly export the
 complete retained bundle using the existing artifact controls.
+
+## Connect an image workflow
 
 For an image workflow, select a source file, add `image.decode` with **Selected
 file**, then connect its `output` to `image.histogram`, `image.channel.extract`
@@ -59,9 +67,12 @@ The raster viewer displays native 8-bit samples, keyboard coordinates and zoom;
 its table reads Core samples rather than browser-rendered colors. Unsupported
 shapes retain their bounded structured data. Direct selected-image inputs are
 decoded only in the resource-limited worker, after filesystem authorization.
+
 Input digests explicitly identify their representation: `file_bytes` hashes the
 authorized original file, while `json_wire_value` hashes a literal or named-port
 value's serialized transport. These hashes are not interchangeable.
+
+## Supply parameters and text
 
 Parameters and choices come from Core schemas. **Parameter form** selects an
 alternative contract, such as substitution by an explicit target alphabet or a
@@ -76,14 +87,18 @@ counts. `text.unicode.compare` accepts separate `input` and `other` ports and
 preserves both original and normalized observations. Parameter/type errors identify
 the selected operation and the rejected input or parameter section.
 
+## Private inputs and retention
+
 Literal inputs are included in the saved configuration. To investigate a file,
 select an authorized asset instead: its bytes stay outside SQLite, and execution
 records retain its digest. Private parameters are entered for a particular run,
 redacted from provenance and requested again for replay. Private operation outputs
 require explicit retention; otherwise their result references are not persisted.
+
 For these operations, **Keep this private output for this run** starts unchecked
 and resets after every attempt or step selection. Keeping the output locally
 enables chaining and private solutions; it never retains private parameters.
+
 Connected private-output steps must be run explicitly before their outputs can be
 used downstream. The application never retains such an upstream result implicitly.
 
@@ -132,5 +147,9 @@ Select a `cryptanalysis` operation and enter its typed JSON `request` input. Mod
 and candidate lists are supplied explicitly and remain local. Reports show scores,
 provenance and completion status; an incomplete report displays a visible notice.
 Scores are heuristics, not probabilities of correctness. Candidate text is inert.
-The existing Cancel action terminates the worker and never publishes an invented
+The Cancel action terminates the worker and never publishes an invented
 completed report. The Core contract describes each request and its resource limits.
+
+See [complete and partial results](https://github.com/cubearc/cube/blob/main/docs/concepts/results.md)
+for the distinction between an incomplete listing, interrupted search and failed
+operation. Each report's completion fields retain their Core meaning.

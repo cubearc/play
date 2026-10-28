@@ -2,12 +2,13 @@
 
 ## Local API
 
-The original [Lab API](../lab-api.md) remains available. Named-port clients use:
+Use these routes for named-port operations and saved graphs. The
+[single-input Lab API](../lab-api.md) documents its separate version-1 request
+format. Named-port clients use:
 
 - `GET /api/lab/v2/operations`: every canonical Core contract and truthful local
   `execution.available`, adapter version and limits. Only available adapters appear
-  in the operation picker. The original image inspectors and the named-port image
-  adapters call the same actual Core APIs.
+  in the operation picker. Image inspectors and named-port adapters call the same Core APIs.
 - `POST /api/lab/v2/execute`: schema version 2, a fresh execution UUID, exact
   operation/version, named input bindings and a parameter object.
 - `GET` / `PUT /api/explorations`: list or save configurations with optimistic
@@ -70,18 +71,39 @@ authorized filesystem resolver, isolated Core worker, cancellation and private
 artifact bundles are reused. Contracts grant no host paths or network access.
 Sources remain read-only; exporting is an explicit separate action.
 
-Requests reject duplicate JSON keys, more than 16 nesting levels, more than 4,096
-nodes or 256 KiB. Named inputs/outputs have a 4 MiB **serialized JSON** budget;
-parameters have 64 KiB. These interface budgets include escaping and wrappers and
-can be stricter than Core's raw input bounds. The default worker deadline is five
-seconds. Discovery reports the actual interface budgets separately from Core caps.
+### Requests and execution
 
-Storage is bounded to 32 explorations, 64 steps per graph, 256 configuration
-versions totaling 8 MiB, and 512 execution attempts with at most 32 KiB of evidence
-each. Binary results reuse the existing 64-bundle / 64 MiB artifact budget. Quota
-errors preserve previous records; no evidence is silently evicted. Failed,
-cancelled and interrupted attempts retain their real status. Missing or corrupt
-artifacts fail explicitly, and historical references remain intact.
+Duplicate JSON keys are rejected. These are Play interface limits in addition to
+Core's operation limits:
+
+| Resource | Maximum or default |
+| --- | --- |
+| Request JSON | 256 KiB |
+| Nesting | 16 levels |
+| JSON nodes | 4,096 |
+| Named-input JSON | 4 MiB |
+| Named-output JSON | 4 MiB |
+| Parameter JSON | 64 KiB |
+| Worker deadline | Default five seconds |
+
+Serialized budgets include wrappers and escaping. Discovery reports these
+separately from Core caps. See
+[Core and interface limits](https://github.com/cubearc/cube/blob/main/docs/concepts/resource-limits.md#core-and-interface-limits).
+
+### Retention and recovery
+
+| Resource | Maximum |
+| --- | --- |
+| Explorations | 32 |
+| Steps per graph | 64 |
+| Configuration versions | 256, totaling 8 MiB |
+| Execution attempts | 512 |
+| Evidence per attempt | 32 KiB |
+| Binary artifact bundles | 64, totaling 64 MiB |
+
+Quota errors preserve previous records; evidence is not silently evicted. Failed,
+cancelled and interrupted attempts retain their status. Missing or corrupt
+artifacts fail explicitly, with historical references intact.
 
 Replay checks inspect at most 64 distinct retained bundles, stop at a cumulative
 64 MiB reading budget (one final bounded 4 MiB read may cross that threshold), and
@@ -92,18 +114,40 @@ Legacy result bundles and notes keep their original identifiers. Their history i
 unassigned to an exploration, and missing or redacted replay parameters remain
 unknown rather than being inferred from terminal text.
 
-The typed Core bridge also executes the bounded transposition/fractionation
-profiles: exact scalar rail/column/sequence/route/grille permutations and explicit
-coordinate/Morse hybrids. All 48 new operations retain canonical named ports;
-none requires a pipeline adapter to execute directly. Complete Columnar keeps
-`original_length`/`padding_count`, Cardan overlays retain `positions` and
-`original_selected`, and Morse returns separate `text`, `ciphertext`, `morse`,
-`padding_count` and `padding_ambiguous` fields. An unresolved Morse inverse has
-`text: null`; the structured viewer preserves this evidence without inventing
-plaintext. Parameters, source literals and artifact references are validated by
-Core schemas and the existing capability-gated worker. No network access or
-upload is introduced. See the pinned Core guide `docs/cipher-permutations.md`
-for exact keyword ties, shapes, route directions, alphabets and pad conventions.
+## Operation-specific results
+
+Core's [transposition and fractionation reference](https://github.com/cubearc/cube/blob/main/docs/cipher-permutations.md)
+defines keyword ties, routes, shapes, alphabets and padding. The Play viewer
+preserves separate named outputs:
+
+- Complete Columnar retains `original_length` and `padding_count`.
+- Cardan overlays retain `positions` and `original_selected`.
+- Morse exposes `text`, `ciphertext`, `morse`, `padding_count` and
+  `padding_ambiguous`. An unresolved inverse has `text: null`.
+
+### Books, keyboards and symbols
+
+Book encoding has separate `source` and `text` inputs. Its `coordinates` output
+can feed the decoder's `input` port when parameters contain the identical caller
+source. The source hash identifies exact UTF-8 bytes and line endings.
+
+Keyboard coordinates are `[row,column,layer]` arrays. Select the named JSON
+output to reuse coordinates without text conversion. Core's contract defines
+geometry, origin, displacement and edge policies. Symbol records preserve exact
+aliases and byte/scalar positions; ambiguous inverses fail.
+
+Text fields use multiline editors. Browser text editing uses LF; file-backed
+source ports preserve original UTF-8, including CRLF. The hash identifies the
+exact value sent to Core. The schema editor handles caller-owned tables/geometry;
+viewers retain separate text, coordinate, position and provenance outputs.
+
+[Core profile limits](https://github.com/cubearc/cube/blob/main/docs/ciphers.md#caller-owned-book-keyboard-and-symbolic-profiles)
+include 64 KiB definitions, 1 MiB inputs, 65,536 items and 4 MiB reports.
+Play's request and artifact quotas apply as well. Definitions and results stay
+within the authorized workspace; no OS keyboard, font, remote source or OCR is
+used to infer a mapping.
+
+### Files and generated images
 
 The local execution catalog covers every installed Core operation. Discovery is
 separate from execution authorization: filesystem operations require selected
@@ -113,6 +157,8 @@ metadata inspects only a bounded header, even for a large file; its
 Carving creates a derived artifact from an explicit range or validated candidate;
 it does not write back into source directories.
 
+### Versioned configurations
+
 Brainfuck uses separate `source` text and `input` byte-array ports (operation
 version 2). Profile execution also requires an explicit profile (version 2).
 Earlier incompatible configurations remain readable and require deliberate edits.
@@ -121,9 +167,16 @@ and text-grid rendering adds `image` only when an explicit complete color mappin
 is supplied. Generic structured viewers preserve these results without guessing
 codecs, text encodings or forensic meaning.
 
+## Private inputs and output retention
+
 For operations marked with private inputs, entered values apply to the current
 run. They are cleared after each attempt or step selection and never enter the
 saved configuration. Authorized file and artifact references can still be saved.
 Execution evidence omits private input values and fingerprints and reports a
 replay gap. An unretained private output also leaves no output digest in saved
 execution history. Retention remains an explicit, separate choice for each run.
+
+Enigma uses a named `text` input with `text`, `final_windows` and `trace` outputs.
+Settings, input and state results are private. Raw stream transforms likewise use
+per-run private keys/pads and an explicit retention choice. Use installed Core
+contracts for profile-specific ports and limits.

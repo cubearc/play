@@ -1,16 +1,18 @@
 # Typed local Lab API
 
-`cipher.enigma` executes the typed Core Enigma I/M3 transform with named `text`
-input and `text`, `final_windows` and `trace` outputs. The schema editor and text
-or structured viewers use the installed Core contract. Settings, input and state
-results are private; the per-run retention choice applies before saving output.
+Use these single-input endpoints for the original Lab request format. For named
+inputs/outputs and saved exploration graphs, use the
+[version-2 exploration API](reference/explorations.md#local-api). Both interfaces
+advertise their own execution availability and transport budgets.
 
-The Lab calls the versioned Rust Core directly. It never parses terminal output or
-executes scripts. These endpoints require the local session Authorization header and exact
-Host/Origin as other workspace APIs. Files/results stay local; no network operation,
-telemetry or upload is added. See [the visual Lab](visual-lab.md) for interactive controls.
+The Lab calls Rust Core directly. Requests require the local session Authorization
+header and exact Host/Origin. Terminal output and scripts are not execution inputs.
+Files and results stay local. See [the visual Lab](visual-lab.md) for interactive controls.
 
 ## Discover and execute
+
+The following routes use the single-input format. Named-port routes are under
+`/api/lab/v2/`; their request shapes and availability are documented separately.
 
 `GET /api/lab/operations` returns the actual Core catalog, engine/package versions,
 Lab limits and execution availability. `GET /api/lab/operations/{id}` describes one
@@ -119,7 +121,7 @@ pixel, sample, palette and result-count limits.
 
 | Resource | Limit |
 | --- | --- |
-| Request JSON | Core's 256 KiB / 16 nesting levels / 4,096 nodes; five seconds to receive |
+| Request JSON | 256 KiB / 16 nesting levels / 4,096 nodes; five seconds to receive |
 | Inline input / authorized file input | 64 KiB / 4 MiB per input |
 | Output | 4 MiB; caller may lower `max_output_bytes` |
 | Worker wall / CPU time | Five seconds / four CPU seconds on Unix |
@@ -127,44 +129,35 @@ pixel, sample, palette and result-count limits.
 | Retained payloads | 64 results / 64 MiB, plus bounded metadata |
 | Concurrent content/file reads | Two, shared with workspace previews; bounded two-second acquisition wait |
 
-Conservative Core pipeline output/work estimates can reject a request before its
-actual output would reach the byte limit. Native development retains byte/work,
+Core pipeline output/work reservations can reject a request before actual output
+reaches the byte cap. See
+[resource budget interpretation](https://github.com/cubearc/cube/blob/main/docs/concepts/resource-limits.md).
+
+Native development retains byte/work,
 process and wall-clock boundaries; platform memory controls differ. The supported
 ordinary-user runtime uses Linux containers for its hard address-space boundary.
 
-Set `timeout_ms` between 1 and 5,000 to lower worker execution time. Send
+### Deadlines and cancellation
+
+Set `timeout_ms` from 1 through 5,000 to lower worker execution time. Send
 `DELETE /api/lab/executions/{request-id}` to cancel active work. Disconnecting also
 requests cancellation when the HTTP handler is dropped. The supervisor kills and
-reaps the worker before releasing its execution slot; cancellation before
-publication begins does not create a successful result. Once publication starts,
-cancellation returns `commit_started`; read the completed result using the request
-ID. A disconnect during that final phase may still leave a complete local result. File reads remain subject to
-local filesystem availability. Operation errors use `{schema_version: 1, error: {code,
-message, operation, parameter, offset}}`, preserving Core categories and safe
-context without echoing arbitrary input or secret values. No unsafe fallback or
-automatic retry is performed.
+reaps the worker before releasing its execution slot.
+
+Cancellation before publication begins does not create a successful result.
+Once publication starts, cancellation returns `commit_started`; read the completed
+result using the request ID. A disconnect during that final phase may still leave
+a complete local result. File reads remain subject to filesystem availability.
+
+### Errors
+
+Operation errors use `{schema_version: 1, error: {code, message, operation,
+parameter, offset}}`. They preserve Core categories and safe context without
+echoing arbitrary input or secret values. There is no unsafe fallback or automatic
+retry. See [result and error categories](https://github.com/cubearc/cube/blob/main/docs/concepts/results.md).
 
 ## Caller-owned puzzle profiles
 
-The named-port API executes `cipher.book.encode` and its existing decoder,
-`text.keyboard.coordinates.encode/decode`, `text.keyboard.shift.encode/decode`,
-`text.keyboard.remap`, and `symbol.tokens.encode/decode` through typed Core calls.
-Book encoding has separate `source` and `text` input ports. Its `coordinates`
-output can feed the legacy decoder's `input` port with the identical caller source
-in parameters. Source hashes retain exact UTF-8/line endings. Keyboard coordinates
-are JSON arrays of `[row,column,layer]`; select the named JSON output to reuse it,
-without a text conversion. Geometry, origin, displacement and edge policies are
-explicit parameters from the Core schema.
-
-Text fields use multiline editors so line breaks are not discarded. Browser text
-editing uses LF; file-backed source ports retain the original UTF-8 bytes, including
-CRLF. The hash describes the exact value sent to Core.
-
-The visual Lab's schema editor accepts caller table/geometry objects and renders
-individual text, coordinate, position and provenance outputs through existing
-bounded viewers. Symbol records retain exact aliases and byte/scalar positions;
-Core refuses ambiguous inverses. No browser font, OS keyboard, remote source,
-OCR, puzzle answer or new pipeline adapter is introduced. Definitions and results
-remain within the workspace's existing local persistence and authorization bounds.
-The Core guide documents the 64 KiB definition, 1 MiB input, 65,536 item and
-4 MiB report limits; the Lab's request/artifact quotas also apply.
+Book, keyboard and symbol-table operations use the named-port API. See
+[operation-specific results](reference/explorations.md#operation-specific-results)
+for separate source/text ports, exact output reuse and editor line endings.
