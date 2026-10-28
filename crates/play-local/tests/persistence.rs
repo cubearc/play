@@ -398,7 +398,8 @@ async fn records_navigation_sessions_and_artifacts_survive_reopen_without_source
 #[tokio::test]
 async fn optimistic_revisions_and_validation_prevent_lost_updates_and_invalid_paths() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     let left = fixture.put(
         "/api/investigation",
         json!({"title":"Left tab","revision":1}),
@@ -498,7 +499,8 @@ async fn optimistic_revisions_and_validation_prevent_lost_updates_and_invalid_pa
 #[tokio::test]
 async fn migrations_upgrade_idempotently_and_reject_changed_or_future_versions() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     fixture.stop().await;
     let mut connection = fixture.sql().await;
     sqlx::query("DROP TABLE artifacts")
@@ -547,7 +549,8 @@ async fn migrations_upgrade_idempotently_and_reject_changed_or_future_versions()
 #[tokio::test]
 async fn recovery_preserves_missing_references_and_finishes_published_imports() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     fixture.upload("missing.txt", "retained bytes").await;
     let artifact = fixture.get("/api/investigation/artifacts").await.1[0].clone();
     fixture.stop().await;
@@ -700,7 +703,8 @@ async fn foreign_corrupt_and_cross_workspace_databases_are_never_reset() {
 #[tokio::test]
 async fn a_second_owner_and_state_paths_within_authorized_files_are_rejected() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     let second = application(fixture.config.clone(), "private-capability".into());
     let request = Request::builder()
         .uri("/healthz")
@@ -731,7 +735,8 @@ async fn a_second_owner_and_state_paths_within_authorized_files_are_rejected() {
 async fn private_database_paths_reject_symlinks_hardlinks_and_unsafe_permissions() {
     use std::os::unix::fs::{PermissionsExt, symlink};
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     fixture.stop().await;
     let path = fixture.path();
     assert_eq!(
@@ -806,7 +811,8 @@ async fn private_database_paths_reject_symlinks_hardlinks_and_unsafe_permissions
 #[tokio::test]
 async fn write_failures_roll_back_and_import_publication_can_recover_without_overwrites() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     let mut connection = fixture.sql().await;
     sqlx::query("CREATE TRIGGER reject_note BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT,'fixture full disk'); END").execute(&mut connection).await.unwrap();
     assert_eq!(
@@ -944,7 +950,8 @@ async fn state_routes_require_session_origin_and_bounded_bodies() {
 #[tokio::test]
 async fn record_budgets_reject_new_entries_without_changing_existing_rows() {
     let mut fixture = Fixture::new();
-    fixture.get("/api/investigation").await;
+    let (status, initialized) = fixture.get("/api/investigation").await;
+    assert_eq!(status, StatusCode::OK, "{initialized}");
     let mut connection = fixture.sql().await;
     sqlx::query("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<100) INSERT INTO notes(id,investigation_id,title,body,revision,updated_ms) SELECT printf('00000000-0000-4000-8000-%012d',i),(SELECT id FROM investigation),'Note','retained',1,0 FROM n").execute(&mut connection).await.unwrap();
     sqlx::query("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<1000) INSERT INTO progress(challenge_key,stage_key,investigation_id,local_status,revision,updated_ms) SELECT 'local',CAST(i AS TEXT),(SELECT id FROM investigation),'unstarted',1,0 FROM n").execute(&mut connection).await.unwrap();

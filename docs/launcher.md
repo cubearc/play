@@ -68,17 +68,19 @@ The runtime image must match the installed launcher's version and protocol. An a
 
 ## Platforms and permissions
 
-Recorded validation covers native macOS checks and real Linux-container
-workflows on Docker Desktop. The maintainer deferred native Windows and WSL/Docker
-Desktop testing on 2026-10-27. The Windows and WSL rows below describe intended
-behavior; validation remains open in [the platform follow-up](https://github.com/cubearc/play/issues/24).
+On Windows with a local Docker Engine inside WSL, run Cube, Play and Docker
+inside the same distribution. Use WSL paths such as `/mnt/d/investigation` for
+Windows files. A Windows browser can open the ready loopback URL printed by Play.
+The native Windows executable uses a local named-pipe engine connection; installing
+the Windows Docker CLI alone does not connect it to WSL's Unix socket.
+See [verification](reference/validation.md) for the actual native and container test scope.
 
 | Environment | Behavior |
 | --- | --- |
 | Linux local Engine | Uses the calling user's UID and primary GID in a non-root image; source ownership and modes remain unchanged. Use a normal account with Docker access. |
 | macOS Docker Desktop | Uses Linux containers and host UID/GID with Docker Desktop file sharing. Exact `/host_mnt` VM translations are recognized during recreation. Paths with spaces, Unicode and dollar signs remain literal. |
 | Windows Docker Desktop | Uses Linux containers through a local named-pipe context, an unprivileged runtime UID and explicit drive-path conversion. Use a local shared drive; UNC mounts are rejected. |
-| WSL | Run Cube, the launcher and Docker CLI inside the same WSL environment with Docker Desktop integration enabled. Windows/native and WSL installations have separate local registries. |
+| WSL | Run Cube, the launcher and Docker CLI inside the same WSL environment, using a local Docker Engine or Docker Desktop integration. Windows/native and WSL installations have separate local registries. |
 
 Use a local Docker context and an ordinary account with access to it. Source access can fail under unsupported sharing or ownership settings; see [platform and runtime boundaries](reference/launcher.md#platform-boundaries).
 
