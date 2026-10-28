@@ -5,6 +5,10 @@
 - All algorithms and operation metadata belong to versioned `cube-core`. Play owns
   UI, filesystem authorization, local persistence and execution orchestration.
   The terminal runs the real Cube CLI; the Lab uses typed Core APIs.
+- Follow the [desktop domain contract](docs/reference/desktop-domain.md) for the
+  Electron refactor's canonical ownership and mandatory interface retirement.
+  Replace current runtime checks with validated native equivalents as their
+  implementation lands; delivery status remains in GitHub Issues and Roadmap.
 - Every new or changed operation needs its canonical versioned Core descriptor,
   named input/output schemas, generated reference, real conformance fixture and
   tested Play adapter/viewer handling. Catalog presence does not grant execution.

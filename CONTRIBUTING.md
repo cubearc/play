@@ -46,6 +46,12 @@ authorization and orchestration. Read [Architecture](docs/architecture.md) befor
 changing these boundaries. Avoid unused abstractions, speculative services and
 duplicate metadata catalogs. Use existing tools instead of custom quality wrappers.
 
+For Electron implementation, follow the
+[desktop domain contract](docs/reference/desktop-domain.md) for entity ownership,
+immutable evidence, native boundaries and the breaking store/interface cutover.
+Each replacement removes its superseded path and validates the corresponding
+observable behavior; implementation status stays in GitHub Issues and Roadmap.
+
 Keep planning in GitHub Issues and CubeArc Roadmap. After authorized delivery,
 verify remote commits and CI. Close an issue only after its acceptance criteria pass
 and the work is integrated into the target branch; keep incomplete work open.

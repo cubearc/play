@@ -1,5 +1,10 @@
 # Architecture
 
+For the Electron refactor, use the
+[desktop domain contract](reference/desktop-domain.md) for canonical ownership,
+evidence identity and interface retirement. The runtime below describes the
+currently implemented application.
+
 Cube Play is a local application with one Rust API and one React interface.
 The Rust workspace contains `crates/play-local`, the host-side `crates/play-launcher`
 and `crates/play-runner`, alongside the React `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
