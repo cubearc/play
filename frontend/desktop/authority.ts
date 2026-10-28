@@ -4,6 +4,7 @@ const resources = new Map([
   [APP_URL, "index.html"],
   ["cube-play://app/app.js", "app.js"],
   ["cube-play://app/app.css", "app.css"],
+  ["cube-play://app/app.ttf", "app.ttf"],
 ]);
 
 export function resourceName(url: string): string | null {

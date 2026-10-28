@@ -41,8 +41,14 @@ let quitting = false;
 
 function createWindow(): void {
   const next = new BrowserWindow({
-    width: 1120,
-    height: 760,
+    width: 1280,
+    height: 800,
+    minWidth: 800,
+    minHeight: 540,
+    backgroundColor: "#1f1f1f",
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const }
+      : {}),
     title: "Cube Play — Native boundary proof",
     webPreferences: {
       preload: fileURLToPath(new URL("preload.cjs", import.meta.url)),
@@ -79,16 +85,18 @@ app
       const name = resourceName(request.url);
       if (request.method !== "GET" || !name)
         return new Response(null, { status: 403 });
-      const contentType = name.endsWith(".js")
-        ? "text/javascript"
-        : name.endsWith(".css")
-          ? "text/css"
-          : "text/html";
+      const contentType = name.endsWith(".ttf")
+        ? "font/ttf"
+        : name.endsWith(".js")
+          ? "text/javascript"
+          : name.endsWith(".css")
+            ? "text/css"
+            : "text/html";
       return new Response(await readFile(new URL(name, resources)), {
         headers: {
           "Content-Type": contentType,
           "Content-Security-Policy":
-            "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'",
+            "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'",
           "X-Content-Type-Options": "nosniff",
           "Cache-Control": "no-store",
         },

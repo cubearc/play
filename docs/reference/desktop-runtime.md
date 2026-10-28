@@ -70,12 +70,14 @@ limits are checked in preload before forwarding across IPC; main and Rust check
 their own boundaries again. No raw `ipcRenderer`, arbitrary channel, path, Node,
 filesystem, database or shell API crosses the bridge.
 
-Packaged resources use an exact allowlist of `index.html`, `app.js` and `app.css`.
+Packaged resources use an exact allowlist of `index.html`, `app.js`, `app.css` and
+the bundled Codicons font `app.ttf`.
 The protocol handler never converts a request pathname into a filesystem path.
 Unknown names, hosts, methods, credentials, query parameters and fragments are
 rejected. Encoded traversal cannot expand the resource allowlist. A restrictive
 CSP denies network connections, frames, forms, inline scripts and object content;
-permissions, popups and renderer navigation are denied.
+font loading is restricted to the same packaged origin.
+Permissions, popups and renderer navigation are denied.
 
 Workspace asset reads must resolve an engine-authorized Asset revision to a
 short-lived resource grant bound to the requesting window and context. Export

@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { _electron as electron } from "@playwright/test";
+import { _electron as electron, expect } from "@playwright/test";
 
 test("real Electron renderer invokes Core and rejects another window's bridge", {
-  timeout: 30000,
+  timeout: 60000,
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-electron-"));
   const application = await electron.launch({
@@ -18,6 +18,7 @@ test("real Electron renderer invokes Core and rejects another window's bridge", 
   });
   try {
     const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
     await page.getByRole("button", { name: "Run", exact: true }).waitFor();
     assert.equal(
       await page.evaluate(
@@ -31,10 +32,68 @@ test("real Electron renderer invokes Core and rejects another window's bridge", 
       ),
       "undefined",
     );
-    await page.getByLabel("Operation").selectOption("cipher.rot13");
+    const explorer = page.getByRole("complementary", { name: "Explorer" });
+    await explorer.waitFor({ timeout: 3000 });
+    await page.keyboard.press("ControlOrMeta+b");
+    await expect(explorer).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+b");
+    await expect(explorer).toBeVisible();
+    const output = page.getByRole("region", { name: "Output" });
+    await page.keyboard.press("ControlOrMeta+j");
+    await expect(output).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+j");
+    await expect(output).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+Shift+p");
+    const palette = page.getByRole("dialog", { name: "Command Palette" });
+    await expect(palette).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "Command", exact: true })
+      .fill("Output");
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(output).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+j");
+    await expect(output).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    assert.ok(
+      await page.evaluate(() =>
+        Array.from(document.fonts).some(
+          (face) => face.family === "codicon" && face.status === "loaded",
+        ),
+      ),
+    );
+    const widthBefore = (await explorer.boundingBox())?.width;
+    const sash = await page
+      .locator(".workspace-split .handle.split-vertical")
+      .boundingBox();
+    assert.ok(widthBefore && sash);
+    await page.mouse.move(sash.x + sash.width / 2, sash.y + 150);
+    await page.mouse.down();
+    await page.mouse.move(sash.x + 42, sash.y + 150, { steps: 5 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await explorer.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(widthBefore + 20);
+    assert.ok(
+      await page.evaluate(
+        () => customElements.get("vscode-button") !== undefined,
+      ),
+    );
+    await page.getByRole("combobox", { name: "Operation" }).click();
+    await page
+      .getByRole("option", { name: "cipher.rot13", exact: true })
+      .click();
     await page.getByLabel("Input").fill("Hello, CubeArc!");
     await page.getByRole("button", { name: "Run", exact: true }).click();
     if (process.platform === "darwin") {
+      await page
+        .getByRole("status")
+        .filter({ hasText: "Uryyb, PhorNep!" })
+        .waitFor();
+      await page.keyboard.press("ControlOrMeta+j");
+      await expect(output).toBeHidden();
+      await page.keyboard.press("ControlOrMeta+Enter");
+      await expect(output).toBeVisible();
       await page
         .getByRole("status")
         .filter({ hasText: "Uryyb, PhorNep!" })
