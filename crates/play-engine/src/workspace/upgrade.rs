@@ -3,7 +3,7 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{Connection, SqliteConnection};
 use std::{
-    fs::{self, File},
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
@@ -101,7 +101,9 @@ pub async fn publish(directory: &Path, id: Uuid, schemas: &Schemas) -> Result<()
         if storage::inspect(&path, id, schemas).await? != storage::SCHEMA_VERSION {
             return Err("unsupported_store");
         }
-        File::open(&path)
+        OpenOptions::new()
+            .write(true)
+            .open(&path)
             .and_then(|file| file.sync_all())
             .map_err(|_| "storage_unavailable")?;
         fs::rename(&path, directory.join("workspace.sqlite3"))
