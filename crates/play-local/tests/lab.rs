@@ -2500,7 +2500,7 @@ async fn caller_owned_puzzle_ports_preserve_sources_arrays_aliases_and_restart()
         .await;
     assert_eq!(status, 200);
     let ops = catalog["operations"].as_array().unwrap();
-    assert_eq!(ops.len(), 305);
+    assert_eq!(ops.len(), 312);
     assert_eq!(
         ops.iter()
             .filter(|v| v["execution"]["available"] == true)
@@ -3007,4 +3007,22 @@ async fn classical_analysis_preserves_wide_scores_and_marks_incomplete_evidence(
         result["inline"]["data"]["report"]["status"]["complete"],
         false
     );
+}
+
+#[tokio::test]
+async fn stream_keys_are_per_run_and_outputs_require_explicit_retention() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let id = Uuid::new_v4();
+    let request = json!({"schema_version":2,"id":id,"operation":"cipher.chacha20","operation_version":1,"inputs":{"input":{"type":"literal","value":{"base64":"AA=="}},"key":{"type":"literal","value":{"base64":cube_core::encoding::base64_encode(&[0;32])}}},"parameters":{"nonce":[0,0,0,0,0,0,0,0,0,0,0,0],"counter":0}});
+    let (status, output) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{output}");
+    assert_eq!(output["retained"], false);
+    let (status, stored) = server
+        .api("GET", &format!("/api/lab/results/{id}"), Value::Null)
+        .await;
+    assert_ne!(status, 200, "transient private result persisted: {stored}");
+    let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.salsa20","operation_version":1,"inputs":{"input":{"type":"literal","value":{"base64":"AA=="}},"key":{"type":"literal","value":{"base64":cube_core::encoding::base64_encode(&[0;32])}}},"parameters":{"nonce":[0,0,0,0,0,0,0,0],"counter":"18446744073709551615"}});
+    let (status, output) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{output}");
 }
