@@ -1,5 +1,12 @@
 # Typed local Lab API
 
+`cipher.aes.encrypt_blocks` and `cipher.aes.decrypt_blocks` accept named `input`
+bytes and return named `output` bytes, displayed by the byte viewer. They call
+Core's raw AES primitive, without padding or authentication. `key_hex` and literal
+input are private run-time values; key material never enters saved configurations
+or provenance. Output is transient unless private retention is explicitly chosen.
+The installed contract and runtime wire budgets govern exact lengths and limits.
+
 `cipher.enigma` executes the typed Core Enigma I/M3 transform with named `text`
 input and `text`, `final_windows` and `trace` outputs. The schema editor and text
 or structured viewers use the installed Core contract. Settings, input and state

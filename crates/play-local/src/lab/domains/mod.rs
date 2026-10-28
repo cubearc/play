@@ -1,4 +1,5 @@
 //! Explicit adapters call typed Core APIs; descriptors never dispatch algorithms.
+mod aes_blocks;
 mod audio;
 mod blockchain;
 mod brainfuck;
@@ -25,7 +26,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
-    operation == cube_core::ciphers::enigma::ID
+    aes_blocks::supported(operation)
+        || operation == cube_core::ciphers::enigma::ID
         || cryptanalysis::supported(operation)
         || workflows::supported(operation)
         || video::supported(operation)
@@ -70,6 +72,7 @@ pub(super) fn execute(
     parameters: Value,
 ) -> Result<Value, OperationError> {
     match operation {
+        _ if aes_blocks::supported(operation) => aes_blocks::execute(operation, inputs, parameters),
         _ if cryptanalysis::supported(operation) => {
             cryptanalysis::execute(operation, inputs, parameters)
         }
