@@ -16,6 +16,9 @@
   add a Docker socket, privileged container or automatic challenge execution.
 - Write documentation, comments, errors, templates and issue descriptions in English.
   Update concise user/developer docs alongside functionality.
+- Follow the [shared documentation guide](https://github.com/cubearc/docs/blob/main/content/contributing/documentation.md).
+  Keep user tasks separate from API/storage reference and retain one canonical
+  explanation per subject. Update `docs/SUMMARY.md` and affected examples.
 - Follow CONTRIBUTING.md for Rustfmt, Clippy with denied warnings, locked Cargo
   tests/coverage, Biome, strict TypeScript, Vitest, Playwright and Docker smoke tests.
   Do not suppress warnings or lower coverage gates to bypass checks.
