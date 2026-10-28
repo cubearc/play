@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import type { OperationResult } from "./exploration-api";
 import { parseResult } from "./lab-api";
-import { TypedOutputs } from "./TypedOutputs";
+import { TypedOutputs, TypedValue } from "./TypedOutputs";
 import { counts, id, outputPort, typedWire } from "./test/lab-fixture";
 
 vi.mock("echarts/core", () => ({
@@ -15,6 +15,20 @@ vi.mock("echarts/core", () => ({
   })),
 }));
 afterEach(() => vi.unstubAllGlobals());
+it("shows incomplete classical evidence explicitly and keeps candidate text inert", () => {
+  const value = {
+    status: { complete: false, stop: "work_limit", work: 2 },
+    candidate: "<script>bad()</script>",
+    score: 123,
+  };
+  render(<TypedValue semantic="analysis.report" value={value} />);
+  expect(screen.getByText(/Incomplete analysis: work_limit/)).toBeVisible();
+  expect(screen.getByText(/not probabilities of correctness/)).toBeVisible();
+  expect(screen.getByLabelText("Structured output")).toHaveValue(
+    JSON.stringify(value, null, 2),
+  );
+  expect(document.querySelector("script")).toBeNull();
+});
 it("annotates the explicitly selected retained port and refuses unretained output", async () => {
   vi.stubGlobal(
     "fetch",

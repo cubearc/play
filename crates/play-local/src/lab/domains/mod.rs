@@ -2,6 +2,7 @@
 mod audio;
 mod blockchain;
 mod brainfuck;
+mod cryptanalysis;
 mod enigma;
 mod files;
 mod fraction;
@@ -25,6 +26,7 @@ use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
     operation == cube_core::ciphers::enigma::ID
+        || cryptanalysis::supported(operation)
         || workflows::supported(operation)
         || video::supported(operation)
         || blockchain::supported(operation)
@@ -68,6 +70,9 @@ pub(super) fn execute(
     parameters: Value,
 ) -> Result<Value, OperationError> {
     match operation {
+        _ if cryptanalysis::supported(operation) => {
+            cryptanalysis::execute(operation, inputs, parameters)
+        }
         "cipher.enigma" => enigma::execute(inputs, parameters),
         "encoding.base58check.encode" => {
             let encoded: String = field(&inputs["input"], "base64")?;
