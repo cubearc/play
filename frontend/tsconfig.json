@@ -21,6 +21,9 @@
     "src",
     "vite.config.ts",
     "vite.launcher.config.ts",
+    "vite.desktop.config.ts",
+    "vite.preload.config.ts",
+    "desktop-renderer-src",
     "playwright.config.ts",
     "tests"
   ]

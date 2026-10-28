@@ -1,0 +1,21 @@
+[package]
+name = "play-engine"
+description = "Private native desktop engine boundary proof"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cube-core = { path = "../../../cube/crates/cube-core", version = "=0.18.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1", features = ["process"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libproc = "=0.14.11"
+
+[lints]
+workspace = true

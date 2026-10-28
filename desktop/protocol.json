@@ -1,0 +1,12 @@
+{
+  "protocol": 1,
+  "engine": "0.2.0",
+  "frame_bytes": 65536,
+  "input_bytes": 8192,
+  "queue_commands": 8,
+  "handshake_ms": 3000,
+  "run_ms": 2000,
+  "cpu_seconds": 1,
+  "vm_growth_bytes": 134217728,
+  "output_bytes": 16384
+}

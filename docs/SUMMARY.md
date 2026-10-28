@@ -22,5 +22,6 @@
     - [Development](development.md)
     - [Architecture](architecture.md)
     - [Desktop domain contract](reference/desktop-domain.md)
+    - [Desktop IPC and native execution](reference/desktop-runtime.md)
     - [Visual Lab implementation](reference/visual-lab.md)
     - [Verification](reference/validation.md)

@@ -4,6 +4,7 @@ WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+COPY desktop/protocol.json /build/desktop/protocol.json
 RUN npm run build
 
 FROM rust:${RUST_VERSION}-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8 AS backend

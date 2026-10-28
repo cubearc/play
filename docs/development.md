@@ -2,6 +2,25 @@
 
 Use Rust stable through rustup, Node.js 24.15+ and npm. Keep Cube 0.18.0 at `../cube`.
 
+## Electron boundary proof
+
+Use the pinned Rust toolchain and `frontend/.nvmrc`. On macOS, install the Xcode
+Command Line Tools for the native helper build and local ad-hoc signing.
+
+```sh
+npm ci --prefix frontend
+npm run desktop:build --prefix frontend
+npm run desktop:test --prefix frontend
+npm run desktop:smoke --prefix frontend
+npm run desktop:proof --prefix frontend
+```
+
+The proof runs packaged React, Electron, Rust and Core over private pipes, with no
+server or Docker. It uses ephemeral text and no Workspace data. Windows/Linux
+execution is refused until native policy validation is implemented. See the
+[IPC and native execution contract](reference/desktop-runtime.md) for its exact
+scope, resource accounting and remaining release requirements.
+
 ## Developer quick start
 
 ```sh

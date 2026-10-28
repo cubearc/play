@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.15.0"
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "desktop:build": "node node_modules/electron/install.js && tsc -p tsconfig.desktop.json && vite build --config vite.desktop.config.ts && vite build --config vite.preload.config.ts && node desktop-dist/prepare.js",
+    "desktop:proof": "electron desktop-dist/main.js",
+    "desktop:test": "node --test desktop-dist/*.test.js",
+    "desktop:smoke": "node --test desktop-dist/desktop.e2e.js",
     "build": "tsc --noEmit && vite build && vite build --config vite.launcher.config.ts",
     "typecheck": "tsc --noEmit",
     "check": "biome check .",
@@ -37,6 +41,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "@vitest/coverage-v8": "5.0.5",
+    "electron": "45.1.0",
     "jsdom": "30.1.3",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",

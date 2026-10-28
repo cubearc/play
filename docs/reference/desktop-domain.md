@@ -152,7 +152,7 @@ OS must prove its source/output grants, worker network policy, process-tree
 cleanup and CPU/memory/time/process/output bounds. Unsupported enforcement fails
 explicitly, without a container or unrestricted fallback. Exact IPC layouts,
 limits and supported OS/architecture mechanisms are owned by the
-[native execution contract](https://github.com/cubearc/play/issues/58).
+[native execution contract](desktop-runtime.md).
 
 Remote Challenge pages/forms run in a separate unprivileged view/session without
 the application preload or local command authority. Bind authentication callbacks
