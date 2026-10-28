@@ -15,6 +15,7 @@ mod numbers;
 mod poly;
 mod puzzle_codes;
 mod reasoning;
+mod stream;
 mod symbols;
 mod text;
 mod text_analysis;
@@ -27,6 +28,7 @@ use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
     aes_blocks::supported(operation)
+        || stream::supported(operation)
         || operation == cube_core::ciphers::enigma::ID
         || cryptanalysis::supported(operation)
         || workflows::supported(operation)
@@ -73,6 +75,7 @@ pub(super) fn execute(
 ) -> Result<Value, OperationError> {
     match operation {
         _ if aes_blocks::supported(operation) => aes_blocks::execute(operation, inputs, parameters),
+        _ if stream::supported(operation) => stream::execute(operation, inputs, parameters),
         _ if cryptanalysis::supported(operation) => {
             cryptanalysis::execute(operation, inputs, parameters)
         }
@@ -118,5 +121,24 @@ pub(super) fn execute(
             poly::execute(operation, inputs, parameters)
         }
         _ => mono::execute(operation, inputs, parameters),
+    }
+}
+
+#[cfg(test)]
+mod stream_acceptance {
+    use super::*;
+    #[test]
+    fn exact_stream_profiles_have_real_typed_private_execution() {
+        for (id, f) in cube_core::operations::contracts::registered_fixtures().unwrap() {
+            if id.starts_with("cipher.chacha")
+                || id.starts_with("cipher.xchacha")
+                || id.starts_with("cipher.salsa")
+                || id == "cipher.vernam"
+            {
+                assert!(supported(&id), "{id} must execute through Play");
+                let output = execute(&id, f.inputs, f.parameters).unwrap();
+                assert_eq!(output, f.outputs, "{id}");
+            }
+        }
     }
 }

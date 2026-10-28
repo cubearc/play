@@ -94,7 +94,7 @@ fn main() {
             std::process::exit(1);
         }
         emit(
-            &json!([{"Id":image(&mode),"Config":{"User":env::var("CUBE_PLAY_FIXTURE_USER").unwrap(),"Labels":{"org.cubearc.play.protocol":if mode=="bad-image"{"99"}else{"1"},"org.cubearc.play.version":"0.2.0","org.cubearc.play.runtime-revision":if mode=="old-runtime"{"20"}else{"21"}}}}]),
+            &json!([{"Id":image(&mode),"Config":{"User":env::var("CUBE_PLAY_FIXTURE_USER").unwrap(),"Labels":{"org.cubearc.play.protocol":if mode=="bad-image"{"99"}else{"1"},"org.cubearc.play.version":"0.2.0","org.cubearc.play.runtime-revision":if mode=="old-runtime"{"21"}else{"22"}}}}]),
         );
         return;
     }
