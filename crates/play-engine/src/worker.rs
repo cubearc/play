@@ -37,16 +37,75 @@ impl Probe {
         match self {
             Self::Rot13 => Ok(json!({"text": cube_core::ciphers::rot13(input)})),
             Self::Brainfuck => {
-                let limits = cube_core::esolang::brainfuck::Limits {
-                    max_output_bytes: protocol::contract().output_bytes,
-                    ..Default::default()
-                };
+                let limits = brainfuck_limits();
                 cube_core::esolang::brainfuck::execute(input, &[], limits)
                     .map(|bytes| json!({"bytes": bytes}))
                     .map_err(|_| "operation_failed")
             }
         }
     }
+}
+
+fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
+    cube_core::esolang::brainfuck::Limits {
+        max_output_bytes: protocol::contract().output_bytes,
+        ..Default::default()
+    }
+}
+
+pub fn parameters(operation: &str) -> Result<Value> {
+    match Probe::parse(operation)? {
+        Probe::Rot13 => Ok(json!({})),
+        Probe::Brainfuck => serde_json::to_value(brainfuck_limits()).map_err(|_| "invalid_state"),
+    }
+}
+pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
+    let contract = cube_core::operations::require(&invocation.operation)
+        .map_err(|_| "unsupported_operation")?
+        .contract()
+        .map_err(|_| "contract_mismatch")?;
+    let port = contract
+        .inputs
+        .iter()
+        .find(|port| port.semantic_type == "text")
+        .ok_or("contract_mismatch")?;
+    let mut inputs = json!({port.name.clone():invocation.input});
+    if invocation.operation == "esolang.brainfuck.execute" {
+        inputs["input"] = json!([]);
+    }
+    Ok(inputs)
+}
+pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
+    let value = match Probe::parse(operation)? {
+        Probe::Rot13 => {
+            let text = output["text"].as_str().ok_or("invalid_response")?;
+            if text.len() > protocol::contract().output_bytes {
+                return Err("output_limit");
+            }
+            json!(text)
+        }
+        Probe::Brainfuck => {
+            let bytes = output["bytes"].as_array().ok_or("invalid_response")?;
+            if bytes.len() > protocol::contract().output_bytes {
+                return Err("output_limit");
+            }
+            let data = bytes
+                .iter()
+                .map(|v| {
+                    v.as_u64()
+                        .and_then(|v| u8::try_from(v).ok())
+                        .ok_or("invalid_response")
+                })
+                .collect::<Result<Vec<_>>>()?;
+            json!(cube_core::operations::contracts::values::Bytes { data })
+        }
+    };
+    let contract = cube_core::operations::require(operation)
+        .map_err(|_| "unsupported_operation")?
+        .contract()
+        .map_err(|_| "contract_mismatch")?;
+    let port = contract.outputs.first().ok_or("contract_mismatch")?;
+    Ok(json!({port.name.clone():value}))
 }
 
 pub fn catalog() -> Result<Value> {

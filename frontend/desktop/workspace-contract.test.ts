@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   assetRead,
-  assetRun,
+  cancelRun,
   context,
   imageImport,
   request,
+  runRequest,
 } from "./workspace-contract.ts";
 
 const owner = {
@@ -27,12 +28,34 @@ test("the workspace bridge accepts closed scoped intents without path or generic
   assert.deepEqual(request(add), add);
   const run = {
     context: owner,
-    asset_id: randomUUID(),
-    revision: 1,
+    key: randomUUID(),
+    trail_id: randomUUID(),
+    pipeline_id: randomUUID(),
+    pipeline_revision: 1,
+    retain_output: true,
     operation: "cipher.rot13",
     operation_version: 1,
   };
-  assert.deepEqual(assetRun(run), run);
+  assert.deepEqual(runRequest(run), run);
+  assert.throws(() => runRequest({ ...run, retain_output: undefined }));
+  assert.throws(() => cancelRun({ context: owner, run_id: "../run" }));
+  assert.deepEqual(
+    request({
+      kind: "list_runs",
+      context: owner,
+      trail_id: run.trail_id,
+      before: null,
+    }).kind,
+    "list_runs",
+  );
+  assert.throws(() =>
+    request({
+      kind: "list_runs",
+      context: owner,
+      trail_id: run.trail_id,
+      before: 0,
+    }),
+  );
   assert.deepEqual(
     imageImport({ context: owner, key: randomUUID(), caption: "Caption" })
       .context,
@@ -62,8 +85,8 @@ test("the workspace bridge accepts closed scoped intents without path or generic
     assert.throws(() =>
       assetRead({ context: owner, asset_id: randomUUID(), revision }),
     );
-  assert.throws(() => assetRun({ ...run, operation_version: 2 ** 32 }));
-  assert.throws(() => assetRun({ ...run, input: "literal authority" }));
+  assert.throws(() => runRequest({ ...run, operation_version: 2 ** 32 }));
+  assert.throws(() => runRequest({ ...run, input: "literal authority" }));
   assert.throws(() =>
     request({
       kind: "save_note",

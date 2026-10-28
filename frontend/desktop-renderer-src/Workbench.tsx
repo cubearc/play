@@ -17,8 +17,8 @@ const mac = navigator.userAgent.includes("Mac");
 const modifier = mac ? "⌘" : "Ctrl+";
 
 export function Workbench() {
-  const executions = useExecutions();
   const state = useWorkspace();
+  const executions = useExecutions(state.exploration, state.refreshSummary);
   const { workspace, exploration } = state;
   const [welcome, setWelcome] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);

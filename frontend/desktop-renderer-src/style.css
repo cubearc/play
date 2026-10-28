@@ -923,3 +923,24 @@ h1 {
   gap: 10px;
   margin-top: 24px;
 }
+
+.run-evidence {
+  display: grid;
+  grid-template-columns: 75px minmax(0, 1fr);
+  gap: 6px;
+}
+.run-evidence dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.inline-result li button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.inline-result li button[aria-current="true"] {
+  border-color: var(--vscode-focusBorder);
+}

@@ -40,12 +40,19 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **1**, SQLite application ID
-`0x4355504e` and 4096-byte pages. There is one baseline in
-`crates/play-engine/src/workspace/schema.sql`, without an old-store reader,
-converter or automatic reset. The engine checks the immutable marker, raw SQLite
+The native store uses generation **2**, schema version **2**, SQLite application ID
+`0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
+accepted generation evolves through `runs.sql`. Recognized native schema 1
+upgrades to schema 2 under its owner lock, preserving content and IDs. The engine
+recovers the recognized source, closes its connection, upgrades a private copy,
+verifies it and publishes it by atomic rename. A validated Workspace-bound
+`upgrade.json` marker identifies that unpublished copy; a new owner discards
+only its marked copy/journal before retrying. Unknown markers refuse opening
+without database writes or cleanup.
+Fresh stores initialize that same baseline/evolution. No previous product-store
+reader, converter or automatic reset is installed. The engine checks the immutable marker, raw SQLite
 header, complete schema signature and stored identity through a read-only immutable
-connection before writable recovery under the owner lock. Foreign-key integrity
+connection before writable recovery or migration under the owner lock. Foreign-key integrity
 is then checked. WAL/SHM files are unsupported; this baseline uses rollback
 journaling.
 
@@ -79,10 +86,11 @@ duplicate records; changed payloads receive `idempotency_conflict`.
 
 Text Assets create a reusable, single-node ROT13 Pipeline definition using the
 actual Core descriptor/version. Trails bind their own source Asset revision.
-Changing the operation selector is currently a session draft. Native operation
-responses are also session attempts: this slice does not persist PipelineRuns,
-Candidates, Solutions, submissions or official evaluation. It does not read or
-alias the previous runtime's database.
+Changing the operation selector is a draft for the next Run. Accepted executions
+freeze their chosen definition, resolved inputs and Core contract; see
+[native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
+and interruption recovery. Candidates, Solutions, submissions and official
+evaluation are separate deliveries.
 
 ## Development ceilings
 
@@ -99,10 +107,14 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | Text Asset or image caption | 1024 bytes |
 | One reasoning revision | 2048 bytes |
 | One imported PNG | 131072 bytes (128 KiB) |
-| Asset and reasoning revision payloads per Exploration | 4194304 bytes (4 MiB) |
+| Asset, reasoning and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
+| Runs per Exploration / Workspace | 64 / 128 |
+| Pending Run output reservation | 131072 bytes (128 KiB) |
 | SQLite database | 16777216 bytes (16 MiB), 4096 pages |
 
 Core additionally applies its image decode limits. SQLite rollback journals and
 small identity/navigation/lock files are separate from the database page ceiling.
+An active schema upgrade can additionally hold one private database copy and its
+rollback journal (up to 16 MiB each), separate from the live database ceiling.
 These conservative development limits are explicit admission controls, not a
 release-wide aggregate disk or process memory guarantee.

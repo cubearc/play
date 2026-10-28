@@ -16,10 +16,11 @@ import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
 import {
   assetRead,
-  assetRun,
+  cancelRun,
   type ExplorationView,
   imageImport,
   request,
+  runRequest,
 } from "./workspace-contract.ts";
 
 protocol.registerSchemesAsPrivileged([
@@ -114,7 +115,6 @@ function createWindow(): void {
   next.on("closed", () => {
     grants.revoke();
     if (window === next) window = undefined;
-    void engine?.cancel().catch(() => {});
   });
   void next.loadURL(APP_URL);
 }
@@ -199,8 +199,11 @@ app
       }
       return data;
     });
-    ipcMain.handle("play:run-asset", (event, value: unknown) =>
-      authorize(event).runAsset(assetRun(value)),
+    ipcMain.handle("play:start-run", (event, value: unknown) =>
+      authorize(event).startRun(runRequest(value)),
+    );
+    ipcMain.handle("play:cancel-run", (event, value: unknown) =>
+      authorize(event).cancelRun(cancelRun(value)),
     );
     ipcMain.handle("play:import-image", (event, value: unknown) => {
       const engine = authorize(event);
@@ -224,7 +227,6 @@ app
       window?.setDocumentEdited(value);
     });
     ipcMain.handle("play:catalog", (event) => authorize(event).catalog());
-    ipcMain.handle("play:cancel", (event) => authorize(event).cancel());
     createWindow();
   })
   .catch(async () => {

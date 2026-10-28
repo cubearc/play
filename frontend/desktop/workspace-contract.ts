@@ -76,6 +76,14 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "list_runs";
+      context: Context;
+      trail_id: string;
+      before: number | null;
+    }
+  | { kind: "run_detail"; context: Context; run_id: string }
+  | { kind: "view"; workspace_id: string }
   | { kind: "list" }
   | { kind: "create"; key: string; title: string }
   | { kind: "open"; workspace_id: string }
@@ -123,10 +131,80 @@ export interface AssetRead {
   asset_id: string;
   revision: number;
 }
-export interface AssetRun extends AssetRead {
+export interface RunRequest {
+  context: Context;
+  key: string;
+  trail_id: string;
+  pipeline_id: string;
+  pipeline_revision: number;
   operation: string;
   operation_version: number;
+  retain_output: boolean;
 }
+export interface CancelRun {
+  context: Context;
+  run_id: string;
+}
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+export interface RunSummary {
+  id: string;
+  sequence: number;
+  trailId: string;
+  pipelineId: string;
+  pipelineRevision: number;
+  status: RunStatus;
+  createdMs: number;
+  finishedMs: number | null;
+  retainOutput: boolean;
+  operation: { operation: string; operationVersion: number; name: string };
+}
+export interface RunDetail extends RunSummary {
+  plan: {
+    pipeline: { id: string; revision: number; definition: unknown };
+    contract: {
+      operation: string;
+      operation_version: number;
+      inputs: { name: string; semantic_type: string }[];
+      outputs: { name: string; semantic_type: string }[];
+    };
+    contractDigest: string;
+    targetNodes: string[];
+    reusePolicy: "none";
+    reusedOutputs: unknown[];
+    inputs: Record<
+      string,
+      | { assetId: string; revision: number; semanticType: string }
+      | { literal: unknown }
+    >;
+    parameters: unknown;
+    limits: unknown;
+  };
+  result: {
+    status: RunStatus;
+    outputs?: Record<string, string | { base64: string }>;
+    code?: string;
+    replayGap?: "output_not_retained";
+  } | null;
+  attempts: {
+    id: string;
+    nodeId: string;
+    attempt: number;
+    startedMs: number;
+    finishedMs: number | null;
+    status: RunStatus;
+  }[];
+}
+export interface RunPage {
+  runs: RunSummary[];
+  before: number | null;
+}
+
 export interface MutationResult {
   explorationId?: string;
   stageId?: string;
@@ -135,7 +213,10 @@ export interface MutationResult {
   blockId?: string;
 }
 export interface Responses {
+  list_runs: RunPage;
+  run_detail: RunDetail;
   list: WorkspaceList;
+  view: WorkspaceView;
   create: WorkspaceView;
   open: WorkspaceView;
   create_exploration: { explorationId: string; stageId: string };
@@ -172,7 +253,10 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    list_runs: ["context", "trail_id", "before"],
+    run_detail: ["context", "run_id"],
     list: [],
+    view: ["workspace_id"],
     create: ["key", "title"],
     open: ["workspace_id"],
     create_exploration: ["workspace_id", "key", "title"],
@@ -191,6 +275,9 @@ export function request(value: unknown): WorkspaceRequest {
     if (field === "context") context(value);
     else if (field === "expected_revision") {
       if (!revision(value)) throw new Error("invalid_command");
+    } else if (field === "before") {
+      if (value !== null && !revision(value))
+        throw new Error("invalid_command");
     } else if (field === "title") {
       if (!bytes(value, 120) || !value.trim())
         throw new Error("invalid_command");
@@ -228,27 +315,38 @@ export function assetRead(value: unknown): AssetRead {
     throw new Error("invalid_command");
   return record as unknown as AssetRead;
 }
-export function assetRun(value: unknown): AssetRun {
+export function runRequest(value: unknown): RunRequest {
   const record = object(value);
   keys(record, [
     "context",
-    "asset_id",
-    "revision",
+    "key",
+    "trail_id",
+    "pipeline_id",
+    "pipeline_revision",
     "operation",
     "operation_version",
+    "retain_output",
   ]);
-  assetRead({
-    context: record.context,
-    asset_id: record.asset_id,
-    revision: record.revision,
-  });
+  context(record.context);
   if (
+    !id(record.key) ||
+    !id(record.trail_id) ||
+    !id(record.pipeline_id) ||
+    !revision(record.pipeline_revision) ||
     !bytes(record.operation, 128) ||
     !revision(record.operation_version) ||
-    Number(record.operation_version) > 0xffffffff
+    Number(record.operation_version) > 0xffffffff ||
+    typeof record.retain_output !== "boolean"
   )
     throw new Error("invalid_command");
-  return record as unknown as AssetRun;
+  return record as unknown as RunRequest;
+}
+export function cancelRun(value: unknown): CancelRun {
+  const record = object(value);
+  keys(record, ["context", "run_id"]);
+  context(record.context);
+  if (!id(record.run_id)) throw new Error("invalid_command");
+  return record as unknown as CancelRun;
 }
 export function contextOf(exploration: ExplorationView): Context {
   return {

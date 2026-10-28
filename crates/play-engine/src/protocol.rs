@@ -25,6 +25,10 @@ pub struct Contract {
     pub image_bytes: usize,
     pub store_bytes: usize,
     pub exploration_bytes: usize,
+    pub workspace_run_limit: usize,
+    pub exploration_run_limit: usize,
+    pub run_page_limit: usize,
+    pub run_reserve_bytes: usize,
 }
 
 pub fn contract() -> Contract {
@@ -52,13 +56,14 @@ pub enum Command {
         id: u32,
         command: crate::workspace::Command,
     },
-    InvokeAsset {
+    StartRun {
+        id: u32,
+        request: crate::workspace::RunRequest,
+    },
+    CancelRun {
         id: u32,
         context: crate::workspace::Context,
-        asset_id: uuid::Uuid,
-        revision: i64,
-        operation: String,
-        operation_version: u32,
+        run_id: uuid::Uuid,
     },
     Cancel {
         id: u32,
@@ -74,7 +79,8 @@ impl Command {
             | Self::Catalog { id }
             | Self::Cancel { id, .. }
             | Self::Workspace { id, .. }
-            | Self::InvokeAsset { id, .. } => *id,
+            | Self::StartRun { id, .. }
+            | Self::CancelRun { id, .. } => *id,
         }
     }
 }

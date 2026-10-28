@@ -13,9 +13,9 @@ opens the actual Electron application. No web server, Docker or browser launcher
 participates in this path. The [notebook preview](../development.md#explore-the-notebook-preview)
 uses this boundary for managed notebooks. The engine persists Workspace content
 and reasoning in [native storage](desktop-storage.md), and resolves exact owned
-text Asset revisions for Core execution in a separate worker. Operation responses
-remain session attempts; persistent PipelineRuns and credential storage are not
-implemented.
+text Asset revisions for Core execution in a separate worker. Single-node
+[PipelineRuns](desktop-runs.md) preserve accepted configuration, actual attempts
+and the chosen private output retention. Credential storage is not implemented.
 
 The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper.
 Linux and Windows negotiate the protocol and expose Core adapter descriptions,
@@ -29,8 +29,9 @@ The proof adapters invoke `cube-core`'s `cipher.rot13` and
 descriptors. Display names use Core's canonical name, such as **ROT13**, or its
 human CLI spelling when no profile name exists. Stable IDs still identify
 invocations; this is not a replacement operation catalog. The complete current
-typed API conformance matrix remains required. Input is UTF-8 text, and the proof
-result envelope holds `text` or `bytes`; it is not a saved Asset or PipelineRun.
+typed API conformance matrix remains required. Worker input is UTF-8 text and its bounded envelope holds `text` or `bytes`.
+The supervisor maps successful output to Core's named ports and commits the Run.
+The private unbound capability probe returns only its test envelope.
 
 ## Trust and process topology
 
@@ -72,7 +73,8 @@ does not grant authority. Navigation does not preserve authorization.
 
 The renderer has sandboxing and context isolation enabled, Node integration and
 webviews disabled. The preload exposes `catalog()`, scoped `workspace(intent)`,
-`importImage(intent)`, `image(assetRef)`, `runAsset(intent)`, `dirty(boolean)` and `cancel()`. Closed request shapes and UTF-8
+`importImage(intent)`, `image(assetRef)`, `startRun(intent)`,
+`cancelRun(context, runId)` as one typed object, and `dirty(boolean)`. Closed request shapes and UTF-8
 limits are checked in preload before forwarding across IPC; main and Rust check
 their own boundaries again. No raw `ipcRenderer`, arbitrary channel, path, Node,
 filesystem, database or shell API crosses the bridge.
@@ -115,16 +117,22 @@ renderer cannot target another invocation by guessing an ID.
 | `hello` | `protocol`, exact `engine` version, 32-hex-character `nonce` | `ready` echoes all three values. |
 | `catalog` | None | `catalog` with adapter `operations` from Core descriptors. |
 | `workspace` | Closed `command` intent | `workspace` with scoped domain data. |
-| `invoke_asset` | `context`, `asset_id`, exact `revision`, `operation`, `operation_version` | `started`, then exactly one `finished`. |
+| `start_run` | Closed Run `request` | `run` containing the accepted or idempotently recovered record. |
+| `cancel_run` | Exact `context`, `run_id` UUID | `run` after killing/reaping and recording cancellation, or the original terminal record. |
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
-| `cancel` | `run_id` | Target `finished` as cancelled, then `cancelled` for this request. |
+| `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **2** uses a 262144-byte frame ceiling, including bounded Base64 PNG
-imports. The renderer has no literal invocation or raw image-import bridge.
+Protocol **3** uses a 262144-byte frame ceiling, including bounded Base64 PNG
+imports. The renderer has no literal invocation, old asset-execution alias or raw
+image-import bridge.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
-add text and save reasoning. Internal image import/read commands are Main-owned.
+add text, save reasoning, list scoped Run summaries and read Run details. Internal image import/read commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
+Managed `run` replies acknowledge durable admission immediately. Clients query
+recorded progress/detail; the engine commits final state independently and never
+sends unsolicited transport replies. The unbound `invoke`/`cancel` entry remains
+only for native capability tests and is absent from the renderer bridge.
 
 The first command must be `hello` within the handshake deadline. A mismatched
 binary/protocol or malformed first frame closes the session. The nonce binds the
@@ -148,11 +156,12 @@ engine after a short shutdown grace. It never reports interrupted work as succes
 
 ## Lifecycle and recovery
 
-Closing a window revokes that frame and cancels its active operation;
-the application and engine stay alive. Activation opens another trusted window.
+Closing a window revokes that frame; the application and engine keep supervising
+accepted Runs while alive. Activation opens another trusted window.
 Unsaved reasoning prompts for keeping the editor open or discarding its draft.
 Saved content survives explicit Quit, which closes SQLite before releasing its
-OS lock and waits for engine shutdown. The complete
+OS lock and waits for engine shutdown. An active Run is killed/reaped and
+committed as cancelled on private-session closure. The complete
 Workspace application must detach windows while preserving engine-owned Runs,
 and implement its chosen explicit background-work policy without depending on a
 React component remaining mounted.

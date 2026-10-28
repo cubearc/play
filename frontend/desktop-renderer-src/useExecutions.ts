@@ -1,121 +1,303 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import limits from "../../desktop/protocol.json";
-import type { Operation, RunResult } from "../desktop/contract";
-import type { TrailView } from "../desktop/workspace-contract";
+import type { Operation } from "../desktop/contract";
+import type {
+  ExplorationView,
+  RunDetail,
+  RunPage,
+  RunRequest,
+  TrailView,
+} from "../desktop/workspace-contract";
 
-export interface Attempt {
-  readonly id: string;
-  readonly operation: Operation;
-  readonly assetId: string;
-  readonly assetRevision: number;
-  readonly result?: RunResult;
-  readonly error?: string;
-  readonly elapsed: number;
-  readonly running: boolean;
+export interface History extends RunPage {
+  selected: string | null;
+  detail: RunDetail | null;
+  loading: boolean;
+  error: string;
 }
+const empty: History = {
+  runs: [],
+  before: null,
+  selected: null,
+  detail: null,
+  loading: false,
+  error: "",
+};
+const activeStatus = (status: string) =>
+  status === "queued" || status === "running";
+const contextFor = (trail: TrailView) => ({
+  workspace_id: trail.workspaceId,
+  exploration_id: trail.explorationId,
+  stage_id: trail.stageId,
+});
+const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 150));
 
-export function useExecutions() {
+export function useExecutions(
+  exploration: ExplorationView | null,
+  refreshSummary: (workspaceId: string) => Promise<void>,
+) {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [catalogError, setCatalogError] = useState("");
   const [selected, setSelected] = useState<Record<string, string>>({});
-  const [attempts, setAttempts] = useState<Record<string, readonly Attempt[]>>(
-    {},
-  );
+  const [retention, setRetention] = useState<Record<string, boolean>>({});
+  const [history, setHistory] = useState<Record<string, History>>({});
   const [busy, setBusy] = useState(false);
+  const live = useRef(true);
   const active = useRef(false);
-
+  const state = useRef(history);
+  state.current = history;
+  const epochs = useRef<Record<string, number>>({});
+  const pending = useRef<Record<string, RunRequest>>({});
+  const watching = useRef(new Set<string>());
+  const update = useCallback(
+    (id: string, transform: (value: History) => History) => {
+      if (live.current)
+        setHistory((previous) => ({
+          ...previous,
+          [id]: transform(previous[id] ?? empty),
+        }));
+    },
+    [],
+  );
   useEffect(() => {
-    let mounted = true;
+    live.current = true;
     void window.play
       .catalog()
-      .then((entries) => {
-        if (mounted) setOperations(entries);
+      .then((value) => {
+        if (live.current) setOperations(value);
       })
       .catch(() => {
-        if (mounted) setCatalogError("Engine catalog unavailable.");
+        if (live.current) setCatalogError("Engine catalog unavailable.");
       });
     return () => {
-      mounted = false;
+      live.current = false;
     };
   }, []);
-
+  const show = useCallback(
+    async (trail: TrailView, id: string) => {
+      const epoch = (epochs.current[trail.id] ?? 0) + 1;
+      epochs.current[trail.id] = epoch;
+      update(trail.id, (previous) => ({
+        ...previous,
+        selected: id,
+        loading: true,
+        error: "",
+      }));
+      try {
+        const detail = await window.play.workspace({
+          kind: "run_detail",
+          context: contextFor(trail),
+          run_id: id,
+        });
+        if (epochs.current[trail.id] === epoch)
+          update(trail.id, (previous) => ({
+            ...previous,
+            detail,
+            loading: false,
+          }));
+      } catch {
+        if (epochs.current[trail.id] === epoch)
+          update(trail.id, (previous) => ({
+            ...previous,
+            loading: false,
+            error: "Run evidence unavailable. Reopen the stage to retry.",
+          }));
+      }
+    },
+    [update],
+  );
+  const watch = useCallback(
+    async (trail: TrailView, initial: RunDetail) => {
+      if (watching.current.has(initial.id)) return;
+      watching.current.add(initial.id);
+      setBusy(true);
+      let detail = initial;
+      try {
+        while (live.current && activeStatus(detail.status)) {
+          await pause();
+          if (!live.current) return;
+          detail = await window.play.workspace({
+            kind: "run_detail",
+            context: contextFor(trail),
+            run_id: detail.id,
+          });
+          const latest = detail;
+          update(trail.id, (previous) => ({
+            ...previous,
+            runs: previous.runs.map((run) =>
+              run.id === latest.id ? latest : run,
+            ),
+            detail: previous.selected === latest.id ? latest : previous.detail,
+          }));
+        }
+      } catch {
+        update(trail.id, (previous) => ({
+          ...previous,
+          error:
+            "Connection lost. The engine owns this Run; reopen the stage to recover its recorded state.",
+        }));
+      } finally {
+        if (live.current && !activeStatus(detail.status))
+          void refreshSummary(trail.workspaceId);
+        watching.current.delete(initial.id);
+        if (live.current) setBusy(watching.current.size > 0);
+      }
+    },
+    [update, refreshSummary],
+  );
+  const load = useCallback(
+    async (trail: TrailView, older = false) => {
+      const before = older ? (state.current[trail.id]?.before ?? null) : null;
+      try {
+        const page = await window.play.workspace({
+          kind: "list_runs",
+          context: contextFor(trail),
+          trail_id: trail.id,
+          before,
+        });
+        const previous = state.current[trail.id] ?? empty;
+        const records = older
+          ? [
+              ...new Map(
+                [...previous.runs, ...page.runs].map((run) => [run.id, run]),
+              ).values(),
+            ].sort((a, b) => b.sequence - a.sequence)
+          : page.runs;
+        const chosen =
+          previous.selected &&
+          records.some((run) => run.id === previous.selected)
+            ? previous.selected
+            : (records[0]?.id ?? null);
+        update(trail.id, (value) => ({
+          ...value,
+          ...page,
+          runs: records,
+          selected: chosen,
+          error: "",
+        }));
+        if (chosen) await show(trail, chosen);
+        const running = page.runs.find((run) => activeStatus(run.status));
+        if (running) {
+          const detail = await window.play.workspace({
+            kind: "run_detail",
+            context: contextFor(trail),
+            run_id: running.id,
+          });
+          void watch(trail, detail);
+        }
+      } catch {
+        update(trail.id, (value) => ({
+          ...value,
+          error: "Run history unavailable. Reopen this stage to retry.",
+        }));
+      }
+    },
+    [show, update, watch],
+  );
+  useEffect(() => {
+    if (!exploration) return;
+    let current = true;
+    void (async () => {
+      for (const trail of exploration.trails) {
+        if (!current) return;
+        if (trail.pipelineId) await load(trail);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [exploration, load]);
   const operationFor = (trail: TrailView) =>
     operations.find(
-      (entry) =>
-        entry.operation ===
+      (operation) =>
+        operation.operation ===
         (selected[trail.id] ?? trail.pipeline?.initialOperation),
     );
-  const selectOperation = (trail: TrailView, operation: string) => {
-    setSelected((previous) => ({ ...previous, [trail.id]: operation }));
-  };
-  const run = useCallback(async (trail: TrailView, operation: Operation) => {
-    const content = trail.source.content;
-    if (
-      active.current ||
-      content.kind !== "text" ||
-      new TextEncoder().encode(content.text).byteLength > limits.input_bytes
-    )
-      return;
-    active.current = true;
-    setBusy(true);
-    const attempt: Attempt = {
-      id: crypto.randomUUID(),
-      operation,
-      assetId: trail.source.id,
-      assetRevision: trail.source.revision,
-      elapsed: 0,
-      running: true,
-    };
-    // Capture the originating trail, not the currently selected tab/Exploration.
-    setAttempts((previous) => ({
-      ...previous,
-      [trail.id]: [...(previous[trail.id] ?? []), attempt],
-    }));
-    const start = performance.now();
-    let finished: Attempt;
+  const run = useCallback(
+    async (trail: TrailView, operation: Operation) => {
+      if (active.current || watching.current.size > 0 || !trail.pipeline)
+        return;
+      active.current = true;
+      setBusy(true);
+      const previous = pending.current[trail.id];
+      const keep = retention[trail.id] ?? true;
+      const request: RunRequest =
+        previous &&
+        previous.operation === operation.operation &&
+        previous.retain_output === keep
+          ? previous
+          : {
+              context: contextFor(trail),
+              key: crypto.randomUUID(),
+              trail_id: trail.id,
+              pipeline_id: trail.pipeline.id,
+              pipeline_revision: trail.pipeline.revision,
+              operation: operation.operation,
+              operation_version: operation.operation_version,
+              retain_output: keep,
+            };
+      pending.current[trail.id] = request;
+      update(trail.id, (value) => ({ ...value, error: "" }));
+      try {
+        const detail = await window.play.startRun(request);
+        delete pending.current[trail.id];
+        update(trail.id, (value) => ({
+          ...value,
+          runs: [detail, ...value.runs.filter((run) => run.id !== detail.id)],
+          detail,
+          selected: detail.id,
+        }));
+        await watch(trail, detail);
+      } catch {
+        update(trail.id, (value) => ({
+          ...value,
+          error:
+            "Run request was not confirmed. Retry to check the same intent; saved history is preserved.",
+        }));
+      } finally {
+        active.current = false;
+        if (live.current) setBusy(watching.current.size > 0);
+      }
+    },
+    [retention, update, watch],
+  );
+  const cancel = async (trail: TrailView) => {
+    const run = state.current[trail.id]?.runs.find((run) =>
+      activeStatus(run.status),
+    );
+    if (!run) return;
     try {
-      const result = await window.play.runAsset({
-        context: {
-          workspace_id: trail.workspaceId,
-          exploration_id: trail.explorationId,
-          stage_id: trail.stageId,
-        },
-        asset_id: trail.source.id,
-        revision: trail.source.revision,
-        operation: operation.operation,
-        operation_version: operation.operation_version,
+      const detail = await window.play.cancelRun({
+        context: contextFor(trail),
+        run_id: run.id,
       });
-      finished = {
-        ...attempt,
-        result,
-        elapsed: Math.round(performance.now() - start),
-        running: false,
-      };
+      update(trail.id, (value) => ({
+        ...value,
+        runs: value.runs.map((run) => (run.id === detail.id ? detail : run)),
+        detail: value.selected === detail.id ? detail : value.detail,
+      }));
     } catch {
-      finished = {
-        ...attempt,
-        error: "Execution rejected. Native invocation is unavailable.",
-        elapsed: Math.round(performance.now() - start),
-        running: false,
-      };
+      update(trail.id, (value) => ({
+        ...value,
+        error:
+          "Cancellation was not confirmed. The recorded Run state will be reloaded.",
+      }));
     }
-    setAttempts((previous) => ({
-      ...previous,
-      [trail.id]: [...(previous[trail.id] ?? []).slice(0, -1), finished],
-    }));
-    active.current = false;
-    setBusy(false);
-  }, []);
-
+  };
   return {
     operations,
     catalogError,
-    attempts,
+    history,
     busy,
     operationFor,
-    selectOperation,
     run,
+    cancel,
+    load,
+    show,
+    keepOutput: (trail: TrailView) => retention[trail.id] ?? true,
+    setKeepOutput: (trail: TrailView, value: boolean) =>
+      setRetention((previous) => ({ ...previous, [trail.id]: value })),
+    selectOperation: (trail: TrailView, value: string) =>
+      setSelected((previous) => ({ ...previous, [trail.id]: value })),
   };
 }
-
 export type Executions = ReturnType<typeof useExecutions>;

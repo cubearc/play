@@ -36,13 +36,17 @@ and reusable pipeline definitions at Workspace level.
    creates a separate text Block.
 3. Keep **ROT13** selected and choose **Run cell** below the caption. On macOS the
    real Core operation produces `The key is in the pixels.` beside the cell,
-   with its source Asset revision and session attempts.
+   with its source Asset revision and saved Run evidence.
 4. Click the image or caption to open its own **Trail canvas** tab. The caption
-   canvas shows the bound Asset, reusable Pipeline definition and session result.
+   canvas shows the bound Asset, reusable Pipeline definition and saved result.
    The image canvas supports inspection and zoom.
-5. Write reasoning, then choose **Save reasoning** or press Cmd/Ctrl+S. Create a
+5. Keep **Keep result in private history** selected to retain the output. Clear
+   it to save a completed Run with an explicit output-not-retained gap. Expand
+   **Saved Run & input evidence** to inspect an earlier execution.
+6. Write reasoning, then choose **Save reasoning** or press Cmd/Ctrl+S. Create a
    second Exploration and add its own content and notes. Quit and reopen the app:
-   saved content, reasoning and the last opened Stage remain separate. Unsaved
+   saved content, reasoning, retained Run results and the last opened Stage remain
+   separate. Unsaved
    reasoning requires a choice before closing or quitting.
 
 | Action | macOS | Windows/Linux |
@@ -56,8 +60,10 @@ Workspace, Exploration, Stage, Block, Asset, Note, Trail and initial Pipeline
 records live in the engine's private SQLite store. There is no seeded example
 workspace. See [native storage](reference/desktop-storage.md) for its generation,
 immutable revisions, ownership, failure behavior and development ceilings.
-Operation selection drafts, open canvas tabs and operation responses remain in
-memory; responses are not retained PipelineRuns or official Challenge evaluation.
+Operation selection drafts and open canvas tabs remain in memory. Accepted
+single-node PipelineRuns and their chosen output-retention policy persist;
+[Run history](reference/desktop-runs.md) records exact inputs, definitions and
+outcomes. These records do not imply official Challenge evaluation.
 The renderer is a presentation adapter under the
 [desktop domain contract](reference/desktop-domain.md). Each cell or canvas shows
 its own result.

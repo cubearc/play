@@ -1,49 +1,113 @@
-import type { Attempt } from "./useExecutions";
+import { useState } from "react";
+import type { RunDetail, TrailView } from "../desktop/workspace-contract";
+import type { Executions } from "./useExecutions";
 
-function value(attempt: Attempt): string {
-  if (attempt.running) return "Running…";
-  if (attempt.error) return attempt.error;
-  const result = attempt.result;
-  if (!result) return "No result.";
-  if (result.status === "cancelled") return "Cancelled";
-  if (result.status === "failed") return `Execution failed: ${result.code}`;
-  return "text" in result.output
-    ? result.output.text
-    : JSON.stringify(result.output.bytes);
+function value(run: RunDetail): string {
+  if (run.status === "queued" || run.status === "running")
+    return `${run.status === "queued" ? "Queued" : "Running"}…`;
+  if (run.status !== "completed")
+    return `${run.status[0]?.toUpperCase()}${run.status.slice(1)}${run.result?.code ? `: ${run.result.code}` : ""}`;
+  if (run.result?.replayGap) return "Completed · output was not retained.";
+  const outputs = run.result?.outputs;
+  return outputs
+    ? Object.entries(outputs)
+        .map(
+          ([name, value]) =>
+            `${name}: ${typeof value === "string" ? value : `Base64 ${value.base64}`}`,
+        )
+        .join("\n")
+    : "Output unavailable.";
 }
-
-export function InlineResult({ attempts }: { attempts: readonly Attempt[] }) {
-  const latest = attempts.at(-1);
-  if (!latest) return null;
+export function InlineResult({
+  trail,
+  executions,
+}: {
+  trail: TrailView;
+  executions: Executions;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const history = executions.history[trail.id];
+  if (!history) return null;
+  const run = history.detail?.id === history.selected ? history.detail : null;
   return (
-    <section className="inline-result" aria-label="Cell result">
-      <div className="cell-result-label">
-        <span>Out [{attempts.length}]</span>
-        <span>
-          {latest.running ? "Running" : `${latest.elapsed} ms`} · Core v
-          {latest.operation.operation_version}
-        </span>
-      </div>
-      <pre role="status">{value(latest)}</pre>
-      <details>
-        <summary>
-          Input reference & session attempts ({attempts.length})
-        </summary>
-        <code>
-          {latest.assetId} @ revision {latest.assetRevision}
-        </code>
-        <ol>
-          {attempts.map((attempt) => (
-            <li key={attempt.id} title={attempt.operation.operation}>
-              {attempt.operation.name} ·{" "}
-              {attempt.running
-                ? "Running"
-                : (attempt.result?.status ?? "Rejected")}{" "}
-              · {attempt.elapsed} ms
-            </li>
-          ))}
-        </ol>
-      </details>
-    </section>
+    <>
+      {history.error ? <p role="alert">{history.error}</p> : null}
+      {run ? (
+        <section className="inline-result" aria-label="Cell result">
+          <div className="cell-result-label">
+            <span>Out [{run.sequence}]</span>
+            <span>
+              {run.operation.name} · {run.status} · v
+              {run.operation.operationVersion}
+            </span>
+          </div>
+          <pre role="status">{value(run)}</pre>
+          <details
+            open={expanded}
+            onToggle={(event) => setExpanded(event.currentTarget.open)}
+          >
+            <summary>
+              Saved Run & input evidence ({history.runs.length})
+            </summary>
+            <dl className="run-evidence">
+              <dt>Run</dt>
+              <dd>
+                <code>{run.id}</code>
+              </dd>
+              <dt>Pipeline</dt>
+              <dd>
+                <code>
+                  {run.pipelineId} @ r{run.pipelineRevision}
+                </code>
+              </dd>
+              <dt>Inputs</dt>
+              <dd>
+                {Object.entries(run.plan.inputs).map(([port, input]) => (
+                  <div key={port}>
+                    <code>
+                      {port} ←{" "}
+                      {"assetId" in input
+                        ? `${input.assetId} @ r${input.revision}`
+                        : JSON.stringify(input.literal)}
+                    </code>
+                  </div>
+                ))}
+              </dd>
+              <dt>Attempts</dt>
+              <dd>
+                {run.attempts.length} actual node attempt(s) · reuse: none
+              </dd>
+            </dl>
+            <ol>
+              {history.runs.map((record) => (
+                <li key={record.id}>
+                  <button
+                    type="button"
+                    aria-label={`Open Run ${record.sequence}`}
+                    aria-current={
+                      history.selected === record.id ? "true" : undefined
+                    }
+                    onClick={() => void executions.show(trail, record.id)}
+                  >
+                    {record.operation.name} · {record.status} · Run{" "}
+                    {record.sequence}
+                  </button>
+                </li>
+              ))}
+            </ol>
+            {history.before ? (
+              <button
+                type="button"
+                onClick={() => void executions.load(trail, true)}
+              >
+                Load older Runs
+              </button>
+            ) : null}
+          </details>
+        </section>
+      ) : history.loading ? (
+        <p role="status">Loading saved Run…</p>
+      ) : null}
+    </>
   );
 }

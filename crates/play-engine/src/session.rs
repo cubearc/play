@@ -18,6 +18,7 @@ struct Active {
     output: Receiver<Result<Value>>,
     result: Option<Value>,
     deadline: Instant,
+    durable: Option<crate::workspace::RunIdentity>,
 }
 
 impl Drop for Active {
@@ -44,6 +45,7 @@ impl Active {
             child,
             output,
             result: None,
+            durable: None,
             deadline: Instant::now() + Duration::from_millis(protocol::contract().run_ms),
         };
         thread::spawn(move || {
@@ -197,33 +199,75 @@ fn dispatch(
             }
             launch(id, invocation, worker, active, output)
         }
-        Command::InvokeAsset {
-            context,
-            asset_id,
-            revision,
-            operation,
-            operation_version,
-            ..
-        } => {
-            let input = match store
-                .as_mut()
-                .ok_or("workspace_closed")
-                .and_then(|store| store.text(&context, asset_id, revision))
-            {
-                Ok(input) => input,
+        Command::StartRun { request, .. } => {
+            let Some(manager) = store.as_mut() else {
+                return reject(output, id, "workspace_unavailable");
+            };
+            match manager.existing_run(&request) {
+                Ok(Some(data)) => {
+                    return protocol::write_frame(
+                        output,
+                        &json!({"type":"run","id":id,"data":data}),
+                    );
+                }
+                Err(code) => return reject(output, id, code),
+                Ok(None) => (),
+            }
+            let Some(worker) = worker.filter(|_| crate::native::available()) else {
+                return reject(output, id, "native_policy_unavailable");
+            };
+            if active.is_some() {
+                return reject(output, id, "busy");
+            }
+            let prepared = match manager.prepare_run(&request) {
+                Ok(value) => value,
                 Err(code) => return reject(output, id, code),
             };
-            launch(
-                id,
-                Invocation {
-                    operation,
-                    operation_version,
-                    input,
-                },
-                worker,
-                active,
-                output,
-            )
+            let identity = prepared.identity;
+            match Active::spawn(id, worker, &prepared.invocation) {
+                Ok(mut child) => {
+                    manager.start_attempt(&identity)?;
+                    child.durable = Some(identity.clone());
+                    *active = Some(child);
+                }
+                Err(code) => {
+                    let data =
+                        manager.finish_run(&identity, json!({"status":"failed","code":code}))?;
+                    return protocol::write_frame(
+                        output,
+                        &json!({"type":"run","id":id,"data":data}),
+                    );
+                }
+            }
+            let data = manager.run_detail(&identity.context, identity.id)?;
+            protocol::write_frame(output, &json!({"type":"run","id":id,"data":data}))
+        }
+        Command::CancelRun {
+            context, run_id, ..
+        } => {
+            let Some(manager) = store.as_mut() else {
+                return reject(output, id, "workspace_unavailable");
+            };
+            let detail = match manager.run_detail(&context, run_id) {
+                Ok(value) => value,
+                Err(code) => return reject(output, id, code),
+            };
+            if matches!(detail["status"].as_str(), Some("queued" | "running")) {
+                let Some(identity) = active
+                    .as_ref()
+                    .and_then(|run| run.durable.clone())
+                    .filter(|run| run.id == run_id)
+                else {
+                    return reject(output, id, "not_running");
+                };
+                drop(active.take());
+                let data = manager.finish_run(
+                    &identity,
+                    json!({"status":"cancelled","code":"user_cancelled"}),
+                )?;
+                return protocol::write_frame(output, &json!({"type":"run","id":id,"data":data}));
+            }
+            protocol::write_frame(output, &json!({"type":"run","id":id,"data":detail}))
         }
         Command::Workspace { command, .. } => {
             if active.is_some()
@@ -247,6 +291,9 @@ fn dispatch(
             }
         }
         Command::Cancel { run_id, .. } => {
+            if store.is_some() {
+                return reject(output, id, "scoped_cancel_required");
+            }
             if active.as_ref().is_none_or(|run| run.id != run_id) {
                 return reject(output, id, "not_running");
             }
@@ -306,7 +353,15 @@ pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
                 }
             }
             Ok(None) => (),
-            Err("transport_closed") => return Ok(()),
+            Err("transport_closed") => {
+                finish_active(
+                    &mut active,
+                    &mut store,
+                    json!({"status":"cancelled","code":"session_closed"}),
+                    &mut output,
+                )?;
+                return Ok(());
+            }
             Err(code) => {
                 reject(&mut output, 0, code)?;
                 return Err(code);
@@ -315,19 +370,41 @@ pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
         if let Some(run) = &mut active {
             match run.poll() {
                 Ok(Some(response)) => {
-                    drop(active.take());
-                    protocol::write_frame(&mut output, &response)?;
+                    finish_active(&mut active, &mut store, response, &mut output)?
                 }
                 Ok(None) => (),
-                Err(code) => {
-                    let id = run.id;
-                    drop(active.take());
-                    protocol::write_frame(
-                        &mut output,
-                        &json!({"type":"finished", "id":id, "status":"failed", "code":code}),
-                    )?;
-                }
+                Err(code) => finish_active(
+                    &mut active,
+                    &mut store,
+                    json!({"status":"failed","code":code}),
+                    &mut output,
+                )?,
             }
         }
     }
+}
+
+fn finish_active(
+    active: &mut Option<Active>,
+    store: &mut Option<crate::workspace::Manager>,
+    mut result: Value,
+    output: &mut impl Write,
+) -> Result<()> {
+    let Some(run) = active.take() else {
+        return Ok(());
+    };
+    let id = run.id;
+    let durable = run.durable.clone();
+    drop(run);
+    if let Some(identity) = durable {
+        let manager = store.as_mut().ok_or("workspace_closed")?;
+        if let Err(code) = manager.finish_run(&identity, result) {
+            manager.finish_run(&identity, json!({"status":"failed","code":code}))?;
+        }
+    } else {
+        result["type"] = json!("finished");
+        result["id"] = json!(id);
+        protocol::write_frame(output, &result)?;
+    }
+    Ok(())
 }

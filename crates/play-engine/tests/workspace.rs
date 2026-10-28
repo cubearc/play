@@ -1,4 +1,4 @@
-use play_engine::workspace::{Command, Context, Manager};
+use play_engine::workspace::{Command, Manager, RunRequest};
 use serde_json::{Value, json};
 use std::{fs, path::Path};
 use uuid::Uuid;
@@ -93,29 +93,18 @@ fn two_explorations_reopen_independent_notebooks_and_immutable_notes() {
     );
     let saved = open(&mut manager, &workspace, a_id);
     let asset = &saved["stage"]["blocks"][0]["asset"];
-    let context: Context = serde_json::from_value(context).unwrap();
-    assert_eq!(
-        manager
-            .text(
-                &context,
-                Uuid::parse_str(asset["id"].as_str().unwrap()).unwrap(),
-                1
-            )
-            .unwrap(),
-        "Gur xrl vf va gur cvkryf."
-    );
-    let mut wrong = context.clone();
-    wrong.exploration_id = Uuid::parse_str(b_id).unwrap();
-    wrong.stage_id = Uuid::parse_str(b["stageId"].as_str().unwrap()).unwrap();
-    assert!(
-        manager
-            .text(
-                &wrong,
-                Uuid::parse_str(asset["id"].as_str().unwrap()).unwrap(),
-                1
-            )
-            .is_err()
-    );
+    let mut request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":saved["trails"][0]["id"],"pipeline_id":saved["trails"][0]["pipeline"]["id"],"pipeline_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let prepared = manager.prepare_run(&request).unwrap();
+    assert_eq!(prepared.invocation.input, "Gur xrl vf va gur cvkryf.");
+    manager
+        .finish_run(
+            &prepared.identity,
+            json!({"status":"cancelled","code":"validation_cancelled"}),
+        )
+        .unwrap();
+    request.context.exploration_id = Uuid::parse_str(b_id).unwrap();
+    request.context.stage_id = Uuid::parse_str(b["stageId"].as_str().unwrap()).unwrap();
+    assert!(manager.prepare_run(&request).is_err());
     drop(manager);
     let mut manager = Manager::new(root).unwrap();
     command(

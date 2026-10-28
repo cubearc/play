@@ -43,14 +43,14 @@ async fn count(
     Ok(())
 }
 
-async fn bytes(
+pub(super) async fn bytes(
     connection: &mut SqliteConnection,
     workspace: &str,
     exploration: &str,
     additional: usize,
 ) -> Result<()> {
-    let total: i64 = sqlx::query_scalar("SELECT (SELECT COALESCE(SUM(length(data)),0) FROM asset_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(text AS BLOB))),0) FROM note_revisions WHERE workspace_id=? AND exploration_id=?)")
-        .bind(workspace).bind(exploration).bind(workspace).bind(exploration).fetch_one(connection).await.map_err(storage::failure)?;
+    let total: i64 = sqlx::query_scalar("SELECT (SELECT COALESCE(SUM(length(data)),0) FROM asset_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(text AS BLOB))),0) FROM note_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(plan AS BLOB))+COALESCE(length(CAST(result AS BLOB)),0)+length(reservation)),0) FROM pipeline_runs WHERE workspace_id=? AND exploration_id=?)")
+        .bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).fetch_one(connection).await.map_err(storage::failure)?;
     if total < 0 || total as usize + additional > protocol::contract().exploration_bytes {
         return Err("storage_quota");
     }

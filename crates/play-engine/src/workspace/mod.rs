@@ -1,11 +1,15 @@
 mod model;
 mod mutations;
 mod queries;
+mod run_plan;
+mod runs;
 mod storage;
+mod upgrade;
 
 use crate::{Result, protocol};
 use model::Identity;
-pub use model::{Command, Context};
+pub use model::{Command, Context, RunRequest};
+pub use runs::{PreparedRun, RunIdentity};
 use serde_json::{Value, json};
 use sqlx::{Connection, Row, SqliteConnection};
 use std::{
@@ -19,7 +23,7 @@ use uuid::Uuid;
 pub struct Manager {
     root: PathBuf,
     runtime: Runtime,
-    expected: Vec<(String, String, String)>,
+    expected: storage::Schemas,
     active: Option<Owned>,
 }
 
@@ -171,6 +175,15 @@ impl Manager {
     pub fn handle(&mut self, command: Command) -> Result<Value> {
         match command {
             Command::List => self.list(),
+            Command::View { workspace_id } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                if store.identity.workspace_id != workspace_id {
+                    return Err("workspace_mismatch");
+                }
+                self.runtime
+                    .block_on(queries::view(store))
+                    .and_then(to_value)
+            }
             Command::Create { key, title } => self.create(key, &title),
             Command::Open { workspace_id } => self.activate(workspace_id),
             Command::OpenExploration {
@@ -186,6 +199,16 @@ impl Manager {
                     .block_on(queries::exploration(store, exploration_id, stage_id))
                     .and_then(to_value)
             }
+            Command::ListRuns {
+                context,
+                trail_id,
+                before,
+            } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                self.runtime
+                    .block_on(runs::list(store, &context, trail_id, before))
+            }
+            Command::RunDetail { context, run_id } => self.run_detail(&context, run_id),
             Command::ReadImage {
                 context,
                 asset_id,
@@ -202,25 +225,29 @@ impl Manager {
         }
     }
 
-    pub fn text(&mut self, context: &Context, asset_id: Uuid, revision: i64) -> Result<String> {
+    pub fn existing_run(&mut self, request: &RunRequest) -> Result<Option<Value>> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
-        self.runtime.block_on(async {
-            let owner = store.identity.workspace_id;
-            let connection = store.connection()?;
-            queries::context(connection, owner, context).await?;
-            let asset = queries::asset(
-                connection,
-                &owner.to_string(),
-                &context.exploration_id.to_string(),
-                &asset_id.to_string(),
-                revision,
-            )
-            .await?;
-            match asset.content {
-                model::Content::Text { text } => Ok(text),
-                model::Content::Image => Err("invalid_asset_type"),
-            }
-        })
+        self.runtime.block_on(runs::existing(store, request))
+    }
+    pub fn prepare_run(&mut self, request: &RunRequest) -> Result<PreparedRun> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime.block_on(runs::prepare(store, request))
+    }
+    pub fn start_attempt(&mut self, run: &RunIdentity) -> Result<()> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime.block_on(runs::started(store, run))
+    }
+    pub fn finish_run(&mut self, run: &RunIdentity, result: Value) -> Result<Value> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime
+            .block_on(runs::finish(store, run, result))
+            .and_then(to_value)
+    }
+    pub fn run_detail(&mut self, context: &Context, id: Uuid) -> Result<Value> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime
+            .block_on(runs::detail(store, context, id))
+            .and_then(to_value)
     }
 }
 
@@ -266,7 +293,7 @@ async fn initialize(directory: &Path, identity: &Identity) -> Result<()> {
             .execute(&mut connection)
             .await
             .map_err(storage::failure)?;
-        Ok(())
+        storage::migrate(&mut connection).await
     }
     .await;
     connection.close().await.map_err(storage::failure)?;

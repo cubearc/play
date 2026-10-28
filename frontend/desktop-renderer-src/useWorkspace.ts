@@ -143,6 +143,21 @@ export function useWorkspace() {
   useEffect(() => {
     void window.play.dirty(Object.keys(drafts).length > 0).catch(() => {});
   }, [drafts]);
+  const refreshSummary = useCallback(async (workspaceId: string) => {
+    if (workspaceRef.current?.id !== workspaceId) return;
+    try {
+      const data = await window.play.workspace({
+        kind: "view",
+        workspace_id: workspaceId,
+      });
+      if (live.current && workspaceRef.current?.id === workspaceId) {
+        workspaceRef.current = data;
+        setWorkspace(data);
+      }
+    } catch {
+      /* A newer workspace selection supplies its own summary. */
+    }
+  }, []);
   const createWorkspace = (title: string, key: string = crypto.randomUUID()) =>
     execute(async () => {
       const data = await window.play.workspace({ kind: "create", key, title });
@@ -297,6 +312,7 @@ export function useWorkspace() {
     error,
     clearError: () => setError(""),
     createWorkspace,
+    refreshSummary,
     open,
     createExploration,
     createStage,

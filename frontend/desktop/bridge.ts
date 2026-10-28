@@ -1,10 +1,12 @@
-import type { Operation, RunResult } from "./contract.ts";
+import type { Operation } from "./contract.ts";
 import type {
   AssetRead,
-  AssetRun,
+  CancelRun,
   ImageImport,
   MutationResult,
   Responses,
+  RunDetail,
+  RunRequest,
   WorkspaceRequest,
 } from "./workspace-contract.ts";
 
@@ -15,9 +17,9 @@ export interface PlayBridge {
   ) => Promise<Responses[K]>;
   importImage: (value: ImageImport) => Promise<MutationResult | null>;
   image: (value: AssetRead) => Promise<string>;
-  runAsset: (value: AssetRun) => Promise<RunResult>;
+  startRun: (value: RunRequest) => Promise<RunDetail>;
+  cancelRun: (value: CancelRun) => Promise<RunDetail>;
   dirty: (value: boolean) => Promise<void>;
-  cancel: () => Promise<void>;
 }
 declare global {
   interface Window {

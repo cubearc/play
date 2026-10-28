@@ -13,6 +13,7 @@ import { Engine } from "./engine.ts";
 import {
   contextOf,
   type ExplorationView,
+  type RunDetail,
   type WorkspaceView,
 } from "./workspace-contract.ts";
 
@@ -70,12 +71,17 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
     exploration = (await engine.workspace(open)) as ExplorationView;
     const asset = exploration.stage.blocks[0]?.asset;
     assert.ok(asset);
+    const trail = exploration.trails[0];
+    assert.ok(trail?.pipeline);
     const invocation = {
       context,
-      asset_id: asset.id,
-      revision: 1,
+      key: randomUUID(),
+      trail_id: trail.id,
+      pipeline_id: trail.pipeline.id,
+      pipeline_revision: trail.pipeline.revision,
       operation: "cipher.rot13",
       operation_version: 1,
+      retain_output: true,
     };
     await assert.rejects(
       engine.run({
@@ -86,24 +92,44 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       /scoped_invocation_required/,
     );
     await assert.rejects(
-      engine.runAsset({ ...invocation, revision: 2 }),
-      /not_found/,
+      engine.startRun({ ...invocation, pipeline_revision: 2 }),
+      /state_conflict/,
     );
     await assert.rejects(
-      engine.runAsset({
+      engine.startRun({
         ...invocation,
         context: { ...context, workspace_id: randomUUID() },
       }),
       /workspace_mismatch/,
     );
+    let saved: RunDetail | null = null;
     if (worker) {
-      const result = await engine.runAsset(invocation);
+      let result = await engine.startRun(invocation);
+      const duplicate = await engine.startRun(invocation);
+      assert.equal(duplicate.id, result.id);
+      while (result.status === "queued" || result.status === "running") {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        result = (await engine.workspace({
+          kind: "run_detail",
+          context,
+          run_id: result.id,
+        })) as RunDetail;
+      }
       assert.equal(result.status, "completed");
-      if (result.status === "completed")
-        assert.deepEqual(result.output, { text: "The key." });
+      assert.deepEqual(result.result?.outputs, { output: "The key." });
+      assert.equal(result.attempts.length, 1);
+      await assert.rejects(
+        engine.startRun({ ...invocation, retain_output: false }),
+        /idempotency_conflict/,
+      );
+      assert.equal(
+        (await engine.cancelRun({ context, run_id: result.id })).status,
+        "completed",
+      );
+      saved = result;
     } else
       await assert.rejects(
-        engine.runAsset(invocation),
+        engine.startRun(invocation),
         /native_policy_unavailable/,
       );
     await engine.close();
@@ -115,6 +141,15 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
     await engine.workspace({ kind: "open", workspace_id: workspace.id });
     const restored = (await engine.workspace(open)) as ExplorationView;
     assert.equal(restored.stage.blocks[0]?.asset.id, asset.id);
+    if (saved)
+      assert.deepEqual(
+        await engine.workspace({
+          kind: "run_detail",
+          context,
+          run_id: saved.id,
+        }),
+        saved,
+      );
   } finally {
     await engine.close();
     await rm(temporary, { recursive: true, force: true });
@@ -190,6 +225,209 @@ test("another process cannot own a live workspace and a killed owner releases it
     }
     lines.close();
     await contender?.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+async function runFixture(engine: Engine, text: string) {
+  const workspace = (await engine.workspace({
+    kind: "create",
+    key: randomUUID(),
+    title: "Lifecycle notebook",
+  })) as WorkspaceView;
+  const created = (await engine.workspace({
+    kind: "create_exploration",
+    workspace_id: workspace.id,
+    key: randomUUID(),
+    title: "Lifecycle",
+  })) as { explorationId: string; stageId: string };
+  const context = {
+    workspace_id: workspace.id,
+    exploration_id: created.explorationId,
+    stage_id: created.stageId,
+  };
+  await engine.workspace({
+    kind: "add_text",
+    context,
+    key: randomUUID(),
+    title: "Program",
+    text,
+  });
+  const exploration = (await engine.workspace({
+    kind: "open_exploration",
+    workspace_id: workspace.id,
+    exploration_id: created.explorationId,
+    stage_id: created.stageId,
+  })) as ExplorationView;
+  const trail = exploration.trails[0];
+  assert.ok(trail?.pipeline);
+  return {
+    context,
+    key: randomUUID(),
+    trail_id: trail.id,
+    pipeline_id: trail.pipeline.id,
+    pipeline_revision: trail.pipeline.revision,
+    operation: "esolang.brainfuck.execute",
+    operation_version: 2,
+    retain_output: true,
+  };
+}
+async function finished(
+  engine: Engine,
+  context: Parameters<Engine["cancelRun"]>[0]["context"],
+  run: RunDetail,
+) {
+  const deadline = Date.now() + 5000;
+  while (run.status === "queued" || run.status === "running") {
+    assert.ok(
+      Date.now() < deadline,
+      "the engine must reach a bounded terminal Run state",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    run = (await engine.workspace({
+      kind: "run_detail",
+      context,
+      run_id: run.id,
+    })) as RunDetail;
+  }
+  return run;
+}
+
+test("durable Runs distinguish real worker failure, cancellation and graceful app shutdown", {
+  skip: !worker,
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-run-lifecycle-"));
+  const root = join(temporary, "private");
+  let engine = await Engine.connect(binary, worker, root);
+  try {
+    const bytesRequest = await runFixture(engine, "++++++++[>++++++++<-]>+.");
+    const bytesRun = await finished(
+      engine,
+      bytesRequest.context,
+      await engine.startRun(bytesRequest),
+    );
+    assert.equal(bytesRun.status, "completed");
+    assert.deepEqual(bytesRun.result?.outputs, { output: { base64: "QQ==" } });
+    assert.equal(bytesRun.plan.contract.outputs[0]?.semantic_type, "bytes");
+    const invalid = await runFixture(engine, "[");
+    const failed = await finished(
+      engine,
+      invalid.context,
+      await engine.startRun(invalid),
+    );
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.result?.code, "operation_failed");
+    assert.equal(failed.attempts[0]?.status, "failed");
+    const loop = await runFixture(engine, "+[+]");
+    const running = await engine.startRun(loop);
+    assert.equal(running.status, "running");
+    const cancelled = await engine.cancelRun({
+      context: loop.context,
+      run_id: running.id,
+    });
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal(cancelled.attempts[0]?.status, "cancelled");
+    assert.deepEqual(await engine.startRun(loop), cancelled);
+    const shutdown = await engine.startRun({ ...loop, key: randomUUID() });
+    assert.equal(shutdown.status, "running");
+    await engine.close();
+    engine = await Engine.connect(binary, worker, root);
+    await engine.workspace({
+      kind: "open",
+      workspace_id: loop.context.workspace_id,
+    });
+    const restored = (await engine.workspace({
+      kind: "run_detail",
+      context: loop.context,
+      run_id: shutdown.id,
+    })) as RunDetail;
+    assert.equal(restored.status, "cancelled");
+    assert.equal(restored.result?.code, "session_closed");
+    assert.deepEqual(
+      await engine.workspace({
+        kind: "run_detail",
+        context: loop.context,
+        run_id: cancelled.id,
+      }),
+      cancelled,
+    );
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("killing the real engine recovers a running node as interrupted without inventing output", {
+  skip: !worker,
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-run-crash-"));
+  const root = join(temporary, "private");
+  const setup = await Engine.connect(binary, worker, root);
+  const request = await runFixture(setup, "+[+]");
+  await setup.close();
+  const owner = spawn(
+    binary,
+    ["--ipc", "--worker", worker ?? "", "--data-root", root],
+    { stdio: ["pipe", "pipe", "ignore"] },
+  );
+  const lines = createInterface({ input: owner.stdout });
+  async function send(value: object) {
+    const reply = once(lines, "line", { signal: AbortSignal.timeout(3000) });
+    owner.stdin.write(`${JSON.stringify(value)}\n`);
+    return JSON.parse((await reply)[0] as string) as {
+      type: string;
+      data: RunDetail;
+    };
+  }
+  let recovered: Engine | undefined;
+  try {
+    assert.equal(
+      (
+        await send({
+          type: "hello",
+          id: 1,
+          protocol: contract.protocol,
+          engine: contract.engine,
+          nonce: "0123456789abcdef0123456789abcdef",
+        })
+      ).type,
+      "ready",
+    );
+    await send({
+      type: "workspace",
+      id: 2,
+      command: { kind: "open", workspace_id: request.context.workspace_id },
+    });
+    const started = await send({ type: "start_run", id: 3, request });
+    assert.equal(started.data.status, "running");
+    const exit = once(owner, "exit");
+    owner.kill("SIGKILL");
+    await exit;
+    recovered = await Engine.connect(binary, worker, root);
+    await recovered.workspace({
+      kind: "open",
+      workspace_id: request.context.workspace_id,
+    });
+    const run = (await recovered.workspace({
+      kind: "run_detail",
+      context: request.context,
+      run_id: started.data.id,
+    })) as RunDetail;
+    assert.equal(run.status, "interrupted");
+    assert.equal(run.attempts[0]?.status, "interrupted");
+    assert.equal(run.result?.code, "owner_stopped");
+    assert.equal(run.result?.outputs, undefined);
+    assert.equal((await recovered.startRun(request)).id, run.id);
+  } finally {
+    if (owner.exitCode === null && owner.signalCode === null) {
+      const exit = once(owner, "exit");
+      owner.kill();
+      await exit;
+    }
+    lines.close();
+    await recovered?.close();
     await rm(temporary, { recursive: true, force: true });
   }
 });

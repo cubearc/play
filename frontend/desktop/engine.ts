@@ -103,20 +103,21 @@ export class Engine {
     return reply.data;
   }
 
-  runAsset(
-    value: import("./workspace-contract.ts").AssetRun,
-  ): Promise<RunResult> {
-    if (this.active !== undefined) return Promise.reject(new Error("busy"));
-    const id = this.nextId + 1;
-    this.active = id;
-    return this.request({ type: "invoke_asset", ...value })
-      .then((reply) => {
-        if (reply.type !== "finished") throw new Error("invalid_response");
-        return reply as unknown as RunResult;
-      })
-      .finally(() => {
-        if (this.active === id) this.active = undefined;
-      });
+  async startRun(
+    request: import("./workspace-contract.ts").RunRequest,
+  ): Promise<import("./workspace-contract.ts").RunDetail> {
+    const reply = await this.request({ type: "start_run", request });
+    if (reply.type !== "run" || !reply.data)
+      throw new Error("invalid_response");
+    return reply.data as import("./workspace-contract.ts").RunDetail;
+  }
+  async cancelRun(
+    value: import("./workspace-contract.ts").CancelRun,
+  ): Promise<import("./workspace-contract.ts").RunDetail> {
+    const reply = await this.request({ type: "cancel_run", ...value });
+    if (reply.type !== "run" || !reply.data)
+      throw new Error("invalid_response");
+    return reply.data as import("./workspace-contract.ts").RunDetail;
   }
 
   async cancel(): Promise<void> {
@@ -172,6 +173,7 @@ export class Engine {
             "ready",
             "catalog",
             "workspace",
+            "run",
             "finished",
             "cancelled",
             "rejected",

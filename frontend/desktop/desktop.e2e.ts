@@ -331,13 +331,30 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
       1,
       "trails reuse the workspace pipeline",
     );
+    await notebook(page)
+      .getByText("Keep result in private history", { exact: true })
+      .click();
+    await expect(
+      notebook(page).getByRole("checkbox", {
+        name: "Keep result in private history",
+      }),
+    ).not.toBeChecked();
+    await notebook(page)
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    await expect(
+      notebook(page).getByRole("region", { name: "Cell result" }),
+    ).toContainText("output was not retained");
     const wrongOwner = await page.evaluate(
-      async ({ context, assetId }) => {
+      async ({ context, trailId, pipelineId }) => {
         try {
-          await window.play.runAsset({
+          await window.play.startRun({
             context,
-            asset_id: assetId,
-            revision: 1,
+            key: crypto.randomUUID(),
+            trail_id: trailId,
+            pipeline_id: pipelineId,
+            pipeline_revision: 1,
+            retain_output: true,
             operation: "cipher.rot13",
             operation_version: 1,
           });
@@ -352,7 +369,11 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
           exploration_id: second.exploration.id,
           stage_id: second.exploration.stage.id,
         },
-        assetId: first.exploration.stage.blocks[0]?.caption?.id ?? "",
+        trailId:
+          first.exploration.trails.find(
+            (trail) => trail.source.content.kind === "text",
+          )?.id ?? "",
+        pipelineId: first.workspace.pipelines[0]?.id ?? "",
       },
     );
     assert.equal(wrongOwner, true);
@@ -410,7 +431,7 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     ).toBeVisible();
     await expect(
       notebook(page).getByRole("region", { name: "Cell result" }),
-    ).toHaveCount(0, { timeout: 1000 });
+    ).toContainText("The key is in the pixels.");
     await explorer(page)
       .getByRole("button", { name: "Alternative hypothesis", exact: true })
       .click();
@@ -434,6 +455,24 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
       sourceBefore,
       "the native import never modifies its source",
     );
+    await expect(
+      notebook(page).getByRole("region", { name: "Cell result" }),
+    ).toContainText("output was not retained");
+    await explorer(page)
+      .getByRole("button", { name: "Spiral signal", exact: true })
+      .click();
+    const restoredResult = notebook(page).getByRole("region", {
+      name: "Cell result",
+    });
+    await restoredResult
+      .getByText("Saved Run & input evidence", { exact: false })
+      .click();
+    await restoredResult
+      .getByRole("button", { name: "Open Run 1", exact: true })
+      .click();
+    await expect(restoredResult).toContainText("Out [1]");
+    await expect(restoredResult).toContainText("The key is in the pixels.");
+    await expect(restoredResult.locator("details")).toHaveAttribute("open", "");
     await capture(application, "native-restored-workspace");
   } finally {
     await application

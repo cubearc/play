@@ -171,8 +171,7 @@ export function Explorer({
               <span>No candidates or solutions saved.</span>
             </div>
             <p className="sidebar-note muted">
-              Content and saved reasoning persist locally. Operation responses
-              remain in this session.
+              Content, saved reasoning and retained Run results persist locally.
             </p>
           </VscodeCollapsible>
         </>

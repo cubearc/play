@@ -13,6 +13,9 @@ pub struct Context {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
     List,
+    View {
+        workspace_id: Uuid,
+    },
     Create {
         key: Uuid,
         title: String,
@@ -55,6 +58,15 @@ pub enum Command {
         title: String,
         caption: String,
         png: String,
+    },
+    ListRuns {
+        context: Context,
+        trail_id: Uuid,
+        before: Option<i64>,
+    },
+    RunDetail {
+        context: Context,
+        run_id: Uuid,
     },
     ReadImage {
         context: Context,
@@ -183,4 +195,17 @@ pub struct View {
     pub pipelines: Vec<Pipeline>,
     pub selected_exploration_id: Option<String>,
     pub selected_stage_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunRequest {
+    pub context: Context,
+    pub key: Uuid,
+    pub trail_id: Uuid,
+    pub pipeline_id: Uuid,
+    pub pipeline_revision: i64,
+    pub operation: String,
+    pub operation_version: u32,
+    pub retain_output: bool,
 }

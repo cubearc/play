@@ -24,5 +24,6 @@
     - [Desktop domain contract](reference/desktop-domain.md)
     - [Desktop IPC and native execution](reference/desktop-runtime.md)
     - [Native workspace storage](reference/desktop-storage.md)
+    - [Native PipelineRuns](reference/desktop-runs.md)
     - [Visual Lab implementation](reference/visual-lab.md)
     - [Verification](reference/validation.md)
