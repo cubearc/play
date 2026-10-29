@@ -328,6 +328,23 @@ h1 {
   max-width: 860px;
   margin: 0 auto 25px;
 }
+.notebook-cell:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 4px;
+}
+.block-order-controls {
+  display: flex;
+  gap: 2px;
+}
+.screen-reader-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .cell-number {
   padding-top: 15px;
   min-width: 20px;

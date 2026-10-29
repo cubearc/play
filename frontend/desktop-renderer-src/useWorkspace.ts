@@ -5,9 +5,11 @@ import type {
   WorkspaceList,
   WorkspaceView,
 } from "../desktop/workspace-contract";
-import { contextOf } from "../desktop/workspace-contract";
+import { contextOf, reasoningOf } from "../desktop/workspace-contract";
 
 const messages: Record<string, string> = {
+  order_conflict:
+    "Notebook order changed. The latest order is shown and your draft was kept. Try the move again.",
   unsupported_store:
     "This workspace uses an unsupported or damaged storage format. Existing data was preserved. Create a separate workspace or reopen it with its supported version.",
   workspace_busy:
@@ -94,10 +96,11 @@ export function useWorkspace() {
       ) {
         setExploration(data);
         setDrafts((previous) => {
-          const draft = previous[data.stage.note.id];
-          if (!draft || draft.value !== data.stage.note.text) return previous;
+          const note = reasoningOf(data.stage);
+          const draft = previous[note.id];
+          if (!draft || draft.value !== note.text) return previous;
           const next = { ...previous };
-          delete next[data.stage.note.id];
+          delete next[note.id];
           return next;
         });
       }
@@ -241,6 +244,45 @@ export function useWorkspace() {
       if (!result) return false;
       await refresh(context);
     });
+  const reloadCurrent = async (context: Context) => {
+    const shown = explorationRef.current;
+    if (
+      shown?.workspaceId === context.workspace_id &&
+      shown.id === context.exploration_id &&
+      shown.stage.id === context.stage_id
+    )
+      await load(
+        context.workspace_id,
+        context.exploration_id,
+        context.stage_id,
+      );
+  };
+  const reorderBlocks = (
+    context: Context,
+    revision: number,
+    blockIds: string[],
+  ) =>
+    execute(async () => {
+      try {
+        await window.play.workspace({
+          kind: "reorder_blocks",
+          context,
+          key: crypto.randomUUID(),
+          expected_revision: revision,
+          block_ids: blockIds,
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("state_conflict")
+        ) {
+          await reloadCurrent(context);
+          throw new Error("order_conflict");
+        }
+        throw error;
+      }
+      await reloadCurrent(context);
+    });
   const reviseText = (
     context: Context,
     blockId: string,
@@ -250,19 +292,6 @@ export function useWorkspace() {
     key: string,
   ) =>
     execute(async () => {
-      const reload = async () => {
-        const shown = explorationRef.current;
-        if (
-          shown?.workspaceId === context.workspace_id &&
-          shown.id === context.exploration_id &&
-          shown.stage.id === context.stage_id
-        )
-          await load(
-            context.workspace_id,
-            context.exploration_id,
-            context.stage_id,
-          );
-      };
       try {
         await window.play.workspace({
           kind: "revise_text",
@@ -275,14 +304,14 @@ export function useWorkspace() {
         });
       } catch (error) {
         if (error instanceof Error && error.message.includes("state_conflict"))
-          await reload().catch(() => {});
+          await reloadCurrent(context).catch(() => {});
         throw error;
       }
-      await reload();
+      await reloadCurrent(context);
     });
   const editNote = (value: string) => {
     if (!exploration) return;
-    const note = exploration.stage.note;
+    const note = reasoningOf(exploration.stage);
     setDrafts((previous) => {
       const next = { ...previous };
       if (value === note.text) delete next[note.id];
@@ -301,7 +330,7 @@ export function useWorkspace() {
   };
   const saveNote = async () => {
     if (!exploration) return;
-    const noteId = exploration.stage.note.id;
+    const noteId = reasoningOf(exploration.stage).id;
     const draft = drafts[noteId];
     if (!draft || saving[noteId]) return;
     setSaving((previous) => ({ ...previous, [noteId]: true }));
@@ -321,16 +350,23 @@ export function useWorkspace() {
         return next;
       });
       setExploration((previous) =>
-        previous?.stage.note.id === noteId
+        previous && reasoningOf(previous.stage).id === noteId
           ? {
               ...previous,
               stage: {
                 ...previous.stage,
-                note: {
-                  id: noteId,
-                  revision: result.revision,
-                  text: draft.value,
-                },
+                blocks: previous.stage.blocks.map((block) =>
+                  block.kind === "note" && block.note.id === noteId
+                    ? {
+                        ...block,
+                        note: {
+                          id: noteId,
+                          revision: result.revision,
+                          text: draft.value,
+                        },
+                      }
+                    : block,
+                ),
               },
             }
           : previous,
@@ -341,7 +377,7 @@ export function useWorkspace() {
       setSaving((previous) => ({ ...previous, [noteId]: false }));
     }
   };
-  const note = exploration?.stage.note;
+  const note = exploration ? reasoningOf(exploration.stage) : null;
   return {
     list,
     workspace,
@@ -359,6 +395,7 @@ export function useWorkspace() {
     addText,
     importImage,
     reviseText,
+    reorderBlocks,
     hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,

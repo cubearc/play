@@ -179,10 +179,26 @@ pub async fn exploration(
         .ok_or("not_found")?;
     let note = sqlx::query("SELECT n.id,n.current_revision,r.text FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id,n.current_revision)=(r.workspace_id,r.exploration_id,r.note_id,r.revision) WHERE n.workspace_id=? AND n.exploration_id=? AND n.stage_id=?")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_one(&mut *connection).await.map_err(storage::failure)?;
-    let block_rows = sqlx::query("SELECT id,asset_id,asset_revision,caption_id,caption_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND kind='asset' ORDER BY position,id")
+    let block_rows = sqlx::query("SELECT id,kind,asset_id,asset_revision,caption_id,caption_revision,note_id FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY position,id")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_all(&mut *connection).await.map_err(storage::failure)?;
     let mut blocks = Vec::new();
+    let mut reasoning_count = 0;
     for row in block_rows {
+        if row.get::<String, _>("kind") == "note" {
+            if row.get::<String, _>("note_id") != note.get::<String, _>("id") {
+                return Err("corrupt_store");
+            }
+            reasoning_count += 1;
+            blocks.push(Block::Note {
+                id: row.get("id"),
+                note: Note {
+                    id: note.get(0),
+                    revision: note.get(1),
+                    text: note.get(2),
+                },
+            });
+            continue;
+        }
         let caption_id: Option<String> = row.get("caption_id");
         let caption = if let Some(id) = caption_id {
             Some(
@@ -198,7 +214,7 @@ pub async fn exploration(
         } else {
             None
         };
-        blocks.push(Block {
+        blocks.push(Block::Asset {
             id: row.get("id"),
             asset: asset(
                 connection,
@@ -210,6 +226,9 @@ pub async fn exploration(
             .await?,
             caption,
         });
+    }
+    if reasoning_count != 1 {
+        return Err("corrupt_store");
     }
     let definitions = pipelines(connection, &workspace).await?;
     let trail_rows = sqlx::query("SELECT id,title,hypothesis,source_id,source_revision,pipeline_id,pipeline_revision FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY rowid")
@@ -254,11 +273,6 @@ pub async fn exploration(
         revision: stage_summary.revision,
         introduction: String::new(),
         blocks,
-        note: Note {
-            id: note.get(0),
-            revision: note.get(1),
-            text: note.get(2),
-        },
     };
     select(connection, &workspace, &exploration, &selected).await?;
     Ok(Exploration {

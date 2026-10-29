@@ -11,7 +11,7 @@ import {
   type Page,
 } from "@playwright/test";
 import type {} from "./bridge.ts";
-import type { Context } from "./workspace-contract.ts";
+import { type Context, reasoningOf } from "./workspace-contract.ts";
 
 const main = fileURLToPath(new URL("main.js", import.meta.url));
 const fixture = fileURLToPath(
@@ -425,8 +425,10 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     assert.equal(restored.workspace.id, first.workspace.id);
     assert.equal(restored.exploration.id, first.exploration.id);
     assert.equal(
-      restored.exploration.stage.blocks[0]?.asset.id,
-      first.exploration.stage.blocks[0]?.asset.id,
+      restored.exploration.stage.blocks.find((block) => block.kind === "asset")
+        ?.asset.id,
+      first.exploration.stage.blocks.find((block) => block.kind === "asset")
+        ?.asset.id,
     );
     await expect(
       notebook(page).getByRole("img", { name: "sample.png", exact: true }),
@@ -533,7 +535,9 @@ test("native text and caption revisions preserve historical Runs and drafts acro
       ).toContainText("The key.");
     }
     const original = await current(page);
-    const block = original.exploration.stage.blocks[0];
+    const block = original.exploration.stage.blocks.find(
+      (block) => block.kind === "asset",
+    );
     assert.ok(block);
     await page
       .getByLabel("Stage note", { exact: true })
@@ -575,7 +579,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
       page.getByRole("status", { name: "Note save status" }),
     ).toHaveText("Unsaved changes");
     const withNoteDraft = await current(page);
-    assert.equal(withNoteDraft.exploration.stage.note.revision, 1);
+    assert.equal(reasoningOf(withNoteDraft.exploration.stage).revision, 1);
     await page
       .getByRole("button", { name: "Save reasoning", exact: true })
       .click();
@@ -592,7 +596,11 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     }
     const revised = await current(page);
     assert.equal(revised.exploration.stage.blocks[0]?.id, block.id);
-    assert.equal(revised.exploration.stage.blocks[0]?.asset.id, block.asset.id);
+    assert.equal(
+      revised.exploration.stage.blocks.find((block) => block.kind === "asset")
+        ?.asset.id,
+      block.asset.id,
+    );
     await cell.getByRole("button", { name: "Edit text", exact: true }).click();
     dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
     await dialog
@@ -741,7 +749,11 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     });
     await expect(cell).toContainText("Another saved revision.");
     const restored = await current(page);
-    assert.equal(restored.exploration.stage.blocks[0]?.asset.revision, 3);
+    assert.equal(
+      restored.exploration.stage.blocks.find((block) => block.kind === "asset")
+        ?.asset.revision,
+      3,
+    );
     await expect(
       notebook(page).getByRole("figure").filter({ hasText: "Frpbaq pncgvba." }),
     ).toBeVisible();
@@ -756,6 +768,318 @@ test("native text and caption revisions preserve historical Runs and drafts acro
         cell.getByRole("region", { name: "Cell result" }),
       ).toContainText("Earlier input · r2");
     }
+    assert.deepEqual(await readFile(fixture), sourceBefore);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("ordered notebook Blocks preserve drafts, evidence and keyboard context after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-block-order-"));
+  const sourceBefore = await readFile(fixture);
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Ordered studies");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Clue order");
+    for (const [title, text] of [
+      ["First clue", "Svefg."],
+      ["Second clue", "Frpbaq."],
+    ]) {
+      await notebook(page)
+        .getByRole("button", { name: "Add text", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: "Add text block",
+        exact: true,
+      });
+      await dialog
+        .getByRole("textbox", { name: "Title", exact: true })
+        .fill(title ?? "");
+      await dialog
+        .getByRole("textbox", { name: "Text", exact: true })
+        .fill(text ?? "");
+      await dialog
+        .getByRole("button", { name: "Add text", exact: true })
+        .click();
+    }
+    const firstCell = () =>
+      notebook(page).getByRole("article", {
+        name: "First clue block",
+        exact: true,
+      });
+    await expect(
+      firstCell().getByRole("button", {
+        name: "Move First clue up",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(
+      notebook(page).getByRole("button", {
+        name: "Move Reasoning down",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    if (process.platform === "darwin") {
+      await firstCell()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(firstCell()).toContainText("output: First.");
+    }
+    const original = await current(page);
+    const before = original.exploration.stage.blocks;
+    const first = before.find(
+      (block) => block.kind === "asset" && block.asset.title === "First clue",
+    );
+    const second = before.find(
+      (block) => block.kind === "asset" && block.asset.title === "Second clue",
+    );
+    const reasoning = before.find((block) => block.kind === "note");
+    assert.ok(
+      first?.kind === "asset" &&
+        second?.kind === "asset" &&
+        reasoning?.kind === "note",
+    );
+    const originalContext = {
+      workspace_id: original.workspace.id,
+      exploration_id: original.exploration.id,
+      stage_id: original.exploration.stage.id,
+    };
+    const firstTrail = original.exploration.trails.find(
+      (trail) => trail.source.id === first.asset.id,
+    );
+    assert.ok(firstTrail);
+    const savedRun = await page.evaluate(
+      async ({ context, trailId }) => {
+        const history = await window.play.workspace({
+          kind: "list_runs",
+          context,
+          trail_id: trailId,
+          before: null,
+        });
+        const id = history.runs[0]?.id;
+        return id
+          ? window.play.workspace({ kind: "run_detail", context, run_id: id })
+          : null;
+      },
+      { context: originalContext, trailId: firstTrail.id },
+    );
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Reasoning stays with this Block.");
+    const secondCell = () =>
+      notebook(page).getByRole("article", {
+        name: "Second clue block",
+        exact: true,
+      });
+    await secondCell()
+      .getByRole("button", { name: "Move Second clue up", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual([second.id, first.id, reasoning.id]);
+    const noteCell = () =>
+      notebook(page).getByRole("article", {
+        name: "Reasoning block",
+        exact: true,
+      });
+    await noteCell()
+      .getByRole("button", { name: "Move Reasoning up", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual([second.id, reasoning.id, first.id]);
+    await expect(noteCell()).toBeFocused();
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Reasoning stays with this Block.",
+    );
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    const imageDialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await imageDialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Gur cvpgher.");
+    await imageDialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    const withImage = await current(page);
+    const image = withImage.exploration.stage.blocks.find(
+      (block) => block.kind === "asset" && block.asset.content.kind === "image",
+    );
+    assert.ok(image);
+    const imageCell = () =>
+      notebook(page).getByRole("article", {
+        name: "sample.png block",
+        exact: true,
+      });
+    await imageCell()
+      .getByRole("button", { name: "Move sample.png up", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual([second.id, reasoning.id, image.id, first.id]);
+    const displayed = await current(page);
+    const external = displayed.exploration.stage.blocks.map(
+      (block) => block.id,
+    );
+    [external[0], external[1]] = [external[1] ?? "", external[0] ?? ""];
+    await page.evaluate(
+      async ({ context, revision, ids }) => {
+        await window.play.workspace({
+          kind: "reorder_blocks",
+          context,
+          key: crypto.randomUUID(),
+          expected_revision: revision,
+          block_ids: ids,
+        });
+      },
+      {
+        context: originalContext,
+        revision: displayed.exploration.stage.revision,
+        ids: external,
+      },
+    );
+    await imageCell()
+      .getByRole("button", { name: "Move sample.png up", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Notebook order changed",
+    );
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual(external);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Reasoning stays with this Block.",
+    );
+    await imageCell()
+      .getByRole("button", { name: "Move sample.png up", exact: true })
+      .click();
+    const finalIds = [reasoning.id, image.id, second.id, first.id];
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual(finalIds);
+    await expect(imageCell().getByRole("figure")).toContainText("Gur cvpgher.");
+    await expect(
+      imageCell().getByRole("img", { name: "sample.png", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Save reasoning", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Saved");
+    if (process.platform === "darwin") {
+      await secondCell().focus();
+      await page.keyboard.press("ControlOrMeta+Enter");
+      await expect(secondCell()).toContainText("output: Second.");
+      const allTrails = (await current(page)).exploration.trails;
+      const runCount = () =>
+        page.evaluate(
+          async ({ context, trails }) => {
+            let count = 0;
+            for (const trail of trails) {
+              const history = await window.play.workspace({
+                kind: "list_runs",
+                context,
+                trail_id: trail.id,
+                before: null,
+              });
+              count += history.runs.length;
+            }
+            return count;
+          },
+          { context: originalContext, trails: allTrails },
+        );
+      const count = await runCount();
+      await page.getByLabel("Stage note", { exact: true }).focus();
+      await page.keyboard.press("ControlOrMeta+Enter");
+      assert.equal(
+        await runCount(),
+        count,
+        "reasoning does not dispatch another Block's Run",
+      );
+      if (savedRun)
+        assert.deepEqual(
+          await page.evaluate(
+            async ({ context, id }) =>
+              window.play.workspace({
+                kind: "run_detail",
+                context,
+                run_id: id,
+              }),
+            { context: originalContext, id: savedRun.id },
+          ),
+          savedRun,
+        );
+    }
+    const final = await current(page);
+    const finalBlocks = final.exploration.stage.blocks;
+    await capture(application, "native-ordered-notebook");
+    await create(page, "Exploration", "Independent order");
+    await expect(notebook(page).getByRole("article")).toHaveCount(1);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "",
+    );
+    await explorer(page)
+      .getByRole("button", { name: "Clue order", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await current(page)).exploration.stage.blocks.map((block) => block.id),
+      )
+      .toEqual(finalIds);
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    const reopened = await current(page);
+    assert.deepEqual(reopened.exploration.stage.blocks, finalBlocks);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Reasoning stays with this Block.",
+    );
+    if (process.platform === "darwin")
+      await expect(firstCell()).toContainText("output: First.");
     assert.deepEqual(await readFile(fixture), sourceBefore);
   } finally {
     await application

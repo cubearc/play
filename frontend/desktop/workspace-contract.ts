@@ -20,7 +20,8 @@ export interface AssetView {
 export interface TextAssetView extends AssetView {
   content: { kind: "text"; text: string };
 }
-export interface BlockView {
+export interface AssetBlockView {
+  kind: "asset";
   id: string;
   asset: AssetView;
   caption?: TextAssetView;
@@ -30,10 +31,20 @@ export interface NoteView {
   revision: number;
   text: string;
 }
+export interface NoteBlockView {
+  kind: "note";
+  id: string;
+  note: NoteView;
+}
+export type BlockView = AssetBlockView | NoteBlockView;
 export interface StageView extends Summary {
   introduction: string;
   blocks: BlockView[];
-  note: NoteView;
+}
+export function reasoningOf(stage: StageView): NoteView {
+  const block = stage.blocks.find((block) => block.kind === "note");
+  if (!block) throw new Error("invalid_stage");
+  return block.note;
 }
 export interface PipelineView extends Summary {
   input: string;
@@ -76,6 +87,13 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "reorder_blocks";
+      context: Context;
+      key: string;
+      expected_revision: number;
+      block_ids: string[];
+    }
   | {
       kind: "list_runs";
       context: Context;
@@ -236,6 +254,7 @@ export interface Responses {
   save_note: { noteId: string; revision: number };
   add_text: { blockId: string };
   revise_text: { assetId: string; revision: number };
+  reorder_blocks: { stageId: string; revision: number };
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -284,6 +303,7 @@ export function request(value: unknown): WorkspaceRequest {
       "expected_revision",
       "text",
     ],
+    reorder_blocks: ["context", "key", "expected_revision", "block_ids"],
   };
   if (typeof kind !== "string" || !Object.hasOwn(fields, kind))
     throw new Error("invalid_command");
@@ -293,7 +313,16 @@ export function request(value: unknown): WorkspaceRequest {
   for (const field of expected) {
     const value = record[field];
     if (field === "context") context(value);
-    else if (field === "expected_revision") {
+    else if (field === "block_ids") {
+      if (!Array.isArray(value) || value.length > limits.block_limit)
+        throw new Error("input_limit");
+      if (
+        !value.length ||
+        !value.every(id) ||
+        new Set(value).size !== value.length
+      )
+        throw new Error("invalid_command");
+    } else if (field === "expected_revision") {
       if (!revision(value)) throw new Error("invalid_command");
     } else if (field === "before") {
       if (value !== null && !revision(value))

@@ -1,6 +1,7 @@
 mod assets;
 mod model;
 mod mutations;
+mod order;
 mod queries;
 mod run_plan;
 mod runs;

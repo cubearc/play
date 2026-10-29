@@ -81,6 +81,12 @@ pub enum Command {
         asset_id: Uuid,
         revision: i64,
     },
+    ReorderBlocks {
+        context: Context,
+        key: Uuid,
+        expected_revision: i64,
+        block_ids: Vec<Uuid>,
+    },
 }
 
 impl Command {
@@ -90,6 +96,7 @@ impl Command {
             | Self::CreateStage { key, .. }
             | Self::SaveNote { key, .. }
             | Self::ReviseText { key, .. }
+            | Self::ReorderBlocks { key, .. }
             | Self::AddText { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
@@ -133,11 +140,18 @@ pub struct Asset {
 }
 
 #[derive(Serialize)]
-pub struct Block {
-    pub id: String,
-    pub asset: Asset,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub caption: Option<Asset>,
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Block {
+    Asset {
+        id: String,
+        asset: Asset,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        caption: Option<Asset>,
+    },
+    Note {
+        id: String,
+        note: Note,
+    },
 }
 
 #[derive(Serialize)]
@@ -179,7 +193,6 @@ pub struct Stage {
     pub revision: i64,
     pub introduction: String,
     pub blocks: Vec<Block>,
-    pub note: Note,
 }
 
 #[derive(Serialize)]

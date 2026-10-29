@@ -4,7 +4,7 @@ import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/V
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  type BlockView,
+  type AssetBlockView,
   type Context,
   contextOf,
   type TextAssetView,
@@ -56,8 +56,15 @@ export function Workbench() {
   const activeTrail = exploration?.trails.find(
     (entry) => entry.id === activeTab,
   );
+  const firstText = exploration?.stage.blocks.find(
+    (block) =>
+      block.kind === "asset" &&
+      (block.caption || block.asset.content.kind === "text"),
+  );
+  const firstSource =
+    firstText?.kind === "asset" ? (firstText.caption ?? firstText.asset) : null;
   const captionTrail = exploration?.trails.find(
-    (entry) => entry.source.content.kind === "text",
+    (entry) => entry.source.id === firstSource?.id,
   );
   const runnableTrail = activeTrail ?? captionTrail;
   const openTabs =
@@ -79,7 +86,7 @@ export function Workbench() {
     const operation = executions.operationFor(runnableTrail);
     if (operation) void executions.run(runnableTrail, operation);
   };
-  const editText = (block: BlockView, asset: TextAssetView) => {
+  const editText = (block: AssetBlockView, asset: TextAssetView) => {
     if (!exploration) return;
     state.clearError();
     setEditing({
@@ -344,6 +351,7 @@ export function Workbench() {
                   addImage={() => setDialog("image")}
                   openTrail={openTrail}
                   editText={editText}
+                  reorderBlocks={state.reorderBlocks}
                 />
               )}
             </>

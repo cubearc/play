@@ -1,5 +1,5 @@
 {
-  "protocol": 4,
+  "protocol": 5,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,

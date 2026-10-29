@@ -92,6 +92,31 @@ freeze their chosen definition, resolved inputs and Core contract; see
 and interruption recovery. Candidates, Solutions, submissions and official
 evaluation are separate deliveries.
 
+## Block ordering
+
+Stage views return one ordered `blocks` sequence tagged with `kind: asset` or
+`kind: note`. The reasoning Note is a Block with its own ID and revisioned Note
+content; there is no separate `Stage.note` field. Image and caption belong to one
+Asset Block. The current baseline has exactly one reasoning Block per Stage.
+
+The closed `reorder_blocks` intent carries `context`, `key`, `expected_revision`
+and `block_ids`. Supply every Block UUID in that Stage exactly once, including
+reasoning. The engine rejects omitted, duplicate, foreign or caption Asset IDs
+with `invalid_order`, and stale Stage revisions with `state_conflict`. Preload
+also checks UUIDs, uniqueness and the eight-Block ceiling before forwarding.
+
+One transaction changes positions and advances the Stage revision. An identical
+order is a no-op; its revision stays the same. Mutation receipts preserve accepted
+responses for matching retries. The command never revises Assets, Notes, Trails,
+Pipelines or Runs. A failed move changes nothing. Reopening returns the saved
+sequence, independently for every Stage and Exploration.
+
+Stage revisions track structural membership and order. Adding text or an image
+also advances this revision; editing content or saving reasoning uses its own
+revision. Content is inserted before a trailing reasoning Block, otherwise at the
+end. No new schema is required: all Block positions live in native schema 2.
+The coordinated app/engine wire protocol is **5**, with no older DTO fallback.
+
 ## Text and caption revisions
 
 The closed `revise_text` intent carries `context`, `key`, `block_id`, `asset_id`,

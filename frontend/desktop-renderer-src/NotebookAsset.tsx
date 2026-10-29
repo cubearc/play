@@ -1,7 +1,7 @@
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import type {
+  AssetBlockView,
   AssetView,
-  BlockView,
   Context,
 } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
@@ -11,7 +11,7 @@ export function NotebookAsset({
   openAsset,
   context,
 }: {
-  block: BlockView;
+  block: AssetBlockView;
   context: Context;
   openAsset: (asset: AssetView) => void;
 }) {

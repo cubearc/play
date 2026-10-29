@@ -69,7 +69,9 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       text: "Gur xrl.",
     });
     exploration = (await engine.workspace(open)) as ExplorationView;
-    const asset = exploration.stage.blocks[0]?.asset;
+    const asset = exploration.stage.blocks.find(
+      (block) => block.kind === "asset",
+    )?.asset;
     assert.ok(asset);
     const trail = exploration.trails[0];
     assert.ok(trail?.pipeline);
@@ -134,6 +136,25 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
         engine.startRun(invocation),
         /native_policy_unavailable/,
       );
+    const order = {
+      kind: "reorder_blocks",
+      context,
+      key: randomUUID(),
+      expected_revision: exploration.stage.revision,
+      block_ids: exploration.stage.blocks.map((block) => block.id).reverse(),
+    };
+    const reordered = await engine.workspace(order);
+    assert.deepEqual(await engine.workspace(order), reordered);
+    const afterOrder = (await engine.workspace(open)) as ExplorationView;
+    assert.deepEqual(
+      afterOrder.stage.blocks.map((block) => block.id),
+      order.block_ids,
+    );
+    assert.deepEqual(afterOrder.trails, exploration.trails);
+    await assert.rejects(
+      engine.workspace({ ...order, key: randomUUID() }),
+      /state_conflict/,
+    );
     await engine.close();
     engine = await Engine.connect(binary, worker, root);
     const listing = (await engine.workspace({ kind: "list" })) as {
@@ -142,7 +163,11 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
     assert.equal(listing.lastWorkspaceId, workspace.id);
     await engine.workspace({ kind: "open", workspace_id: workspace.id });
     const restored = (await engine.workspace(open)) as ExplorationView;
-    assert.equal(restored.stage.blocks[0]?.asset.id, asset.id);
+    assert.deepEqual(restored.stage.blocks, afterOrder.stage.blocks);
+    assert.equal(
+      restored.stage.blocks.find((block) => block.kind === "asset")?.asset.id,
+      asset.id,
+    );
     if (saved)
       assert.deepEqual(
         await engine.workspace({
@@ -455,7 +480,7 @@ test("editing an input during a real worker Run preserves its plan and rejects s
       exploration_id: request.context.exploration_id,
       stage_id: request.context.stage_id,
     })) as ExplorationView;
-    const block = opened.stage.blocks[0];
+    const block = opened.stage.blocks.find((block) => block.kind === "asset");
     assert.ok(block);
     const running = await engine.startRun(request);
     assert.equal(running.status, "running");

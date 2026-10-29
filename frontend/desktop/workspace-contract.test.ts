@@ -15,6 +15,30 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("Block ordering accepts only a bounded complete-order intent with unique UUIDs", () => {
+  const order = {
+    kind: "reorder_blocks",
+    context: owner,
+    key: randomUUID(),
+    expected_revision: 2,
+    block_ids: [randomUUID(), randomUUID()],
+  };
+  assert.deepEqual(request(order), order);
+  for (const block_ids of [
+    [],
+    [order.block_ids[0], order.block_ids[0]],
+    ["../asset"],
+    Array.from({ length: 9 }, () => randomUUID()),
+    null,
+  ])
+    assert.throws(() => request({ ...order, block_ids }));
+  for (const expected_revision of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(() => request({ ...order, expected_revision }));
+  assert.throws(() => request({ ...order, path: "/private" }));
+  assert.throws(() =>
+    request({ ...order, context: { ...owner, stage_id: "foreign" } }),
+  );
+});
 test("the workspace bridge accepts closed scoped intents without path or generic IPC authority", () => {
   assert.deepEqual(context(owner), owner);
   assert.deepEqual(request({ kind: "list" }), { kind: "list" });

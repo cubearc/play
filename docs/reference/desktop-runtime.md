@@ -124,14 +124,17 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **4** uses a 262144-byte frame ceiling, including bounded Base64 PNG
+Protocol **5** uses a 262144-byte frame ceiling, including bounded Base64 PNG
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image-import bridge.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
-add text, revise existing text/captions, save reasoning, list scoped Run summaries
+add text, revise existing text/captions, reorder complete Stage Blocks, save reasoning, list scoped Run summaries
 and read Run details. Internal image import/read commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
+Stage responses expose one tagged Block sequence, including reasoning.
+`reorder_blocks` pins the Stage revision and every Block UUID; see
+[Block ordering](desktop-storage.md#block-ordering) for conflict and identity rules.
 The `revise_text` intent pins its Block/Asset IDs and expected revision. Run
 requests require `source_asset_id` and `source_revision` as well as the selected
 Pipeline revision; stale bindings fail before admission. Prior protocol shapes

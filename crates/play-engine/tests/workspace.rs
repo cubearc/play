@@ -29,6 +29,14 @@ fn open(manager: &mut Manager, workspace: &str, id: &str) -> Value {
         json!({"kind":"open_exploration","workspace_id":workspace,"exploration_id":id,"stage_id":null}),
     )
 }
+fn note(view: &Value) -> &Value {
+    &view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|block| block["kind"] == "note")
+        .unwrap()["note"]
+}
 fn files(directory: &Path) -> Vec<(String, Vec<u8>)> {
     let mut entries = fs::read_dir(directory)
         .unwrap()
@@ -58,7 +66,7 @@ fn two_explorations_reopen_independent_notebooks_and_immutable_notes() {
     let b_view = open(&mut manager, &workspace, b_id);
     let context = json!({"workspace_id":workspace,"exploration_id":a_id,"stage_id":a["stageId"]});
     let note_key = Uuid::new_v4();
-    let save = json!({"kind":"save_note","context":context,"key":note_key,"note_id":a_view["stage"]["note"]["id"],"expected_revision":1,"text":"Only the first investigation."});
+    let save = json!({"kind":"save_note","context":context,"key":note_key,"note_id":note(&a_view)["id"],"expected_revision":1,"text":"Only the first investigation."});
     let accepted = command(&mut manager, save.clone());
     assert_eq!(accepted["revision"], 2);
     assert_eq!(
@@ -74,13 +82,13 @@ fn two_explorations_reopen_independent_notebooks_and_immutable_notes() {
             .unwrap_err(),
         "idempotency_conflict"
     );
-    let mixed = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":b_view["stage"]["note"]["id"],"expected_revision":1,"text":"must not cross owners"});
+    let mixed = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":note(&b_view)["id"],"expected_revision":1,"text":"must not cross owners"});
     assert!(
         manager
             .handle(serde_json::from_value(mixed).unwrap())
             .is_err()
     );
-    let stale = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":a_view["stage"]["note"]["id"],"expected_revision":1,"text":"stale"});
+    let stale = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":note(&a_view)["id"],"expected_revision":1,"text":"stale"});
     assert_eq!(
         manager
             .handle(serde_json::from_value(stale).unwrap())
@@ -112,15 +120,18 @@ fn two_explorations_reopen_independent_notebooks_and_immutable_notes() {
         json!({"kind":"open","workspace_id":workspace}),
     );
     let restored = open(&mut manager, &workspace, a_id);
-    assert_eq!(
-        restored["stage"]["note"]["text"],
-        "Only the first investigation."
-    );
-    assert_eq!(restored["stage"]["note"]["revision"], 2);
+    assert_eq!(note(&restored)["text"], "Only the first investigation.");
+    assert_eq!(note(&restored)["revision"], 2);
     assert_eq!(restored["stage"]["blocks"][0]["asset"]["id"], asset["id"]);
     let separate = open(&mut manager, &workspace, b_id);
-    assert_eq!(separate["stage"]["note"]["text"], "");
-    assert!(separate["stage"]["blocks"].as_array().unwrap().is_empty());
+    assert_eq!(note(&separate)["text"], "");
+    assert!(
+        separate["stage"]["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|block| block["kind"] == "note")
+    );
 }
 
 #[test]
@@ -231,13 +242,14 @@ fn png_caption_import_is_atomic_and_preserves_independent_asset_references() {
         open(&mut manager, &workspace, id)["stage"]["blocks"]
             .as_array()
             .unwrap()
-            .is_empty()
+            .iter()
+            .all(|block| block["kind"] == "note")
     );
     let result = command(&mut manager, import.clone());
     assert_eq!(command(&mut manager, import), result);
     let view = open(&mut manager, &workspace, id);
     let block = &view["stage"]["blocks"][0];
-    assert_eq!(view["stage"]["blocks"].as_array().unwrap().len(), 1);
+    assert_eq!(view["stage"]["blocks"].as_array().unwrap().len(), 2);
     assert_ne!(block["asset"]["id"], block["caption"]["id"]);
     assert_eq!(view["trails"].as_array().unwrap().len(), 2);
     assert_eq!(block["caption"]["content"]["text"], "Gur xrl.");
@@ -298,17 +310,17 @@ fn quotas_reject_atomically_and_stage_ownership_is_enforced() {
             .as_array()
             .unwrap()
             .len(),
-        7
+        8
     );
-    let note = open(&mut manager, &workspace, id)["stage"]["note"].clone();
-    let save = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":note["id"],"expected_revision":1,"text":"x".repeat(2049)});
+    let saved_note = note(&open(&mut manager, &workspace, id)).clone();
+    let save = json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":saved_note["id"],"expected_revision":1,"text":"x".repeat(2049)});
     assert_eq!(
         manager
             .handle(serde_json::from_value(save).unwrap())
             .unwrap_err(),
         "input_limit"
     );
-    assert_eq!(open(&mut manager, &workspace, id)["stage"]["note"], note);
+    assert_eq!(note(&open(&mut manager, &workspace, id)), &saved_note);
 }
 
 #[test]
@@ -335,7 +347,7 @@ fn schema_tampering_is_rejected_read_only_and_foreign_keys_protect_immutable_evi
     runtime.block_on(async {
         let mut db = SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&database).foreign_keys(true)).await.unwrap();
         let failed = sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,note_id) VALUES(?,?,?,?,0,'note',?)")
-            .bind(&workspace).bind(b["explorationId"].as_str().unwrap()).bind(b["stageId"].as_str().unwrap()).bind(Uuid::new_v4().to_string()).bind(first["stage"]["note"]["id"].as_str().unwrap()).execute(&mut db).await.unwrap_err();
+            .bind(&workspace).bind(b["explorationId"].as_str().unwrap()).bind(b["stageId"].as_str().unwrap()).bind(Uuid::new_v4().to_string()).bind(note(&first)["id"].as_str().unwrap()).execute(&mut db).await.unwrap_err();
         assert!(matches!(failed, sqlx::Error::Database(ref error) if error.is_foreign_key_violation()));
         assert!(sqlx::query("UPDATE note_revisions SET text='overwrite'").execute(&mut db).await.is_err());
         assert!(sqlx::query("DELETE FROM note_revisions").execute(&mut db).await.is_err());
@@ -436,10 +448,7 @@ fn a_known_store_recovers_an_interrupted_sqlite_transaction_after_owner_death() 
         &mut manager,
         json!({"kind":"open","workspace_id":workspace}),
     );
-    assert_eq!(
-        open(&mut manager, &workspace, id)["stage"]["note"],
-        before["stage"]["note"]
-    );
+    assert_eq!(note(&open(&mut manager, &workspace, id)), note(&before));
     assert!(!directory.join("workspace.sqlite3-journal").exists());
 }
 

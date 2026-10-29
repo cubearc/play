@@ -5,7 +5,7 @@
   - [First notebook](getting-started.md)
   - [Create and reopen Workspaces](launcher.md)
   - [Explorations and Trails](explorations.md)
-  - [Stage notebook](notebook.md)
+  - [Stage notebook and ordering](notebook.md)
   - [Text and image Assets](workspace.md)
   - [Image inspection](visual-lab.md)
   - [Resume saved work](persistence.md)

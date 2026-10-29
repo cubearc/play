@@ -131,7 +131,7 @@ fn caption_edits_keep_the_figure_image_and_references_intact() {
     command(&mut manager, edit(&context, block, caption, ""));
     let after = open(&mut manager, &context);
     let edited = &after["stage"]["blocks"][0];
-    assert_eq!(after["stage"]["blocks"].as_array().unwrap().len(), 1);
+    assert_eq!(after["stage"]["blocks"].as_array().unwrap().len(), 2);
     assert_eq!(edited["id"], block["id"]);
     assert_eq!(edited["asset"], block["asset"]);
     assert_eq!(edited["caption"]["id"], caption["id"]);

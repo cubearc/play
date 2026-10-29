@@ -60,6 +60,30 @@ review the latest saved revision. It never silently overwrites that content.
 Unsaved text/caption edits trigger the same **Keep editing** / **Discard draft**
 choice as reasoning when closing or quitting; drafts are not crash-recovery data.
 
+## Reorder the notebook
+
+Use the up and down arrows in a Block's heading to move it one position. The
+image, caption and inline result move together. **Reasoning** is also an ordered
+Block; move it between clues or place it first.
+
+Tab to a move button and press Enter to use the keyboard. After a successful
+move, focus follows the Block and its position is announced. Cmd/Ctrl+Enter in a
+text or caption Block runs that Block's selected operation. In reasoning, that
+shortcut does not run another Block.
+
+Moves save immediately and survive reopening. They preserve Asset identities,
+saved revisions, Trails, earlier Runs and unsaved reasoning. If another action
+changed the order first, Play shows the latest order and keeps your draft; try
+the move again. Reordering is visual organization, not Pipeline scheduling.
+
+![Reasoning moved before an image and caption, with move arrows in each Block heading.](assets/desktop/ordered-notebook.png)
+
+The ordered notebook in the macOS source preview. Image and caption remain one
+Block. [Open full size](assets/desktop/ordered-notebook.png).
+
+New content is placed before reasoning when reasoning is last. If you have moved
+reasoning elsewhere, new content is appended without moving the existing Blocks.
+
 ## Save reasoning
 
 Write in **Stage note**, then choose **Save reasoning** or Cmd/Ctrl+S. Wait for
@@ -79,5 +103,5 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 
 Windows/Linux worker execution is refused by the current native policy, even
 though the UI has keyboard bindings. [Installation](installation.md) states the
-platform scope. Image replacement, Block reordering/duplication/removal and
+platform scope. Image replacement, Block duplication/removal and
 result export are not available in this preview.

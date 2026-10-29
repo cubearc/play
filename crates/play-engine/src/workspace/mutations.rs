@@ -1,7 +1,7 @@
 use super::{
     assets,
     model::{Command, Context},
-    queries,
+    order, queries,
     storage::{self, Owned},
 };
 use crate::{Result, protocol};
@@ -292,11 +292,13 @@ async fn add(
     } else {
         None
     };
-    let position:i64=sqlx::query_scalar("SELECT count(*) FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND kind='asset'").bind(&workspace).bind(&exploration).bind(&stage).fetch_one(&mut *connection).await.map_err(storage::failure)?;
+    let position = order::append_position(connection, context).await?;
     sqlx::query("UPDATE blocks SET position=position+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND position>=?").bind(&workspace).bind(&exploration).bind(&stage).bind(position).execute(&mut *connection).await.map_err(storage::failure)?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")
-        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64)).execute(connection).await.map_err(storage::failure)?;
+        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64)).execute(&mut *connection).await.map_err(storage::failure)?;
+    let expected = order::revision(connection, context).await?;
+    order::advance(connection, context, expected).await?;
     Ok(json!({"blockId":block}))
 }
 
@@ -409,6 +411,15 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
                 text,
             )
             .await?
+        }
+        Command::ReorderBlocks {
+            context,
+            expected_revision,
+            block_ids,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            order::reorder(connection, context, *expected_revision, block_ids).await?
         }
         _ => return Err("invalid_command"),
     };

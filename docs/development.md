@@ -43,7 +43,9 @@ check the explicit history gap. The image canvas supports preview and zoom.
 
 The real Electron smoke test covers image/caption grouping, inline results,
 Explorer resizing, keyboard navigation, two Explorations, native input ownership,
-reasoning and reopening. Its chooser fixture selects a real PNG through the
+reasoning and reopening. It also reorders every Block kind with pointer/keyboard,
+checks stale-order recovery with a preserved draft, and verifies focused-cell
+execution and immutable earlier Run evidence. Its chooser fixture selects a real PNG through the
 trusted import handler. It does not establish arbitrary graph execution or Cloud
 participation. Screenshots are written under `frontend/playwright-report/`.
 

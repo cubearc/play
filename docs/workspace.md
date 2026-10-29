@@ -6,6 +6,8 @@
 A Stage notebook holds ordered Blocks. Each text Block has a revisioned Asset.
 An image Block holds the image and its caption together; the caption is a
 separate text Asset within that same Block. Both can be opened in a Trail canvas.
+Use the heading arrows to [reorder complete Blocks](notebook.md#reorder-the-notebook),
+including reasoning, without changing their Assets or evidence.
 
 ## Add text
 
