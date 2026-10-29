@@ -1,10 +1,11 @@
 use super::{
+    blocks,
     model::{AssetRevision, BlockSource, Content, Context},
     mutations, order, queries, storage,
 };
-use crate::{Result, protocol};
+use crate::Result;
 use serde_json::{Value, json};
-use sqlx::{Row, SqliteConnection};
+use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 fn copy_title(title: &str, number: usize) -> String {
@@ -92,14 +93,7 @@ pub(super) async fn duplicate(
     expected: i64,
     source: &BlockSource,
 ) -> Result<Value> {
-    if expected < 1
-        || expected == i64::MAX
-        || source.asset.revision < 1
-        || source
-            .caption
-            .as_ref()
-            .is_some_and(|caption| caption.revision < 1)
-    {
+    if expected < 1 || expected == i64::MAX {
         return Err("input_limit");
     }
     if order::revision(connection, context).await? != expected {
@@ -108,46 +102,19 @@ pub(super) async fn duplicate(
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
     let stage = context.stage_id.to_string();
-    let row = sqlx::query("SELECT position,kind,asset_id,asset_revision,caption_id,caption_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
-        .bind(&workspace).bind(&exploration).bind(&stage).bind(block_id.to_string())
-        .fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
-    if row.get::<String, _>("kind") != "asset" {
-        return Err("invalid_block_type");
+    let bound = blocks::binding(connection, context, block_id, source).await?;
+    if bound.archived_revision.is_some() {
+        return Err("block_archived");
     }
-    let caption = row
-        .get::<Option<String>, _>("caption_id")
-        .zip(row.get::<Option<i64>, _>("caption_revision"));
-    if row.get::<String, _>("asset_id") != source.asset.asset_id.to_string()
-        || row.get::<i64, _>("asset_revision") != source.asset.revision
-        || caption
-            != source
-                .caption
-                .as_ref()
-                .map(|caption| (caption.asset_id.to_string(), caption.revision))
-    {
-        return Err("state_conflict");
-    }
-    mutations::count(
-        connection,
-        "SELECT count(*) FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=?",
-        &workspace,
-        Some(&exploration),
-        Some(&stage),
-        protocol::contract().block_limit,
-    )
-    .await?;
+    blocks::admit_new(connection, context).await?;
     let primary = fork_asset(connection, context, &source.asset).await?;
     let caption = if let Some(source) = &source.caption {
         Some(fork_asset(connection, context, source).await?)
     } else {
         None
     };
-    let position = row
-        .get::<i64, _>("position")
-        .checked_add(1)
-        .ok_or("corrupt_store")?;
-    sqlx::query("UPDATE blocks SET position=position+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND position>=?")
-        .bind(&workspace).bind(&exploration).bind(&stage).bind(position).execute(&mut *connection).await.map_err(storage::failure)?;
+    let position = bound.position.checked_add(1).ok_or("corrupt_store")?;
+    order::make_space(connection, context, position).await?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")
         .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64))

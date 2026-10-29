@@ -4,6 +4,7 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import { useEffect, useRef, useState } from "react";
 import contract from "../../desktop/protocol.json" with { type: "json" };
 import type {
+  AssetBlockData,
   AssetBlockView,
   AssetView,
   Context,
@@ -12,6 +13,7 @@ import type {
   TrailView,
 } from "../desktop/workspace-contract";
 import { contextOf } from "../desktop/workspace-contract";
+import { ArchivedBlocks } from "./ArchivedBlocks";
 import { NotebookAsset } from "./NotebookAsset";
 import { OperationCell } from "./OperationCell";
 import type { Executions } from "./useExecutions";
@@ -67,6 +69,7 @@ export function Notebook({
   editText,
   reorderBlocks,
   duplicateBlock,
+  setArchived,
 }: {
   exploration: ExplorationView;
   executions: Executions;
@@ -90,17 +93,44 @@ export function Notebook({
     revision: number,
     block: AssetBlockView,
   ) => Promise<string | null>;
+  setArchived: (
+    context: Context,
+    revision: number,
+    block: AssetBlockData,
+    archived: boolean,
+  ) => Promise<boolean>;
 }) {
   const cells = useRef(new Map<string, HTMLElement>());
+  const reasoningBlockId =
+    exploration.stage.blocks.find((block) => block.kind === "note")?.id ?? "";
+  const archivePanel = useRef<HTMLElement>(null);
+  const [archiveStage, setArchiveStage] = useState<string | null>(null);
+  const archiveOpen =
+    archiveStage === exploration.stage.id &&
+    exploration.stage.archivedBlocks.length > 0;
+  const retained =
+    exploration.stage.blocks.length + exploration.stage.archivedBlocks.length;
+  const full = exploration.stage.blocks.length >= contract.block_limit;
+  const canAdd = !full && retained < contract.retained_block_limit;
+  const limitMessage =
+    retained >= contract.retained_block_limit
+      ? "Stage retention limit reached; create another Stage"
+      : "Archive a block to make room";
+  useEffect(() => {
+    if (archiveOpen) archivePanel.current?.focus();
+  }, [archiveOpen]);
   const [moved, setMoved] = useState<{
     stageId: string;
     blockId: string;
     message: string;
   } | null>(null);
   useEffect(() => {
-    if (moved?.stageId === exploration.stage.id)
-      cells.current.get(moved.blockId)?.focus();
-  }, [moved, exploration.stage.id]);
+    if (moved?.stageId === exploration.stage.id) {
+      (
+        cells.current.get(moved.blockId) ?? cells.current.get(reasoningBlockId)
+      )?.focus();
+    }
+  }, [moved, exploration.stage.id, reasoningBlockId]);
   const move = async (index: number, direction: number, title: string) => {
     const stage = exploration.stage;
     const block = stage.blocks[index];
@@ -135,6 +165,34 @@ export function Notebook({
         message: `Copied ${block.asset.title}. The copy was inserted after its source.`,
       });
   };
+  const changeArchive = async (block: AssetBlockData, archived: boolean) => {
+    if (archived && !exploration.stage.archivedBlocks.length)
+      setArchiveStage(null);
+    const blocks = exploration.stage.blocks;
+    const index = blocks.findIndex((entry) => entry.id === block.id);
+    const next =
+      blocks[index + 1] ??
+      blocks[index - 1] ??
+      blocks.find((entry) => entry.kind === "note");
+    if (
+      await setArchived(
+        contextOf(exploration),
+        exploration.stage.revision,
+        block,
+        archived,
+      )
+    ) {
+      if (!archived && exploration.stage.archivedBlocks.length === 1)
+        setArchiveStage(null);
+      setMoved({
+        stageId: exploration.stage.id,
+        blockId: archived ? (next?.id ?? "") : block.id,
+        message: archived
+          ? `Archived ${block.asset.title}. Content and Run history are kept in Archived blocks.`
+          : `Restored ${block.asset.title}. Its original Assets and Run history are available.`,
+      });
+    }
+  };
   return (
     <section className="notebook scroll-surface" aria-label="Stage notebook">
       <header className="document-heading">
@@ -155,7 +213,9 @@ export function Notebook({
           <VscodeButton
             secondary
             icon="symbol-string"
-            disabled={busy}
+            disabled={busy || !canAdd}
+            aria-disabled={busy || !canAdd ? "true" : "false"}
+            title={canAdd ? undefined : limitMessage}
             onClick={addText}
           >
             Add text
@@ -163,10 +223,26 @@ export function Notebook({
           <VscodeButton
             secondary
             icon="file-media"
-            disabled={busy}
+            disabled={busy || !canAdd}
+            aria-disabled={busy || !canAdd ? "true" : "false"}
+            title={canAdd ? undefined : limitMessage}
             onClick={addImage}
           >
             Add image
+          </VscodeButton>
+          <VscodeButton
+            secondary
+            icon="archive"
+            disabled={!exploration.stage.archivedBlocks.length}
+            aria-disabled={
+              !exploration.stage.archivedBlocks.length ? "true" : "false"
+            }
+            aria-expanded={archiveOpen ? "true" : "false"}
+            onClick={() =>
+              setArchiveStage(archiveOpen ? null : exploration.stage.id)
+            }
+          >
+            Archived blocks ({exploration.stage.archivedBlocks.length})
           </VscodeButton>
         </div>
         <span
@@ -265,21 +341,23 @@ export function Notebook({
                       icon="copy"
                       aria-label={`Duplicate ${title}`}
                       title={
-                        exploration.stage.blocks.length >= contract.block_limit
-                          ? "Stage limit reached"
-                          : "Duplicate this saved block"
+                        !canAdd ? limitMessage : "Duplicate this saved block"
                       }
-                      disabled={
-                        busy ||
-                        exploration.stage.blocks.length >= contract.block_limit
-                      }
-                      aria-disabled={
-                        busy ||
-                        exploration.stage.blocks.length >= contract.block_limit
-                          ? "true"
-                          : "false"
-                      }
+                      disabled={busy || !canAdd}
+                      aria-disabled={busy || !canAdd ? "true" : "false"}
                       onClick={() => void duplicate(block)}
+                    />
+                  ) : null}
+                  {block.kind === "asset" ? (
+                    <VscodeButton
+                      secondary
+                      iconOnly
+                      icon="archive"
+                      aria-label={`Archive ${title}`}
+                      title="Archive this saved block and keep its evidence"
+                      disabled={busy}
+                      aria-disabled={busy ? "true" : "false"}
+                      onClick={() => void changeArchive(block, true)}
                     />
                   ) : null}
                   <VscodeButton
@@ -334,6 +412,33 @@ export function Notebook({
           </article>
         );
       })}
+      {archiveOpen ? (
+        <section
+          className="archived-blocks"
+          aria-label="Archived blocks"
+          tabIndex={-1}
+          ref={archivePanel}
+          onKeyDownCapture={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+        >
+          <ArchivedBlocks
+            items={exploration.stage.archivedBlocks}
+            context={contextOf(exploration)}
+            busy={busy}
+            full={full}
+            openAsset={openAsset}
+            restore={(block) => void changeArchive(block, false)}
+          />
+          <p className="muted">
+            {exploration.stage.blocks.length} / {contract.block_limit} active ·{" "}
+            {retained} / {contract.retained_block_limit} retained
+          </p>
+        </section>
+      ) : null}
     </section>
   );
 }

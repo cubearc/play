@@ -1,5 +1,5 @@
 use super::{
-    assets, copies,
+    assets, blocks, copies,
     model::{Command, Context},
     order, queries,
     storage::{self, Owned},
@@ -18,7 +18,7 @@ pub fn title(value: &str) -> Result<&str> {
     Ok(value)
 }
 
-pub(super) async fn count(
+async fn count(
     connection: &mut SqliteConnection,
     sql: &'static str,
     workspace: &str,
@@ -259,15 +259,7 @@ async fn add(
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
     let stage = context.stage_id.to_string();
-    count(
-        connection,
-        "SELECT count(*) FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=?",
-        &workspace,
-        Some(&exploration),
-        Some(&stage),
-        protocol::contract().block_limit,
-    )
-    .await?;
+    blocks::admit_new(connection, context).await?;
     let (kind, data) = if let Some(encoded) = encoded {
         if encoded.len() > protocol::contract().image_bytes.div_ceil(3) * 4 {
             return Err("input_limit");
@@ -306,7 +298,7 @@ async fn add(
         None
     };
     let position = order::append_position(connection, context).await?;
-    sqlx::query("UPDATE blocks SET position=position+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND position>=?").bind(&workspace).bind(&exploration).bind(&stage).bind(position).execute(&mut *connection).await.map_err(storage::failure)?;
+    order::make_space(connection, context, position).await?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")
         .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64)).execute(&mut *connection).await.map_err(storage::failure)?;
@@ -433,6 +425,42 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         } => {
             queries::context(connection, owner, context).await?;
             order::reorder(connection, context, *expected_revision, block_ids).await?
+        }
+        Command::ArchiveBlock {
+            context,
+            block_id,
+            expected_revision,
+            source,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            blocks::change(
+                connection,
+                context,
+                *block_id,
+                *expected_revision,
+                source,
+                true,
+            )
+            .await?
+        }
+        Command::RestoreBlock {
+            context,
+            block_id,
+            expected_revision,
+            source,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            blocks::change(
+                connection,
+                context,
+                *block_id,
+                *expected_revision,
+                source,
+                false,
+            )
+            .await?
         }
         Command::DuplicateBlock {
             context,

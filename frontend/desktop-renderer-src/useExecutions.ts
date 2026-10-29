@@ -214,7 +214,12 @@ export function useExecutions(
     );
   const run = useCallback(
     async (trail: TrailView, operation: Operation) => {
-      if (active.current || watching.current.size > 0 || !trail.pipeline)
+      if (
+        active.current ||
+        watching.current.size > 0 ||
+        !trail.pipeline ||
+        trail.archived
+      )
         return;
       active.current = true;
       setBusy(true);

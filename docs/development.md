@@ -52,6 +52,12 @@ The duplication journey checks independent text/caption edits and Runs, source
 revision conflicts, keyboard copy, grouped images, quota state and restart.
 Native tests also preserve copy provenance across schema 2 upgrades and refuse
 lineage changes; engine tests cover atomic rollback after a caption quota failure.
+Archive journeys cover preserved history and drafts, keyboard restoration,
+image/caption grouping, active-slot reuse, retained limits and independent
+Explorations. Native tests archive an admitted worker without stopping its
+supervision, then cancel it and reject new work until restoration. Schema fixtures
+reconstruct exact earlier native stores with their real domain records and verify
+protected evidence after upgrade.
 
 ## Source boundaries
 

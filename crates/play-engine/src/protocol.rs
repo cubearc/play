@@ -20,6 +20,7 @@ pub struct Contract {
     pub exploration_limit: usize,
     pub stage_limit: usize,
     pub block_limit: usize,
+    pub retained_block_limit: usize,
     pub text_bytes: usize,
     pub note_bytes: usize,
     pub image_bytes: usize,

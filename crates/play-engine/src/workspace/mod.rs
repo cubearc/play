@@ -1,4 +1,5 @@
 mod assets;
+mod blocks;
 mod copies;
 mod model;
 mod mutations;

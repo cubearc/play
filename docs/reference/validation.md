@@ -35,6 +35,9 @@ Ordering and duplication journeys verify completed keyboard focus, concurrent
 revision conflicts, independent copied Assets and Runs, pinned source labels,
 image/caption grouping and restart. Storage tests upgrade native schemas 1/2,
 preserve immutable lineage and roll back a full copy if caption storage fails.
+Archive checks preserve active worker supervision and history, refuse new
+execution and edits, restore original IDs, exercise capacity/isolation, and verify
+schema 3 upgrades plus database deletion/Note-state guards.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not

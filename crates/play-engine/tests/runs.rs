@@ -1,3 +1,5 @@
+#[path = "support/native_schema.rs"]
+mod native_schema;
 use play_engine::workspace::{Command, Context, Manager, RunRequest};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -174,20 +176,7 @@ fn alternate_operation_freezes_a_reusable_definition_and_real_bytes_contract() {
 }
 
 fn native_baseline_fixture(root: &std::path::Path, workspace: Uuid) {
-    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    runtime.block_on(async {
-  let mut db=SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(root.join(workspace.to_string()).join("workspace.sqlite3")).foreign_keys(false)).await.unwrap();
-  // Reconstruct the exact previously delivered native baseline, retaining its real domain records.
-  sqlx::raw_sql("BEGIN; DROP TABLE asset_origins; DROP TABLE run_inputs; DROP TABLE node_attempts; DROP TABLE pipeline_runs; DROP TABLE workspace_meta;").execute(&mut db).await.unwrap();
-  let baseline=include_str!("../src/workspace/schema.sql");let start=baseline.find("CREATE TABLE workspace_meta").unwrap();let end=baseline[start..].find(';').unwrap()+start+1;
-  sqlx::raw_sql(&baseline[start..end]).execute(&mut db).await.unwrap();
-  sqlx::query("INSERT INTO workspace_meta VALUES(?,2,1)").bind(workspace.to_string()).execute(&mut db).await.unwrap();
-  sqlx::raw_sql("PRAGMA user_version=1; COMMIT;").execute(&mut db).await.unwrap();db.close().await.unwrap();
- });
+    native_schema::snapshot(root, workspace, 1);
 }
 
 #[test]

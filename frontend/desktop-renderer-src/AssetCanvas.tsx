@@ -33,6 +33,13 @@ export function AssetCanvas({
           </span>
         </div>
       </header>
+      {trail.archived ? (
+        <p className="archive-notice" role="note">
+          <VscodeIcon name="archive" /> Archived block · Content and Run history
+          are preserved. Restore it from the Stage notebook to edit or run
+          again. Accepted work can still finish or be cancelled.
+        </p>
+      ) : null}
       <div className="canvas-surface">
         <article
           className="canvas-node source-node"

@@ -397,6 +397,98 @@ async function finished(
   return run;
 }
 
+test("archive keeps admitted native work supervised and refuses new work until restore", {
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-native-archive-"));
+  const engine = await Engine.connect(
+    binary,
+    worker,
+    join(temporary, "private"),
+  );
+  try {
+    const request = await runFixture(engine, "+[]");
+    const open = {
+      kind: "open_exploration",
+      workspace_id: request.context.workspace_id,
+      exploration_id: request.context.exploration_id,
+      stage_id: request.context.stage_id,
+    };
+    const before = (await engine.workspace(open)) as ExplorationView;
+    const block = before.stage.blocks.find((b) => b.kind === "asset");
+    assert.ok(block?.kind === "asset");
+    const admitted = worker ? await engine.startRun(request) : null;
+    const mutation = {
+      kind: "archive_block",
+      context: request.context,
+      key: randomUUID(),
+      block_id: block.id,
+      expected_revision: before.stage.revision,
+      source: {
+        asset: { asset_id: block.asset.id, revision: block.asset.revision },
+        caption: null,
+      },
+    };
+    const accepted = await engine.workspace(mutation);
+    assert.deepEqual(await engine.workspace(mutation), accepted);
+    const archived = (await engine.workspace(open)) as ExplorationView;
+    assert.equal(archived.stage.blocks.length, 1);
+    assert.equal(archived.trails[0]?.archived, true);
+    if (admitted) {
+      const still = (await engine.workspace({
+        kind: "run_detail",
+        context: request.context,
+        run_id: admitted.id,
+      })) as RunDetail;
+      assert.notEqual(still.status, "cancelled");
+      assert.deepEqual(still.plan, admitted.plan);
+      const cancelled = await engine.cancelRun({
+        context: request.context,
+        run_id: admitted.id,
+      });
+      assert.ok(
+        cancelled.status === "cancelled" || cancelled.status === "failed",
+      );
+      assert.deepEqual(cancelled.plan, admitted.plan);
+      await assert.rejects(
+        engine.startRun({ ...request, key: randomUUID() }),
+        /block_archived/,
+      );
+      assert.equal((await engine.startRun(request)).id, admitted.id);
+    } else
+      await assert.rejects(
+        engine.startRun({ ...request, key: randomUUID() }),
+        /native_policy_unavailable/,
+      );
+    await engine.workspace({
+      ...mutation,
+      kind: "restore_block",
+      key: randomUUID(),
+      expected_revision: archived.stage.revision,
+    });
+    const restored = (await engine.workspace(open)) as ExplorationView;
+    assert.deepEqual(restored.stage.blocks, before.stage.blocks);
+    assert.equal(restored.trails[0]?.archived, false);
+    if (worker) {
+      const completed = await finished(
+        engine,
+        request.context,
+        await engine.startRun({
+          ...request,
+          key: randomUUID(),
+          operation: "cipher.rot13",
+          operation_version: 1,
+        }),
+      );
+      assert.equal(completed.status, "completed");
+      assert.deepEqual(completed.result?.outputs, { output: "+[]" });
+    }
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("durable Runs distinguish real worker failure, cancellation and graceful app shutdown", {
   skip: !worker,
   timeout: 15000,

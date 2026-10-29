@@ -22,9 +22,12 @@ pub(super) async fn revise_text(
     let exploration = context.exploration_id.to_string();
     let stage = context.stage_id.to_string();
     let asset = asset.to_string();
-    let row = sqlx::query("SELECT asset_id,asset_revision,caption_id,caption_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND kind='asset'")
+    let row = sqlx::query("SELECT asset_id,asset_revision,caption_id,caption_revision,archived_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND kind='asset'")
         .bind(&workspace).bind(&exploration).bind(&stage).bind(block.to_string())
         .fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
+    if row.get::<Option<i64>, _>("archived_revision").is_some() {
+        return Err("block_archived");
+    }
     let primary = row.get::<String, _>("asset_id") == asset;
     let revision = if primary {
         row.get::<i64, _>("asset_revision")

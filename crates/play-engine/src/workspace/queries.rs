@@ -145,6 +145,40 @@ pub async fn select(
     Ok(())
 }
 
+async fn asset_block(
+    connection: &mut SqliteConnection,
+    workspace: &str,
+    exploration: &str,
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<AssetBlock> {
+    let caption = if let Some(id) = row.get::<Option<String>, _>("caption_id") {
+        Some(
+            asset(
+                connection,
+                workspace,
+                exploration,
+                &id,
+                row.get("caption_revision"),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    Ok(AssetBlock {
+        id: row.get("id"),
+        asset: asset(
+            connection,
+            workspace,
+            exploration,
+            row.get("asset_id"),
+            row.get("asset_revision"),
+        )
+        .await?,
+        caption,
+    })
+}
+
 pub async fn exploration(
     store: &mut Owned,
     exploration_id: Uuid,
@@ -183,13 +217,28 @@ pub async fn exploration(
         .ok_or("not_found")?;
     let note = sqlx::query("SELECT n.id,n.current_revision,r.text FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id,n.current_revision)=(r.workspace_id,r.exploration_id,r.note_id,r.revision) WHERE n.workspace_id=? AND n.exploration_id=? AND n.stage_id=?")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_one(&mut *connection).await.map_err(storage::failure)?;
-    let block_rows = sqlx::query("SELECT id,kind,asset_id,asset_revision,caption_id,caption_revision,note_id FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY position,id")
+    let block_rows = sqlx::query("SELECT id,kind,asset_id,asset_revision,caption_id,caption_revision,note_id,archived_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY archived_revision DESC,position,id")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_all(&mut *connection).await.map_err(storage::failure)?;
+    if block_rows.len() > crate::protocol::contract().retained_block_limit
+        || block_rows
+            .iter()
+            .filter(|row| row.get::<Option<i64>, _>("archived_revision").is_none())
+            .count()
+            > crate::protocol::contract().block_limit
+    {
+        return Err("corrupt_store");
+    }
     let mut blocks = Vec::new();
+    let mut archived_blocks = Vec::new();
     let mut reasoning_count = 0;
     for row in block_rows {
+        let archived: Option<i64> = row.get("archived_revision");
+        if archived.is_some_and(|revision| revision < 1) {
+            return Err("corrupt_store");
+        }
         if row.get::<String, _>("kind") == "note" {
-            if row.get::<String, _>("note_id") != note.get::<String, _>("id") {
+            if archived.is_some() || row.get::<String, _>("note_id") != note.get::<String, _>("id")
+            {
                 return Err("corrupt_store");
             }
             reasoning_count += 1;
@@ -201,41 +250,23 @@ pub async fn exploration(
                     text: note.get(2),
                 },
             });
-            continue;
-        }
-        let caption_id: Option<String> = row.get("caption_id");
-        let caption = if let Some(id) = caption_id {
-            Some(
-                asset(
-                    connection,
-                    &workspace,
-                    &exploration,
-                    &id,
-                    row.get("caption_revision"),
-                )
-                .await?,
-            )
         } else {
-            None
-        };
-        blocks.push(Block::Asset {
-            id: row.get("id"),
-            asset: asset(
-                connection,
-                &workspace,
-                &exploration,
-                row.get("asset_id"),
-                row.get("asset_revision"),
-            )
-            .await?,
-            caption,
-        });
+            let block = asset_block(connection, &workspace, &exploration, &row).await?;
+            if let Some(revision) = archived {
+                archived_blocks.push(ArchivedBlock {
+                    block,
+                    archived_revision: revision,
+                });
+            } else {
+                blocks.push(Block::Asset { block });
+            }
+        }
     }
     if reasoning_count != 1 {
         return Err("corrupt_store");
     }
     let definitions = pipelines(connection, &workspace).await?;
-    let trail_rows = sqlx::query("SELECT id,title,hypothesis,source_id,source_revision,pipeline_id,pipeline_revision FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY rowid")
+    let trail_rows = sqlx::query("SELECT t.id,t.title,t.hypothesis,t.source_id,t.source_revision,t.pipeline_id,t.pipeline_revision,NOT EXISTS(SELECT 1 FROM blocks b WHERE b.workspace_id=t.workspace_id AND b.exploration_id=t.exploration_id AND b.stage_id=t.stage_id AND b.archived_revision IS NULL AND (b.asset_id=t.source_id OR b.caption_id=t.source_id)) AS archived FROM trails t WHERE t.workspace_id=? AND t.exploration_id=? AND t.stage_id=? ORDER BY t.rowid")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_all(&mut *connection).await.map_err(storage::failure)?;
     let mut trails = Vec::new();
     for row in trail_rows {
@@ -253,6 +284,7 @@ pub async fn exploration(
             return Err("corrupt_store");
         }
         trails.push(Trail {
+            archived: row.get("archived"),
             id: row.get("id"),
             workspace_id: workspace.clone(),
             exploration_id: exploration.clone(),
@@ -277,6 +309,7 @@ pub async fn exploration(
         revision: stage_summary.revision,
         introduction: String::new(),
         blocks,
+        archived_blocks,
     };
     select(connection, &workspace, &exploration, &selected).await?;
     Ok(Exploration {

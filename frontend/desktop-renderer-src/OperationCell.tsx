@@ -36,8 +36,9 @@ export function OperationCell({
             label="Operation"
             title={operation?.operation}
             value={operation?.operation ?? ""}
-            disabled={running}
+            disabled={running || trail.archived}
             onChange={() =>
+              !trail.archived &&
               executions.selectOperation(trail, selector.current?.value ?? "")
             }
           >
@@ -49,9 +50,13 @@ export function OperationCell({
           </VscodeSingleSelect>
           <VscodeButton
             icon="play"
-            disabled={!operation || executions.busy}
+            disabled={!operation || executions.busy || trail.archived}
+            aria-disabled={
+              !operation || executions.busy || trail.archived ? "true" : "false"
+            }
             onClick={() => {
-              if (operation) void executions.run(trail, operation);
+              if (operation && !trail.archived)
+                void executions.run(trail, operation);
             }}
           >
             Run cell
@@ -69,8 +74,9 @@ export function OperationCell({
         <VscodeCheckbox
           ref={keep}
           checked={executions.keepOutput(trail)}
-          disabled={running}
+          disabled={running || trail.archived}
           onChange={() =>
+            !trail.archived &&
             executions.setKeepOutput(trail, keep.current?.checked ?? true)
           }
         >

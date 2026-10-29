@@ -17,6 +17,8 @@ the actual Core contract before admitting work. Unsupported native enforcement,
 missing adapters, version mismatches and busy capacity reject before admission.
 A changed Trail source or Pipeline returns `state_conflict` before creating a Run;
 the engine never silently resolves a different revision than the caller selected.
+An archived source returns `block_archived` before a new Run is created. Archive
+state is resolved in the engine, independently of disabled UI controls.
 
 An accepted Run pins:
 
@@ -39,6 +41,11 @@ returns `idempotency_conflict`. Choosing Run again after acknowledgement uses a
 new intent and preserves the preceding evidence.
 
 ## State and recovery
+
+Archiving a Block does not cancel admitted work, change its pinned inputs or
+rewrite its evidence. Its existing Run stays supervised and cancellable. Matching
+accepted-intent retries and scoped Run history remain available; new work requires
+restoring the Block first.
 
 The engine commits `queued` before spawning the worker, then records an actual
 node attempt and `running`. It owns supervision independently of React and

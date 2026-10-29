@@ -1,3 +1,5 @@
+#[path = "support/native_schema.rs"]
+mod native_schema;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use play_engine::workspace::{Context, Manager, RunRequest};
 use serde_json::{Value, json};
@@ -316,24 +318,7 @@ fn native_schema_two_and_interrupted_copies_upgrade_without_reassigning_evidence
             )
             .unwrap();
         drop(manager);
-        with_database(&root, context.workspace_id, async |connection| {
-            sqlx::raw_sql("BEGIN; DROP TABLE asset_origins;")
-                .execute(&mut *connection)
-                .await
-                .unwrap();
-            let header = include_str!("../src/workspace/runs.sql")
-                .split("CREATE TABLE pipeline_runs")
-                .next()
-                .unwrap();
-            sqlx::raw_sql(header)
-                .execute(&mut *connection)
-                .await
-                .unwrap();
-            sqlx::raw_sql("PRAGMA user_version=2; COMMIT;")
-                .execute(connection)
-                .await
-                .unwrap();
-        });
+        native_schema::snapshot(&root, context.workspace_id, 2);
         let directory = root.join(context.workspace_id.to_string());
         let identity = std::fs::read(directory.join("workspace.json")).unwrap();
         let temporary = Uuid::new_v4();
@@ -378,7 +363,10 @@ fn native_schema_two_and_interrupted_copies_upgrade_without_reassigning_evidence
                 .fetch_one(&mut *connection)
                 .await
                 .unwrap();
-            assert_eq!(version, 3);
+            assert_eq!(
+                version,
+                i64::from(play_engine::protocol::contract().schema_version)
+            );
             sqlx::query("PRAGMA foreign_keys=ON")
                 .execute(&mut *connection)
                 .await

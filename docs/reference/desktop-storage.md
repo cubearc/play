@@ -40,10 +40,10 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **3**, SQLite application ID
+The native store uses generation **2**, schema version **4**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
-accepted generation evolves through `runs.sql` and `copies.sql`. Recognized native
-schemas 1 and 2 upgrade to schema 3 under the owner lock, preserving content,
+accepted generation evolves through `runs.sql`, `copies.sql` and `archive.sql`.
+Recognized native schemas 1, 2 and 3 upgrade to schema 4 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -95,14 +95,14 @@ evaluation are separate deliveries.
 
 ## Block ordering
 
-Stage views return one ordered `blocks` sequence tagged with `kind: asset` or
+Stage views return one ordered active `blocks` sequence tagged with `kind: asset` or
 `kind: note`. The reasoning Note is a Block with its own ID and revisioned Note
 content; there is no separate `Stage.note` field. Image and caption belong to one
 Asset Block. The current baseline has exactly one reasoning Block per Stage.
 
 The closed `reorder_blocks` intent carries `context`, `key`, `expected_revision`
-and `block_ids`. Supply every Block UUID in that Stage exactly once, including
-reasoning. The engine rejects omitted, duplicate, foreign or caption Asset IDs
+and `block_ids`. Supply every active Block UUID in that Stage exactly once, including
+reasoning. The engine rejects archived, omitted, duplicate, foreign or caption Asset IDs
 with `invalid_order`, and stale Stage revisions with `state_conflict`. Preload
 also checks UUIDs, uniqueness and the eight-Block ceiling before forwarding.
 
@@ -115,8 +115,8 @@ sequence, independently for every Stage and Exploration.
 Stage revisions track structural membership and order. Adding text or an image
 also advances this revision; editing content or saving reasoning uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
-end. Block positions remain in the existing native table; schema 3 adds immutable
-copy provenance. The coordinated app/engine wire protocol is **6**, with no older
+end. Positions are normalized among active Blocks; archived positions cannot
+change that order. The coordinated app/engine wire protocol is **7**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -157,6 +157,47 @@ second copy; confirmed conflicts reload the current notebook and preserve Note
 drafts. Copies count as separate content for all storage/Block ceilings. The
 single reasoning Block has no copy action in this preview.
 
+## Block archive and restoration
+
+`archive_block` and `restore_block` carry `context`, `key`, `block_id`,
+`expected_revision` and the same closed `source` snapshot as duplication.
+Admission checks the exact owning Stage, structural revision and primary/caption
+bindings. Concurrent content edits conflict even if the Stage order is unchanged.
+Note Blocks return `invalid_block_type`.
+
+Schema 4 adds nullable `blocks.archived_revision`. `NULL` means active; a positive
+value pins the Stage revision that last archived that Block. A CHECK constraint
+keeps the unique reasoning Block active. A deletion trigger preserves Block rows.
+There is no permanent-delete command or implicit data cleanup.
+
+One transaction changes the archive state, advances the Stage revision and
+normalizes active positions. A request for the current state at the expected
+revision is a no-op; stale revisions still conflict. Matching receipt retries
+return the original accepted response and never reapply an old archive after a
+later restoration. Failures leave membership, content and evidence unchanged.
+
+Stage responses contain `archivedBlocks`, newest archive revision first. Each
+record has `archivedRevision` and `block: { id, asset, caption? }`; the inner Block
+is always asset content, without a Note variant. Active Blocks retain their tagged
+shape. Restoring inserts the original Block before trailing reasoning, otherwise
+at the active end. IDs, Asset revisions, copy provenance, Trail bindings,
+Pipelines and Runs are retained. `Trail.archived` is derived from its active Block
+binding rather than stored as a second mutable status.
+
+Archived text/captions cannot be edited or duplicated. New Run admission rejects
+their source in the engine; already admitted work keeps its original supervision,
+completion/cancellation and history. Content/image reads and existing Run evidence
+remain scoped and available. An active copy can still run when its source of
+provenance is archived.
+
+The active ceiling remains eight Blocks. Adding or duplicating also checks the
+sixteen-retained-Block ceiling, returning `retained_block_limit` when reached.
+Restoration checks active capacity without creating another retained row.
+Archiving remains possible at the retained ceiling, so an active/archived pair can
+still be exchanged. All retained revisions and Runs continue to consume byte
+quotas; archiving does not reclaim that budget. Renderer controls are capacity
+hints; Rust enforces the limits and ownership independently.
+
 ## Text and caption revisions
 
 The closed `revise_text` intent carries `context`, `key`, `block_id`, `asset_id`,
@@ -188,7 +229,8 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | Managed Workspaces, including interrupted initializations | 16 |
 | Explorations per Workspace | 32 |
 | Stages per Exploration | 16 |
-| Blocks per Stage, including the reasoning block | 8 |
+| Active Blocks per Stage, including reasoning | 8 |
+| Retained Blocks per Stage, including active content, archives and reasoning | 16 |
 | Text Asset or image caption | 1024 bytes |
 | One reasoning revision | 2048 bytes |
 | One imported PNG | 131072 bytes (128 KiB) |

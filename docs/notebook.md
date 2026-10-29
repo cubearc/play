@@ -110,8 +110,45 @@ reasoning are not copied into the new Trail.
 If the source or notebook changed first, Play shows the latest content and keeps
 your reasoning draft. Review it, then duplicate again. Unsaved text in an editor
 must be saved or cancelled before copying. Copies count toward the Stage's eight
-Blocks and retained storage limit; the button is disabled when the Stage is full.
+active Blocks, sixteen retained Blocks and stored-content budget. The button is
+disabled when a Block ceiling is reached.
 **Reasoning** remains one Note Block per Stage and has no duplicate action.
+
+## Archive and restore a Block
+
+Choose the archive icon in a text or image Block's heading. The Block leaves the
+active notebook, while its Assets, source links, Trails and Run history stay in
+the Stage. Images and captions are archived together. Saved reasoning and any
+reasoning draft stay in place; the unique **Reasoning** Block cannot be archived.
+
+Choose **Archived blocks** to inspect the saved content. **Open evidence** opens
+its Trail canvas, where earlier Runs remain available. The canvas identifies the
+Block as archived and disables new executions. Existing accepted work keeps its
+original inputs and supervision; it can finish or be cancelled from that canvas.
+
+![Archived text and image with caption, preserved as grouped content with Open evidence and Restore controls.](assets/desktop/archived-blocks.png)
+
+The Stage keeps its archived content and source identities. [Open full size](assets/desktop/archived-blocks.png).
+
+![Archived Trail canvas with the original source and retained ROT13 result, an archive notice and a disabled Run cell control.](assets/desktop/archived-canvas.png)
+
+Earlier Run evidence stays readable while the Block is archived. [Open full size](assets/desktop/archived-canvas.png).
+
+Choose **Restore** to return a Block with the same IDs, revisions, bindings and
+history. Tab to **Restore First clue** and press Enter to use the keyboard. It is
+placed before trailing reasoning, or at the end if reasoning was moved earlier.
+Focus follows the restored Block. You can edit, copy and run it again.
+
+Archiving frees an active slot, but keeps stored data. A Stage allows eight active
+Blocks and sixteen retained Blocks in total, including reasoning and archives.
+At eight active Blocks, archive another before restoring one. At sixteen retained
+Blocks, restore existing content or create another Stage. Historical content and
+Runs still count toward the stored-byte budget. There is no permanent Block delete
+action in this preview.
+
+If content or order changed first, Play shows the latest state and keeps your
+reasoning draft. Review it before trying again. Archiving does not save a separate
+editor draft. Quit/reopen restores the archive and its evidence.
 
 ## Save reasoning
 
@@ -132,5 +169,5 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 
 Windows/Linux worker execution is refused by the current native policy, even
 though the UI has keyboard bindings. [Installation](installation.md) states the
-platform scope. Image replacement, Block removal and
-result export are not available in this preview.
+platform scope. Image replacement, permanent Block deletion and result export
+are not available in this preview.

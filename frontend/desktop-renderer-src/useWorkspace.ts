@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  AssetBlockData,
   AssetBlockView,
   Context,
   ExplorationView,
@@ -10,6 +11,12 @@ import type {
 import { contextOf, reasoningOf } from "../desktop/workspace-contract";
 
 const messages: Record<string, string> = {
+  lifecycle_conflict:
+    "Notebook or saved block changed. The latest state is shown and your reasoning draft was kept. Review it, then try again.",
+  block_archived:
+    "This block is archived. Restore it from Archived blocks to continue editing, copying or running it.",
+  retained_block_limit:
+    "This Stage reached its retained-block limit. Restore existing content or create another Stage.",
   copy_conflict:
     "Saved block changed or the notebook was reorganized. The latest content is shown and your reasoning draft was kept. Review it, then duplicate again.",
   order_conflict:
@@ -110,7 +117,9 @@ export function useWorkspace() {
           delete next[note.id];
           return next;
         });
+        return data;
       }
+      return null;
     },
     [],
   );
@@ -258,7 +267,7 @@ export function useWorkspace() {
       shown.id === context.exploration_id &&
       shown.stage.id === context.stage_id
     )
-      await load(
+      return await load(
         context.workspace_id,
         context.exploration_id,
         context.stage_id,
@@ -289,6 +298,46 @@ export function useWorkspace() {
         throw error;
       }
       await reloadCurrent(context);
+    });
+  const setArchived = (
+    context: Context,
+    revision: number,
+    block: AssetBlockData,
+    archived: boolean,
+  ) =>
+    execute(async () => {
+      try {
+        await window.play.workspace({
+          kind: archived ? "archive_block" : "restore_block",
+          context,
+          key: crypto.randomUUID(),
+          block_id: block.id,
+          expected_revision: revision,
+          source: {
+            asset: { asset_id: block.asset.id, revision: block.asset.revision },
+            caption: block.caption
+              ? { asset_id: block.caption.id, revision: block.caption.revision }
+              : null,
+          },
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("state_conflict")
+        ) {
+          await reloadCurrent(context);
+          throw new Error("lifecycle_conflict");
+        }
+        throw error;
+      }
+      const latest = await reloadCurrent(context);
+      if (!latest) return false;
+      if (
+        latest.stage.archivedBlocks.some(
+          (entry) => entry.block.id === block.id,
+        ) !== archived
+      )
+        throw new Error("lifecycle_conflict");
     });
   const duplicateBlock = async (
     context: Context,
@@ -329,6 +378,8 @@ export function useWorkspace() {
             "invalid_image",
             "corrupt_store",
             "workspace_mismatch",
+            "block_archived",
+            "retained_block_limit",
           ].some((code) => error.message.includes(code))
         )
           copyIntents.current.delete(slot);
@@ -365,7 +416,11 @@ export function useWorkspace() {
           text,
         });
       } catch (error) {
-        if (error instanceof Error && error.message.includes("state_conflict"))
+        if (
+          error instanceof Error &&
+          (error.message.includes("state_conflict") ||
+            error.message.includes("block_archived"))
+        )
           await reloadCurrent(context).catch(() => {});
         throw error;
       }
@@ -459,6 +514,7 @@ export function useWorkspace() {
     reviseText,
     reorderBlocks,
     duplicateBlock,
+    setArchived,
     hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,

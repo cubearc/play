@@ -342,6 +342,33 @@ h1 {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
 }
+.archived-blocks {
+  max-width: 860px;
+  margin: 28px auto;
+  padding: 20px;
+  border: 1px solid #3a3d41;
+  border-radius: 5px;
+  background: #222529;
+}
+.archived-blocks:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 3px;
+}
+.archived-cell {
+  margin-top: 20px;
+  padding: 12px 0;
+  border-top: 1px solid #3a3d41;
+}
+.archive-notice {
+  max-width: 860px;
+  margin: 0 auto 22px;
+  padding: 12px 16px;
+  border-left: 2px solid #75beff;
+  background: #282e35;
+  color: #c5d4df;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .screen-reader-only {
   position: absolute;
   width: 1px;

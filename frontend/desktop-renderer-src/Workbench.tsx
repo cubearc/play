@@ -82,7 +82,8 @@ export function Workbench() {
     setSelection((previous) => ({ ...previous, [contextKey]: trail.id }));
   };
   const run = () => {
-    if (runnableTrail?.source.content.kind !== "text") return;
+    if (runnableTrail?.source.content.kind !== "text" || runnableTrail.archived)
+      return;
     const operation = executions.operationFor(runnableTrail);
     if (operation) void executions.run(runnableTrail, operation);
   };
@@ -138,6 +139,7 @@ export function Workbench() {
       disabled:
         executions.busy ||
         !runnableTrail ||
+        runnableTrail.archived ||
         runnableTrail.source.content.kind !== "text" ||
         !executions.operationFor(runnableTrail),
       execute: run,
@@ -353,6 +355,7 @@ export function Workbench() {
                   editText={editText}
                   reorderBlocks={state.reorderBlocks}
                   duplicateBlock={state.duplicateBlock}
+                  setArchived={state.setArchived}
                 />
               )}
             </>

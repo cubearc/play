@@ -13,6 +13,243 @@ import {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("archived Blocks keep evidence and restore their original Assets after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-archive-"));
+  const imported = await readFile(fixture);
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Preserved clues");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Archive study");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const cell = () =>
+      notebook(page).getByRole("article", { name: "Clue block", exact: true });
+    if (process.platform === "darwin") {
+      await cell()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(cell()).toContainText("output: The key.");
+    }
+    const before = await current(page);
+    const source = before.exploration.stage.blocks[0];
+    assert.ok(source?.kind === "asset");
+    const context = {
+      workspace_id: before.workspace.id,
+      exploration_id: before.exploration.id,
+      stage_id: before.exploration.stage.id,
+    };
+    const trail = before.exploration.trails.find(
+      (t) => t.source.id === source.asset.id,
+    );
+    assert.ok(trail);
+    const history = () =>
+      page.evaluate(
+        async ({ context, id }) =>
+          window.play.workspace({
+            kind: "list_runs",
+            context,
+            trail_id: id,
+            before: null,
+          }),
+        { context, id: trail.id },
+      );
+    const saved = (await history()).runs;
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Evidence stays available while this clue is archived.");
+    await cell()
+      .getByRole("button", { name: "Archive Clue", exact: true })
+      .click();
+    await expect(cell()).toHaveCount(0);
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "Reasoning block",
+        exact: true,
+      }),
+    ).toBeFocused();
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Evidence stays available while this clue is archived.",
+    );
+    const openArchive = async () => {
+      await notebook(page)
+        .getByRole("button", { name: "Archived blocks (1)", exact: true })
+        .click();
+    };
+    await openArchive();
+    let archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await expect(archive).toContainText("Gur xrl.");
+    await archive
+      .getByRole("button", { name: "Open evidence Clue", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await expect(canvas).toContainText("Archived block");
+    await expect(
+      canvas.getByRole("button", { name: "Run cell", exact: true }),
+    ).toBeDisabled();
+    await page.keyboard.press("ControlOrMeta+Enter");
+    assert.deepEqual((await history()).runs, saved);
+    if (process.platform === "darwin")
+      await expect(canvas).toContainText("output: The key.");
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await openArchive();
+    archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    const restore = archive.getByRole("button", {
+      name: "Restore Clue",
+      exact: true,
+    });
+    await expect(restore).toBeEnabled();
+    await restore.focus();
+    await page.keyboard.press("Enter");
+    await expect(cell()).toBeFocused();
+    assert.deepEqual((await current(page)).exploration.stage.blocks[0], source);
+    if (process.platform === "darwin") {
+      await cell()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect.poll(async () => (await history()).runs.length).toBe(2);
+    }
+    await page.evaluate(
+      async ({ context, id, asset }) => {
+        await window.play.workspace({
+          kind: "revise_text",
+          context,
+          key: crypto.randomUUID(),
+          block_id: id,
+          asset_id: asset,
+          expected_revision: 1,
+          text: "Frpbaq.",
+        });
+      },
+      { context, id: source.id, asset: source.asset.id },
+    );
+    await cell()
+      .getByRole("button", { name: "Archive Clue", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Notebook or saved block changed",
+    );
+    await expect(cell()).toContainText("Frpbaq.");
+    assert.equal(
+      (await current(page)).exploration.stage.archivedBlocks.length,
+      0,
+    );
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Gur cvpgher.");
+    await dialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    const image = () =>
+      notebook(page).getByRole("article", {
+        name: "sample.png block",
+        exact: true,
+      });
+    const imageBefore = (await current(page)).exploration.stage.blocks.find(
+      (b) => b.kind === "asset" && b.asset.content.kind === "image",
+    );
+    assert.ok(imageBefore);
+    await image()
+      .getByRole("button", { name: "Archive sample.png", exact: true })
+      .click();
+    await expect(image()).toHaveCount(0);
+    await openArchive();
+    archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await expect(archive.getByRole("figure")).toContainText("Gur cvpgher.");
+    await expect(
+      archive.getByRole("img", { name: "sample.png", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Save reasoning", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Saved");
+    await capture(application, "native-archived-blocks");
+    const archivedView = (await current(page)).exploration;
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual((await current(page)).exploration, archivedView);
+    await openArchive();
+    archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await archive
+      .getByRole("button", { name: "Restore sample.png", exact: true })
+      .click();
+    await expect(image()).toBeFocused();
+    assert.deepEqual(
+      (await current(page)).exploration.stage.blocks.find(
+        (b) => b.id === imageBefore.id,
+      ),
+      imageBefore,
+    );
+    assert.deepEqual(await readFile(fixture), imported);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("duplicated Blocks preserve independent content and source lineage after restart", {
   timeout: 90000,
 }, async () => {
@@ -1317,6 +1554,150 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
     if (process.platform === "darwin")
       await expect(firstCell()).toContainText("output: First.");
     assert.deepEqual(await readFile(fixture), sourceBefore);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("archive frees an active slot while retained evidence and restore limits stay scoped", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-archive-slots-"));
+  const application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Bounded notebooks");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Original study");
+    const initial = await current(page);
+    const context = {
+      workspace_id: initial.workspace.id,
+      exploration_id: initial.exploration.id,
+      stage_id: initial.exploration.stage.id,
+    };
+    await page.evaluate(async (context) => {
+      for (let index = 0; index < 7; index++)
+        await window.play.workspace({
+          kind: "add_text",
+          context,
+          key: crypto.randomUUID(),
+          title: `Clue ${index}`,
+          text: "Gur xrl.",
+        });
+    }, context);
+    await page.reload();
+    await expect(notebook(page)).toBeVisible();
+    await expect(
+      notebook(page).getByRole("button", { name: "Add text", exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Keep this draft while making room.");
+    const original = notebook(page).getByRole("article", {
+      name: "Clue 0 block",
+      exact: true,
+    });
+    await original
+      .getByRole("button", { name: "Archive Clue 0", exact: true })
+      .click();
+    await expect(original).toHaveCount(0);
+    await expect(
+      notebook(page).getByRole("button", { name: "Add text", exact: true }),
+    ).toBeEnabled();
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Replacement");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Replacement clue");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Archived blocks (1)", exact: true })
+      .click();
+    let archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await expect(
+      archive.getByRole("button", { name: "Restore Clue 0", exact: true }),
+    ).toBeDisabled();
+    await expect(archive).toContainText("8 / 8 active");
+    const replacement = notebook(page).getByRole("article", {
+      name: "Replacement block",
+      exact: true,
+    });
+    await replacement
+      .getByRole("button", { name: "Archive Replacement", exact: true })
+      .click();
+    await expect(replacement).toHaveCount(0);
+    archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    const restore = archive.getByRole("button", {
+      name: "Restore Clue 0",
+      exact: true,
+    });
+    await expect(restore).toBeEnabled();
+    await restore.click();
+    await expect(original).toBeFocused();
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Keep this draft while making room.",
+    );
+    const saved = (await current(page)).exploration;
+    assert.equal(saved.stage.blocks.length, 8);
+    assert.equal(saved.stage.archivedBlocks.length, 1);
+    assert.equal(
+      saved.stage.archivedBlocks[0]?.block.asset.title,
+      "Replacement",
+    );
+    await create(page, "Exploration", "Independent study");
+    await expect(
+      notebook(page).getByRole("button", {
+        name: "Archived blocks (0)",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "",
+    );
+    await explorer(page)
+      .getByRole("button", { name: "Original study", exact: true })
+      .click();
+    await expect(notebook(page)).toContainText("Clue 0");
+    assert.deepEqual((await current(page)).exploration, saved);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Keep this draft while making room.",
+    );
+    await page
+      .getByRole("button", { name: "Save reasoning", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Saved");
   } finally {
     await application
       .evaluate(({ dialog }) => {

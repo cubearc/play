@@ -49,7 +49,9 @@ exact source revisions; editing the copied caption leaves the original alone.
 ## Limits and recovery
 
 The preview accepts PNG image imports and text, rather than arbitrary files,
-videos or executable pages. A Stage allows 8 Blocks including reasoning;
+videos or executable pages. A Stage allows 8 active and 16 retained Blocks,
+including reasoning. [Archiving](notebook.md#archive-and-restore-a-block) frees
+an active slot while retaining content and evidence;
 historical revisions and retained Runs also consume the Exploration's budget.
 A rejected import preserves existing content and the source. Exact limits and
 ownership rules are in [native storage](reference/desktop-storage.md).

@@ -15,6 +15,42 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("archive and restore require the exact closed Block snapshot and structural revision", () => {
+  for (const kind of ["archive_block", "restore_block"]) {
+    const intent = {
+      kind,
+      context: owner,
+      key: randomUUID(),
+      block_id: randomUUID(),
+      expected_revision: 2,
+      source: { asset: { asset_id: randomUUID(), revision: 1 }, caption: null },
+    };
+    assert.deepEqual(request(intent), intent);
+    for (const invalid of [
+      { ...intent, expected_revision: 0 },
+      { ...intent, path: "/private" },
+      {
+        ...intent,
+        source: {
+          ...intent.source,
+          asset: { asset_id: "../other", revision: 1 },
+        },
+      },
+      {
+        ...intent,
+        source: { ...intent.source, caption: { asset_id: randomUUID() } },
+      },
+      {
+        ...intent,
+        source: {
+          ...intent.source,
+          caption: { asset_id: randomUUID(), revision: -1 },
+        },
+      },
+    ])
+      assert.throws(() => request(invalid));
+  }
+});
 test("duplication accepts closed exact source snapshots without path or partial caption authority", () => {
   const intent = {
     kind: "duplicate_block",

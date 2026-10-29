@@ -29,11 +29,17 @@ export interface BlockSource {
 export interface TextAssetView extends AssetView {
   content: { kind: "text"; text: string };
 }
-export interface AssetBlockView {
-  kind: "asset";
+export interface AssetBlockData {
   id: string;
   asset: AssetView;
   caption?: TextAssetView;
+}
+export interface AssetBlockView extends AssetBlockData {
+  kind: "asset";
+}
+export interface ArchivedBlockView {
+  block: AssetBlockData;
+  archivedRevision: number;
 }
 export interface NoteView {
   id: string;
@@ -49,6 +55,7 @@ export type BlockView = AssetBlockView | NoteBlockView;
 export interface StageView extends Summary {
   introduction: string;
   blocks: BlockView[];
+  archivedBlocks: ArchivedBlockView[];
 }
 export function reasoningOf(stage: StageView): NoteView {
   const block = stage.blocks.find((block) => block.kind === "note");
@@ -61,6 +68,7 @@ export interface PipelineView extends Summary {
   operationVersion: number;
 }
 export interface TrailView {
+  archived: boolean;
   id: string;
   workspaceId: string;
   explorationId: string;
@@ -96,6 +104,14 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "archive_block" | "restore_block";
+      context: Context;
+      key: string;
+      block_id: string;
+      expected_revision: number;
+      source: BlockSource;
+    }
   | {
       kind: "duplicate_block";
       context: Context;
@@ -273,6 +289,8 @@ export interface Responses {
   revise_text: { assetId: string; revision: number };
   reorder_blocks: { stageId: string; revision: number };
   duplicate_block: { blockId: string; stageId: string; revision: number };
+  archive_block: { blockId: string; revision: number; archived: boolean };
+  restore_block: { blockId: string; revision: number; archived: boolean };
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -323,6 +341,20 @@ export function request(value: unknown): WorkspaceRequest {
     ],
     reorder_blocks: ["context", "key", "expected_revision", "block_ids"],
     duplicate_block: [
+      "context",
+      "key",
+      "block_id",
+      "expected_revision",
+      "source",
+    ],
+    archive_block: [
+      "context",
+      "key",
+      "block_id",
+      "expected_revision",
+      "source",
+    ],
+    restore_block: [
       "context",
       "key",
       "block_id",

@@ -118,20 +118,39 @@ export function Explorer({
                         <VscodeIcon name="add" />
                         <span>New Stage</span>
                       </button>
-                      {exploration.trails.length ? (
+                      {exploration.trails.some((trail) => !trail.archived) ? (
                         <div className="tree-section">Trails</div>
                       ) : null}
-                      {exploration.trails.map((trail) => (
-                        <button
-                          key={trail.id}
-                          type="button"
-                          className={`tree-row trail-row ${activeTab === trail.id ? "selected" : ""}`}
-                          onClick={() => openTrail(trail)}
-                        >
-                          <VscodeIcon name="git-branch" />
-                          <span>{trail.title}</span>
-                        </button>
-                      ))}
+                      {exploration.trails
+                        .filter((trail) => !trail.archived)
+                        .map((trail) => (
+                          <button
+                            key={trail.id}
+                            type="button"
+                            className={`tree-row trail-row ${activeTab === trail.id ? "selected" : ""}`}
+                            onClick={() => openTrail(trail)}
+                          >
+                            <VscodeIcon name="git-branch" />
+                            <span>{trail.title}</span>
+                          </button>
+                        ))}
+                      {exploration.trails.some((trail) => trail.archived) ? (
+                        <div className="tree-section">Archived trails</div>
+                      ) : null}
+                      {exploration.trails
+                        .filter((trail) => trail.archived)
+                        .map((trail) => (
+                          <button
+                            key={trail.id}
+                            type="button"
+                            className={`tree-row trail-row ${activeTab === trail.id ? "selected" : ""}`}
+                            aria-label={`Archived ${trail.title}`}
+                            onClick={() => openTrail(trail)}
+                          >
+                            <VscodeIcon name="archive" />
+                            <span>{trail.title}</span>
+                          </button>
+                        ))}
                     </div>
                   ) : null}
                 </div>

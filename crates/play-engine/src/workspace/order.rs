@@ -38,7 +38,7 @@ pub(super) async fn append_position(
     connection: &mut SqliteConnection,
     context: &Context,
 ) -> Result<i64> {
-    let row = sqlx::query("SELECT position,kind FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY position DESC,id DESC LIMIT 1")
+    let row = sqlx::query("SELECT position,kind FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND archived_revision IS NULL ORDER BY position DESC,id DESC LIMIT 1")
         .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string())
         .fetch_one(connection).await.map_err(storage::failure)?;
     let position: i64 = row.get("position");
@@ -47,6 +47,37 @@ pub(super) async fn append_position(
     } else {
         position.checked_add(1).ok_or("corrupt_store")
     }
+}
+pub(super) async fn make_space(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    position: i64,
+) -> Result<()> {
+    sqlx::query("UPDATE blocks SET position=position+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND archived_revision IS NULL AND position>=?")
+        .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).bind(position).execute(connection).await.map_err(storage::failure)?;
+    Ok(())
+}
+async fn ids(connection: &mut SqliteConnection, context: &Context) -> Result<Vec<String>> {
+    sqlx::query_scalar("SELECT id FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND archived_revision IS NULL ORDER BY position,id")
+        .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).fetch_all(connection).await.map_err(storage::failure)
+}
+async fn assign(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    ids: &[String],
+) -> Result<()> {
+    for (position, id) in ids.iter().enumerate() {
+        let updated=sqlx::query("UPDATE blocks SET position=? WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND archived_revision IS NULL")
+            .bind(position as i64).bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).bind(id).execute(&mut *connection).await.map_err(storage::failure)?;
+        if updated.rows_affected() != 1 {
+            return Err("state_conflict");
+        }
+    }
+    Ok(())
+}
+pub(super) async fn normalize(connection: &mut SqliteConnection, context: &Context) -> Result<()> {
+    let current = ids(connection, context).await?;
+    assign(connection, context, &current).await
 }
 pub(super) async fn reorder(
     connection: &mut SqliteConnection,
@@ -60,9 +91,7 @@ pub(super) async fn reorder(
     if revision(connection, context).await? != expected {
         return Err("state_conflict");
     }
-    let current:Vec<String> = sqlx::query_scalar("SELECT id FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY position,id")
-        .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string())
-        .fetch_all(&mut *connection).await.map_err(storage::failure)?;
+    let current = ids(connection, context).await?;
     let requested: Vec<String> = requested.iter().map(Uuid::to_string).collect();
     if requested.len() != current.len()
         || requested.iter().collect::<BTreeSet<_>>() != current.iter().collect::<BTreeSet<_>>()
@@ -73,13 +102,6 @@ pub(super) async fn reorder(
         return Ok(json!({"stageId":context.stage_id,"revision":expected}));
     }
     let next = advance(connection, context, expected).await?;
-    for (position, id) in requested.iter().enumerate() {
-        let result=sqlx::query("UPDATE blocks SET position=? WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
-            .bind(position as i64).bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).bind(id)
-            .execute(&mut *connection).await.map_err(storage::failure)?;
-        if result.rows_affected() != 1 {
-            return Err("state_conflict");
-        }
-    }
+    assign(connection, context, &requested).await?;
     Ok(json!({"stageId":context.stage_id,"revision":next}))
 }

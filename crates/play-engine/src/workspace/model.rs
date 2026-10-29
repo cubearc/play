@@ -9,14 +9,14 @@ pub struct Context {
     pub stage_id: Uuid,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct AssetRevision {
     pub asset_id: Uuid,
     pub revision: i64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct BlockSource {
     pub asset: AssetRevision,
@@ -26,6 +26,20 @@ pub struct BlockSource {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    ArchiveBlock {
+        context: Context,
+        key: Uuid,
+        block_id: Uuid,
+        expected_revision: i64,
+        source: BlockSource,
+    },
+    RestoreBlock {
+        context: Context,
+        key: Uuid,
+        block_id: Uuid,
+        expected_revision: i64,
+        source: BlockSource,
+    },
     DuplicateBlock {
         context: Context,
         key: Uuid,
@@ -119,6 +133,8 @@ impl Command {
             | Self::ReviseText { key, .. }
             | Self::ReorderBlocks { key, .. }
             | Self::DuplicateBlock { key, .. }
+            | Self::ArchiveBlock { key, .. }
+            | Self::RestoreBlock { key, .. }
             | Self::AddText { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
@@ -175,15 +191,28 @@ pub struct AssetOrigin {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Block {
     Asset {
-        id: String,
-        asset: Asset,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        caption: Option<Asset>,
+        #[serde(flatten)]
+        block: AssetBlock,
     },
     Note {
         id: String,
         note: Note,
     },
+}
+
+#[derive(Serialize)]
+pub struct AssetBlock {
+    pub id: String,
+    pub asset: Asset,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caption: Option<Asset>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchivedBlock {
+    pub block: AssetBlock,
+    pub archived_revision: i64,
 }
 
 #[derive(Serialize)]
@@ -216,15 +245,18 @@ pub struct Trail {
     pub source: Asset,
     pub pipeline_id: Option<String>,
     pub pipeline: Option<Pipeline>,
+    pub archived: bool,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Stage {
     pub id: String,
     pub title: String,
     pub revision: i64,
     pub introduction: String,
     pub blocks: Vec<Block>,
+    pub archived_blocks: Vec<ArchivedBlock>,
 }
 
 #[derive(Serialize)]

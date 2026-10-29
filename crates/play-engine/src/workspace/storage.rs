@@ -12,9 +12,10 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
 pub const COPY_SCHEMA: &str = include_str!("copies.sql");
+pub const ARCHIVE_SCHEMA: &str = include_str!("archive.sql");
 pub type Schemas = Vec<Vec<(String, String, String)>>;
 pub const SCHEMA: &str = include_str!("schema.sql");
 
@@ -236,13 +237,13 @@ pub async fn expected_schema() -> Result<Schemas> {
         .execute(&mut connection)
         .await
         .map_err(failure)?;
-    let baseline = schema_rows(&mut connection).await?;
-    migrate_to(&mut connection, 2).await?;
-    let runs = schema_rows(&mut connection).await?;
-    migrate(&mut connection).await?;
-    let current = schema_rows(&mut connection).await?;
+    let mut versions = vec![schema_rows(&mut connection).await?];
+    for version in 2..=SCHEMA_VERSION {
+        migrate_to(&mut connection, version).await?;
+        versions.push(schema_rows(&mut connection).await?);
+    }
     connection.close().await.map_err(failure)?;
-    Ok(vec![baseline, runs, current])
+    Ok(versions)
 }
 
 pub async fn inspect(path: &Path, id: Uuid, expected: &Schemas) -> Result<u32> {
@@ -376,7 +377,7 @@ async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()
         .map_err(failure)?;
     let result = async {
         let mut transaction = connection.begin().await.map_err(failure)?;
-        for (next, schema) in [(2, RUN_SCHEMA), (3, COPY_SCHEMA)] {
+        for (next, schema) in [(2, RUN_SCHEMA), (3, COPY_SCHEMA), (4, ARCHIVE_SCHEMA)] {
             if version < i64::from(next) && next <= target {
                 sqlx::raw_sql(schema)
                     .execute(&mut *transaction)

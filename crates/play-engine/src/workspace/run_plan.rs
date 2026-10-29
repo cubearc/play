@@ -1,4 +1,5 @@
 use super::{
+    blocks,
     model::{Content, RunRequest},
     queries, storage,
 };
@@ -46,6 +47,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     {
         return Err("state_conflict");
     }
+    blocks::source_active(connection, context, &asset_id).await?;
     let asset = queries::asset(
         connection,
         &workspace,
