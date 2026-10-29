@@ -37,6 +37,14 @@ Explorations can bind their own text to the same definition without sharing note
 or Run evidence. Selecting another operation freezes a separate definition for
 the accepted Run.
 
+## Follow an edited Asset
+
+[Edit text or a caption](notebook.md#edit-text-and-captions) in its notebook to
+append an Asset revision. Its existing Trail and open canvas show that saved
+revision without creating a second Asset or canvas identity. Earlier Runs stay
+bound to their original inputs; the result marks an earlier input until another
+Run is accepted for the saved content.
+
 ## Preserve evidence
 
 Choose **Run cell** to create a PipelineRun, rather than replacing an earlier

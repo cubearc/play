@@ -3,18 +3,31 @@ import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIc
 import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/VscodeSplitLayout.js";
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TrailView } from "../desktop/workspace-contract";
+import {
+  type BlockView,
+  type Context,
+  contextOf,
+  type TextAssetView,
+  type TrailView,
+} from "../desktop/workspace-contract";
 import { AssetCanvas } from "./AssetCanvas";
 import { CommandPalette, type WorkbenchCommand } from "./CommandPalette";
 import { ContentDialog, type DialogKind } from "./ContentDialog";
 import { Explorer } from "./Explorer";
 import { Notebook } from "./Notebook";
+import { TextAssetEditor } from "./TextAssetEditor";
 import { useExecutions } from "./useExecutions";
 import { useWorkspace } from "./useWorkspace";
 import { WorkspaceWelcome } from "./WorkspaceWelcome";
 
 const mac = navigator.userAgent.includes("Mac");
 const modifier = mac ? "⌘" : "Ctrl+";
+interface TextEdit {
+  context: Context;
+  blockId: string;
+  asset: TextAssetView;
+  caption: boolean;
+}
 
 export function Workbench() {
   const state = useWorkspace();
@@ -22,6 +35,13 @@ export function Workbench() {
   const { workspace, exploration } = state;
   const [welcome, setWelcome] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
+  const [editing, setEditing] = useState<TextEdit | null>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  useEffect(() => {
+    void window.play
+      .dirty(state.hasUnsavedNotes || editorDirty)
+      .catch(() => {});
+  }, [state.hasUnsavedNotes, editorDirty]);
   const [tabs, setTabs] = useState<Record<string, readonly string[]>>({});
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [sidebar, setSidebar] = useState(true);
@@ -59,6 +79,21 @@ export function Workbench() {
     const operation = executions.operationFor(runnableTrail);
     if (operation) void executions.run(runnableTrail, operation);
   };
+  const editText = (block: BlockView, asset: TextAssetView) => {
+    if (!exploration) return;
+    state.clearError();
+    setEditing({
+      context: contextOf(exploration),
+      blockId: block.id,
+      asset,
+      caption: block.caption?.id === asset.id,
+    });
+  };
+  const closeEditor = () => {
+    setEditing(null);
+    setEditorDirty(false);
+    state.clearError();
+  };
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -68,6 +103,7 @@ export function Workbench() {
         event.repeat
       )
         return;
+      if (dialog || editing) return;
       const key = event.key.toLowerCase();
       if (key === "b" && !event.shiftKey) {
         event.preventDefault();
@@ -307,6 +343,7 @@ export function Workbench() {
                   addText={() => setDialog("text")}
                   addImage={() => setDialog("image")}
                   openTrail={openTrail}
+                  editText={editText}
                 />
               )}
             </>
@@ -331,8 +368,8 @@ export function Workbench() {
         <span>
           {state.noteSaving
             ? "Saving…"
-            : state.noteDirty
-              ? "Unsaved reasoning"
+            : state.noteDirty || editorDirty
+              ? "Unsaved content"
               : workspace
                 ? "Local storage"
                 : "Local"}
@@ -350,6 +387,25 @@ export function Workbench() {
             if (dialog === "text") return state.addText(title, text, key);
             return state.importImage(text, key);
           }}
+        />
+      ) : null}
+      {editing ? (
+        <TextAssetEditor
+          asset={editing.asset}
+          caption={editing.caption}
+          error={state.error}
+          onClose={closeEditor}
+          onDirty={setEditorDirty}
+          onSave={(text, key) =>
+            state.reviseText(
+              editing.context,
+              editing.blockId,
+              editing.asset.id,
+              editing.asset.revision,
+              text,
+              key,
+            )
+          }
         />
       ) : null}
       {palette ? (

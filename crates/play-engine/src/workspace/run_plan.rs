@@ -42,6 +42,10 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     }
     let asset_id: String = row.get("source_id");
     let asset_revision: i64 = row.get("source_revision");
+    if asset_id != request.source_asset_id.to_string() || asset_revision != request.source_revision
+    {
+        return Err("state_conflict");
+    }
     let asset = queries::asset(
         connection,
         &workspace,

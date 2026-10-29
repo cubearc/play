@@ -9,11 +9,14 @@ contextual CLI execution are separate deliveries.
 ## Accepted invocation
 
 The trusted desktop sends a closed `start_run` intent with Workspace,
-Exploration, Stage, Trail and selected Pipeline revision, operation/version,
+Exploration, Stage, Trail, selected Pipeline revision and expected source Asset
+ID/revision, operation/version,
 intent UUID and explicit output-retention choice. Rust verifies every owner,
 resolves the Trail's exact Asset revision and validates inputs/parameters against
 the actual Core contract before admitting work. Unsupported native enforcement,
 missing adapters, version mismatches and busy capacity reject before admission.
+A changed Trail source or Pipeline returns `state_conflict` before creating a Run;
+the engine never silently resolves a different revision than the caller selected.
 
 An accepted Run pins:
 
@@ -62,6 +65,18 @@ releasing SQLite ownership. A killed engine cannot report success; reopening its
 recognized store marks queued/running work `interrupted` with `owner_stopped`,
 without changing completed records. This recovery is not a complete release
 claim about native descendant/PTY cleanup on every platform.
+
+## Edited inputs
+
+Saving a text/caption edit advances the working Block/Trail source, without
+changing an accepted Run's plan, input references, attempts or output. An active
+worker continues with its frozen bytes. The notebook/canvas marks a selected Run
+from an earlier input revision; another explicit Run uses the saved revision.
+
+A retry of an already accepted intent still recovers that original Run after an
+edit. A new intent requesting the old source is rejected. The client preserves
+unconfirmed intents for recovery and clears one only after a definite pre-admission
+conflict or acknowledgement; it never fabricates a replacement execution.
 
 ## Outputs and privacy
 

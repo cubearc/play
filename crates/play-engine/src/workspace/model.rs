@@ -52,6 +52,14 @@ pub enum Command {
         title: String,
         text: String,
     },
+    ReviseText {
+        context: Context,
+        key: Uuid,
+        block_id: Uuid,
+        asset_id: Uuid,
+        expected_revision: i64,
+        text: String,
+    },
     AddImage {
         context: Context,
         key: Uuid,
@@ -81,6 +89,7 @@ impl Command {
             Self::CreateExploration { key, .. }
             | Self::CreateStage { key, .. }
             | Self::SaveNote { key, .. }
+            | Self::ReviseText { key, .. }
             | Self::AddText { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
@@ -205,6 +214,8 @@ pub struct RunRequest {
     pub trail_id: Uuid,
     pub pipeline_id: Uuid,
     pub pipeline_revision: i64,
+    pub source_asset_id: Uuid,
+    pub source_revision: i64,
     pub operation: String,
     pub operation_version: u32,
     pub retain_output: bool,

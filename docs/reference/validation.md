@@ -25,7 +25,10 @@ The engine suite exercises real SQLite, immutable revisions, ownership, accepted
 Runs and interruption recovery. Desktop tests use real pipes/workers and reject
 forged sender/frame authority. The Electron smoke opens the actual renderer and
 preload, imports a real PNG, decodes its caption, retains history, saves separate
-Explorations and reopens the private profile. It checks source bytes and rejected
+Explorations and reopens the private profile. A second journey edits text/captions, preserves
+earlier input results, tests conflict and unsaved-draft handling, and reopens the
+new revisions. Native IPC also edits an input while a real worker runs, then
+rejects stale dispatch. These checks preserve source bytes and reject
 cross-Exploration access. A controlled native chooser fixture is not a Cloud mock
 or a general file-browser implementation.
 

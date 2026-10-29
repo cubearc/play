@@ -25,7 +25,7 @@ fn setup(manager: &mut Manager) -> (RunRequest, Value) {
         json!({"kind":"open_exploration","workspace_id":workspace["id"],"exploration_id":created["explorationId"],"stage_id":created["stageId"]}),
     );
     let trail = &view["trails"][0];
-    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     (request, view)
 }
 #[test]

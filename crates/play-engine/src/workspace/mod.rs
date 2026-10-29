@@ -1,3 +1,4 @@
+mod assets;
 mod model;
 mod mutations;
 mod queries;

@@ -13,7 +13,9 @@ and accepted single-node Runs in private local storage.
 Retained outputs reopen beside their cells and in Trail history. A Run accepted
 without output retention reopens with an explicit gap. Operation-selection
 drafts and open canvas tabs are not persisted. Save reasoning and wait for
-**Saved** before switching; unsaved drafts do not survive a crash.
+**Saved** before switching. Save text/caption editors with **Save changes**; their
+revisions persist under the original Asset IDs. Unsaved drafts do not survive a
+crash. Editing never rewrites an earlier Run's input revision or result.
 
 
 ![Reopened notebook with two Explorations and an earlier retained Run selected in the expanded history.](assets/desktop/run-history.png)

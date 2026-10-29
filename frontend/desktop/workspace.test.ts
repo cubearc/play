@@ -79,6 +79,8 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       trail_id: trail.id,
       pipeline_id: trail.pipeline.id,
       pipeline_revision: trail.pipeline.revision,
+      source_asset_id: trail.source.id,
+      source_revision: trail.source.revision,
       operation: "cipher.rot13",
       operation_version: 1,
       retain_output: true,
@@ -267,6 +269,8 @@ async function runFixture(engine: Engine, text: string) {
     trail_id: trail.id,
     pipeline_id: trail.pipeline.id,
     pipeline_revision: trail.pipeline.revision,
+    source_asset_id: trail.source.id,
+    source_revision: trail.source.revision,
     operation: "esolang.brainfuck.execute",
     operation_version: 2,
     retain_output: true,
@@ -429,6 +433,84 @@ test("killing the real engine recovers a running node as interrupted without inv
     }
     lines.close();
     await recovered?.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("editing an input during a real worker Run preserves its plan and rejects stale dispatch", {
+  skip: !worker,
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-live-input-edit-"));
+  const engine = await Engine.connect(
+    binary,
+    worker,
+    join(temporary, "private"),
+  );
+  try {
+    const request = await runFixture(engine, "+[]");
+    const opened = (await engine.workspace({
+      kind: "open_exploration",
+      workspace_id: request.context.workspace_id,
+      exploration_id: request.context.exploration_id,
+      stage_id: request.context.stage_id,
+    })) as ExplorationView;
+    const block = opened.stage.blocks[0];
+    assert.ok(block);
+    const running = await engine.startRun(request);
+    assert.equal(running.status, "running");
+    const mutation = {
+      kind: "revise_text",
+      context: request.context,
+      key: randomUUID(),
+      block_id: block.id,
+      asset_id: block.asset.id,
+      expected_revision: 1,
+      text: "nycun",
+    };
+    const saved = await engine.workspace(mutation);
+    assert.deepEqual(await engine.workspace(mutation), saved);
+    const stillRunning = (await engine.workspace({
+      kind: "run_detail",
+      context: request.context,
+      run_id: running.id,
+    })) as RunDetail;
+    assert.equal(stillRunning.status, "running");
+    assert.deepEqual(stillRunning.plan, running.plan);
+    const cancelled = await engine.cancelRun({
+      context: request.context,
+      run_id: running.id,
+    });
+    assert.equal(cancelled.status, "cancelled");
+    await assert.rejects(
+      engine.startRun({ ...request, key: randomUUID() }),
+      /state_conflict/,
+    );
+    const completed = await finished(
+      engine,
+      request.context,
+      await engine.startRun({
+        ...request,
+        key: randomUUID(),
+        source_revision: 2,
+        operation: "cipher.rot13",
+        operation_version: 1,
+      }),
+    );
+    assert.equal(completed.status, "completed");
+    assert.deepEqual(completed.result?.outputs, { output: "alpha" });
+    assert.deepEqual(
+      (
+        (await engine.workspace({
+          kind: "run_detail",
+          context: request.context,
+          run_id: running.id,
+        })) as RunDetail
+      ).plan,
+      running.plan,
+    );
+  } finally {
+    await engine.close();
     await rm(temporary, { recursive: true, force: true });
   }
 });

@@ -231,6 +231,8 @@ export function useExecutions(
               trail_id: trail.id,
               pipeline_id: trail.pipeline.id,
               pipeline_revision: trail.pipeline.revision,
+              source_asset_id: trail.source.id,
+              source_revision: trail.source.revision,
               operation: operation.operation,
               operation_version: operation.operation_version,
               retain_output: keep,
@@ -247,11 +249,15 @@ export function useExecutions(
           selected: detail.id,
         }));
         await watch(trail, detail);
-      } catch {
+      } catch (error) {
+        const conflict =
+          error instanceof Error && error.message.includes("state_conflict");
+        if (conflict) delete pending.current[trail.id];
         update(trail.id, (value) => ({
           ...value,
-          error:
-            "Run request was not confirmed. Retry to check the same intent; saved history is preserved.",
+          error: conflict
+            ? "The input or Pipeline changed. Reopen this stage before starting another Run."
+            : "Run request was not confirmed. Retry to check the same intent; saved history is preserved.",
         }));
       } finally {
         active.current = false;

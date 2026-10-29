@@ -32,4 +32,6 @@ from the first Exploration do not become content in the second.
 For a visual clue, [add an image with its caption](workspace.md). The caption
 appears with its image and can feed ROT13 directly; there is no need to copy it
 into a separate text cell. [Notebook controls](notebook.md) cover retention,
-reasoning and keyboard shortcuts.
+reasoning and keyboard shortcuts. Continue with
+[editing text and captions](notebook.md#edit-text-and-captions) to change a clue
+while preserving the result you just obtained.

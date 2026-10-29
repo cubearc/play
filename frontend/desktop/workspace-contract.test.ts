@@ -26,17 +26,35 @@ test("the workspace bridge accepts closed scoped intents without path or generic
     text: "é".repeat(512),
   };
   assert.deepEqual(request(add), add);
+  const edit = {
+    kind: "revise_text",
+    context: owner,
+    key: randomUUID(),
+    block_id: randomUUID(),
+    asset_id: randomUUID(),
+    expected_revision: 1,
+    text: "é".repeat(512),
+  };
+  assert.deepEqual(request(edit), edit);
+  assert.throws(() => request({ ...edit, path: "/private" }));
+  assert.throws(() => request({ ...edit, text: `${edit.text}x` }));
+  assert.throws(() => request({ ...edit, expected_revision: 0 }));
   const run = {
     context: owner,
     key: randomUUID(),
     trail_id: randomUUID(),
     pipeline_id: randomUUID(),
     pipeline_revision: 1,
+    source_asset_id: randomUUID(),
+    source_revision: 1,
     retain_output: true,
     operation: "cipher.rot13",
     operation_version: 1,
   };
   assert.deepEqual(runRequest(run), run);
+  assert.throws(() => runRequest({ ...run, source_asset_id: "../private" }));
+  assert.throws(() => runRequest({ ...run, source_revision: 0 }));
+  assert.throws(() => runRequest({ ...run, source_revision: undefined }));
   assert.throws(() => runRequest({ ...run, retain_output: undefined }));
   assert.throws(() => cancelRun({ context: owner, run_id: "../run" }));
   assert.deepEqual(

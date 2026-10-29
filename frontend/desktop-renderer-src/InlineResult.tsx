@@ -29,6 +29,14 @@ export function InlineResult({
   const history = executions.history[trail.id];
   if (!history) return null;
   const run = history.detail?.id === history.selected ? history.detail : null;
+  const input = run
+    ? Object.values(run.plan.inputs).find((value) => "assetId" in value)
+    : null;
+  const earlier =
+    input &&
+    "assetId" in input &&
+    (input.assetId !== trail.source.id ||
+      input.revision !== trail.source.revision);
   return (
     <>
       {history.error ? <p role="alert">{history.error}</p> : null}
@@ -42,6 +50,12 @@ export function InlineResult({
             </span>
           </div>
           <pre role="status">{value(run)}</pre>
+          {earlier && input && "assetId" in input ? (
+            <p className="input-revision" role="note">
+              Earlier input · r{input.revision}. The current source is r
+              {trail.source.revision}; run again to use it.
+            </p>
+          ) : null}
           <details
             open={expanded}
             onToggle={(event) => setExpanded(event.currentTarget.open)}

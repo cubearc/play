@@ -4,7 +4,9 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import { useRef } from "react";
 import type {
   AssetView,
+  BlockView,
   ExplorationView,
+  TextAssetView,
   TrailView,
 } from "../desktop/workspace-contract";
 import { contextOf } from "../desktop/workspace-contract";
@@ -24,6 +26,7 @@ export function Notebook({
   addText,
   addImage,
   busy,
+  editText,
 }: {
   exploration: ExplorationView;
   executions: Executions;
@@ -31,6 +34,7 @@ export function Notebook({
   noteDirty: boolean;
   noteSaving: boolean;
   busy: boolean;
+  editText: (block: BlockView, asset: TextAssetView) => void;
   saveNote: () => void;
   addText: () => void;
   addImage: () => void;
@@ -80,6 +84,11 @@ export function Notebook({
         </div>
       </header>
       {exploration.stage.blocks.map((block, index) => {
+        const textAsset =
+          block.caption ??
+          (block.asset.content.kind === "text"
+            ? { ...block.asset, content: block.asset.content }
+            : null);
         const trail = exploration.trails.find(
           (entry) => entry.source.id === (block.caption ?? block.asset).id,
         );
@@ -105,6 +114,16 @@ export function Notebook({
                   {block.asset.title}
                 </span>
                 <span className="badge">Asset · r{block.asset.revision}</span>
+                {textAsset ? (
+                  <VscodeButton
+                    secondary
+                    icon="edit"
+                    disabled={busy}
+                    onClick={() => editText(block, textAsset)}
+                  >
+                    {block.caption ? "Edit caption" : "Edit text"}
+                  </VscodeButton>
+                ) : null}
               </div>
               <NotebookAsset
                 block={block}

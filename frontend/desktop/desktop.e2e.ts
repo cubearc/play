@@ -44,6 +44,7 @@ async function saveNote(page: Page, text: string) {
   ).toHaveText("Saved");
 }
 async function capture(application: ElectronApplication, name: string) {
+  await mkdir("playwright-report", { recursive: true });
   const png = await application.evaluate(async ({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows().find((entry) =>
       entry.isVisible(),
@@ -227,7 +228,6 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
       page.getByRole("region", { name: "Empty workspace" }),
     ).toBeVisible();
     await create(page, "Exploration", "Spiral signal");
-    await mkdir("playwright-report", { recursive: true });
     await checkWorkbench(page);
     await application.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({
@@ -354,6 +354,8 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
             trail_id: trailId,
             pipeline_id: pipelineId,
             pipeline_revision: 1,
+            source_asset_id: crypto.randomUUID(),
+            source_revision: 1,
             retain_output: true,
             operation: "cipher.rot13",
             operation_version: 1,
@@ -474,6 +476,287 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     await expect(restoredResult).toContainText("The key is in the pixels.");
     await expect(restoredResult.locator("details")).toHaveAttribute("open", "");
     await capture(application, "native-restored-workspace");
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("native text and caption revisions preserve historical Runs and drafts across restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-edits-"));
+  const sourceBefore = await readFile(fixture);
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Revision studies");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Changing clues");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    let cell = notebook(page).getByRole("article", {
+      name: "Clue block",
+      exact: true,
+    });
+    if (process.platform === "darwin") {
+      await cell.getByRole("button", { name: "Run cell", exact: true }).click();
+      await expect(
+        cell.getByRole("region", { name: "Cell result" }),
+      ).toContainText("The key.");
+    }
+    const original = await current(page);
+    const block = original.exploration.stage.blocks[0];
+    assert.ok(block);
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Reasoning is still a separate draft.");
+    await cell.getByRole("button", { name: "Edit text", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Frpbaq pyhr.");
+    const runCount = () =>
+      page.evaluate(async (exploration) => {
+        const trail = exploration.trails[0];
+        if (!trail) throw new Error("trail_missing");
+        const page = await window.play.workspace({
+          kind: "list_runs",
+          context: {
+            workspace_id: exploration.workspaceId,
+            exploration_id: exploration.id,
+            stage_id: exploration.stage.id,
+          },
+          trail_id: trail.id,
+          before: null,
+        });
+        return page.runs.length;
+      }, original.exploration);
+    const beforeShortcut = await runCount();
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect(dialog).toBeVisible();
+    assert.equal(
+      await runCount(),
+      beforeShortcut,
+      "an editor shortcut must not create a Run",
+    );
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(dialog).toBeHidden();
+    await expect(cell).toContainText("Frpbaq pyhr.");
+    await expect(cell).toContainText("Asset · r2");
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Unsaved changes");
+    const withNoteDraft = await current(page);
+    assert.equal(withNoteDraft.exploration.stage.note.revision, 1);
+    await page
+      .getByRole("button", { name: "Save reasoning", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Saved");
+    if (process.platform === "darwin") {
+      const result = cell.getByRole("region", { name: "Cell result" });
+      await expect(result).toContainText("Earlier input · r1");
+      await expect(result).toContainText("The key.");
+      await cell.getByRole("button", { name: "Run cell", exact: true }).click();
+      await expect(result).toContainText("Second clue.");
+      await expect(result).not.toContainText("Earlier input");
+    }
+    const revised = await current(page);
+    assert.equal(revised.exploration.stage.blocks[0]?.id, block.id);
+    assert.equal(revised.exploration.stage.blocks[0]?.asset.id, block.asset.id);
+    await cell.getByRole("button", { name: "Edit text", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Draft stays here.");
+    await page.evaluate(
+      async ({ block, context }) => {
+        await window.play.workspace({
+          kind: "revise_text",
+          context,
+          key: crypto.randomUUID(),
+          block_id: block.id,
+          asset_id: block.asset.id,
+          expected_revision: 2,
+          text: "Another saved revision.",
+        });
+      },
+      {
+        block,
+        context: {
+          workspace_id: original.workspace.id,
+          exploration_id: original.exploration.id,
+          stage_id: original.exploration.stage.id,
+        },
+      },
+    );
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText("draft was kept");
+    await expect(
+      dialog.getByRole("textbox", { name: "Text", exact: true }),
+    ).toHaveValue("Draft stays here.");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(cell).toContainText("Another saved revision.");
+    await cell.getByRole("button", { name: "Edit text", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await expect(
+      dialog.getByRole("textbox", { name: "Text", exact: true }),
+    ).toHaveValue("Another saved revision.");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Unsaved source draft.");
+    if (process.platform === "darwin") {
+      await expect
+        .poll(() =>
+          application.evaluate(({ BrowserWindow }) =>
+            BrowserWindow.getAllWindows().some((window) =>
+              window.isDocumentEdited(),
+            ),
+          ),
+        )
+        .toBe(true);
+      const prompt = await application.evaluate(
+        ({ app, dialog }) =>
+          new Promise<string>((resolve) => {
+            dialog.showMessageBox = async (...args: unknown[]) => {
+              const options = args.find(
+                (value) =>
+                  value && typeof value === "object" && "message" in value,
+              );
+              resolve(
+                options &&
+                  typeof options === "object" &&
+                  "message" in options &&
+                  typeof options.message === "string"
+                  ? options.message
+                  : "missing_message",
+              );
+              return { response: 0, checkboxChecked: false };
+            };
+            app.quit();
+          }),
+      );
+      assert.equal(prompt, "Changes have not been saved.");
+      await expect(dialog).toBeVisible();
+    }
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Gur pncgvba.");
+    await dialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    const imageCell = notebook(page).getByRole("article", {
+      name: "sample.png block",
+      exact: true,
+    });
+    if (process.platform === "darwin") {
+      await imageCell
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(
+        imageCell.getByRole("region", { name: "Cell result" }),
+      ).toContainText("The caption.");
+    }
+    await imageCell
+      .getByRole("button", { name: "Edit caption", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Edit caption", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Frpbaq pncgvba.");
+    await capture(application, "native-caption-editor");
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(dialog).toBeHidden();
+    await expect(imageCell.getByRole("figure")).toContainText(
+      "Frpbaq pncgvba.",
+    );
+    await expect(imageCell.getByRole("figure")).toContainText("Caption · r2");
+    await expect(
+      imageCell.getByRole("img", { name: "sample.png", exact: true }),
+    ).toBeVisible();
+    if (process.platform === "darwin") {
+      await expect(
+        imageCell.getByRole("region", { name: "Cell result" }),
+      ).toContainText("Earlier input · r1");
+      await capture(application, "native-edited-notebook");
+      await imageCell
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(
+        imageCell.getByRole("region", { name: "Cell result" }),
+      ).toContainText("Second caption.");
+    }
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    cell = notebook(page).getByRole("article", {
+      name: "Clue block",
+      exact: true,
+    });
+    await expect(cell).toContainText("Another saved revision.");
+    const restored = await current(page);
+    assert.equal(restored.exploration.stage.blocks[0]?.asset.revision, 3);
+    await expect(
+      notebook(page).getByRole("figure").filter({ hasText: "Frpbaq pncgvba." }),
+    ).toBeVisible();
+    if (process.platform === "darwin") {
+      await expect(
+        notebook(page).getByRole("article", {
+          name: "sample.png block",
+          exact: true,
+        }),
+      ).toContainText("Second caption.");
+      await expect(
+        cell.getByRole("region", { name: "Cell result" }),
+      ).toContainText("Earlier input · r2");
+    }
+    assert.deepEqual(await readFile(fixture), sourceBefore);
   } finally {
     await application
       .evaluate(({ dialog }) => {

@@ -124,13 +124,18 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **3** uses a 262144-byte frame ceiling, including bounded Base64 PNG
+Protocol **4** uses a 262144-byte frame ceiling, including bounded Base64 PNG
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image-import bridge.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
-add text, save reasoning, list scoped Run summaries and read Run details. Internal image import/read commands are Main-owned.
+add text, revise existing text/captions, save reasoning, list scoped Run summaries
+and read Run details. Internal image import/read commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
+The `revise_text` intent pins its Block/Asset IDs and expected revision. Run
+requests require `source_asset_id` and `source_revision` as well as the selected
+Pipeline revision; stale bindings fail before admission. Prior protocol shapes
+are refused, without optional-field defaults or a compatibility command.
 Managed `run` replies acknowledge durable admission immediately. Clients query
 recorded progress/detail; the engine commits final state independently and never
 sends unsolicited transport replies. The unbound `invoke`/`cancel` entry remains

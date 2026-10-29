@@ -13,6 +13,7 @@ Organize independent Explorations in a Workspace, keep clues in Stage notebooks,
 and open an Asset in its own Trail canvas.
 
 - Keep an image and its caption together, with distinct input Asset identities.
+- Edit text and captions while preserving earlier revisions and Run evidence.
 - Run ROT13 or Brainfuck on text and inspect results beside the cell.
 - Reopen saved content, reasoning and retained Run evidence.
 

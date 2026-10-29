@@ -115,6 +115,15 @@ export type WorkspaceRequest =
       text: string;
     }
   | {
+      kind: "revise_text";
+      context: Context;
+      key: string;
+      block_id: string;
+      asset_id: string;
+      expected_revision: number;
+      text: string;
+    }
+  | {
       kind: "add_text";
       context: Context;
       key: string;
@@ -137,6 +146,8 @@ export interface RunRequest {
   trail_id: string;
   pipeline_id: string;
   pipeline_revision: number;
+  source_asset_id: string;
+  source_revision: number;
   operation: string;
   operation_version: number;
   retain_output: boolean;
@@ -224,6 +235,7 @@ export interface Responses {
   create_stage: { explorationId: string; stageId: string };
   save_note: { noteId: string; revision: number };
   add_text: { blockId: string };
+  revise_text: { assetId: string; revision: number };
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -264,6 +276,14 @@ export function request(value: unknown): WorkspaceRequest {
     create_stage: ["workspace_id", "exploration_id", "key", "title"],
     save_note: ["context", "key", "note_id", "expected_revision", "text"],
     add_text: ["context", "key", "title", "text"],
+    revise_text: [
+      "context",
+      "key",
+      "block_id",
+      "asset_id",
+      "expected_revision",
+      "text",
+    ],
   };
   if (typeof kind !== "string" || !Object.hasOwn(fields, kind))
     throw new Error("invalid_command");
@@ -323,6 +343,8 @@ export function runRequest(value: unknown): RunRequest {
     "trail_id",
     "pipeline_id",
     "pipeline_revision",
+    "source_asset_id",
+    "source_revision",
     "operation",
     "operation_version",
     "retain_output",
@@ -333,6 +355,8 @@ export function runRequest(value: unknown): RunRequest {
     !id(record.trail_id) ||
     !id(record.pipeline_id) ||
     !revision(record.pipeline_revision) ||
+    !id(record.source_asset_id) ||
+    !revision(record.source_revision) ||
     !bytes(record.operation, 128) ||
     !revision(record.operation_version) ||
     Number(record.operation_version) > 0xffffffff ||

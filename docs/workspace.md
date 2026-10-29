@@ -34,6 +34,13 @@ Trail canvas. Running ROT13 below the caption transforms that caption's exact
 Asset revision. It does not extract letters from the pixels. The image canvas
 currently supports preview and zoom, rather than a full image operation graph.
 
+## Edit saved content
+
+Use **Edit text** for a text Block or **Edit caption** for an image's existing
+caption. [Notebook editing](notebook.md#edit-text-and-captions) covers saving,
+revision conflicts, keyboard controls and results from an earlier input. A caption
+edit keeps the same figure and does not change the imported PNG.
+
 ## Limits and recovery
 
 The preview accepts PNG image imports and text, rather than arbitrary files,

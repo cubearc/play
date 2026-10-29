@@ -92,6 +92,26 @@ freeze their chosen definition, resolved inputs and Core contract; see
 and interruption recovery. Candidates, Solutions, submissions and official
 evaluation are separate deliveries.
 
+## Text and caption revisions
+
+The closed `revise_text` intent carries `context`, `key`, `block_id`, `asset_id`,
+`expected_revision` and `text`. The engine resolves a text Asset actually bound
+to that Stage Block, checks its current and latest revision, validates UTF-8 byte
+limits and charges retained bytes before appending. Image Assets are not editable
+through this intent. Another owner's IDs or an unrelated Block/Asset pair fail.
+
+One transaction appends immutable content/digest, advances the Block's matching
+Asset or caption reference and advances matching working Trail bindings in that
+Stage. It preserves IDs, the image/figure and every accepted Run/attempt/input
+reference. Equal text at the expected revision is a no-op; a stale revision is
+still a conflict. Expected revisions must be positive and cannot overflow.
+
+Mutation receipts make identical retries return the original accepted response;
+a changed payload with that intent key fails. A conflict or quota failure leaves
+prior content and evidence intact. A running worker keeps its already frozen
+input. New Run admission separately checks its explicit expected Asset identity
+and revision; reading a newer notebook never rewrites a completed Run.
+
 ## Development ceilings
 
 [`desktop/protocol.json`](https://github.com/cubearc/play/blob/main/desktop/protocol.json)

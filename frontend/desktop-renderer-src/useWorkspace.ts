@@ -13,7 +13,7 @@ const messages: Record<string, string> = {
   workspace_busy:
     "This workspace is already open in another engine. Close that owner before reopening it here.",
   state_conflict:
-    "The saved note changed. Your draft was kept; reload the stage before retrying.",
+    "The saved content changed. Your draft was kept; cancel and reopen the editor to review the latest revision.",
   storage_quota:
     "The workspace storage limit was reached. Existing content was preserved.",
   input_limit: "This content exceeds the supported text limit.",
@@ -54,6 +54,8 @@ export function useWorkspace() {
   const live = useRef(true);
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
+  const explorationRef = useRef(exploration);
+  explorationRef.current = exploration;
   const execute = useCallback(
     async (action: () => Promise<void> | Promise<boolean | undefined>) => {
       if (actionBusy.current) return false;
@@ -140,9 +142,6 @@ export function useWorkspace() {
       epoch.current++;
     };
   }, [bind, execute]);
-  useEffect(() => {
-    void window.play.dirty(Object.keys(drafts).length > 0).catch(() => {});
-  }, [drafts]);
   const refreshSummary = useCallback(async (workspaceId: string) => {
     if (workspaceRef.current?.id !== workspaceId) return;
     try {
@@ -242,6 +241,45 @@ export function useWorkspace() {
       if (!result) return false;
       await refresh(context);
     });
+  const reviseText = (
+    context: Context,
+    blockId: string,
+    assetId: string,
+    revision: number,
+    text: string,
+    key: string,
+  ) =>
+    execute(async () => {
+      const reload = async () => {
+        const shown = explorationRef.current;
+        if (
+          shown?.workspaceId === context.workspace_id &&
+          shown.id === context.exploration_id &&
+          shown.stage.id === context.stage_id
+        )
+          await load(
+            context.workspace_id,
+            context.exploration_id,
+            context.stage_id,
+          );
+      };
+      try {
+        await window.play.workspace({
+          kind: "revise_text",
+          context,
+          key,
+          block_id: blockId,
+          asset_id: assetId,
+          expected_revision: revision,
+          text,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("state_conflict"))
+          await reload().catch(() => {});
+        throw error;
+      }
+      await reload();
+    });
   const editNote = (value: string) => {
     if (!exploration) return;
     const note = exploration.stage.note;
@@ -320,6 +358,8 @@ export function useWorkspace() {
     selectStage,
     addText,
     importImage,
+    reviseText,
+    hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,
     noteValue: note ? (drafts[note.id]?.value ?? note.text) : "",

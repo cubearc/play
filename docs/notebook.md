@@ -31,6 +31,35 @@ history. Accepted Runs pin the input revision and Pipeline/Core configuration;
 choosing another operation does not rewrite previous evidence. See
 [native PipelineRuns](reference/desktop-runs.md) for states and exact retention.
 
+## Edit text and captions
+
+Choose **Edit text** in a text Block or **Edit caption** on an image that has a
+caption. Change the content, then choose **Save changes** or Cmd/Ctrl+S. The editor
+shows its starting revision and UTF-8 byte count; the 1024-byte limit also applies
+to edits. **Cancel** discards this edit draft.
+
+Saving keeps the Block and Asset identities and appends a revision. The image and
+caption stay in one figure, and editing the caption leaves image bytes unchanged.
+Its existing Trail uses the saved revision for the next Run. A Run already in
+progress continues with its original input.
+
+An older result remains visible with **Earlier input · r1** when the current
+source is r2. Choose **Run cell** to execute the saved content; earlier Runs remain
+in history. Saving text does not execute it, and Cmd/Ctrl+Enter inside the editor
+does not start a background Run. Cmd/Ctrl+S saves the editor without saving a
+separate reasoning draft.
+
+![Caption editor with revision, byte count and explicit Save changes and Cancel controls.](assets/desktop/caption-editor.png)
+
+The caption editor in the macOS source preview. Saving preserves earlier input
+revisions and Run evidence. [Open full size](assets/desktop/caption-editor.png).
+
+If another edit was saved first, the editor keeps your draft and reports a
+conflict. Copy any text you want to keep, then **Cancel** and reopen the editor to
+review the latest saved revision. It never silently overwrites that content.
+Unsaved text/caption edits trigger the same **Keep editing** / **Discard draft**
+choice as reasoning when closing or quitting; drafts are not crash-recovery data.
+
 ## Save reasoning
 
 Write in **Stage note**, then choose **Save reasoning** or Cmd/Ctrl+S. Wait for
@@ -46,9 +75,9 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 | Toggle Explorer | Cmd+B | Ctrl+B |
 | Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
 | Run active text cell | Cmd+Enter | Ctrl+Enter |
-| Save reasoning | Cmd+S | Ctrl+S |
+| Save editor or reasoning | Cmd+S | Ctrl+S |
 
 Windows/Linux worker execution is refused by the current native policy, even
 though the UI has keyboard bindings. [Installation](installation.md) states the
-platform scope. Blocks currently support creation and ordered display; a general
-content editor, drag reordering and result export are not available in this preview.
+platform scope. Image replacement, Block reordering/duplication/removal and
+result export are not available in this preview.

@@ -1,4 +1,5 @@
 use super::{
+    assets,
     model::{Command, Context},
     queries,
     storage::{self, Owned},
@@ -389,6 +390,25 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         } => {
             queries::context(connection, owner, context).await?;
             add(connection, context, title, caption, Some(png)).await?
+        }
+        Command::ReviseText {
+            context,
+            block_id,
+            asset_id,
+            expected_revision,
+            text,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            assets::revise_text(
+                connection,
+                context,
+                *block_id,
+                *asset_id,
+                *expected_revision,
+                text,
+            )
+            .await?
         }
         _ => return Err("invalid_command"),
     };

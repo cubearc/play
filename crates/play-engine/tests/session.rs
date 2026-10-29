@@ -13,7 +13,7 @@ fn negotiates_the_private_protocol_before_accepting_commands() {
         .unwrap();
     let mut input = child.stdin.take().unwrap();
     let mut output = BufReader::new(child.stdout.take().unwrap());
-    writeln!(input, r#"{{"type":"hello","id":1,"protocol":3,"engine":"0.2.0","nonce":"0123456789abcdef0123456789abcdef"}}"#).unwrap();
+    writeln!(input, "{}", serde_json::json!({"type":"hello","id":1,"protocol":play_engine::protocol::contract().protocol,"engine":play_engine::protocol::contract().engine,"nonce":"0123456789abcdef0123456789abcdef"})).unwrap();
     let mut line = String::new();
     output.read_line(&mut line).unwrap();
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();
@@ -45,8 +45,10 @@ fn rejects_unscoped_execution_and_replayed_ids_without_exposing_input() {
     };
     use serde_json::json;
     assert_eq!(
-        request(json!({"type":"hello","id":1,"protocol":3,"engine":"0.2.0",
-        "nonce":"0123456789abcdef0123456789abcdef"}))["type"],
+        request(
+            json!({"type":"hello","id":1,"protocol":play_engine::protocol::contract().protocol,"engine":play_engine::protocol::contract().engine,
+        "nonce":"0123456789abcdef0123456789abcdef"})
+        )["type"],
         "ready"
     );
     let catalog = request(json!({"type":"catalog","id":2}));

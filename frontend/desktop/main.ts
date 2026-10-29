@@ -65,9 +65,9 @@ async function confirmDiscard(): Promise<boolean> {
   try {
     const result = await dialog.showMessageBox(window, {
       type: "warning",
-      message: "Reasoning has unsaved changes.",
+      message: "Changes have not been saved.",
       detail:
-        "Keep editing to save your reasoning, or discard the unsaved draft.",
+        "Keep editing to save your content, or discard the unsaved draft.",
       buttons: ["Keep editing", "Discard draft"],
       defaultId: 0,
       cancelId: 0,
