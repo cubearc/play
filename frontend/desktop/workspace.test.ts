@@ -16,7 +16,6 @@ import {
   contextOf,
   type ExplorationView,
   type RunDetail,
-  type RunRequest,
   type TrailView,
   type WorkspaceView,
 } from "./workspace-contract.ts";
@@ -38,6 +37,15 @@ const worker =
         ),
       )
     : undefined;
+
+const supervisionWorker = worker
+  ? fileURLToPath(
+      new URL(
+        "../desktop-native/SupervisionProbe.app/Contents/MacOS/play-engine",
+        import.meta.url,
+      ),
+    )
+  : undefined;
 
 test("native image adapter pins authorized image input and preserves exact Core pixel bytes", {
   timeout: 15000,
@@ -658,11 +666,8 @@ test("archive keeps admitted native work supervised and refuses new work until r
   timeout: 15000,
 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(), "play-native-archive-"));
-  const engine = await Engine.connect(
-    binary,
-    worker,
-    join(temporary, "private"),
-  );
+  const root = join(temporary, "private");
+  let engine = await Engine.connect(binary, supervisionWorker, root);
   try {
     const request = await runFixture(engine, "+[]");
     const open = {
@@ -674,7 +679,9 @@ test("archive keeps admitted native work supervised and refuses new work until r
     const before = (await engine.workspace(open)) as ExplorationView;
     const block = before.stage.blocks.find((b) => b.kind === "asset");
     assert.ok(block?.kind === "asset");
-    const admitted = worker ? await engine.startRun(request) : null;
+    const admitted = worker
+      ? await actualRunning(() => engine.startRun(request))
+      : null;
     const mutation = {
       kind: "archive_block",
       context: request.context,
@@ -698,15 +705,13 @@ test("archive keeps admitted native work supervised and refuses new work until r
         context: request.context,
         run_id: admitted.id,
       })) as RunDetail;
-      assert.notEqual(still.status, "cancelled");
+      assert.equal(still.status, "running");
       assert.deepEqual(still.plan, admitted.plan);
       const cancelled = await engine.cancelRun({
         context: request.context,
         run_id: admitted.id,
       });
-      assert.ok(
-        cancelled.status === "cancelled" || cancelled.status === "failed",
-      );
+      assert.equal(cancelled.status, "cancelled");
       assert.deepEqual(cancelled.plan, admitted.plan);
       await assert.rejects(
         engine.startRun({ ...request, key: randomUUID() }),
@@ -728,6 +733,7 @@ test("archive keeps admitted native work supervised and refuses new work until r
     assert.deepEqual(restored.stage.blocks, before.stage.blocks);
     assert.equal(restored.trails[0]?.archived, false);
     if (worker) {
+      engine = await reconnect(engine, worker, root, request.context);
       const trail = restored.trails[0];
       assert.ok(trail);
       const selected = await saveOperation(
@@ -785,6 +791,14 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(failed.attempts[0]?.status, "failed");
     // Keep a nonterminating bounded program for active cancellation.
     const loop = await runFixture(engine, "+[]");
+    const endedBeforeQuit = await finished(
+      engine,
+      loop.context,
+      await engine.startRun({ ...loop, key: randomUUID() }),
+    );
+    assert.equal(endedBeforeQuit.status, "failed");
+    assert.equal(endedBeforeQuit.result?.code, "operation_failed");
+    engine = await reconnect(engine, supervisionWorker, root, loop.context);
     const running = await actualRunning(() => engine.startRun(loop));
     assert.equal(running.status, "running");
     const cancelled = await engine.cancelRun({
@@ -794,20 +808,9 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(cancelled.status, "cancelled");
     assert.equal(cancelled.attempts[0]?.status, "cancelled");
     assert.deepEqual(await engine.startRun(loop), cancelled);
-    const endedBeforeQuit = await finished(
-      engine,
-      loop.context,
-      await engine.startRun({ ...loop, key: randomUUID() }),
-    );
-    assert.equal(endedBeforeQuit.status, "failed");
-    assert.equal(endedBeforeQuit.result?.code, "operation_failed");
-    // A running snapshot cannot keep a bounded program active until a later Quit.
-    // Deliver admission and EOF together to test graceful close without a client race.
+    const shutdownIntent = { ...loop, key: randomUUID() };
+    const shutdown = await actualRunning(() => engine.startRun(shutdownIntent));
     await engine.close();
-    const shutdown = await closeAfterAdmission(root, {
-      ...loop,
-      key: randomUUID(),
-    });
     engine = await Engine.connect(binary, worker, root);
     await engine.workspace({
       kind: "open",
@@ -854,7 +857,7 @@ test("killing the real engine recovers a running node as interrupted without inv
   await setup.close();
   const owner = spawn(
     binary,
-    ["--ipc", "--worker", worker ?? "", "--data-root", root],
+    ["--ipc", "--worker", supervisionWorker ?? "", "--data-root", root],
     { stdio: ["pipe", "pipe", "ignore"] },
   );
   const lines = createInterface({ input: owner.stdout });
@@ -936,11 +939,8 @@ test("editing an input during a real worker Run preserves its plan and rejects s
   timeout: 15000,
 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(), "play-live-input-edit-"));
-  const engine = await Engine.connect(
-    binary,
-    worker,
-    join(temporary, "private"),
-  );
+  const root = join(temporary, "private");
+  let engine = await Engine.connect(binary, supervisionWorker, root);
   try {
     const request = await runFixture(engine, "+[]");
     const opened = (await engine.workspace({
@@ -988,6 +988,7 @@ test("editing an input during a real worker Run preserves its plan and rejects s
     })) as ExplorationView;
     const trail = updated.trails[0];
     assert.ok(trail);
+    engine = await reconnect(engine, worker, root, request.context);
     const selected = await saveOperation(
       engine,
       request.context,
@@ -1070,60 +1071,14 @@ async function actualRunning(
   return run;
 }
 
-async function closeAfterAdmission(
+async function reconnect(
+  engine: Engine,
+  workerPath: string | undefined,
   root: string,
-  request: RunRequest,
-): Promise<RunDetail> {
-  const owner = spawn(
-    binary,
-    ["--ipc", "--worker", worker ?? "", "--data-root", root],
-    { stdio: ["pipe", "pipe", "ignore"] },
-  );
-  const lines = createInterface({ input: owner.stdout });
-  const exit = once(owner, "exit");
-  const send = async (value: object, end = false) => {
-    const reply = once(lines, "line", { signal: AbortSignal.timeout(3000) });
-    const frame = `${JSON.stringify(value)}\n`;
-    if (end) owner.stdin.end(frame);
-    else owner.stdin.write(frame);
-    return JSON.parse((await reply)[0] as string) as {
-      type: string;
-      data: RunDetail;
-    };
-  };
-  try {
-    assert.equal(
-      (
-        await send({
-          type: "hello",
-          id: 1,
-          protocol: contract.protocol,
-          engine: contract.engine,
-          nonce: "0123456789abcdef0123456789abcdef",
-        })
-      ).type,
-      "ready",
-    );
-    assert.equal(
-      (
-        await send({
-          type: "workspace",
-          id: 2,
-          command: { kind: "open", workspace_id: request.context.workspace_id },
-        })
-      ).type,
-      "workspace",
-    );
-    const admitted = await send({ type: "start_run", id: 3, request }, true);
-    assert.equal(admitted.type, "run");
-    assert.equal(admitted.data.status, "queued");
-    assert.deepEqual(await exit, [0, null]);
-    return admitted.data;
-  } finally {
-    if (owner.exitCode === null && owner.signalCode === null) {
-      owner.kill();
-      await exit;
-    }
-    lines.close();
-  }
+  context: Context,
+) {
+  await engine.close();
+  const next = await Engine.connect(binary, workerPath, root);
+  await next.workspace({ kind: "open", workspace_id: context.workspace_id });
+  return next;
 }

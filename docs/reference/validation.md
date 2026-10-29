@@ -205,3 +205,11 @@ finished Run unchanged during schema-10 migration. The Electron graph journey
 adds/connects nodes, moves one by keyboard, executes both under the real worker
 policy, inspects their distinct results, promotes the output node and reopens the
 same evidence after restart. axe-core runs with the existing rules enabled.
+
+Supervisor lifecycle fixtures use a separate signed, sandboxed test helper that
+holds after the canonical node-start event. It makes archive/edit/cancel/Quit
+and owner-kill assertions independent of how quickly Core exhausts a finite work
+budget. The existing engine wall deadline and worker CPU/VM limits remain in force.
+The helper exits when its supervisor dies. The helper fabricates no output and is absent from production
+worker selection; actual Core outputs, typed conformance and real Electron Runs
+continue to use the normal worker.

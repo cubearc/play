@@ -47,6 +47,8 @@ command("cargo", [
   "play-engine",
   "--example",
   "native-boundary-probe",
+  "--example",
+  "native-supervision-probe",
   "--bin",
   "play-engine",
 ]);
@@ -66,6 +68,11 @@ if (process.platform === "darwin") {
       join(root, "target/debug/play-engine"),
       "com.cubearc.play.boundary-worker",
     ),
+  );
+  bundle(
+    "SupervisionProbe",
+    join(root, "target/debug/examples/native-supervision-probe"),
+    "com.cubearc.play.supervision-probe",
   );
   bundle(
     "Probe",
