@@ -6,6 +6,7 @@ mod model;
 mod mutations;
 mod order;
 mod queries;
+mod results;
 mod run_plan;
 mod runs;
 mod storage;

@@ -3,27 +3,26 @@ import type {
   AssetBlockData,
   AssetView,
   Context,
+  RunOutputOrigin,
 } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
+import { AssetOrigin } from "./AssetOrigin";
 import { FilePreview } from "./FilePreview";
 
 export function NotebookAsset({
   block,
   openAsset,
   context,
+  openSourceRun,
 }: {
   block: AssetBlockData;
   context: Context;
   openAsset: (asset: AssetView) => void;
+  openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   return (
     <figure className="notebook-figure">
-      {block.asset.origin ? (
-        <p className="copy-origin">
-          Copied from {block.asset.origin.title} · r
-          {block.asset.origin.revision}
-        </p>
-      ) : null}
+      <AssetOrigin asset={block.asset} openRun={openSourceRun} />
       <button
         className={`asset-content ${block.asset.content.kind}`}
         type="button"
@@ -56,7 +55,7 @@ export function NotebookAsset({
           </button>
           <span className="caption-meta">
             Caption · r{block.caption.revision}
-            {block.caption.origin
+            {block.caption.origin?.kind === "asset"
               ? ` · Copied from r${block.caption.origin.revision}`
               : ""}
           </span>

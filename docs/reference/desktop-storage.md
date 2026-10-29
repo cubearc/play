@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **5**, SQLite application ID
+The native store uses generation **2**, schema version **6**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
-accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql` and
-`files.sql`.
-Recognized native schemas 1, 2, 3 and 4 upgrade to schema 5 under the owner lock, preserving content,
+accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
+`files.sql` and `results.sql`.
+Recognized native schemas 1–5 upgrade to schema 6 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -119,6 +119,48 @@ coerced to text inputs or editable with `revise_text`. Their Blocks use the same
 ordering, independent copy/lineage and archive/restore lifecycle as other Assets;
 copies retain exact bytes, while archived views remain readable. Schema 5 widens
 the Asset-kind constraint while preserving existing references and triggers.
+
+## Saved Run outputs
+
+The closed `pin_run_output` intent carries `context`, `key`, `expected_revision`,
+`run_id`, `attempt_id` and `port`. The renderer cannot supply output bytes, a
+replacement value, a title or an inferred source. Rust checks the exact owned
+Stage revision and completed retained Run/attempt, its single target node,
+installed Core contract/version/digest and named output schema. Unsupported
+privacy policies, contract drift, missing ports, failed or unretained work refuse
+promotion without changing the notebook.
+
+The transaction copies the selected text or bytes into a new immutable Asset
+revision, creates its Block/Trail, records the origin and advances the Stage.
+Text preserves the text semantic type and existing 1024-byte ceiling. Bytes use
+the File representation and its bounded viewer, without implicit text coercion.
+Active/retained Block and aggregate byte limits apply to the complete mutation.
+No operation runs while saving an output.
+
+`result_origins` links the new Asset to its exact Run, actual attempt and named
+port under composite ownership foreign keys. An immutable unique key prevents
+multiple roots for that selection. Guards preserve the origin, prevent further
+root content revisions and exclude simultaneous copy/Run origins. Existing
+`asset_origins` still records the immediate parent of an independent copy.
+
+Protocol 9 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
+and `title`; `kind: run_output` has `runId`, `attemptId`, `nodeId`, `trailId`,
+`port`, `semanticType`, `operationName` and the engine `sequence`. There is no
+untagged-origin fallback. Run-origin fields derive from immutable stored evidence,
+and the source link requests that exact Run within its owning context.
+
+Result roots reject `revise_text` with `result_read_only`; copied text variants
+have their own revisions and remain editable. Reordering/archive/restoration
+preserve the root's origin and history. Archiving a source clue does not revoke
+its retained Run or the independent result. Text results can feed a new explicit
+text Run; byte results remain inspection-only Files in this preview.
+
+Matching intent retries return the original receipt. A fresh intent for the same
+Run/attempt/port returns its existing Block without adding content or restoring
+an archive. A stale Stage revision fails before mutation. `result_not_available`
+identifies unfinished or unretained work. Recognized native schema 5 upgrades
+preserve files, archived content, source lineage and completed Runs before
+accepting promotion.
 
 ## Block ordering
 

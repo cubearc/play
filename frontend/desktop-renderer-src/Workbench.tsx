@@ -7,6 +7,7 @@ import {
   type AssetBlockView,
   type Context,
   contextOf,
+  type RunOutputOrigin,
   type TextAssetView,
   type TrailView,
 } from "../desktop/workspace-contract";
@@ -31,7 +32,6 @@ interface TextEdit {
 
 export function Workbench() {
   const state = useWorkspace();
-  const executions = useExecutions(state.exploration, state.refreshSummary);
   const { workspace, exploration } = state;
   const [welcome, setWelcome] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
@@ -44,6 +44,37 @@ export function Workbench() {
   }, [state.hasUnsavedNotes, editorDirty]);
   const [tabs, setTabs] = useState<Record<string, readonly string[]>>({});
   const [selection, setSelection] = useState<Record<string, string>>({});
+  const [pendingFocus, setPendingFocus] = useState<{
+    stageId: string;
+    blockId: string;
+  } | null>(null);
+  const focusHandled = useCallback(() => setPendingFocus(null), []);
+  const executions = useExecutions(state.exploration, state.refreshSummary, {
+    busy: state.busy,
+    save: async (trail, run, port) => {
+      const attempt = run.attempts[0];
+      if (
+        !exploration ||
+        exploration.id !== trail.explorationId ||
+        exploration.stage.id !== trail.stageId ||
+        run.attempts.length !== 1 ||
+        !attempt
+      )
+        return;
+      const block = await state.pinRunOutput(
+        contextOf(exploration),
+        exploration.stage.revision,
+        run.id,
+        attempt.id,
+        port,
+      );
+      if (block) {
+        const key = `${trail.explorationId}/${trail.stageId}`;
+        setSelection((previous) => ({ ...previous, [key]: "notebook" }));
+        setPendingFocus({ stageId: trail.stageId, blockId: block });
+      }
+    },
+  });
   const [sidebar, setSidebar] = useState(true);
   const [palette, setPalette] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(258);
@@ -80,6 +111,15 @@ export function Workbench() {
       [contextKey]: [...new Set([...(previous[contextKey] ?? []), trail.id])],
     }));
     setSelection((previous) => ({ ...previous, [contextKey]: trail.id }));
+  };
+  const openSourceRun = (origin: RunOutputOrigin) => {
+    const trail = exploration?.trails.find(
+      (trail) => trail.id === origin.trailId,
+    );
+    if (trail) {
+      openTrail(trail);
+      void executions.show(trail, origin.runId);
+    }
   };
   const run = () => {
     if (runnableTrail?.source.content.kind !== "text" || runnableTrail.archived)
@@ -338,6 +378,7 @@ export function Workbench() {
                   key={activeTrail.id}
                   trail={activeTrail}
                   executions={executions}
+                  openSourceRun={openSourceRun}
                 />
               ) : (
                 <Notebook
@@ -357,6 +398,13 @@ export function Workbench() {
                   reorderBlocks={state.reorderBlocks}
                   duplicateBlock={state.duplicateBlock}
                   setArchived={state.setArchived}
+                  openSourceRun={openSourceRun}
+                  focusBlockId={
+                    pendingFocus?.stageId === exploration.stage.id
+                      ? pendingFocus.blockId
+                      : null
+                  }
+                  onFocusHandled={focusHandled}
                 />
               )}
             </>

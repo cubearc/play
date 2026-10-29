@@ -18,6 +18,9 @@ revisions persist under the original Asset IDs. Unsaved drafts do not survive a
 crash. Editing never rewrites an earlier Run's input revision or result.
 Duplicated Blocks reopen with their own content, Assets, Trails and saved Runs.
 Their source revision labels remain pinned even after the original is edited.
+Saved result Blocks retain their exact Run/attempt/port origin and typed value.
+Their source link opens the chosen Run after later edits or executions. A text
+result's independent Runs also reopen without changing that original evidence.
 Archived Blocks and their Run history also survive reopening. Use **Archived
 blocks** in the Stage notebook to inspect or restore them. Restoring preserves
 their identities and revisions; archiving never discards stored content.

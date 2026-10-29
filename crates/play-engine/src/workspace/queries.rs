@@ -55,8 +55,13 @@ pub async fn asset(
         _ => return Err("corrupt_store"),
     };
     let origin = sqlx::query("SELECT o.source_asset_id,o.source_revision,a.title FROM asset_origins o JOIN assets a ON (o.workspace_id,o.exploration_id,o.source_asset_id)=(a.workspace_id,a.exploration_id,a.id) WHERE o.workspace_id=? AND o.exploration_id=? AND o.asset_id=?")
-        .bind(workspace).bind(exploration).bind(id).fetch_optional(connection).await.map_err(storage::failure)?
-        .map(|row| Box::new(AssetOrigin {asset_id:row.get(0),revision:row.get(1),title:row.get(2)}));
+        .bind(workspace).bind(exploration).bind(id).fetch_optional(&mut *connection).await.map_err(storage::failure)?
+        .map(|row| Box::new(AssetOrigin::Asset {asset_id:row.get(0),revision:row.get(1),title:row.get(2)}));
+    let result_origin = super::results::origin(connection, workspace, exploration, id).await?;
+    if origin.is_some() && result_origin.is_some() {
+        return Err("corrupt_store");
+    }
+    let origin = origin.or(result_origin);
     Ok(Asset {
         id: id.into(),
         exploration_id: exploration.into(),

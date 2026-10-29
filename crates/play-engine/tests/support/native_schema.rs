@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use uuid::Uuid;
 
 pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
-    assert!((1..=4).contains(&target));
+    assert!((1..=5).contains(&target));
     let directory = root.join(workspace.to_string());
     let database = directory.join("workspace.sqlite3");
     let source = directory.join("schema-fixture-source.sqlite3");
@@ -18,8 +18,10 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         if target>=2 {sqlx::raw_sql(include_str!("../../src/workspace/runs.sql")).execute(&mut connection).await.unwrap();}
         if target>=3 {sqlx::raw_sql(include_str!("../../src/workspace/copies.sql")).execute(&mut connection).await.unwrap();}
         if target>=4 {sqlx::raw_sql(include_str!("../../src/workspace/archive.sql")).execute(&mut connection).await.unwrap();}
+        if target>=5 {sqlx::raw_sql(include_str!("../../src/workspace/files.sql")).execute(&mut connection).await.unwrap();}
         sqlx::query("ATTACH DATABASE ? AS original").bind(source.to_str().unwrap()).execute(&mut connection).await.unwrap();
-        let files:i64=sqlx::query_scalar("SELECT count(*) FROM original.assets WHERE kind='file'").fetch_one(&mut connection).await.unwrap();assert_eq!(files,0,"an older native fixture cannot represent File Assets");
+        let results:i64=sqlx::query_scalar("SELECT count(*) FROM original.result_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(results,0,"an older native fixture cannot represent Result Assets");
+        if target<5 {let files:i64=sqlx::query_scalar("SELECT count(*) FROM original.assets WHERE kind='file'").fetch_one(&mut connection).await.unwrap();assert_eq!(files,0,"an older native fixture cannot represent File Assets");}
         if target<4 {let archived:i64=sqlx::query_scalar("SELECT count(*) FROM original.blocks WHERE archived_revision IS NOT NULL").fetch_one(&mut connection).await.unwrap();assert_eq!(archived,0,"an older native fixture cannot represent archived content");}
         if target<3 {let origins:i64=sqlx::query_scalar("SELECT count(*) FROM original.asset_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(origins,0);}
         if target<2 {let runs:i64=sqlx::query_scalar("SELECT count(*) FROM original.pipeline_runs").fetch_one(&mut connection).await.unwrap();assert_eq!(runs,0);}

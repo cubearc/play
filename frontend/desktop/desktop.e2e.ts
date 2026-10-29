@@ -13,6 +13,241 @@ import {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("saved output Blocks preserve the original Run and can feed a new text operation", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-result-blocks-"));
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Selected evidence");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Result study");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const clue = () =>
+      notebook(page).getByRole("article", { name: "Clue block", exact: true });
+    await clue().getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(clue()).toContainText("output: The key.");
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Keep this selected result as evidence.");
+    const stale = await current(page);
+    await page.evaluate(async ({ workspace, exploration }) => {
+      await window.play.workspace({
+        kind: "reorder_blocks",
+        context: {
+          workspace_id: workspace.id,
+          exploration_id: exploration.id,
+          stage_id: exploration.stage.id,
+        },
+        key: crypto.randomUUID(),
+        expected_revision: exploration.stage.revision,
+        block_ids: exploration.stage.blocks.map((block) => block.id).reverse(),
+      });
+    }, stale);
+    await clue()
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Notebook content changed",
+    );
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "ROT13 · output · Run 1 block",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Keep this selected result as evidence.",
+    );
+    await expect(
+      clue().getByRole("button", { name: "Save output as block", exact: true }),
+    ).toBeEnabled();
+    await clue()
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    const result = () =>
+      notebook(page).getByRole("article", {
+        name: "ROT13 · output · Run 1 block",
+        exact: true,
+      });
+    await expect(result()).toBeFocused();
+    await expect(result()).toContainText("Saved from ROT13");
+    await expect(result()).toContainText("The key.");
+    await expect(
+      result().getByRole("button", { name: "Edit text", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Keep this selected result as evidence.",
+    );
+    const saved = await current(page);
+    const root = saved.exploration.stage.blocks.find(
+      (b) => b.kind === "asset" && b.asset.title === "ROT13 · output · Run 1",
+    );
+    assert.ok(root?.kind === "asset");
+    await result()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    await expect(result()).toContainText("output: Gur xrl.");
+    await clue()
+      .getByRole("button", { name: "Edit text", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur frpbaq.");
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await clue().getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(clue()).toContainText("output: The second.");
+    await result()
+      .getByRole("button", { name: "Open source Run 1", exact: true })
+      .click();
+    const canvas = () =>
+      page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(canvas()).toContainText("Earlier input · r1");
+    await expect(canvas()).toContainText("output: The key.");
+    await expect(
+      canvas().getByRole("button", {
+        name: "Saved output as block",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await clue()
+      .getByRole("button", { name: "Archive Clue", exact: true })
+      .click();
+    await result()
+      .getByRole("button", { name: "Open source Run 1", exact: true })
+      .click();
+    await expect(canvas()).toContainText("Archived block");
+    await expect(canvas()).toContainText("output: The key.");
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await result()
+      .getByRole("button", {
+        name: "Archive ROT13 · output · Run 1",
+        exact: true,
+      })
+      .click();
+    await notebook(page)
+      .getByRole("button", { name: "Archived blocks (2)", exact: true })
+      .click();
+    const archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await archive
+      .getByRole("button", {
+        name: "Restore ROT13 · output · Run 1",
+        exact: true,
+      })
+      .click();
+    await expect(result()).toBeFocused();
+    assert.deepEqual(
+      (await current(page)).exploration.stage.blocks.find(
+        (b) => b.id === root.id,
+      ),
+      root,
+    );
+    await saveNote(page, "Keep this selected result as evidence.");
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Grouped with the image.");
+    await dialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    const file = join(profile, "evidence.bin");
+    await writeFile(file, Buffer.from([0, 128, 255]));
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, file);
+    await notebook(page)
+      .getByRole("button", { name: "Add file", exact: true })
+      .click();
+    for (let index = 0; index < 2; index++) {
+      await result()
+        .getByRole("button", {
+          name: "Move ROT13 · output · Run 1 down",
+          exact: true,
+        })
+        .click();
+      await expect(result()).toBeFocused();
+    }
+    const mixed = (await current(page)).exploration.stage.blocks.filter(
+      (block) => block.kind === "asset",
+    );
+    assert.equal(mixed[0]?.asset.content.kind, "image");
+    assert.equal(mixed[1]?.asset.content.kind, "file");
+    assert.equal(mixed[2]?.asset.id, root.asset.id);
+    await create(page, "Exploration", "Separate results");
+    await expect(notebook(page)).not.toContainText("Saved from ROT13");
+    await explorer(page)
+      .getByRole("button", { name: "Result study", exact: true })
+      .click();
+    await expect(result()).toContainText("output: Gur xrl.");
+    const before = await current(page);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(result()).toContainText("Saved from ROT13");
+    await expect(result()).toContainText("output: Gur xrl.");
+    assert.deepEqual(await current(page), before);
+    assert.deepEqual(await readFile(file), Buffer.from([0, 128, 255]));
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("File Blocks import inert content and preserve scoped copies, order and archive after restart", {
   timeout: 90000,
 }, async () => {

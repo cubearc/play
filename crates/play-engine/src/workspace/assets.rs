@@ -1,5 +1,5 @@
 use super::{
-    model::{Content, Context},
+    model::{AssetOrigin, Content, Context},
     mutations, queries, storage,
 };
 use crate::{Result, protocol};
@@ -42,6 +42,12 @@ pub(super) async fn revise_text(
         return Err("state_conflict");
     }
     let original = queries::asset(connection, &workspace, &exploration, &asset, expected).await?;
+    if matches!(
+        original.origin.as_deref(),
+        Some(AssetOrigin::RunOutput { .. })
+    ) {
+        return Err("result_read_only");
+    }
     let Content::Text { text: previous } = original.content else {
         return Err("invalid_asset_type");
     };

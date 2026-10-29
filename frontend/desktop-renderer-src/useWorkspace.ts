@@ -11,6 +11,12 @@ import type {
 import { contextOf, reasoningOf } from "../desktop/workspace-contract";
 
 const messages: Record<string, string> = {
+  result_read_only:
+    "Saved results preserve their original output. Duplicate this block to edit an alternative.",
+  result_not_available:
+    "Only a completed Run with a retained output can be saved as a block.",
+  result_conflict:
+    "Notebook content changed. The latest state is shown and your reasoning draft was kept. Review it, then save the result again.",
   lifecycle_conflict:
     "Notebook or saved block changed. The latest state is shown and your reasoning draft was kept. Review it, then try again.",
   block_archived:
@@ -28,7 +34,7 @@ const messages: Record<string, string> = {
   state_conflict:
     "The saved content changed. Your draft was kept; cancel and reopen the editor to review the latest revision.",
   storage_quota:
-    "The workspace storage limit was reached. Existing content was preserved.",
+    "A notebook or workspace storage limit was reached. Existing content was preserved.",
   input_limit: "This content exceeds the supported text limit.",
   image_limit: "Choose a PNG image no larger than 128 KiB.",
   file_limit: "Choose a file no larger than 128 KiB.",
@@ -69,6 +75,9 @@ export function useWorkspace() {
   const actionBusy = useRef(false);
   const copyIntents = useRef(
     new Map<string, Extract<WorkspaceRequest, { kind: "duplicate_block" }>>(),
+  );
+  const resultIntents = useRef(
+    new Map<string, Extract<WorkspaceRequest, { kind: "pin_run_output" }>>(),
   );
   const epoch = useRef(0);
   const live = useRef(true);
@@ -285,6 +294,60 @@ export function useWorkspace() {
       if (!result) return false;
       await refresh(context);
     });
+  const pinRunOutput = async (
+    context: Context,
+    revision: number,
+    run: string,
+    attempt: string,
+    port: string,
+  ): Promise<string | null> => {
+    const slot = `${context.workspace_id}/${context.exploration_id}/${context.stage_id}/${run}/${attempt}/${port}`;
+    let block: string | null = null;
+    const intent: Extract<WorkspaceRequest, { kind: "pin_run_output" }> =
+      resultIntents.current.get(slot) ?? {
+        kind: "pin_run_output",
+        context,
+        key: crypto.randomUUID(),
+        expected_revision: revision,
+        run_id: run,
+        attempt_id: attempt,
+        port,
+      };
+    const accepted = await execute(async () => {
+      resultIntents.current.set(slot, intent);
+      try {
+        const result = await window.play.workspace(intent);
+        const latest = await reloadCurrent(context);
+        if (!latest) return false;
+        resultIntents.current.delete(slot);
+        block = result.blockId;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          [
+            "state_conflict",
+            "result_not_available",
+            "not_found",
+            "storage_quota",
+            "retained_block_limit",
+            "workspace_mismatch",
+            "contract_mismatch",
+            "output_limit",
+          ].some((code) => error.message.includes(code))
+        )
+          resultIntents.current.delete(slot);
+        if (
+          error instanceof Error &&
+          error.message.includes("state_conflict")
+        ) {
+          await reloadCurrent(context);
+          throw new Error("result_conflict");
+        }
+        throw error;
+      }
+    });
+    return accepted ? block : null;
+  };
   const reorderBlocks = (
     context: Context,
     revision: number,
@@ -528,6 +591,7 @@ export function useWorkspace() {
     reorderBlocks,
     duplicateBlock,
     setArchived,
+    pinRunOutput,
     hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,

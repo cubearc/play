@@ -16,7 +16,20 @@ export interface AssetView {
   revision: number;
   title: string;
   content: { kind: "image" } | { kind: "text"; text: string } | FileContent;
-  origin?: { assetId: string; revision: number; title: string };
+  origin?:
+    | { kind: "asset"; assetId: string; revision: number; title: string }
+    | RunOutputOrigin;
+}
+export interface RunOutputOrigin {
+  kind: "run_output";
+  runId: string;
+  attemptId: string;
+  nodeId: string;
+  trailId: string;
+  port: string;
+  semanticType: "text" | "bytes";
+  operationName: string;
+  sequence: number;
 }
 export interface FileContent {
   kind: "file";
@@ -110,6 +123,15 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "pin_run_output";
+      context: Context;
+      key: string;
+      expected_revision: number;
+      run_id: string;
+      attempt_id: string;
+      port: string;
+    }
   | {
       kind: "archive_block" | "restore_block";
       context: Context;
@@ -285,6 +307,7 @@ export interface MutationResult {
   blockId?: string;
 }
 export interface Responses {
+  pin_run_output: { blockId: string; stageId: string; revision: number };
   list_runs: RunPage;
   run_detail: RunDetail;
   list: WorkspaceList;
@@ -330,6 +353,14 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    pin_run_output: [
+      "context",
+      "key",
+      "expected_revision",
+      "run_id",
+      "attempt_id",
+      "port",
+    ],
     list_runs: ["context", "trail_id", "before"],
     run_detail: ["context", "run_id"],
     list: [],
@@ -398,6 +429,9 @@ export function request(value: unknown): WorkspaceRequest {
       if (!revision(value)) throw new Error("invalid_command");
     } else if (field === "before") {
       if (value !== null && !revision(value))
+        throw new Error("invalid_command");
+    } else if (field === "port") {
+      if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(value))
         throw new Error("invalid_command");
     } else if (field === "title") {
       if (!bytes(value, 120) || !value.trim())

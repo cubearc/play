@@ -59,6 +59,13 @@ journey exercises HTML as text, binary preview, chooser cancellation, independen
 copies, keyboard order, archive/restore, Exploration isolation and restart.
 Native checks also reject oversized/special files and renderer path authority;
 source file bytes remain unchanged.
+Save a retained output with **Save as block**, then run its text independently
+and follow **Open source Run** after editing/re-running the original clue. The
+result journey verifies exact historical selection, keyboard focus, preserved
+reasoning drafts, read-only roots, archive/restore, isolation and restart. Native
+IPC also promotes actual Brainfuck bytes without text coercion; engine tests
+cover unavailable outputs, conflicts, quota rollback, unique origins and schema-5
+upgrade. Core determines the operation version and output contract in these checks.
 Archive journeys cover preserved history and drafts, keyboard restoration,
 image/caption grouping, active-slot reuse, retained limits and independent
 Explorations. Native tests archive an admitted worker without stopping its

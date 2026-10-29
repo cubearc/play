@@ -9,6 +9,7 @@ import type {
   AssetView,
   Context,
   ExplorationView,
+  RunOutputOrigin,
   TextAssetView,
   TrailView,
 } from "../desktop/workspace-contract";
@@ -71,6 +72,9 @@ export function Notebook({
   reorderBlocks,
   duplicateBlock,
   setArchived,
+  openSourceRun,
+  focusBlockId,
+  onFocusHandled,
 }: {
   exploration: ExplorationView;
   executions: Executions;
@@ -83,6 +87,9 @@ export function Notebook({
   addText: () => void;
   addImage: () => void;
   addFile: () => void;
+  openSourceRun: (origin: RunOutputOrigin) => void;
+  focusBlockId: string | null;
+  onFocusHandled: () => void;
   onNote: (value: string) => void;
   openTrail: (trail: TrailView) => void;
   reorderBlocks: (
@@ -106,6 +113,14 @@ export function Notebook({
   const reasoningBlockId =
     exploration.stage.blocks.find((block) => block.kind === "note")?.id ?? "";
   const archivePanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focusBlockId) {
+      (
+        cells.current.get(focusBlockId) ?? cells.current.get(reasoningBlockId)
+      )?.focus();
+      onFocusHandled();
+    }
+  }, [focusBlockId, reasoningBlockId, onFocusHandled]);
   const [archiveStage, setArchiveStage] = useState<string | null>(null);
   const archiveOpen =
     archiveStage === exploration.stage.id &&
@@ -335,9 +350,11 @@ export function Notebook({
                       : noteDirty
                         ? "Unsaved draft"
                         : `Saved · r${block.note.revision}`
-                    : `Asset · r${block.asset.revision}`}
+                    : `${block.asset.origin?.kind === "run_output" ? "Result" : "Asset"} · r${block.asset.revision}`}
                 </span>
-                {block.kind === "asset" && textAsset ? (
+                {block.kind === "asset" &&
+                textAsset &&
+                textAsset.origin?.kind !== "run_output" ? (
                   <VscodeButton
                     secondary
                     icon="edit"
@@ -416,6 +433,7 @@ export function Notebook({
                     block={block}
                     context={contextOf(exploration)}
                     openAsset={openAsset}
+                    openSourceRun={openSourceRun}
                   />
                   {trail?.pipelineId ? (
                     <OperationCell trail={trail} executions={executions} />
@@ -445,6 +463,7 @@ export function Notebook({
             busy={busy}
             full={full}
             openAsset={openAsset}
+            openSourceRun={openSourceRun}
             restore={(block) => void changeArchive(block, false)}
           />
           <p className="muted">

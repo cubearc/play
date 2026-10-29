@@ -31,6 +31,45 @@ history. Accepted Runs pin the input revision and Pipeline/Core configuration;
 choosing another operation does not rewrite previous evidence. See
 [native PipelineRuns](reference/desktop-runs.md) for states and exact retention.
 
+## Save a result as a Block
+
+Run a text cell with **Keep result in private history** checked, then choose
+**Save as block** beside its output. Play adds the selected value before trailing
+reasoning and focuses the result Block. Your reasoning draft stays in place.
+This saves evidence without running another operation.
+
+**Saved from ROT13 · output · Run 1** identifies the operation, named port and
+exact Run. Choose **Open source Run** to inspect its original input and attempt.
+If you later edit the source or run it again, the saved Block still contains
+the chosen output. You can also select an earlier Run in **Saved Run & input
+evidence** and save that result instead of the latest one.
+
+![A saved ROT13 result Block with its source Run link and a separate text operation, beside the original clue and saved reasoning.](assets/desktop/result-notebook.png)
+
+The selected output has its own Asset and Trail while preserving its source evidence. [Open full size](assets/desktop/result-notebook.png).
+
+A saved text result can feed **Run cell** in its own Block or Trail canvas. That
+creates a new Run using the exact result text; it does not invent a reused
+attempt. Byte outputs remain File Assets with exact bytes and an inert preview,
+without becoming runnable text. File operations remain unavailable in this preview.
+
+![The source Trail canvas showing an earlier input revision and the original Run selected from a saved result Block.](assets/desktop/result-source-run.png)
+
+The source link opens the chosen Run after a later edit and execution. [Open full size](assets/desktop/result-source-run.png).
+
+Saved results are read-only. To edit a text alternative, duplicate the result
+Block, then use **Edit text** on the copy. Reorder, archive and restore result
+Blocks using the same controls as other content. Their source links and earlier
+Runs survive reopening, even if the original clue is archived.
+
+One Block represents each Run/attempt/output selection. **Saved as block** means
+it already exists in this Stage, including Archived blocks; saving again does
+not create another copy or restore archived content. Use **Duplicate** for a
+distinct alternative. Runs without retained output, or that did not complete,
+cannot create a result Block. Stage and storage limits still apply. If another
+action changed the notebook, review the refreshed Stage and save again; your
+reasoning draft is kept.
+
 ## Edit text and captions
 
 Choose **Edit text** in a text Block or **Edit caption** on an image that has a

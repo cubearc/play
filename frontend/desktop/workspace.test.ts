@@ -35,6 +35,120 @@ const worker =
       )
     : undefined;
 
+test("a real retained byte Run becomes an exact file result with immutable attempt provenance", {
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-result-ipc-"));
+  const engine = await Engine.connect(
+    binary,
+    worker,
+    join(temporary, "private"),
+  );
+  try {
+    const workspace = (await engine.workspace({
+      kind: "create",
+      key: randomUUID(),
+      title: "Byte evidence",
+    })) as WorkspaceView;
+    const created = (await engine.workspace({
+      kind: "create_exploration",
+      workspace_id: workspace.id,
+      key: randomUUID(),
+      title: "Byte result",
+    })) as { explorationId: string; stageId: string };
+    const open = {
+      kind: "open_exploration",
+      workspace_id: workspace.id,
+      exploration_id: created.explorationId,
+      stage_id: created.stageId,
+    };
+    let exploration = (await engine.workspace(open)) as ExplorationView;
+    const context = contextOf(exploration);
+    await engine.workspace({
+      kind: "add_text",
+      context,
+      key: randomUUID(),
+      title: "Program",
+      text: "+.",
+    });
+    exploration = (await engine.workspace(open)) as ExplorationView;
+    const trail = exploration.trails[0];
+    assert.ok(trail?.pipeline);
+    const operation = (await engine.catalog()).find(
+      (operation) => operation.operation === "esolang.brainfuck.execute",
+    );
+    assert.ok(operation);
+    const request = {
+      context,
+      key: randomUUID(),
+      trail_id: trail.id,
+      pipeline_id: trail.pipeline.id,
+      pipeline_revision: trail.pipeline.revision,
+      source_asset_id: trail.source.id,
+      source_revision: trail.source.revision,
+      operation: operation.operation,
+      operation_version: operation.operation_version,
+      retain_output: true,
+    };
+    if (!worker) {
+      await assert.rejects(
+        engine.startRun(request),
+        /native_policy_unavailable/,
+      );
+      return;
+    }
+    let run = await engine.startRun(request);
+    while (run.status === "running" || run.status === "queued") {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      run = (await engine.workspace({
+        kind: "run_detail",
+        context,
+        run_id: run.id,
+      })) as RunDetail;
+    }
+    assert.equal(run.status, "completed");
+    const attempt = run.attempts[0];
+    const port = run.plan.contract.outputs.find(
+      (output) => output.semantic_type === "bytes",
+    )?.name;
+    assert.ok(attempt && port);
+    const intent = {
+      kind: "pin_run_output",
+      context,
+      key: randomUUID(),
+      expected_revision: exploration.stage.revision,
+      run_id: run.id,
+      attempt_id: attempt.id,
+      port,
+    };
+    const result = (await engine.workspace(intent)) as { blockId: string };
+    assert.deepEqual(await engine.workspace(intent), result);
+    const saved = (await engine.workspace(open)) as ExplorationView;
+    const block = saved.stage.blocks.find(
+      (block) => block.id === result.blockId,
+    );
+    assert.ok(block?.kind === "asset" && block.asset.content.kind === "file");
+    assert.equal(block.asset.content.byteLength, 1);
+    assert.equal(block.asset.content.preview.text, "01");
+    assert.ok(block.asset.origin?.kind === "run_output");
+    assert.equal(block.asset.origin.runId, run.id);
+    assert.equal(block.asset.origin.attemptId, attempt.id);
+    assert.equal(block.asset.origin.nodeId, attempt.nodeId);
+    assert.equal(
+      saved.trails.find((trail) => trail.source.id === block.asset.id)
+        ?.pipeline,
+      null,
+    );
+    assert.deepEqual(
+      await engine.workspace({ kind: "run_detail", context, run_id: run.id }),
+      run,
+    );
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("private IPC resolves exact owned asset revisions and refuses unscoped managed execution", {
   timeout: 15000,
 }, async () => {
@@ -181,6 +295,7 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
     assert.ok(copied?.kind === "asset");
     assert.notEqual(copied.asset.id, asset.id);
     assert.deepEqual(copied.asset.origin, {
+      kind: "asset",
       assetId: asset.id,
       revision: asset.revision,
       title: asset.title,

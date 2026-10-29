@@ -4,6 +4,7 @@ import type {
   AssetBlockData,
   AssetView,
   Context,
+  RunOutputOrigin,
 } from "../desktop/workspace-contract";
 import { NotebookAsset } from "./NotebookAsset";
 
@@ -14,6 +15,7 @@ export function ArchivedBlocks({
   full,
   openAsset,
   restore,
+  openSourceRun,
 }: {
   items: ArchivedBlockView[];
   context: Context;
@@ -21,6 +23,7 @@ export function ArchivedBlocks({
   full: boolean;
   openAsset: (asset: AssetView) => void;
   restore: (block: AssetBlockData) => void;
+  openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   return (
     <>
@@ -43,6 +46,7 @@ export function ArchivedBlocks({
             block={block}
             context={context}
             openAsset={openAsset}
+            openSourceRun={openSourceRun}
           />
           <div className="notebook-actions">
             <VscodeButton

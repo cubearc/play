@@ -1,3 +1,4 @@
+import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import { useState } from "react";
 import type { RunDetail, TrailView } from "../desktop/workspace-contract";
 import type { Executions } from "./useExecutions";
@@ -50,6 +51,41 @@ export function InlineResult({
             </span>
           </div>
           <pre role="status">{value(run)}</pre>
+          {run.status === "completed" &&
+          run.retainOutput &&
+          run.attempts.length === 1 &&
+          run.attempts[0]?.status === "completed"
+            ? Object.keys(run.result?.outputs ?? {})
+                .filter((port) =>
+                  run.plan.contract.outputs.some(
+                    (output) =>
+                      output.name === port &&
+                      ["text", "bytes"].includes(output.semantic_type),
+                  ),
+                )
+                .map((port) => {
+                  const saved = executions.outputSaved(run, port);
+                  return (
+                    <div className="result-actions" key={port}>
+                      <span>{port}</span>
+                      <VscodeButton
+                        secondary
+                        icon={saved ? "check" : "notebook"}
+                        disabled={executions.saveBusy || saved}
+                        aria-disabled={
+                          executions.saveBusy || saved ? "true" : "false"
+                        }
+                        aria-label={`${saved ? "Saved" : "Save"} ${port} as block`}
+                        onClick={() =>
+                          void executions.saveOutput(trail, run, port)
+                        }
+                      >
+                        {saved ? "Saved as block" : "Save as block"}
+                      </VscodeButton>
+                    </div>
+                  );
+                })
+            : null}
           {earlier && input && "assetId" in input ? (
             <p className="input-revision" role="note">
               Earlier input · r{input.revision}. The current source is r

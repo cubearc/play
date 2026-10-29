@@ -1,8 +1,9 @@
 import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import { useState } from "react";
-import type { TrailView } from "../desktop/workspace-contract";
+import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
+import { AssetOrigin } from "./AssetOrigin";
 import { FilePreview } from "./FilePreview";
 import { OperationCell } from "./OperationCell";
 import type { Executions } from "./useExecutions";
@@ -10,9 +11,11 @@ import type { Executions } from "./useExecutions";
 export function AssetCanvas({
   trail,
   executions,
+  openSourceRun,
 }: {
   trail: TrailView;
   executions: Executions;
+  openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   const [zoom, setZoom] = useState(100);
   const image = trail.source.content.kind === "image";
@@ -45,6 +48,7 @@ export function AssetCanvas({
         </p>
       ) : null}
       <div className="canvas-surface">
+        <AssetOrigin asset={trail.source} openRun={openSourceRun} />
         <article
           className="canvas-node source-node"
           aria-label="Bound source asset"

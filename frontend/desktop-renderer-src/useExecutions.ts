@@ -34,6 +34,10 @@ const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 150));
 export function useExecutions(
   exploration: ExplorationView | null,
   refreshSummary: (workspaceId: string) => Promise<void>,
+  results: {
+    busy: boolean;
+    save: (trail: TrailView, run: RunDetail, port: string) => Promise<void>;
+  },
 ) {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [catalogError, setCatalogError] = useState("");
@@ -295,6 +299,24 @@ export function useExecutions(
     }
   };
   return {
+    saveOutput: results.save,
+    saveBusy: results.busy,
+    outputSaved: (run: RunDetail, port: string) => {
+      if (!exploration) return false;
+      const assets = [
+        ...exploration.stage.blocks
+          .filter((b) => b.kind === "asset")
+          .map((b) => b.asset),
+        ...exploration.stage.archivedBlocks.map((b) => b.block.asset),
+      ];
+      return assets.some(
+        (asset) =>
+          asset.origin?.kind === "run_output" &&
+          asset.origin.runId === run.id &&
+          asset.origin.attemptId === run.attempts[0]?.id &&
+          asset.origin.port === port,
+      );
+    },
     operations,
     catalogError,
     history,

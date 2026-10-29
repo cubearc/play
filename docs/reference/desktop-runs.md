@@ -3,7 +3,7 @@
 Running a text cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
 The development executor supports one node using the installed native ROT13 or
-Brainfuck adapter. General DAG planning, joins, parallelism, output reuse and
+Brainfuck adapter. General DAG planning, joins, parallelism, executor output reuse and
 contextual CLI execution are separate deliveries.
 
 ## Accepted invocation
@@ -104,6 +104,19 @@ replay gap, and contains neither output bytes nor their fingerprint. It cannot
 silently recover discarded output. These records are private local evidence,
 not Candidates, Solutions, official Challenge validation or a general replay
 verifier.
+
+## Save a selected output
+
+Use [Save as block](../notebook.md#save-a-result-as-a-block) on a completed,
+retained output to create its own notebook Asset and Trail. The Block keeps a
+Run/actual-attempt/port origin; opening its source selects that exact historical
+Run even after the working input changes. The immutable Run remains unchanged.
+
+Text results can be bound to a new single-node text execution. That Run still
+uses `reusePolicy: none` and records its own actual attempt, with the saved result
+Asset as input. Byte results preserve exact bytes in an inspection-only File
+representation. Saving a Block never fabricates an execution, recovers an
+unretained output or performs an implicit conversion.
 
 ## History and limits
 

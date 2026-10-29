@@ -26,6 +26,14 @@ pub struct BlockSource {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    PinRunOutput {
+        context: Context,
+        key: Uuid,
+        expected_revision: i64,
+        run_id: Uuid,
+        attempt_id: Uuid,
+        port: String,
+    },
     ArchiveBlock {
         context: Context,
         key: Uuid,
@@ -134,6 +142,7 @@ impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
             Self::CreateExploration { key, .. }
+            | Self::PinRunOutput { key, .. }
             | Self::CreateStage { key, .. }
             | Self::SaveNote { key, .. }
             | Self::ReviseText { key, .. }
@@ -205,11 +214,27 @@ pub struct Asset {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AssetOrigin {
-    pub asset_id: String,
-    pub revision: i64,
-    pub title: String,
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum AssetOrigin {
+    Asset {
+        asset_id: String,
+        revision: i64,
+        title: String,
+    },
+    RunOutput {
+        run_id: String,
+        attempt_id: String,
+        node_id: String,
+        trail_id: String,
+        port: String,
+        semantic_type: String,
+        operation_name: String,
+        sequence: i64,
+    },
 }
 
 #[derive(Serialize)]

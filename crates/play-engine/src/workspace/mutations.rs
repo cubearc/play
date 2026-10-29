@@ -1,7 +1,7 @@
 use super::{
     assets, blocks, copies, files,
     model::{Command, Context},
-    order, queries,
+    order, queries, results,
     storage::{self, Owned},
 };
 use crate::{Result, protocol};
@@ -280,8 +280,18 @@ async fn add(
         (encoded.is_some() && !text.is_empty()).then_some(text),
     )
     .await
+    .map(AddedBlock::value)
 }
 
+pub(super) struct AddedBlock {
+    pub id: String,
+    pub asset_id: String,
+}
+impl AddedBlock {
+    pub(super) fn value(self) -> Value {
+        json!({"blockId":self.id})
+    }
+}
 pub(super) async fn add_block(
     connection: &mut SqliteConnection,
     context: &Context,
@@ -289,7 +299,7 @@ pub(super) async fn add_block(
     kind: &str,
     data: &[u8],
     caption: Option<&str>,
-) -> Result<Value> {
+) -> Result<AddedBlock> {
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
     let stage = context.stage_id.to_string();
@@ -320,10 +330,13 @@ pub(super) async fn add_block(
     order::make_space(connection, context, position).await?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")
-        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64)).execute(&mut *connection).await.map_err(storage::failure)?;
+        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(&primary).bind(&caption).bind(caption.as_ref().map(|_|1i64)).execute(&mut *connection).await.map_err(storage::failure)?;
     let expected = order::revision(connection, context).await?;
     order::advance(connection, context, expected).await?;
-    Ok(json!({"blockId":block}))
+    Ok(AddedBlock {
+        id: block,
+        asset_id: primary,
+    })
 }
 
 pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
@@ -356,6 +369,25 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         return serde_json::from_str(previous.get::<&str, _>(1)).map_err(|_| "corrupt_store");
     }
     let result = match command {
+        Command::PinRunOutput {
+            context,
+            expected_revision,
+            run_id,
+            attempt_id,
+            port,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            results::pin(
+                connection,
+                context,
+                *expected_revision,
+                *run_id,
+                *attempt_id,
+                port,
+            )
+            .await?
+        }
         Command::CreateExploration {
             workspace_id,
             title,

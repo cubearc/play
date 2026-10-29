@@ -21,7 +21,9 @@ pub(super) async fn add(
     if data.len() > maximum {
         return Err("file_limit");
     }
-    mutations::add_block(connection, context, title, "file", &data, None).await
+    mutations::add_block(connection, context, title, "file", &data, None)
+        .await
+        .map(mutations::AddedBlock::value)
 }
 
 pub(super) fn content(data: &[u8], sha256: String) -> Result<Content> {

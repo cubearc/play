@@ -73,7 +73,7 @@ fn text_copy_forks_current_content_with_lineage_independent_edits_and_no_invente
     assert_eq!(copied["asset"]["content"], source["asset"]["content"]);
     assert_eq!(
         copied["asset"]["origin"],
-        json!({"assetId":source["asset"]["id"],"revision":2,"title":"Clue"})
+        json!({"kind":"asset","assetId":source["asset"]["id"],"revision":2,"title":"Clue"})
     );
     assert_eq!(
         after["stage"]["revision"],

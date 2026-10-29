@@ -16,6 +16,29 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("saving an output requires a closed Run/attempt/port intent without renderer output data", () => {
+  const value = {
+    kind: "pin_run_output",
+    context: owner,
+    key: randomUUID(),
+    expected_revision: 2,
+    run_id: randomUUID(),
+    attempt_id: randomUUID(),
+    port: "output",
+  };
+  assert.deepEqual(request(value), value);
+  for (const candidate of [
+    { ...value, attempt_id: undefined },
+    { ...value, output: "forged" },
+    { ...value, base64: "AA==" },
+    { ...value, port: "" },
+    { ...value, port: "output.value" },
+    { ...value, port: "x".repeat(65) },
+    { ...value, expected_revision: 0 },
+    { ...value, context: { ...owner, exploration_id: "foreign" } },
+  ])
+    assert.throws(() => request(candidate), /invalid_command/);
+});
 test("file import grants only a chooser intent, never a renderer path or bytes", () => {
   const value = { context: owner, key: randomUUID() };
   assert.deepEqual(fileImport(value), value);

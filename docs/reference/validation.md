@@ -43,6 +43,12 @@ regular-file admission, inert HTML, cancellation, exact chooser authority,
 independent copies, ordering, archive/restore, Exploration isolation and restart.
 Schema-4 fixtures preserve archived content, source lineage and completed Runs
 before accepting file imports. A second same-URL window cannot invoke the chooser.
+Result checks promote exact retained Run/attempt/port outputs, reject unfinished,
+unretained, foreign and stale requests, preserve unique immutable origins and
+database revision guards, reuse text through a new real Run, and save real
+Brainfuck bytes as Files. The Electron journey follows the original Run after
+later edits/dispatch, preserves reasoning drafts and result identities through
+archive/restore and restart, and keeps a second Exploration independent.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not

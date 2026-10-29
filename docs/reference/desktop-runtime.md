@@ -124,7 +124,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **8** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **9** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -132,7 +132,7 @@ then sends an internal `add_file` command. Renderer paths, URLs, raw file bytes
 and extra fields are refused. Preview text never becomes HTML or a resource URL.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
 add text, revise existing text/captions, reorder, duplicate, archive or restore Stage content Blocks,
-save reasoning, list scoped Run summaries
+save retained Run outputs as Blocks, save reasoning, list scoped Run summaries
 and read Run details. Internal image import/read and file import commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
@@ -146,6 +146,10 @@ defines the independent identities, transaction and immutable origin record.
 `archive_block` and `restore_block` use that same exact Block/source snapshot and
 Stage revision. [Block lifecycle](desktop-storage.md#block-archive-and-restoration)
 defines retention, restoration and execution admission.
+`pin_run_output` names the exact Run, attempt and port plus the expected Stage
+revision. [Saved outputs](desktop-storage.md#saved-run-outputs) defines typed
+value resolution, immutable origins, unique results and retry behavior. Asset
+origins are tagged `asset` or `run_output`; old untagged payloads are not accepted.
 The `revise_text` intent pins its Block/Asset IDs and expected revision. Run
 requests require `source_asset_id` and `source_revision` as well as the selected
 Pipeline revision; stale bindings fail before admission. Prior protocol shapes
