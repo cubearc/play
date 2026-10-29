@@ -57,12 +57,13 @@ checks, resource accounting and adversarial validation.
 ## Native execution and delivery scope
 
 The macOS proof uses a locally ad-hoc-signed App Sandbox helper with filesystem,
-network, CPU/time, output and process controls. It runs ROT13 and Brainfuck from
-Core. Windows/Linux reject worker execution with `native_policy_unavailable`
+network, CPU/time, output and process controls. Typed graphs run ROT13, Brainfuck,
+image pixel reads, UTF-8 conversions and ordered text/byte joins through Core.
+Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-General DAG planning, parallel branches, contextual CLI/PTY, authenticated Cloud,
+Broader field/numeric composition, parallel branches, contextual CLI/PTY, authenticated Cloud,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

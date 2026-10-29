@@ -170,7 +170,10 @@ prior payload shapes are refused. Worker invocations include saved parameters.
 
 The native catalog reports each adapter's full Core contract, input semantic type
 and effective default parameters. The editor presents compatible named ports
-and saves complete graphs in immutable revisions. Rust owns dependency planning;
+for ROT13, Brainfuck, image pixel reads, UTF-8 encoding/decoding and ordered
+text/byte joins. Conversion and composition algorithms remain in Core. Byte
+literals use explicit Base64, and the text join editor exposes a Separator field.
+The editor saves complete graphs in immutable revisions. Rust owns dependency planning;
 the worker receives only that selected closure, the bounded source bytes and
 explicit literals, with no database or filesystem authority. Private node progress
 frames let the engine persist each actual attempt/result before final completion. Image defaults are `x: 0`, `y: 0`,

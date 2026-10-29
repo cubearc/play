@@ -6,6 +6,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, Read};
+mod composition;
 
 pub fn validate(invocation: &Invocation) -> Result<()> {
     let probe = Probe::parse(&invocation.operation)?;
@@ -69,7 +70,10 @@ fn configured_limits(value: &Value) -> Result<cube_core::esolang::brainfuck::Lim
     })
 }
 pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
-    let probe = Probe::parse(operation)?;
+    let probe = Probe::parse(operation).ok();
+    if probe.is_none() && !composition::supported(operation) {
+        return Err("unsupported_operation");
+    }
     let contract = cube_core::operations::require(operation)
         .map_err(|_| "unsupported_operation")?
         .contract()
@@ -87,12 +91,12 @@ pub fn validate_configuration(operation: &str, version: u32, parameters: &Value)
         .validate_parameters(parameters)
         .map_err(|_| "invalid_parameters")?;
     match probe {
-        Probe::Rot13 => {}
-        Probe::Pixel => {
+        Some(Probe::Rot13) | None => {}
+        Some(Probe::Pixel) => {
             let _: PixelParameters =
                 serde_json::from_value(parameters.clone()).map_err(|_| "invalid_parameters")?;
         }
-        Probe::Brainfuck => {
+        Some(Probe::Brainfuck) => {
             configured_limits(parameters)?;
         }
     }
@@ -157,6 +161,9 @@ fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
 }
 
 pub fn parameters(operation: &str) -> Result<Value> {
+    if composition::supported(operation) {
+        return composition::parameters(operation);
+    }
     match Probe::parse(operation)? {
         Probe::Rot13 => Ok(json!({})),
         Probe::Pixel => Ok(json!({"x":0,"y":0,"expand_palette":false})),
@@ -187,15 +194,23 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
     Ok(inputs)
 }
 pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
-    let value = match Probe::parse(operation)? {
-        Probe::Rot13 => {
+    if Probe::parse(operation).is_err() && !composition::supported(operation) {
+        return Err("unsupported_operation");
+    }
+    let contract = cube_core::operations::require(operation)
+        .map_err(|_| "unsupported_operation")?
+        .contract()
+        .map_err(|_| "contract_mismatch")?;
+    let port = contract.outputs.first().ok_or("contract_mismatch")?;
+    let value = match port.semantic_type.as_str() {
+        "text" => {
             let text = output["text"].as_str().ok_or("invalid_response")?;
             if text.len() > protocol::contract().output_bytes {
                 return Err("output_limit");
             }
             json!(text)
         }
-        Probe::Brainfuck | Probe::Pixel => {
+        "bytes" => {
             let bytes = output["bytes"].as_array().ok_or("invalid_response")?;
             if bytes.len() > protocol::contract().output_bytes {
                 return Err("output_limit");
@@ -210,19 +225,15 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
                 .collect::<Result<Vec<_>>>()?;
             json!(cube_core::operations::contracts::values::Bytes { data })
         }
+        _ => return Err("contract_mismatch"),
     };
-    let contract = cube_core::operations::require(operation)
-        .map_err(|_| "unsupported_operation")?
-        .contract()
-        .map_err(|_| "contract_mismatch")?;
-    let port = contract.outputs.first().ok_or("contract_mismatch")?;
     Ok(json!({port.name.clone():value}))
 }
 
 pub fn catalog() -> Result<Value> {
     let entries = cube_core::operations::catalog()
         .into_iter()
-        .filter(|descriptor| Probe::parse(descriptor.id).is_ok())
+        .filter(|descriptor| Probe::parse(descriptor.id).is_ok() || composition::supported(descriptor.id))
         .map(|descriptor| {
             let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
             let name = descriptor
@@ -230,7 +241,7 @@ pub fn catalog() -> Result<Value> {
                 .map_or(descriptor.command, |metadata| metadata.canonical_name);
             Ok(
                 json!({"operation":descriptor.id, "operation_version":contract.operation_version,
-                "name":name, "description":descriptor.description, "input_type":contract.inputs.iter().find(|port| ["text", "image.samples"].contains(&port.semantic_type.as_str())).ok_or("contract_mismatch")?.semantic_type, "parameters":parameters(descriptor.id)?,"contract":contract}),
+                "name":name, "description":descriptor.description, "input_type":contract.inputs.first().ok_or("contract_mismatch")?.semantic_type, "parameters":parameters(descriptor.id)?,"contract":contract}),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -528,43 +539,7 @@ pub fn execute_pipeline(
         contract
             .validate_inputs(&values)
             .map_err(|_| "contract_mismatch")?;
-        let primary = contract
-            .inputs
-            .iter()
-            .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
-            .ok_or("contract_mismatch")?;
-        let input = if primary.semantic_type == "image.samples" {
-            image_input(&invocation, node)?
-        } else {
-            values[&primary.name].as_str().ok_or("contract_mismatch")?
-        };
-        let single = Invocation {
-            operation: node.operation.clone(),
-            operation_version: node.operation_version,
-            parameters: node.parameters.clone(),
-            input: input.into(),
-        };
-        validate(&single)?;
-        let bytes = if node.operation == "esolang.brainfuck.execute" {
-            values["input"]
-                .as_array()
-                .ok_or("contract_mismatch")?
-                .iter()
-                .map(|v| {
-                    v.as_u64()
-                        .and_then(|n| u8::try_from(n).ok())
-                        .ok_or("contract_mismatch")
-                })
-                .collect::<Result<Vec<_>>>()?
-        } else {
-            Vec::new()
-        };
-        if bytes.len() > protocol::contract().output_bytes {
-            return Err("input_limit");
-        }
-        emit(json!({"type":"node_started","nodeId":id}))?;
-        let raw =
-            Probe::parse(&node.operation)?.execute_with_bytes(input, &bytes, &node.parameters)?;
+        let raw = execute_node(&invocation, node, &values, &mut emit)?;
         let named = named_outputs(&node.operation, &raw)?;
         contract
             .validate_outputs(&named)
@@ -582,4 +557,56 @@ pub fn execute_pipeline(
         final_output = raw;
     }
     Ok(final_output)
+}
+
+fn execute_node(
+    invocation: &PipelineInvocation,
+    node: &crate::graph::Node,
+    values: &Value,
+    emit: &mut impl FnMut(Value) -> Result<()>,
+) -> Result<Value> {
+    let id = node.id;
+    if composition::supported(&node.operation) {
+        composition::validate_inputs(&node.operation, values, &node.parameters)?;
+        emit(json!({"type":"node_started","nodeId":id}))?;
+        return composition::execute(&node.operation, values, &node.parameters);
+    }
+    let contract = node.contract()?;
+    let primary = contract
+        .inputs
+        .iter()
+        .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
+        .ok_or("contract_mismatch")?;
+    let input = if primary.semantic_type == "image.samples" {
+        image_input(invocation, node)?
+    } else {
+        values[&primary.name].as_str().ok_or("contract_mismatch")?
+    };
+    let single = Invocation {
+        operation: node.operation.clone(),
+        operation_version: node.operation_version,
+        parameters: node.parameters.clone(),
+        input: input.into(),
+    };
+    validate(&single)?;
+    let bytes = if node.operation == "esolang.brainfuck.execute" {
+        values["input"]
+            .as_array()
+            .ok_or("contract_mismatch")?
+            .iter()
+            .map(|v| {
+                v.as_u64()
+                    .and_then(|n| u8::try_from(n).ok())
+                    .ok_or("contract_mismatch")
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
+    if bytes.len() > protocol::contract().output_bytes {
+        return Err("input_limit");
+    }
+    emit(json!({"type":"node_started","nodeId":id}))?;
+    let raw = Probe::parse(&node.operation)?.execute_with_bytes(input, &bytes, &node.parameters)?;
+    Ok(raw)
 }

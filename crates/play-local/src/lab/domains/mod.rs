@@ -3,6 +3,7 @@ mod aes_blocks;
 mod audio;
 mod blockchain;
 mod brainfuck;
+mod composition;
 mod cryptanalysis;
 mod enigma;
 mod files;
@@ -28,6 +29,7 @@ use serde_json::{Value, json};
 
 pub(super) fn supported(operation: &str) -> bool {
     aes_blocks::supported(operation)
+        || composition::supported(operation)
         || stream::supported(operation)
         || operation == cube_core::ciphers::enigma::ID
         || cryptanalysis::supported(operation)
@@ -74,6 +76,9 @@ pub(super) fn execute(
     parameters: Value,
 ) -> Result<Value, OperationError> {
     match operation {
+        _ if composition::supported(operation) => {
+            composition::execute(operation, inputs, parameters)
+        }
         _ if aes_blocks::supported(operation) => aes_blocks::execute(operation, inputs, parameters),
         _ if stream::supported(operation) => stream::execute(operation, inputs, parameters),
         _ if cryptanalysis::supported(operation) => {

@@ -55,6 +55,7 @@ export function PipelineEditor({
   const dialog = useRef<HTMLDialogElement>(null);
   const titleField = useRef<HTMLElementTagNameMap["vscode-textfield"]>(null);
   const paramsField = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
+  const separatorField = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
   const [title, setTitle] = useState(
     mode === "fork"
       ? `${pipeline?.title} (copy)`
@@ -63,7 +64,8 @@ export function PipelineEditor({
         : "New Pipeline",
   );
   const [definition, setDefinition] = useState<PipelineDefinition>(() => {
-    if (pipeline) return structuredClone(pipeline.definition);
+    if (pipeline && mode !== "create")
+      return structuredClone(pipeline.definition);
     const op = operations.find((o) => o.input_type === inputType);
     if (!op) throw new Error("catalog_unavailable");
     const id = crypto.randomUUID();
@@ -85,7 +87,9 @@ export function PipelineEditor({
       output: id,
     };
   });
-  const [bindings, setBindings] = useState<Bindings>(() => bindingRefs(trail));
+  const [bindings, setBindings] = useState<Bindings>(() =>
+    mode === "create" ? {} : bindingRefs(trail),
+  );
   const initialBindings = useRef(JSON.stringify(bindings));
   const initial = useRef(JSON.stringify(definition));
   const [selected, setSelected] = useState(definition.output);
@@ -318,38 +322,73 @@ export function PipelineEditor({
               disabled={readonly || invalid}
               onChange={(inputs) => update({ ...node, inputs })}
             />
-            <label htmlFor="pipeline-parameters">Parameters (JSON)</label>
-            <VscodeTextarea
-              id="pipeline-parameters"
-              label="Parameters (JSON)"
-              ref={paramsField}
-              value={parameters}
-              rows={5}
-              disabled={readonly}
-              onInput={() => {
-                const text = paramsField.current?.value ?? "";
-                setParameters(text);
-                try {
-                  const v: unknown = JSON.parse(text);
-                  if (
-                    !v ||
-                    typeof v !== "object" ||
-                    Array.isArray(v) ||
-                    new TextEncoder().encode(JSON.stringify(v)).byteLength >
-                      limits.pipeline_parameter_bytes
-                  )
-                    throw new Error("invalid_parameters");
-                  setInvalid(false);
-                  update({ ...node, parameters: v as Record<string, unknown> });
-                } catch {
-                  setInvalid(true);
-                }
-              }}
-            />
+            {operation?.operation === "text.concat" ? (
+              <>
+                <label htmlFor="pipeline-separator">Separator</label>
+                <VscodeTextarea
+                  id="pipeline-separator"
+                  label="Separator"
+                  ref={separatorField}
+                  rows={2}
+                  value={String(node.parameters.separator ?? "")}
+                  disabled={readonly}
+                  onInput={() => {
+                    const next = {
+                      separator: separatorField.current?.value ?? "",
+                    };
+                    update({ ...node, parameters: next });
+                    setParameters(JSON.stringify(next));
+                    setInvalid(
+                      new TextEncoder().encode(JSON.stringify(next))
+                        .byteLength > limits.pipeline_parameter_bytes,
+                    );
+                  }}
+                />
+                <p>
+                  Included once between left and right. Leave blank to join
+                  directly.
+                </p>
+              </>
+            ) : (
+              <>
+                <label htmlFor="pipeline-parameters">Parameters (JSON)</label>
+                <VscodeTextarea
+                  id="pipeline-parameters"
+                  label="Parameters (JSON)"
+                  ref={paramsField}
+                  value={parameters}
+                  rows={5}
+                  disabled={readonly}
+                  onInput={() => {
+                    const text = paramsField.current?.value ?? "";
+                    setParameters(text);
+                    try {
+                      const v: unknown = JSON.parse(text);
+                      if (
+                        !v ||
+                        typeof v !== "object" ||
+                        Array.isArray(v) ||
+                        new TextEncoder().encode(JSON.stringify(v)).byteLength >
+                          limits.pipeline_parameter_bytes
+                      )
+                        throw new Error("invalid_parameters");
+                      setInvalid(false);
+                      update({
+                        ...node,
+                        parameters: v as Record<string, unknown>,
+                      });
+                    } catch {
+                      setInvalid(true);
+                    }
+                  }}
+                />
+              </>
+            )}
             {invalid ? (
               <p role="alert">
-                Enter a bounded JSON object for the parameters before changing
-                nodes.
+                {operation?.operation === "text.concat"
+                  ? "The separator is too long for this Pipeline."
+                  : "Enter a bounded JSON object for the parameters before changing nodes."}
               </p>
             ) : null}
             <div className="dialog-actions">

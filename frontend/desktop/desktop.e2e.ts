@@ -21,6 +21,255 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("typed composition joins image/caption branches and keeps binary and failed-decode evidence", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-composition-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Compose the clues");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Read the hidden bytes");
+    const image = fileURLToPath(
+      new URL("../../tests/fixtures/composition.png", import.meta.url),
+    );
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, image);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("xrl.");
+    await editor
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await notebook(page)
+      .getByRole("button", { name: "Explore composition.png", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Joined clues");
+    await editor
+      .getByRole("textbox", { name: "Input name", exact: true })
+      .fill("caption");
+    await editor
+      .getByRole("button", { name: "Add input", exact: true })
+      .click();
+    const choose = async (label: string, option: string) => {
+      await editor.getByRole("combobox", { name: label, exact: true }).click();
+      await editor.getByRole("option", { name: option, exact: true }).click();
+    };
+    await choose("Asset for caption", "Image caption · r1");
+    const add = async (operation: string) => {
+      await editor
+        .getByRole("button", { name: "Add node", exact: true })
+        .click();
+      await choose("Operation", operation);
+    };
+    await add("Decode UTF-8");
+    await choose("input · bytes", "1. image pixel · output");
+    await add("ROT13");
+    await choose("input · text", "2. Decode UTF-8 · output");
+    await add("ROT13");
+    await choose("input · text", "caption · text");
+    await add("Concatenate text");
+    await choose("left · text", "3. ROT13 · output");
+    await choose("right · text", "4. ROT13 · output");
+    await editor
+      .getByRole("textbox", { name: "Separator", exact: true })
+      .fill(" ");
+    await capture(application, "native-composition-editor");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: The key." : "Execution rejected",
+    );
+    if (process.platform !== "darwin") return;
+    await expect(
+      canvas.getByRole("button", { name: "Run cell", exact: true }),
+    ).not.toHaveAttribute("disabled", "");
+    await page
+      .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
+      .click();
+    await expect(explorer(page)).toBeHidden();
+    await canvas
+      .getByRole("region", { name: "Pipeline graph", exact: true })
+      .evaluate((e) => e.scrollIntoView({ block: "start" }));
+    await capture(application, "native-composition-canvas", false);
+    await page
+      .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
+      .click();
+    assert.deepEqual((await accessibility(page)).violations, []);
+    const first = await current(page);
+    const trail = first.exploration.trails.find(
+      (t) => t.source.content.kind === "image",
+    );
+    assert.ok(trail);
+    const details = async () =>
+      page.evaluate(async (t) => {
+        const context = {
+          workspace_id: t.workspaceId,
+          exploration_id: t.explorationId,
+          stage_id: t.stageId,
+        };
+        const runs = await window.play.workspace({
+          kind: "list_runs",
+          context,
+          trail_id: t.id,
+          before: null,
+        });
+        const latest = runs.runs[0];
+        if (!latest) throw new Error("run_missing");
+        return window.play.workspace({
+          kind: "run_detail",
+          context,
+          run_id: latest.id,
+        });
+      }, trail);
+    const joined = await details();
+    assert.equal(joined.attempts.length, 5);
+    assert.ok(joined.attempts.every((a) => a.status === "completed"));
+    assert.equal(joined.result?.outputs?.output, "The key.");
+    await canvas
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "Concatenate text · output · Run 1 block",
+        exact: true,
+      }),
+    ).toContainText("The key.");
+    await notebook(page)
+      .getByRole("button", { name: "Explore composition.png", exact: true })
+      .click();
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Binary join");
+    await expect(
+      editor.getByRole("button", { name: /^Node [0-9]+:/ }),
+    ).toHaveCount(1);
+    await choose("Operation", "Encode UTF-8");
+    await editor
+      .getByRole("textbox", { name: "Text value", exact: true })
+      .fill("é");
+    await add("Concatenate bytes");
+    await choose("left · bytes", "1. Encode UTF-8 · output");
+    const encoded = editor.getByRole("textbox", {
+      name: "Bytes (Base64)",
+      exact: true,
+    });
+    await encoded.fill("/w==");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText("w6n/");
+    await expect(
+      canvas.getByRole("button", { name: "Run cell", exact: true }),
+    ).not.toHaveAttribute("disabled", "");
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+    await add("Decode UTF-8");
+    await choose("input · bytes", "2. Concatenate bytes · output");
+    await add("Concatenate text");
+    await choose("left · text", "3. Decode UTF-8 · output");
+    await editor
+      .getByRole("button", { name: "Save revision", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText("not valid UTF-8");
+    const failed = await details();
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.attempts.length, 3);
+    assert.equal(failed.attempts[0]?.status, "completed");
+    assert.equal(failed.attempts[1]?.status, "completed");
+    assert.equal(failed.attempts[2]?.status, "failed");
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    const reopened = await current(page);
+    assert.ok(
+      reopened.exploration.stage.blocks.some(
+        (b) =>
+          b.kind === "asset" &&
+          b.asset.content.kind === "text" &&
+          b.asset.content.text === "The key.",
+      ),
+    );
+    const restored = await page.evaluate(
+      ({ t, id }) =>
+        window.play.workspace({
+          kind: "run_detail",
+          context: {
+            workspace_id: t.workspaceId,
+            exploration_id: t.explorationId,
+            stage_id: t.stageId,
+          },
+          run_id: id,
+        }),
+      { t: trail, id: joined.id },
+    );
+    assert.deepEqual(restored, joined);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("named assets keep figures grouped and share a graph without sharing bindings or Run targets", {
   timeout: 90000,
 }, async () => {

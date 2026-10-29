@@ -129,12 +129,13 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     let pipeline_id = request.pipeline_id.to_string();
     let pipeline_revision = request.pipeline_revision;
     let node_id = *schedule.first().ok_or("invalid_pipeline")?;
-    let nodes = schedule
+    let mut nodes = schedule
         .iter()
         .map(|id| node_plan(graph.node(*id)?))
         .collect::<Result<Vec<_>>>()?;
     let target_plan = node_plan(target)?;
-    let value = json!({"formatVersion":2,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":2,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let contracts = compact_contracts(&mut nodes, &target_plan)?;
+    let value = json!({"formatVersion":3,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":2,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }
@@ -155,4 +156,22 @@ pub fn node_plan(node: &crate::graph::Node) -> Result<Value> {
     Ok(
         json!({"id":node.id,"operation":{"operation":node.operation,"operationVersion":node.operation_version,"name":name},"contract":c,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&c).map_err(|_|"invalid_state")?),"parameters":node.parameters,"inputs":node.inputs}),
     )
+}
+
+fn compact_contracts(nodes: &mut [Value], target: &Value) -> Result<Value> {
+    let mut contracts = serde_json::Map::new();
+    for node in nodes {
+        let digest = node["contractDigest"]
+            .as_str()
+            .ok_or("invalid_state")?
+            .to_owned();
+        let fields = node.as_object_mut().ok_or("invalid_state")?;
+        let contract = fields.remove("contract").ok_or("invalid_state")?;
+        fields.remove("parameters");
+        fields.remove("inputs");
+        if digest != target["contractDigest"] {
+            contracts.entry(digest).or_insert(contract);
+        }
+    }
+    Ok(Value::Object(contracts))
 }

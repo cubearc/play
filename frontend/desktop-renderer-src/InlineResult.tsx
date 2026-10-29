@@ -4,6 +4,8 @@ import type { RunDetail, TrailView } from "../desktop/workspace-contract";
 import type { Executions } from "./useExecutions";
 
 function value(run: RunDetail): string {
+  if (run.result?.code === "invalid_encoding")
+    return "Failed: The input bytes are not valid UTF-8.";
   if (run.status === "queued" || run.status === "running")
     return `${run.status === "queued" ? "Queued" : "Running"}…`;
   if (run.status !== "completed")

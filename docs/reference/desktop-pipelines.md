@@ -6,11 +6,12 @@ one Exploration. [Explorations and Trails](../explorations.md#save-and-reuse-a-p
 shows the editing workflow.
 
 The editor supports a typed graph with up to four named Asset inputs, up to eight
-nodes and one selected output node. Native ROT13, Brainfuck and image pixel reads
+nodes and one selected output node. Native ROT13, Brainfuck, image pixel reads,
+UTF-8 encoding/decoding and ordered text/byte concatenation
 use their installed Core names, versions, named ports and parameter contracts.
 Rust validates the whole graph and plans the chosen output's ancestor closure;
-one bounded worker executes those dependencies sequentially. Explicit representation
-conversions, parallelism, output caching and
+one bounded worker executes those dependencies sequentially. Structured field and
+numeric composition, additional representation conversions, parallelism, output caching and
 contextual CLI attachment remain separate deliveries under
 [issue 42](https://github.com/cubearc/play/issues/42) and
 [issue 45](https://github.com/cubearc/play/issues/45).
@@ -79,6 +80,20 @@ JSON byte array, while pixel and Brainfuck outputs are Core `bytes` objects with
 Base64 representation. Connecting those representations directly is rejected.
 Text literals and byte arrays belong to the saved definition, so they must not
 contain credentials or other secrets.
+
+UTF-8 decoding consumes a Core `bytes` value and returns text without replacement;
+encoding performs the reverse conversion. `text.concat` has required `left` and
+`right` text ports and an optional `separator` defaulting to empty text.
+`bytes.concat` joins required left/right Core byte values without an implicit
+separator. The editor offers explicit Base64 literals for `bytes`; numeric byte
+arrays retain their separate `bytes.array` representation. File Assets are not
+direct executable byte inputs in this adapter set.
+
+Native conversion/join inputs, including the text separator and repeated operands,
+share the existing **8192-byte** per-node input ceiling. Aggregate raw output across
+all executed nodes remains **16384 bytes**. Core's broader direct-call limits do
+not enlarge these native budgets. See [ordered Core composition](https://github.com/cubearc/cube/blob/main/docs/reference/composition.md)
+for exact empty/Unicode/binary semantics.
 
 A fork preserves the chosen graph and records its immutable Workspace-scoped
 origin. Revisions preserve node IDs unless the editor deliberately removes/adds

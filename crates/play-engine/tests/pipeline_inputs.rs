@@ -31,10 +31,18 @@ fn view(m: &mut Manager, c: &Context) -> Value {
     )
 }
 fn image(m: &mut Manager, c: &Context, caption: &str) -> Value {
+    image_from(
+        m,
+        c,
+        caption,
+        include_bytes!("../../../tests/fixtures/sample.png"),
+    )
+}
+fn image_from(m: &mut Manager, c: &Context, caption: &str, png: &[u8]) -> Value {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     call(
         m,
-        json!({"kind":"add_image","context":c,"key":Uuid::new_v4(),"title":"Puzzle image","caption":caption,"png":STANDARD.encode(include_bytes!("../../../tests/fixtures/sample.png"))}),
+        json!({"kind":"add_image","context":c,"key":Uuid::new_v4(),"title":"Puzzle image","caption":caption,"png":STANDARD.encode(png)}),
     );
     view(m, c)
 }
@@ -78,6 +86,11 @@ fn request(c: &Context, t: &Value, target: &Value) -> RunRequest {
     serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"pipeline_id":t["pipeline"]["id"],"pipeline_revision":t["pipeline"]["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"target_node_id":target["id"],"operation":target["operation"],"operation_version":target["operationVersion"],"retain_output":true})).unwrap()
 }
 fn execute(m: &mut Manager, r: &RunRequest) -> Value {
+    let result = execute_outcome(m, r);
+    assert_eq!(result["status"], "completed");
+    result
+}
+fn execute_outcome(m: &mut Manager, r: &RunRequest) -> Value {
     let p = m.prepare_run(r).unwrap();
     let id = p.identity.clone();
     let output = play_engine::worker::execute_pipeline(p.invocation, |event| {
@@ -88,10 +101,52 @@ fn execute(m: &mut Manager, r: &RunRequest) -> Value {
         } else {
             m.finish_attempt(&n, event)
         }
-    })
-    .unwrap();
-    m.finish_run(&id, json!({"status":"completed","output":output}))
-        .unwrap()
+    });
+    let result = match output {
+        Ok(output) => json!({"status":"completed","output":output}),
+        Err(code) => json!({"status":"failed","code":code}),
+    };
+    m.finish_run(&id, result).unwrap()
+}
+
+#[test]
+fn decoder_failure_is_durable_without_losing_completed_producer_evidence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("private");
+    let mut m = Manager::new(root.clone()).unwrap();
+    let c = context(&mut m, None, "Keep the failed path");
+    let v = image(&mut m, &c, "Unused caption");
+    let mut d = definition();
+    let a = d["nodes"][0]["id"].clone();
+    let b = d["nodes"][1]["id"].clone();
+    let end = Uuid::new_v4();
+    d["nodes"] = json!([
+        {"id":a,"operation":"bytes.concat","operationVersion":1,"parameters":{},"position":{"x":40,"y":40},"inputs":{"left":{"kind":"literal","value":{"base64":"/wA="}},"right":{"kind":"literal","value":{"base64":"gA=="}}}},
+        {"id":b,"operation":"text.utf8.decode","operationVersion":1,"parameters":{},"position":{"x":340,"y":40},"inputs":{"input":{"kind":"output","nodeId":a,"port":"output"}}},
+        {"id":end,"operation":"text.concat","operationVersion":1,"parameters":{},"position":{"x":640,"y":40},"inputs":{"left":{"kind":"output","nodeId":b,"port":"output"},"right":{"kind":"literal","value":"not reached"}}}
+    ]);
+    d["output"] = json!(end);
+    let p = pipeline(&mut m, &c, &d);
+    let v = bind(&mut m, &c, &v, &p, "Inspect the bytes");
+    let t = trail(&v, &figure(&v)["asset"]);
+    let run = execute_outcome(&mut m, &request(&c, t, &d["nodes"][2]));
+    assert_eq!(
+        run["result"],
+        json!({"status":"failed","code":"invalid_encoding"})
+    );
+    let attempts = run["attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0]["status"], "completed");
+    assert_eq!(attempts[1]["status"], "failed");
+    assert_eq!(attempts[0]["result"]["outputs"]["output"]["base64"], "/wCA");
+    drop(m);
+    let mut m = Manager::new(root).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(
+        m.run_detail(&c, serde_json::from_value(run["id"].clone()).unwrap())
+            .unwrap(),
+        run
+    );
 }
 #[test]
 fn two_explorations_bind_the_same_graph_to_distinct_image_caption_revisions_and_targets() {
@@ -138,6 +193,73 @@ fn two_explorations_bind_the_same_graph_to_distinct_image_caption_revisions_and_
         m.run_detail(&b, serde_json::from_value(br["id"].clone()).unwrap())
             .unwrap(),
         br
+    );
+}
+
+#[test]
+fn image_bytes_and_caption_join_in_explicit_order_and_preserve_every_actual_attempt() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("private");
+    let mut m = Manager::new(root.clone()).unwrap();
+    let c = context(&mut m, None, "Join the clues");
+    let v = image_from(
+        &mut m,
+        &c,
+        "xrl.",
+        include_bytes!("../../../tests/fixtures/composition.png"),
+    );
+    let mut d = definition();
+    let pixel = d["nodes"][0]["id"].clone();
+    let caption = d["nodes"][1]["id"].clone();
+    let decode = Uuid::new_v4();
+    let rotate = Uuid::new_v4();
+    let join = Uuid::new_v4();
+    d["nodes"].as_array_mut().unwrap().extend([
+        json!({"id":decode,"operation":"text.utf8.decode","operationVersion":1,"parameters":{},"position":{"x":300,"y":80},"inputs":{"input":{"kind":"output","nodeId":pixel,"port":"output"}}}),
+        json!({"id":rotate,"operation":"cipher.rot13","operationVersion":1,"parameters":{},"position":{"x":600,"y":80},"inputs":{"input":{"kind":"output","nodeId":decode,"port":"output"}}}),
+        json!({"id":join,"operation":"text.concat","operationVersion":1,"parameters":{"separator":" "},"position":{"x":900,"y":160},"inputs":{"left":{"kind":"output","nodeId":rotate,"port":"output"},"right":{"kind":"output","nodeId":caption,"port":"output"}}}),
+    ]);
+    d["output"] = json!(join);
+    let p = pipeline(&mut m, &c, &d);
+    let v = bind(&mut m, &c, &v, &p, "The image supplies the first word");
+    let t = trail(&v, &figure(&v)["asset"]);
+    let run = execute(&mut m, &request(&c, t, &d["nodes"][4]));
+    assert_eq!(run["result"]["outputs"]["output"], "The key.");
+    assert_eq!(run["attempts"].as_array().unwrap().len(), 5);
+    assert_eq!(run["plan"]["inputs"]["source"]["used"], true);
+    assert_eq!(run["plan"]["inputs"]["caption"]["used"], true);
+    assert_eq!(run["plan"]["pipeline"]["definition"], d);
+    assert_eq!(run["plan"]["formatVersion"], 3);
+    assert!(run["plan"].to_string().len() <= 16384);
+    assert_eq!(run["plan"]["contracts"].as_object().unwrap().len(), 3);
+    for node in run["plan"]["nodes"].as_array().unwrap() {
+        assert!(node.get("contract").is_none());
+        let contract = if node["contractDigest"] == run["plan"]["contractDigest"] {
+            &run["plan"]["contract"]
+        } else {
+            &run["plan"]["contracts"][node["contractDigest"].as_str().unwrap()]
+        };
+        assert_eq!(contract["operation"], node["operation"]["operation"]);
+        let installed =
+            cube_core::operations::require(node["operation"]["operation"].as_str().unwrap())
+                .unwrap()
+                .contract()
+                .unwrap();
+        assert_eq!(
+            node["contractDigest"],
+            cube_core::hashing::sha256(&serde_json::to_vec(&installed).unwrap())
+        );
+        assert_eq!(*contract, serde_json::to_value(installed).unwrap());
+    }
+    let attempts = run["attempts"].as_array().unwrap();
+    assert!(attempts.iter().all(|a| a["status"] == "completed"));
+    drop(m);
+    let mut m = Manager::new(root).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(
+        m.run_detail(&c, serde_json::from_value(run["id"].clone()).unwrap())
+            .unwrap(),
+        run
     );
 }
 fn save(c: &Context, t: &Value, p: &Value, bindings: Value) -> Value {

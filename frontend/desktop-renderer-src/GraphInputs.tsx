@@ -1,7 +1,7 @@
 import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
 import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { Operation } from "../desktop/contract";
 import type {
   GraphNode,
@@ -24,6 +24,14 @@ export function Select({
   onChange: (value: string) => void;
 }) {
   const ref = useRef<HTMLElementTagNameMap["vscode-single-select"]>(null);
+  const [position, setPosition] = useState<"above" | "below">("below");
+  const place = () => {
+    const box = ref.current?.getBoundingClientRect();
+    if (box)
+      setPosition(
+        box.top > window.innerHeight - box.bottom ? "above" : "below",
+      );
+  };
   return (
     <>
       <label htmlFor={id}>{label}</label>
@@ -31,6 +39,10 @@ export function Select({
         id={id}
         label={label}
         ref={ref}
+        position={position}
+        onFocusCapture={place}
+        onPointerDownCapture={place}
+        onKeyDownCapture={place}
         value={value}
         disabled={disabled}
         onChange={() => onChange(ref.current?.value ?? "")}
@@ -59,7 +71,16 @@ function Literal({
 }) {
   const ref = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
   const text = semanticType === "text";
-  const label = text ? "Text value" : "Byte values (JSON)";
+  const bytes = semanticType === "bytes";
+  const label = text
+    ? "Text value"
+    : bytes
+      ? "Bytes (Base64)"
+      : "Byte values (JSON)";
+  const encoded =
+    bytes && value !== null && typeof value === "object" && "base64" in value
+      ? String(value.base64)
+      : "";
   return (
     <>
       <label htmlFor={id}>{label}</label>
@@ -67,12 +88,19 @@ function Literal({
         id={id}
         label={label}
         ref={ref}
-        value={typeof value === "string" ? value : JSON.stringify(value)}
+        value={
+          bytes
+            ? encoded
+            : typeof value === "string"
+              ? value
+              : JSON.stringify(value)
+        }
         rows={2}
         disabled={disabled}
         onInput={() => {
           const raw = ref.current?.value ?? "";
-          if (text) onChange(raw);
+          if (bytes) onChange({ base64: raw });
+          else if (text) onChange(raw);
           else {
             try {
               onChange(JSON.parse(raw));
@@ -84,6 +112,13 @@ function Literal({
       />
     </>
   );
+}
+function emptyLiteral(semanticType: string): unknown {
+  return semanticType === "bytes"
+    ? { base64: "" }
+    : semanticType === "bytes.array"
+      ? []
+      : "";
 }
 export function initialInputs(
   operation: Operation,
@@ -101,7 +136,7 @@ export function initialInputs(
           }
         : {
             kind: "literal",
-            value: p.semantic_type === "bytes.array" ? [] : "",
+            value: emptyLiteral(p.semantic_type),
           },
     ]),
   );
@@ -171,7 +206,7 @@ export function GraphInputs({
                 else if (v === "literal")
                   update({
                     kind: "literal",
-                    value: port.semantic_type === "bytes.array" ? [] : "",
+                    value: emptyLiteral(port.semantic_type),
                   });
                 else {
                   const [nodeId, port] = v.split(":");

@@ -3,9 +3,9 @@
 Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
 The executor plans the explicitly selected target node and its ancestors in a typed graph,
-using native ROT13, Brainfuck or image pixel-reading adapters. One sandboxed worker
-executes the plan sequentially. Explicit byte-representation
-conversions, parallelism, executor output reuse and contextual CLI execution are
+using native ROT13, Brainfuck, image pixel-reading, UTF-8 and ordered text/byte
+concatenation adapters. One sandboxed worker executes the plan sequentially.
+Structured field/numeric composition, parallelism, executor output reuse and contextual CLI execution are
 separate deliveries.
 
 ## Accepted invocation
@@ -35,6 +35,14 @@ An accepted Run pins:
 - Core operation/schema/adapter identity, complete contract and contract digest.
 - Effective parameters, Trail hypothesis/revision, execution ceilings and the `none` reuse policy.
 
+Plan format 3 freezes the full definition once. Each compact node records its
+operation/version and `contractDigest`. The target's complete contract remains in
+`contract`; other unique contracts are stored in `contracts`, keyed by digest.
+Repeated operations share that snapshot. Parameters and connections stay in the
+frozen definition. This avoids repeated schema/configuration copies while keeping
+the existing **16384-byte** plan ceiling; an oversized plan is rejected before
+admission. Historical finished plans remain immutable in their recorded format.
+
 [Save and select a Pipeline revision](../explorations.md#save-and-reuse-a-pipeline)
 before executing another configuration. A Run never creates or substitutes a
 Pipeline implicitly. A requested operation/version that differs from the selected
@@ -52,6 +60,11 @@ saving another Pipeline revision. Both actions use the same admission and
 retention rules. Aggregate consumed text is bounded at 8192 UTF-8 bytes and raw
 PNG data at 131072 bytes across all named inputs; extra slots do not increase
 worker CPU, wall-time, memory or output budgets.
+
+Resolved conversion/join operands, including repeated values and a text separator,
+are bounded at 8192 bytes per node. UTF-8 decoding rejects malformed bytes as
+`invalid_encoding`; it does not insert replacement characters. A failed decoder keeps
+completed producer evidence and never starts its consumer.
 
 ## State and recovery
 

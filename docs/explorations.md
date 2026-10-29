@@ -43,6 +43,10 @@ Choose a saved revision and keep this Trail's hypothesis. [Open full size](asset
 
 ## Save and reuse a Pipeline
 
+**New Pipeline** starts with one initial operation for the primary Asset and fresh
+input bindings. **Fork Pipeline** copies a chosen definition with its origin
+recorded; **Edit Pipeline** revises the existing definition.
+
 Choose **New Pipeline** to name a reusable graph. Select an operation by its Core
 name, review its typed inputs and parameters and choose **Create Pipeline**.
 The Trail selects the saved revision. Choose **Run cell** to execute it against
@@ -124,6 +128,47 @@ Exploration can choose the same saved Pipeline and bind its own caption.
 
 Rebind an input when you want to use the edited content. [Open full size](assets/desktop/pipeline-inputs-binding.png).
 
+## Combine image and caption results
+
+Use the [sample PNG](../tests/fixtures/composition.png) with the caption `xrl.`.
+Download the PNG from its repository file page, then add it as an image with that
+caption. This fixture stores the ASCII bytes `Gur` in its three RGB channels.
+Reading pixels uses those byte values; it does not recognize drawn letters.
+
+Open the image canvas, create a Pipeline named **Joined clues**, and add the text
+input `caption` bound to the figure's caption Asset. Keep the first **image pixel**
+node at `(0, 0)` and build these connections:
+
+| Node | Operation | Input |
+| --- | --- | --- |
+| 1 | image pixel | Image `source` |
+| 2 | Decode UTF-8 | Node 1's byte output |
+| 3 | ROT13 | Node 2's text output |
+| 4 | ROT13 | `caption` |
+| 5 | Concatenate text | `left`: Node 3; `right`: Node 4 |
+
+Set **Separator** to one space, keep Node 5 as the output and save. The left
+branch produces `The`; the right produces `key.`. **Run cell** returns **The key.**
+with five actual node attempts. The worker runs dependencies sequentially.
+
+![Five-node Pipeline editor with image decoding, caption ROT13 and explicitly ordered text inputs and separator.](assets/desktop/composition-editor.png)
+
+Choose each operand and the separator explicitly. [Open full size](assets/desktop/composition-editor.png).
+
+![Completed image-caption composition graph with the joined text result in its Trail canvas.](assets/desktop/composition-canvas.png)
+
+The result retains its source revisions and intermediate attempts. [Open full size](assets/desktop/composition-canvas.png).
+
+**Save output as block** adds the final text to the Stage with its exact Run,
+attempt and output-port origin. Changing the working Pipeline does not rewrite
+that result or its earlier graph.
+
+For binary composition, **Concatenate bytes** keeps arbitrary bytes in left/right
+order. Byte operands can come from a compatible output or an explicit
+**Bytes (Base64)** literal. **Encode UTF-8** and **Decode UTF-8** cross the text/byte
+boundary explicitly. Invalid UTF-8 fails without replacement; downstream nodes do
+not start, and completed producer evidence remains available.
+
 ## Follow an edited Asset
 
 [Edit text or a caption](notebook.md#edit-text-and-captions) in its notebook to
@@ -141,7 +186,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-Explicit conversions, broader composition, output reuse, parallel execution and
+Structured field/numeric composition, output reuse, parallel execution and
 contextual CLI attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 Use [native Run reference](reference/desktop-runs.md) for implemented execution
 semantics and [the domain contract](reference/desktop-domain.md) for full ownership.
