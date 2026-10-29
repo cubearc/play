@@ -2849,6 +2849,8 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     const restoredResult = notebook(page).getByRole("region", {
       name: "Cell result",
     });
+    await expect(restoredResult).toContainText("Out [2]");
+    await expect(restoredResult).toContainText("The key is in the pixels.");
     await restoredResult
       .getByText("Saved Run & input evidence", { exact: false })
       .click();
