@@ -899,11 +899,18 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
         (await current(page)).exploration.stage.blocks.map((block) => block.id),
       )
       .toEqual([second.id, first.id, reasoning.id]);
+    await expect(secondCell()).toBeFocused();
     const noteCell = () =>
       notebook(page).getByRole("article", {
         name: "Reasoning block",
         exact: true,
       });
+    await expect(
+      noteCell().getByRole("button", {
+        name: "Move Reasoning up",
+        exact: true,
+      }),
+    ).toBeEnabled();
     await noteCell()
       .getByRole("button", { name: "Move Reasoning up", exact: true })
       .focus();
@@ -954,6 +961,7 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
         (await current(page)).exploration.stage.blocks.map((block) => block.id),
       )
       .toEqual([second.id, reasoning.id, image.id, first.id]);
+    await expect(imageCell()).toBeFocused();
     const displayed = await current(page);
     const external = displayed.exploration.stage.blocks.map(
       (block) => block.id,
@@ -998,6 +1006,7 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
         (await current(page)).exploration.stage.blocks.map((block) => block.id),
       )
       .toEqual(finalIds);
+    await expect(imageCell()).toBeFocused();
     await expect(imageCell().getByRole("figure")).toContainText("Gur cvpgher.");
     await expect(
       imageCell().getByRole("img", { name: "sample.png", exact: true }),
