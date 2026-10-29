@@ -107,6 +107,19 @@ mod tests {
     #[test]
     fn every_numeric_adapter_uses_real_core_and_conforms_without_integer_rounding() {
         let cases = [
+            ("text.integer", json!({"input":"7"}), json!({}), json!(7)),
+            (
+                "number.maximum",
+                json!({"input":[2,3]}),
+                json!({}),
+                json!(3),
+            ),
+            (
+                "number.add",
+                json!({"left":3,"right":7}),
+                json!({}),
+                json!(10),
+            ),
             (
                 "number.gcd",
                 json!({"a":"18446744073709551615","b":3}),
@@ -194,8 +207,8 @@ mod tests {
         let mut covered = std::collections::BTreeSet::new();
         for (op, inputs, parameters, expected) in cases {
             covered.insert(op);
-            assert!(supported(op));
-            let output = execute(op, inputs.clone(), parameters.clone()).unwrap();
+            assert!(super::super::supported(op));
+            let output = super::super::execute(op, inputs.clone(), parameters.clone()).unwrap();
             assert_eq!(output["output"], expected, "{op}");
             let worker=serde_json::from_value(json!({"operation":op,"operation_version":1,"inputs":inputs,"parameters":parameters})).unwrap();
             let result = super::super::super::typed::run(worker).unwrap();
