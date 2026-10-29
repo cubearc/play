@@ -129,7 +129,7 @@
 }
 @media (max-width: 800px) {
   .graph-editor-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .graph-inspector {
     border-left: 0;

@@ -13,7 +13,19 @@ export function FilePreview({
         {content.byteLength.toLocaleString("en-US")} bytes ·{" "}
         {content.preview.format === "utf8" ? "UTF-8 preview" : "Hex preview"}
       </span>
-      <pre>{content.preview.text || "Empty file"}</pre>
+      {details ? (
+        <textarea
+          className="file-source-preview"
+          aria-label="File preview"
+          readOnly
+          value={content.preview.text}
+          placeholder="Empty file"
+          rows={6}
+          spellCheck={false}
+        />
+      ) : (
+        <pre>{content.preview.text || "Empty file"}</pre>
+      )}
       {content.preview.truncated ? (
         <span className="file-meta">
           Partial preview · original bytes are preserved
@@ -22,7 +34,12 @@ export function FilePreview({
       {details ? (
         <div className="file-digest">
           <span>SHA-256</span>
-          <code>{content.sha256}</code>
+          <input
+            aria-label="File SHA-256"
+            readOnly
+            value={content.sha256}
+            spellCheck={false}
+          />
         </div>
       ) : null}
     </div>

@@ -1,8 +1,8 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef, useState } from "react";
 import type { WorkspaceState } from "./useWorkspace";
+import VscodeButton from "./VscodeButton";
 
 export function WorkspaceWelcome({
   state,

@@ -1,8 +1,8 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useRef } from "react";
 import limits from "../../desktop/protocol.json";
 import type { NoteView } from "../desktop/workspace-contract";
+import VscodeButton from "./VscodeButton";
 export interface NoteDraftState {
   value: string;
   dirty: boolean;

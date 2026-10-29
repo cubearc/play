@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import { useState } from "react";
 import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
@@ -8,6 +7,7 @@ import { FilePreview } from "./FilePreview";
 import { PipelineGraph } from "./PipelineGraph";
 import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
+import VscodeButton from "./VscodeButton";
 
 export function AssetCanvas({
   trail,

@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeCollapsible from "@vscode-elements/react-elements/dist/components/VscodeCollapsible.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import type {
@@ -6,6 +5,7 @@ import type {
   TrailView,
   WorkspaceView,
 } from "../desktop/workspace-contract";
+import VscodeButton from "./VscodeButton";
 
 export function Explorer({
   hidden,

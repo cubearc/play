@@ -89,7 +89,15 @@ separator. The editor offers explicit Base64 literals for `bytes`; numeric byte
 arrays retain their separate `bytes.array` representation. File Assets are not
 direct executable byte inputs in this adapter set.
 
-Native conversion/join inputs, including the text separator and repeated operands,
+The JSON adapters parse a text document, select a field by JSON Pointer and
+extract an actual string explicitly. Numeric adapters parse canonical integer
+text, compute a nonempty integer-array maximum and add named operands.
+`image.dimensions` produces `{"dimensions":[width,height]}` in pixels. These
+outputs use semantic type `json`; consumers still enforce their complete value
+schemas. Integer operations use the shared exact ±9,007,199,254,740,991 range
+and reject floating representations. See [Core field composition](https://github.com/cubearc/cube/blob/main/docs/reference/structured-composition.md).
+
+Native composition inputs, including field paths, the text separator and repeated operands,
 share the existing **8192-byte** per-node input ceiling. Aggregate raw output across
 all executed nodes remains **16384 bytes**. Core's broader direct-call limits do
 not enlarge these native budgets. See [ordered Core composition](https://github.com/cubearc/cube/blob/main/docs/reference/composition.md)

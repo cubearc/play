@@ -1,13 +1,13 @@
 import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
 import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
-import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Operation } from "../desktop/contract";
 import type {
   GraphNode,
   GraphSource,
   PipelineDefinition,
 } from "../desktop/workspace-contract";
+import { type LiteralDraft, LiteralValue } from "./LiteralValue";
 export function Select({
   id,
   label,
@@ -45,6 +45,7 @@ export function Select({
         onKeyDownCapture={place}
         value={value}
         disabled={disabled}
+        aria-disabled={disabled ? "true" : "false"}
         onChange={() => onChange(ref.current?.value ?? "")}
       >
         {options.map((o) => (
@@ -56,64 +57,14 @@ export function Select({
     </>
   );
 }
-function Literal({
-  id,
-  value,
-  semanticType,
-  disabled,
-  onChange,
-}: {
-  id: string;
-  value: unknown;
-  semanticType: string;
-  disabled: boolean;
-  onChange: (value: unknown) => void;
-}) {
-  const ref = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
-  const text = semanticType === "text";
-  const bytes = semanticType === "bytes";
-  const label = text
-    ? "Text value"
-    : bytes
-      ? "Bytes (Base64)"
-      : "Byte values (JSON)";
-  const encoded =
-    bytes && value !== null && typeof value === "object" && "base64" in value
-      ? String(value.base64)
-      : "";
-  return (
-    <>
-      <label htmlFor={id}>{label}</label>
-      <VscodeTextarea
-        id={id}
-        label={label}
-        ref={ref}
-        value={
-          bytes
-            ? encoded
-            : typeof value === "string"
-              ? value
-              : JSON.stringify(value)
-        }
-        rows={2}
-        disabled={disabled}
-        onInput={() => {
-          const raw = ref.current?.value ?? "";
-          if (bytes) onChange({ base64: raw });
-          else if (text) onChange(raw);
-          else {
-            try {
-              onChange(JSON.parse(raw));
-            } catch {
-              onChange(raw);
-            }
-          }
-        }}
-      />
-    </>
-  );
-}
-function emptyLiteral(semanticType: string): unknown {
+function emptyLiteral(semanticType: string, schema?: unknown): unknown {
+  if (semanticType === "json")
+    return schema !== null &&
+      typeof schema === "object" &&
+      "type" in schema &&
+      schema.type === "integer"
+      ? 0
+      : null;
   return semanticType === "bytes"
     ? { base64: "" }
     : semanticType === "bytes.array"
@@ -136,7 +87,7 @@ export function initialInputs(
           }
         : {
             kind: "literal",
-            value: emptyLiteral(p.semantic_type),
+            value: emptyLiteral(p.semantic_type, p.schema),
           },
     ]),
   );
@@ -147,14 +98,43 @@ export function GraphInputs({
   operations,
   disabled,
   onChange,
+  onInvalidChange,
 }: {
   node: GraphNode;
   definition: PipelineDefinition;
   operations: Operation[];
   disabled: boolean;
   onChange: (inputs: GraphNode["inputs"]) => void;
+  onInvalidChange: (invalid: boolean) => void;
 }) {
   const op = operations.find((o) => o.operation === node.operation);
+  const [drafts, setDrafts] = useState<Record<string, LiteralDraft>>({});
+  const draftState = useRef(drafts);
+  const literalKey = (n: GraphNode, port: string) =>
+    `${n.id}:${n.operation}:${port}`;
+  const activeKeys = definition.nodes
+    .flatMap((n) =>
+      Object.entries(n.inputs)
+        .filter(([, s]) => s.kind === "literal")
+        .map(([port]) => literalKey(n, port)),
+    )
+    .sort()
+    .join("|");
+  useEffect(() => {
+    const keys = new Set(activeKeys.split("|"));
+    const next = Object.fromEntries(
+      Object.entries(draftState.current).filter(([key]) => keys.has(key)),
+    );
+    draftState.current = next;
+    setDrafts(next);
+    onInvalidChange(Object.values(next).some((d) => Boolean(d.error)));
+  }, [activeKeys, onInvalidChange]);
+  const saveDraft = (key: string, draft: LiteralDraft) => {
+    const next = { ...draftState.current, [key]: draft };
+    draftState.current = next;
+    setDrafts(next);
+    onInvalidChange(Object.values(next).some((d) => Boolean(d.error)));
+  };
   return (
     <>
       {op?.contract.inputs.map((port) => {
@@ -206,7 +186,7 @@ export function GraphInputs({
                 else if (v === "literal")
                   update({
                     kind: "literal",
-                    value: emptyLiteral(port.semantic_type),
+                    value: emptyLiteral(port.semantic_type, port.schema),
                   });
                 else {
                   const [nodeId, port] = v.split(":");
@@ -215,7 +195,13 @@ export function GraphInputs({
               }}
             />
             {source?.kind === "literal" ? (
-              <Literal
+              <LiteralValue
+                key={literalKey(node, port.name)}
+                draft={drafts[literalKey(node, port.name)]}
+                onDraft={(draft) =>
+                  saveDraft(literalKey(node, port.name), draft)
+                }
+                schema={port.schema}
                 id={`literal-${node.id}-${port.name}`}
                 value={source.value}
                 semanticType={port.semantic_type}

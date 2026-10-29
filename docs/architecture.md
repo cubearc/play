@@ -63,7 +63,7 @@ Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-Broader field/numeric composition, parallel branches, contextual CLI/PTY, authenticated Cloud,
+Parallel branches, contextual CLI/PTY, authenticated Cloud,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

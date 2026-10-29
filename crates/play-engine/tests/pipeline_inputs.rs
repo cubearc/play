@@ -51,6 +51,92 @@ fn definition() -> Value {
     let b = Uuid::new_v4();
     json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"image.samples"},{"name":"caption","semanticType":"text"}],"nodes":[{"id":a,"operation":"image.pixels.read","operationVersion":1,"parameters":{"x":0,"y":0,"expand_palette":false},"position":{"x":80,"y":80},"inputs":{"input":{"kind":"input","name":"source"}}},{"id":b,"operation":"cipher.rot13","operationVersion":1,"parameters":{},"position":{"x":400,"y":80},"inputs":{"input":{"kind":"input","name":"caption"}}}],"output":b})
 }
+
+fn numeric_definition(pointer: &str) -> Value {
+    let ids: [Uuid; 5] = std::array::from_fn(|_| Uuid::new_v4());
+    let input = |name: &str| json!({"kind":"input","name":name});
+    let output = |index: usize| json!({"kind":"output","nodeId":ids[index],"port":"output"});
+    let nodes=vec![
+        ("image.dimensions",json!({"input":input("source")}),json!({})),
+        ("json.select",json!({"input":output(0)}),json!({"pointer":pointer})),
+        ("number.maximum",json!({"input":output(1)}),json!({})),
+        ("text.integer",json!({"input":input("caption")}),json!({})),
+        ("number.add",json!({"left":output(2),"right":output(3)}),json!({})),
+    ].into_iter().enumerate().map(|(i,(operation,inputs,parameters))|json!({"id":ids[i],"operation":operation,"operationVersion":1,"inputs":inputs,"parameters":parameters,"position":{"x":40+(i%3)*300,"y":40+(i/3)*180}})).collect::<Vec<_>>();
+    json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"image.samples"},{"name":"caption","semanticType":"text"}],"nodes":nodes,"output":ids[4]})
+}
+
+#[test]
+fn numeric_field_graph_preserves_actual_types_attempts_and_snapshot_after_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Numeric facts");
+    let v = image_from(
+        &mut m,
+        &c,
+        "7",
+        include_bytes!("../../../tests/fixtures/composition.png"),
+    );
+    let d = numeric_definition("/dimensions");
+    let p = pipeline(&mut m, &c, &d);
+    let v = bind(&mut m, &c, &v, &p, "Use exact dimensions and score");
+    let t = trail(&v, &figure(&v)["asset"]);
+    let r = request(&c, t, &d["nodes"][4]);
+    let completed = execute(&mut m, &r);
+    assert_eq!(completed["result"]["outputs"]["output"], json!(8));
+    assert_eq!(completed["attempts"].as_array().unwrap().len(), 5);
+    assert!(
+        completed["attempts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["status"] == "completed")
+    );
+    assert!(completed["plan"].to_string().len() <= 16384);
+    let run_id = serde_json::from_value(completed["id"].clone()).unwrap();
+    drop(m);
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(m.run_detail(&c, run_id).unwrap(), completed);
+}
+
+#[test]
+fn numeric_failures_preserve_completed_values_and_stop_consumers() {
+    for (caption, pointer, code, attempt_count) in [
+        ("7", "/missing", "missing_field", 2),
+        ("9007199254740991", "/dimensions", "numeric_overflow", 5),
+        ("7", "/dimensions/0", "contract_mismatch", 2),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut m = Manager::new(root.path().join("private")).unwrap();
+        let c = context(&mut m, None, "Failed numeric path");
+        let v = image_from(
+            &mut m,
+            &c,
+            caption,
+            include_bytes!("../../../tests/fixtures/composition.png"),
+        );
+        let d = numeric_definition(pointer);
+        let p = pipeline(&mut m, &c, &d);
+        let v = bind(&mut m, &c, &v, &p, "Inspect numeric evidence");
+        let run = execute_outcome(
+            &mut m,
+            &request(&c, trail(&v, &figure(&v)["asset"]), &d["nodes"][4]),
+        );
+        assert_eq!(run["result"], json!({"status":"failed","code":code}));
+        let attempts = run["attempts"].as_array().unwrap();
+        assert_eq!(attempts.len(), attempt_count);
+        assert_eq!(
+            attempts[0]["result"]["outputs"]["output"],
+            json!({"dimensions":[1,1]})
+        );
+        let id = serde_json::from_value(run["id"].clone()).unwrap();
+        drop(m);
+        let mut m = Manager::new(root.path().join("private")).unwrap();
+        call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+        assert_eq!(m.run_detail(&c, id).unwrap(), run);
+    }
+}
 fn pipeline(m: &mut Manager, c: &Context, d: &Value) -> Value {
     call(
         m,

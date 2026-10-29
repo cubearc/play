@@ -1,8 +1,8 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { EditableAssetView } from "../desktop/workspace-contract";
+import VscodeButton from "./VscodeButton";
 
 export function TextAssetEditor({
   asset,

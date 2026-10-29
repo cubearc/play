@@ -1,8 +1,8 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import { useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation } from "../desktop/contract";
 import type { PipelineDefinition } from "../desktop/workspace-contract";
+import VscodeButton from "./VscodeButton";
 export function PipelineGraph({
   definition,
   operations,

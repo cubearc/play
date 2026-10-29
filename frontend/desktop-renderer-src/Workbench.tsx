@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/VscodeSplitLayout.js";
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
@@ -22,6 +21,7 @@ import { TextAssetEditor } from "./TextAssetEditor";
 import { TrailEditor } from "./TrailEditor";
 import { useExecutions } from "./useExecutions";
 import { useWorkspace } from "./useWorkspace";
+import VscodeButton from "./VscodeButton";
 import { WorkspaceWelcome } from "./WorkspaceWelcome";
 
 const mac = navigator.userAgent.includes("Mac");
@@ -250,15 +250,16 @@ export function Workbench() {
           <VscodeIcon name="files" size={24} />
         </button>
       </nav>
+      {/* The element clamps positions against its current minimum sizes. */}
       <VscodeSplitLayout
         ref={sidebarSplit}
         className="workspace-split"
         split="vertical"
         fixedPane="start"
         initialHandlePosition="258px"
-        handlePosition={sidebar ? `${sidebarWidth}px` : "0px"}
         minStart={sidebar ? "210px" : "0px"}
         minEnd="400px"
+        handlePosition={sidebar ? `${sidebarWidth}px` : "0px"}
         resetOnDblClick
         onVscSplitLayoutChange={(event) => {
           if (

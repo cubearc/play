@@ -17,6 +17,7 @@ mod poly;
 mod puzzle_codes;
 mod reasoning;
 mod stream;
+mod structured;
 mod symbols;
 mod text;
 mod text_analysis;
@@ -30,6 +31,7 @@ use serde_json::{Value, json};
 pub(super) fn supported(operation: &str) -> bool {
     aes_blocks::supported(operation)
         || composition::supported(operation)
+        || structured::supported(operation)
         || stream::supported(operation)
         || operation == cube_core::ciphers::enigma::ID
         || cryptanalysis::supported(operation)
@@ -79,6 +81,7 @@ pub(super) fn execute(
         _ if composition::supported(operation) => {
             composition::execute(operation, inputs, parameters)
         }
+        _ if structured::supported(operation) => structured::execute(operation, inputs, parameters),
         _ if aes_blocks::supported(operation) => aes_blocks::execute(operation, inputs, parameters),
         _ if stream::supported(operation) => stream::execute(operation, inputs, parameters),
         _ if cryptanalysis::supported(operation) => {

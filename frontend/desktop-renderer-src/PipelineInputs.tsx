@@ -1,9 +1,9 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { PipelineDefinition } from "../desktop/workspace-contract";
 import { Select } from "./GraphInputs";
+import VscodeButton from "./VscodeButton";
 export function PipelineInputs({
   definition,
   disabled,

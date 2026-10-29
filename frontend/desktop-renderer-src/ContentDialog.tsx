@@ -1,8 +1,8 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
+import VscodeButton from "./VscodeButton";
 
 export type DialogKind =
   | "exploration"

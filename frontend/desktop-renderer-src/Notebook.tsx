@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import { useEffect, useRef, useState } from "react";
 import contract from "../../desktop/protocol.json" with { type: "json" };
@@ -18,6 +17,7 @@ import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
 import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
+import VscodeButton from "./VscodeButton";
 
 export function Notebook({
   exploration,

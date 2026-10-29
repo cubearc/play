@@ -829,8 +829,8 @@ h1 {
   cursor: pointer;
 }
 .command-item.selected {
-  background: #04395e;
-  color: #fff;
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
 }
 .command-item:disabled {
   opacity: 0.45;
@@ -839,6 +839,30 @@ h1 {
 .command-item kbd {
   font: 11px var(--vscode-font-family);
   color: #9d9d9d;
+}
+.command-item.selected kbd {
+  color: inherit;
+}
+.file-source-preview,
+.file-digest input {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid transparent;
+  color: inherit;
+  background: var(--vscode-editor-background);
+  font: 13px var(--vscode-editor-font-family);
+}
+.file-source-preview {
+  resize: vertical;
+  color: #ce9178;
+}
+.file-source-preview::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+.file-source-preview:focus-visible,
+.file-digest input:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
 }
 @media (max-width: 950px) {
   .app-name {

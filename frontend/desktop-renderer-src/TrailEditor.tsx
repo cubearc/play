@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
 import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
@@ -10,7 +9,6 @@ import type {
   PipelineView,
   TrailView,
 } from "../desktop/workspace-contract";
-
 import {
   type Bindings,
   BindingsEditor,
@@ -18,6 +16,7 @@ import {
   completeBindings,
   selectedBindings,
 } from "./BindingsEditor";
+import VscodeButton from "./VscodeButton";
 
 export function TrailEditor({
   trail,

@@ -1,5 +1,5 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import type { AssetView, RunOutputOrigin } from "../desktop/workspace-contract";
+import VscodeButton from "./VscodeButton";
 
 export function AssetOrigin({
   asset,

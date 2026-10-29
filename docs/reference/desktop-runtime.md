@@ -171,7 +171,10 @@ prior payload shapes are refused. Worker invocations include saved parameters.
 The native catalog reports each adapter's full Core contract, input semantic type
 and effective default parameters. The editor presents compatible named ports
 for ROT13, Brainfuck, image pixel reads, UTF-8 encoding/decoding and ordered
-text/byte joins. Conversion and composition algorithms remain in Core. Byte
+text/byte joins, JSON parsing/field selection, explicit string/integer conversion,
+image dimensions and exact integer maximum/addition. Conversion and composition
+algorithms remain in Core. JSON is validated against the full consumer schema;
+its serialized value counts toward native input/output budgets. Byte
 literals use explicit Base64, and the text join editor exposes a Separator field.
 The editor saves complete graphs in immutable revisions. Rust owns dependency planning;
 the worker receives only that selected closure, the bounded source bytes and

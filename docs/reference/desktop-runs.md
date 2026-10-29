@@ -126,7 +126,11 @@ is text; Brainfuck's `output` is the Core bytes object with Base64 representatio
 The engine validates that payload against Core before atomically committing it
 with the actual node attempt terminal state. The final result belongs to the
 selected output node; the evidence view also shows retained intermediate outputs. The UI labels bytes as Base64 instead of guessing
-a text conversion.
+a text conversion. JSON results preserve objects, arrays, numbers, Booleans and
+null. Both final and intermediate viewers use the frozen output contract, never
+an object-shape guess; a JSON object containing `base64` is still JSON.
+Field/numeric failures keep completed producer attempts and do not execute their
+downstream consumers.
 
 Without retention, every completed node and the Run record has `output_not_retained` as an explicit
 replay gap, and contains neither output bytes nor their fingerprint. It cannot

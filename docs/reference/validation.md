@@ -63,11 +63,18 @@ File, annotation and Result Blocks. It uses keyboard creation/edit/copy/order/
 archive/restore, selects compatible image and caption operations, checks exact
 image Asset binding and RGB bytes, switches Explorations and reopens all saved
 identities. Hostile page scripts/forms/embeds stay text. axe-core runs in the real
-Electron document with WCAG 2 A/AA and 2.1 AA rules for notebook and image canvas;
+Electron document with WCAG 2 A/AA, 2.1 AA and 2.2 AA rules for notebook and image canvas;
 no rules are disabled. Tests cover tab arrow/Home/End navigation, readable
 contrast and keyboard access to the image viewport. Native IPC also saves actual
 pixel bytes as a File result and rejects archived-image dispatch; schema-7
 fixtures preserve Notes and bind prior image Trails without losing evidence.
+
+Structured-composition journeys connect real image dimensions and caption integers,
+exercise field selection and explicit text conversion, reject invalid literals,
+missing fields, null-to-text and integer overflow, and preserve exact successful
+and failed Runs through restart. Keyboard/ARIA checks cover disabled controls,
+parameter fields and selectable file previews. These checks do not establish
+complete WCAG conformance.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not

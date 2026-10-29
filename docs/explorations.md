@@ -23,7 +23,8 @@ Click a text Asset, image, caption, file or Page in a Stage notebook. Play opens
 canvas** tab for that Asset in the same Exploration. A caption's canvas shows its
 exact bound Asset revision, selected reusable Pipeline and accepted Run history.
 The image's canvas supports inspection, zoom and a [typed first-pixel Run](visual-lab.md#read-the-first-pixel). Page canvases show inert source text. A file's canvas shows an inert
-text/hex preview, byte count and SHA-256 digest. Results stay with the cell or
+text/hex preview, byte count and SHA-256 digest. The preview and full digest are
+read-only fields: focus them with the keyboard to select and copy their values. Results stay with the cell or
 canvas that produced them.
 
 
@@ -169,6 +170,51 @@ order. Byte operands can come from a compatible output or an explicit
 boundary explicitly. Invalid UTF-8 fails without replacement; downstream nodes do
 not start, and completed producer evidence remains available.
 
+## Combine dimensions and a numeric caption
+
+Add the [sample PNG](../tests/fixtures/composition.png) with the caption `7`.
+It is one pixel wide and one pixel high. Open its canvas, create a Pipeline,
+and declare a text input named `caption` bound to that figure's caption Asset.
+Build this graph:
+
+| Node | Operation | Input and parameters |
+| --- | --- | --- |
+| 1 | Image dimensions | Image `source` |
+| 2 | Select field | Node 1; **Field path** `/dimensions` |
+| 3 | Maximum | Node 2's JSON array |
+| 4 | Parse integer | `caption` |
+| 5 | Add | `left`: Node 3; `right`: Node 4 |
+
+Select Node 5 as output and save. **Run cell** returns **8**: `max([1,1]) + 7`.
+This notation explains the graph; Play does not evaluate expressions. Each of
+its five nodes has a retained attempt and intermediate value.
+
+![Pipeline editor joining maximum image dimension with an explicitly parsed caption integer.](assets/desktop/numeric-editor.png)
+
+Use **Field path** and the named input controls to connect the graph. [Open full size](assets/desktop/numeric-editor.png).
+
+![Image Trail canvas showing the numeric result 8 and its five-node graph.](assets/desktop/numeric-canvas.png)
+
+Inspect numeric results as numbers beside their producing graph. [Open full size](assets/desktop/numeric-canvas.png).
+
+Operation parameters have labeled controls. **Advanced parameters** exposes the
+complete saved JSON when needed. Integer literals reject fractions and unsafe
+integers before saving, preserving an invalid draft when switching nodes. Input
+schemas are checked again by the engine before a consumer executes.
+
+For JSON text, connect **Parse JSON → Select field → Use text value** before a
+text operation such as **ROT13**. A field path selects the original JSON type.
+An existing `null` is retained; a missing field fails explicitly. **Use text
+value** rejects `null`, objects and numbers instead of silently converting them.
+JSON objects containing a `base64` key remain JSON, rather than being displayed
+as byte outputs.
+
+Integer composition is exact within ±9,007,199,254,740,991. **Parse integer**
+requires canonical decimal text; Maximum and Add reject fractional/mixed values.
+A missing field, incompatible consumer or overflowing sum stops downstream work
+and keeps completed producer evidence. See [Core's field and integer reference](https://github.com/cubearc/cube/blob/main/docs/reference/structured-composition.md)
+for pointer escapes, empty values and exact bounds.
+
 ## Follow an edited Asset
 
 [Edit text or a caption](notebook.md#edit-text-and-captions) in its notebook to
@@ -186,7 +232,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-Structured field/numeric composition, output reuse, parallel execution and
-contextual CLI attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
+General structured-result promotion, parallel execution and contextual CLI
+attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 Use [native Run reference](reference/desktop-runs.md) for implemented execution
 semantics and [the domain contract](reference/desktop-domain.md) for full ownership.

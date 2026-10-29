@@ -1,11 +1,26 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import { useState } from "react";
 import type { RunDetail, TrailView } from "../desktop/workspace-contract";
+import { attemptOutputType, formatResultValue } from "./ResultValue";
 import type { Executions } from "./useExecutions";
+import VscodeButton from "./VscodeButton";
 
 function value(run: RunDetail): string {
   if (run.result?.code === "invalid_encoding")
     return "Failed: The input bytes are not valid UTF-8.";
+  if (run.result?.code === "missing_field")
+    return "Failed: The selected field or array index does not exist. Check the field path.";
+  if (run.result?.code === "numeric_overflow")
+    return "Failed: The integer exceeds the exact range. Use smaller operands.";
+  if (run.result?.code === "invalid_number")
+    return "Failed: An exact integer is required. Use Parse integer for text.";
+  if (run.result?.code === "invalid_json")
+    return "Failed: The source is not valid JSON. Check its syntax and duplicate keys.";
+  if (run.result?.code === "invalid_pointer")
+    return "Failed: The field path is not a valid JSON Pointer. Use / between fields.";
+  if (run.result?.code === "invalid_type")
+    return "Failed: The selected value is not text. Choose a text field.";
+  if (run.result?.code === "contract_mismatch")
+    return "Failed: A value does not match its input type. Choose a compatible field or an explicit conversion.";
   if (run.status === "queued" || run.status === "running")
     return `${run.status === "queued" ? "Queued" : "Running"}…`;
   if (run.status !== "completed")
@@ -16,7 +31,7 @@ function value(run: RunDetail): string {
     ? Object.entries(outputs)
         .map(
           ([name, value]) =>
-            `${name}: ${typeof value === "string" ? value : `Base64 ${value.base64}`}`,
+            `${name}: ${formatResultValue(value, run.plan.contract.outputs.find((p) => p.name === name)?.semantic_type)}`,
         )
         .join("\n")
     : "Output unavailable.";
@@ -147,7 +162,7 @@ export function InlineResult({
                           {Object.entries(a.result.outputs)
                             .map(
                               ([port, v]) =>
-                                `${port}: ${typeof v === "string" ? v : `Base64 ${v.base64}`}`,
+                                `${port}: ${formatResultValue(v, attemptOutputType(run, a.nodeId, port))}`,
                             )
                             .join("\n")}
                         </pre>

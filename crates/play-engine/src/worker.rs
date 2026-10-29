@@ -7,6 +7,14 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, Read};
 mod composition;
+mod structured;
+
+fn supported(operation: &str) -> bool {
+    Probe::parse(operation).is_ok()
+        || composition::supported(operation)
+        || structured::supported(operation)
+        || operation == "image.dimensions"
+}
 
 pub fn validate(invocation: &Invocation) -> Result<()> {
     let probe = Probe::parse(&invocation.operation)?;
@@ -71,7 +79,7 @@ fn configured_limits(value: &Value) -> Result<cube_core::esolang::brainfuck::Lim
 }
 pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
     let probe = Probe::parse(operation).ok();
-    if probe.is_none() && !composition::supported(operation) {
+    if !supported(operation) {
         return Err("unsupported_operation");
     }
     let contract = cube_core::operations::require(operation)
@@ -161,7 +169,10 @@ fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
 }
 
 pub fn parameters(operation: &str) -> Result<Value> {
-    if composition::supported(operation) {
+    if composition::supported(operation)
+        || structured::supported(operation)
+        || operation == "image.dimensions"
+    {
         return composition::parameters(operation);
     }
     match Probe::parse(operation)? {
@@ -194,7 +205,7 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
     Ok(inputs)
 }
 pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
-    if Probe::parse(operation).is_err() && !composition::supported(operation) {
+    if !supported(operation) {
         return Err("unsupported_operation");
     }
     let contract = cube_core::operations::require(operation)
@@ -225,6 +236,7 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
                 .collect::<Result<Vec<_>>>()?;
             json!(cube_core::operations::contracts::values::Bytes { data })
         }
+        "json" => output.get("value").cloned().ok_or("invalid_response")?,
         _ => return Err("contract_mismatch"),
     };
     Ok(json!({port.name.clone():value}))
@@ -233,7 +245,7 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
 pub fn catalog() -> Result<Value> {
     let entries = cube_core::operations::catalog()
         .into_iter()
-        .filter(|descriptor| Probe::parse(descriptor.id).is_ok() || composition::supported(descriptor.id))
+        .filter(|descriptor| supported(descriptor.id))
         .map(|descriptor| {
             let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
             let name = descriptor
@@ -546,7 +558,10 @@ pub fn execute_pipeline(
             .map_err(|_| "invalid_response")?;
         let size = match raw.get("text").and_then(Value::as_str) {
             Some(text) => text.len(),
-            None => raw["bytes"].as_array().ok_or("invalid_response")?.len(),
+            None => match raw.get("value") {
+                Some(value) => value.to_string().len(),
+                None => raw["bytes"].as_array().ok_or("invalid_response")?.len(),
+            },
         };
         used = used.checked_add(size).ok_or("output_limit")?;
         if used > protocol::contract().output_bytes {
@@ -566,6 +581,17 @@ fn execute_node(
     emit: &mut impl FnMut(Value) -> Result<()>,
 ) -> Result<Value> {
     let id = node.id;
+    if node.operation == "image.dimensions" {
+        emit(json!({"type":"node_started","nodeId":id}))?;
+        return Ok(
+            json!({"value":cube_core::image::dimensions::inspect(&image(image_input(invocation,node)?)?)}),
+        );
+    }
+    if structured::supported(&node.operation) {
+        structured::validate_inputs(&node.operation, values, &node.parameters)?;
+        emit(json!({"type":"node_started","nodeId":id}))?;
+        return structured::execute(&node.operation, values, &node.parameters);
+    }
     if composition::supported(&node.operation) {
         composition::validate_inputs(&node.operation, values, &node.parameters)?;
         emit(json!({"type":"node_started","nodeId":id}))?;

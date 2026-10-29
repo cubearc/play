@@ -369,11 +369,26 @@ export interface RunSummary {
   retainOutput: boolean;
   operation: { operation: string; operationVersion: number; name: string };
 }
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 export interface RunDetail extends RunSummary {
   plan: {
     pipeline: { id: string; revision: number; definition: unknown };
     executionOrder?: string[];
-    nodes?: { id: string; operation: { name: string } }[];
+    nodes?: {
+      id: string;
+      operation: { name: string };
+      contractDigest?: string;
+    }[];
+    contracts?: Record<
+      string,
+      { outputs: { name: string; semantic_type: string }[] }
+    >;
     contract: {
       operation: string;
       operation_version: number;
@@ -399,7 +414,7 @@ export interface RunDetail extends RunSummary {
   };
   result: {
     status: RunStatus;
-    outputs?: Record<string, string | { base64: string }>;
+    outputs?: Record<string, JsonValue>;
     code?: string;
     replayGap?: "output_not_retained";
   } | null;

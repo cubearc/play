@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 81a6246e8a37bb7ca4cdb5b93a4894c83e1fdc83
+          ref: 1be10d71155c0e61ad6f4e143d49c2014464a1c4
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 81a6246e8a37bb7ca4cdb5b93a4894c83e1fdc83
+          ref: 1be10d71155c0e61ad6f4e143d49c2014464a1c4
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 81a6246e8a37bb7ca4cdb5b93a4894c83e1fdc83
+          ref: 1be10d71155c0e61ad6f4e143d49c2014464a1c4
           path: cube
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -145,7 +145,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 81a6246e8a37bb7ca4cdb5b93a4894c83e1fdc83
+          ref: 1be10d71155c0e61ad6f4e143d49c2014464a1c4
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -183,7 +183,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 81a6246e8a37bb7ca4cdb5b93a4894c83e1fdc83
+          ref: 1be10d71155c0e61ad6f4e143d49c2014464a1c4
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable

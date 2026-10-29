@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +21,335 @@ declare global {
 
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
+
+test("numeric fields compose exact image facts and caption values with retained evidence", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-numeric-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Measure the clue");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Exact image dimensions");
+    const image = fileURLToPath(
+      new URL("../../tests/fixtures/composition.png", import.meta.url),
+    );
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, image);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("7");
+    await editor
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore composition.png", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Dimensions plus score");
+    const choose = async (label: string, option: string) => {
+      await editor.getByRole("combobox", { name: label, exact: true }).click();
+      await editor.getByRole("option", { name: option, exact: true }).click();
+    };
+    await editor
+      .getByRole("textbox", { name: "Input name", exact: true })
+      .fill("caption");
+    await editor
+      .getByRole("button", { name: "Add input", exact: true })
+      .click();
+    await choose("Asset for caption", "Image caption · r1");
+    await choose("Operation", "Image dimensions");
+    const add = async (operation: string) => {
+      await editor
+        .getByRole("button", { name: "Add node", exact: true })
+        .click();
+      await choose("Operation", operation);
+    };
+    await add("Select field");
+    await choose("input · json", "1. Image dimensions · output");
+    await editor
+      .getByRole("textbox", { name: "Field path", exact: true })
+      .fill("/dimensions");
+    await add("Maximum");
+    await choose("input · json", "2. Select field · output");
+    await add("Parse integer");
+    await choose("input · text", "caption · text");
+    await add("Add");
+    await choose("left · json", "3. Maximum · output");
+    await choose("right · json", "Literal · json");
+    const integerValue = editor.getByRole("textbox", {
+      name: "Integer value",
+      exact: true,
+    });
+    await integerValue.fill("9007199254740990.5");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await editor
+      .getByRole("button", { name: "Node 3: Maximum", exact: true })
+      .click();
+    await editor
+      .getByRole("button", { name: "Node 5: Add", exact: true })
+      .click();
+    await expect(integerValue).toHaveValue("9007199254740990.5");
+    await integerValue.fill("7");
+    await choose("right · json", "4. Parse integer · output");
+    await capture(application, "native-numeric-editor");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: 8" : "Execution rejected",
+    );
+    await page
+      .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
+      .click();
+    await canvas
+      .getByRole("region", { name: "Pipeline graph", exact: true })
+      .evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await capture(application, "native-numeric-canvas", false);
+    await page
+      .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
+      .click();
+    assert.deepEqual((await accessibility(page)).violations, []);
+    if (process.platform !== "darwin") return;
+    const original = await latestRun(page, "composition.png");
+    assert.equal(original.detail.result?.outputs?.output, 8);
+    assert.equal(original.detail.attempts.length, 5);
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+    await choose("right · json", "Literal · json");
+    await editor
+      .getByRole("textbox", { name: "Integer value", exact: true })
+      .fill("9007199254740991");
+    await editor
+      .getByRole("button", { name: "Save revision", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText("integer exceeds the exact range");
+    const failed = await latestRun(page, "composition.png");
+    assert.equal(failed.detail.result?.code, "numeric_overflow");
+    assert.equal(failed.detail.attempts.length, 4);
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual(
+      await frozenRun(page, original.context, original.detail.id),
+      original.detail,
+    );
+    assert.deepEqual(
+      await frozenRun(page, failed.context, failed.detail.id),
+      failed.detail,
+    );
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("structured fields preserve JSON types, distinguish null and missing, and retain failed paths", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-json-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Structured evidence");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Choose the exact field");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Structured clue");
+    await editor
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill(
+        '{"clue":"Gur xrl.","empty":null,"ratio":1.5,"payload":{"base64":"YQ=="}}',
+      );
+    await editor.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Structured clue", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await pipelineReflow(application);
+    const choose = async (label: string, option: string) => {
+      await editor.getByRole("combobox", { name: label, exact: true }).click();
+      await editor.getByRole("option", { name: option, exact: true }).click();
+    };
+    const add = async (operation: string) => {
+      await editor
+        .getByRole("button", { name: "Add node", exact: true })
+        .click();
+      await choose("Operation", operation);
+    };
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Decode a structured clue");
+    await choose("Operation", "Parse JSON");
+    await add("Select field");
+    await choose("input · json", "1. Parse JSON · output");
+    await editor
+      .getByRole("textbox", { name: "Field path", exact: true })
+      .fill("/clue");
+    await add("Use text value");
+    await choose("input · json", "2. Select field · output");
+    await add("ROT13");
+    await choose("input · text", "3. Use text value · output");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: The key." : "Execution rejected",
+    );
+    if (process.platform !== "darwin") return;
+    const original = await latestRun(page, "Structured clue");
+    assert.equal(original.detail.attempts.length, 4);
+    const revise = async (pointer: string) => {
+      await canvas
+        .getByRole("button", { name: "Edit Pipeline", exact: true })
+        .click();
+      editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+      await editor
+        .getByRole("button", { name: "Node 2: Select field", exact: true })
+        .click();
+      await editor
+        .getByRole("textbox", { name: "Field path", exact: true })
+        .fill(pointer);
+      await editor
+        .getByRole("button", { name: "Save revision", exact: true })
+        .click();
+      await expect(editor).toBeHidden();
+    };
+    await revise("/payload");
+    await canvas
+      .getByRole("button", { name: "Node 2: Select field", exact: true })
+      .click();
+    await canvas.getByRole("button", { name: "Run node", exact: true }).click();
+    const result = canvas.getByRole("region", { name: "Cell result" });
+    await expect(result).toContainText('"base64": "YQ=="');
+    await expect(result).not.toContainText("Base64 YQ==");
+    const object = await latestRun(page, "Structured clue");
+    assert.deepEqual(object.detail.result?.outputs?.output, { base64: "YQ==" });
+    assert.equal(object.detail.attempts.length, 2);
+    await revise("/missing");
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(result).toContainText(
+      "selected field or array index does not exist",
+    );
+    const missing = await latestRun(page, "Structured clue");
+    assert.equal(missing.detail.result?.code, "missing_field");
+    assert.equal(missing.detail.attempts.length, 2);
+    await revise("/empty");
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(result).toContainText("selected value is not text");
+    const empty = await latestRun(page, "Structured clue");
+    assert.equal(empty.detail.result?.code, "invalid_type");
+    assert.equal(empty.detail.attempts.length, 3);
+    assert.equal(empty.detail.attempts[1]?.result?.outputs?.output, null);
+    await result
+      .getByText("Saved Run & input evidence", { exact: false })
+      .click();
+    await expect(result).toContainText("output: null");
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await capture(application, "native-structured-failure");
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    for (const saved of [original, object, missing, empty])
+      assert.deepEqual(
+        await frozenRun(page, saved.context, saved.detail.id),
+        saved.detail,
+      );
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
 
 test("typed composition joins image/caption branches and keeps binary and failed-decode evidence", {
   timeout: 90000,
@@ -794,6 +1124,15 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
       .getByRole("option")
       .filter({ hasText: /brainfuck/i })
       .click();
+    await expect(
+      editor.getByRole("textbox", { name: "Max instructions", exact: true }),
+    ).toBeVisible();
+    await expect(
+      editor.getByRole("textbox", { name: "Cell bits", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      editor.getByRole("textbox", { name: "Eof", exact: true }),
+    ).toHaveCount(0);
     await editor
       .getByRole("button", { name: "Save revision", exact: true })
       .click();
@@ -831,6 +1170,10 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
       .getByRole("button", { name: "Fork Pipeline", exact: true })
       .click();
     editor = page.getByRole("dialog", { name: "Fork Pipeline", exact: true });
+    await expect(
+      editor.getByRole("button", { name: "Add node", exact: true }),
+    ).toBeDisabled();
+    assert.deepEqual((await accessibility(page)).violations, []);
     await editor
       .getByRole("textbox", { name: "Pipeline name", exact: true })
       .fill("Alternative program");
@@ -1790,7 +2133,32 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
     const canvas = () =>
       page.getByRole("region", { name: "Trail canvas", exact: true });
     await expect(canvas()).toContainText("File inspection");
-    await expect(canvas().locator("pre")).toHaveText(text);
+    await expect(
+      canvas().getByRole("textbox", { name: "File preview", exact: true }),
+    ).toHaveValue(text);
+    const preview = canvas().getByRole("textbox", {
+      name: "File preview",
+      exact: true,
+    });
+    await preview.focus();
+    await page.keyboard.press("ControlOrMeta+a");
+    assert.equal(
+      await preview.evaluate((element: HTMLTextAreaElement) =>
+        element.value.slice(element.selectionStart, element.selectionEnd),
+      ),
+      text,
+    );
+    await page.keyboard.press("Tab");
+    const digest = canvas().getByRole("textbox", {
+      name: "File SHA-256",
+      exact: true,
+    });
+    await expect(digest).toBeFocused();
+    await expect(digest).toHaveValue(
+      createHash("sha256").update(text).digest("hex"),
+    );
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await capture(application, "native-file-canvas");
     await expect(
       canvas().getByRole("heading", { name: "Injected heading", exact: true }),
     ).toHaveCount(0);
@@ -1831,7 +2199,9 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
       .getByRole("button", { name: "Open evidence clue.html", exact: true })
       .click();
     await expect(canvas()).toContainText("Archived block");
-    await expect(canvas().locator("pre")).toHaveText(text);
+    await expect(
+      canvas().getByRole("textbox", { name: "File preview", exact: true }),
+    ).toHaveValue(text);
     await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
     await notebook(page)
       .getByRole("button", { name: "Archived blocks (1)", exact: true })
@@ -2376,7 +2746,10 @@ async function accessibility(page: Page) {
   await page.evaluate(axe.source);
   return page.evaluate(async () => {
     return window.axe.run(document, {
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
+      runOnly: {
+        type: "tag",
+        values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
+      },
     });
   });
 }
@@ -2419,13 +2792,23 @@ async function capture(
 }
 async function checkWorkbench(page: Page) {
   await expect(explorer(page)).toBeVisible();
+  const editor = page.getByRole("main", {
+    name: "Exploration editors",
+    exact: true,
+  });
+  const originalWidth = (await editor.boundingBox())?.width;
+  assert.ok(originalWidth);
   await page.keyboard.press("ControlOrMeta+b");
   await expect(explorer(page)).toBeHidden();
+  await expect
+    .poll(async () => (await editor.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(originalWidth + 200);
   await page.keyboard.press("ControlOrMeta+b");
   await expect(explorer(page)).toBeVisible();
   await page.keyboard.press("ControlOrMeta+Shift+p");
   const palette = page.getByRole("dialog", { name: "Command Palette" });
   await expect(palette).toBeVisible();
+  assert.deepEqual((await accessibility(page)).violations, []);
   await page
     .getByRole("textbox", { name: "Command", exact: true })
     .fill("Stage notebook");
@@ -2452,6 +2835,106 @@ async function checkWorkbench(page: Page) {
     .poll(async () => (await explorer(page).boundingBox())?.width ?? 0)
     .toBeGreaterThan(widthBefore + 20);
 }
+async function pipelineReflow(application: ElectronApplication) {
+  const page = await application.firstWindow();
+  const original = await application.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+    if (!window) throw new Error("visible_window_missing");
+    return {
+      size: window.getBounds(),
+      zoom: window.webContents.getZoomFactor(),
+    };
+  });
+  try {
+    for (const settings of [
+      { width: 800, height: 540, zoom: 1 },
+      { width: 1280, height: 800, zoom: 2 },
+    ]) {
+      await application.evaluate(({ BrowserWindow }, settings) => {
+        const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+        if (!window) throw new Error("visible_window_missing");
+        window.setSize(settings.width, settings.height);
+        window.webContents.setZoomFactor(settings.zoom);
+      }, settings);
+      await expect
+        .poll(() =>
+          page.getByRole("dialog").evaluate((dialog) => ({
+            shell: document.documentElement.scrollWidth > innerWidth,
+            form: dialog.scrollWidth > dialog.clientWidth + 1,
+          })),
+        )
+        .toEqual({ shell: false, form: false });
+    }
+  } finally {
+    await application.evaluate(({ BrowserWindow }, original) => {
+      const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+      if (!window) throw new Error("visible_window_missing");
+      window.webContents.setZoomFactor(original.zoom);
+      window.setSize(original.size.width, original.size.height);
+    }, original);
+  }
+}
+
+// Evidence reads may overlap the renderer's bounded post-Run summary refresh.
+async function afterSummaryRefresh<T>(read: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      return await read();
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes("Error: busy") ||
+        Date.now() >= deadline
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+}
+async function latestRun(page: Page, sourceTitle: string) {
+  const state = await afterSummaryRefresh(() => current(page));
+  const trail = state.exploration.trails.find(
+    (t) => t.source.title === sourceTitle,
+  );
+  assert.ok(trail);
+  const context = {
+    workspace_id: trail.workspaceId,
+    exploration_id: trail.explorationId,
+    stage_id: trail.stageId,
+  };
+  const detail = await afterSummaryRefresh(() =>
+    page.evaluate(
+      async ({ trailId, context }) => {
+        const history = await window.play.workspace({
+          kind: "list_runs",
+          context,
+          trail_id: trailId,
+          before: null,
+        });
+        const id = history.runs[0]?.id;
+        if (!id) throw new Error("run_missing");
+        return window.play.workspace({
+          kind: "run_detail",
+          context,
+          run_id: id,
+        });
+      },
+      { trailId: trail.id, context },
+    ),
+  );
+  return { context, detail };
+}
+async function frozenRun(page: Page, context: Context, id: string) {
+  return afterSummaryRefresh(() =>
+    page.evaluate(
+      ({ context, id }) =>
+        window.play.workspace({ kind: "run_detail", context, run_id: id }),
+      { context, id },
+    ),
+  );
+}
+
 async function current(page: Page) {
   return page.evaluate(async () => {
     const list = await window.play.workspace({ kind: "list" });

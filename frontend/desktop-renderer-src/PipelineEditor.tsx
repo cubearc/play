@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useEffect, useRef, useState } from "react";
@@ -19,8 +18,10 @@ import {
   selectedBindings,
 } from "./BindingsEditor";
 import { GraphInputs, initialInputs, Select } from "./GraphInputs";
+import { ParameterFields, parameterTypesValid } from "./ParameterFields";
 import { PipelineGraph } from "./PipelineGraph";
 import { PipelineInputs } from "./PipelineInputs";
+import VscodeButton from "./VscodeButton";
 export type PipelineMode = "create" | "revise" | "fork";
 export interface PipelineDraft {
   title: string;
@@ -55,7 +56,6 @@ export function PipelineEditor({
   const dialog = useRef<HTMLDialogElement>(null);
   const titleField = useRef<HTMLElementTagNameMap["vscode-textfield"]>(null);
   const paramsField = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
-  const separatorField = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
   const [title, setTitle] = useState(
     mode === "fork"
       ? `${pipeline?.title} (copy)`
@@ -95,6 +95,7 @@ export function PipelineEditor({
   const [selected, setSelected] = useState(definition.output);
   const [saving, setSaving] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  const [invalidLiterals, setInvalidLiterals] = useState(false);
   const key = useRef(crypto.randomUUID());
   const bindingKey = useRef(crypto.randomUUID());
   const node = definition.nodes.find((n) => n.id === selected);
@@ -109,7 +110,8 @@ export function PipelineEditor({
     JSON.stringify(definition) !== initial.current ||
     JSON.stringify(bindings) !== initialBindings.current ||
     mode !== "revise" ||
-    invalid;
+    invalid ||
+    invalidLiterals;
   useEffect(() => onDirty(changed), [changed, onDirty]);
   const change = (next: PipelineDefinition) => {
     key.current = crypto.randomUUID();
@@ -135,6 +137,11 @@ export function PipelineEditor({
   const readonly = saving || mode === "fork";
   const valid =
     !invalid &&
+    !invalidLiterals &&
+    definition.nodes.every((n) => {
+      const op = operations.find((o) => o.operation === n.operation);
+      return op && parameterTypesValid(op, n.parameters);
+    }) &&
     completeBindings(definition.inputs, bindings) &&
     title.trim() &&
     new TextEncoder().encode(title).byteLength <= 120 &&
@@ -236,6 +243,13 @@ export function PipelineEditor({
           />
           <VscodeButton
             secondary
+            aria-disabled={
+              readonly ||
+              invalid ||
+              definition.nodes.length >= limits.pipeline_node_limit
+                ? "true"
+                : "false"
+            }
             disabled={
               readonly ||
               invalid ||
@@ -317,78 +331,67 @@ export function PipelineEditor({
             <p>{operation?.description}</p>
             <GraphInputs
               node={node}
+              onInvalidChange={setInvalidLiterals}
               definition={definition}
               operations={operations}
               disabled={readonly || invalid}
               onChange={(inputs) => update({ ...node, inputs })}
             />
-            {operation?.operation === "text.concat" ? (
-              <>
-                <label htmlFor="pipeline-separator">Separator</label>
-                <VscodeTextarea
-                  id="pipeline-separator"
-                  label="Separator"
-                  ref={separatorField}
-                  rows={2}
-                  value={String(node.parameters.separator ?? "")}
-                  disabled={readonly}
-                  onInput={() => {
-                    const next = {
-                      separator: separatorField.current?.value ?? "",
-                    };
-                    update({ ...node, parameters: next });
-                    setParameters(JSON.stringify(next));
-                    setInvalid(
+            {operation ? (
+              <ParameterFields
+                operation={operation}
+                parameters={node.parameters}
+                disabled={readonly}
+                onChange={(next) => {
+                  update({ ...node, parameters: next });
+                  setParameters(JSON.stringify(next, null, 2));
+                  setInvalid(
+                    !parameterTypesValid(operation, next) ||
                       new TextEncoder().encode(JSON.stringify(next))
                         .byteLength > limits.pipeline_parameter_bytes,
-                    );
-                  }}
-                />
-                <p>
-                  Included once between left and right. Leave blank to join
-                  directly.
-                </p>
-              </>
-            ) : (
-              <>
-                <label htmlFor="pipeline-parameters">Parameters (JSON)</label>
-                <VscodeTextarea
-                  id="pipeline-parameters"
-                  label="Parameters (JSON)"
-                  ref={paramsField}
-                  value={parameters}
-                  rows={5}
-                  disabled={readonly}
-                  onInput={() => {
-                    const text = paramsField.current?.value ?? "";
-                    setParameters(text);
-                    try {
-                      const v: unknown = JSON.parse(text);
-                      if (
-                        !v ||
-                        typeof v !== "object" ||
-                        Array.isArray(v) ||
-                        new TextEncoder().encode(JSON.stringify(v)).byteLength >
-                          limits.pipeline_parameter_bytes
-                      )
-                        throw new Error("invalid_parameters");
-                      setInvalid(false);
-                      update({
-                        ...node,
-                        parameters: v as Record<string, unknown>,
-                      });
-                    } catch {
-                      setInvalid(true);
-                    }
-                  }}
-                />
-              </>
-            )}
+                  );
+                }}
+              />
+            ) : null}
+            <details className="advanced-parameters">
+              <summary>Advanced parameters</summary>
+              <label htmlFor="pipeline-parameters">Parameters (JSON)</label>
+              <VscodeTextarea
+                id="pipeline-parameters"
+                label="Parameters (JSON)"
+                ref={paramsField}
+                value={parameters}
+                rows={5}
+                disabled={readonly}
+                onInput={() => {
+                  const raw = paramsField.current?.value ?? "";
+                  setParameters(raw);
+                  try {
+                    const value: unknown = JSON.parse(raw);
+                    if (
+                      !value ||
+                      typeof value !== "object" ||
+                      Array.isArray(value) ||
+                      new TextEncoder().encode(JSON.stringify(value))
+                        .byteLength > limits.pipeline_parameter_bytes
+                    )
+                      throw new Error("invalid_parameters");
+                    setInvalid(false);
+                    update({
+                      ...node,
+                      parameters: value as Record<string, unknown>,
+                    });
+                  } catch {
+                    setInvalid(true);
+                  }
+                }}
+              />
+            </details>
             {invalid ? (
               <p role="alert">
                 {operation?.operation === "text.concat"
                   ? "The separator is too long for this Pipeline."
-                  : "Enter a bounded JSON object for the parameters before changing nodes."}
+                  : "Check the parameter values and their limits before changing nodes."}
               </p>
             ) : null}
             <div className="dialog-actions">

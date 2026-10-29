@@ -9,9 +9,6 @@ pub(super) fn supported(operation: &str) -> bool {
     )
 }
 pub(super) fn parameters(operation: &str) -> Result<Value> {
-    if !supported(operation) {
-        return Err("unsupported_operation");
-    }
     let contract = cube_core::operations::require(operation)
         .map_err(|_| "unsupported_operation")?
         .contract()

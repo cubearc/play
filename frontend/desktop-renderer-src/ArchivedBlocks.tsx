@@ -1,4 +1,3 @@
-import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import type {
   ArchivedBlockView,
   AssetView,
@@ -8,6 +7,7 @@ import type {
 } from "../desktop/workspace-contract";
 import { blockTitle } from "../desktop/workspace-contract";
 import { NotebookAsset } from "./NotebookAsset";
+import VscodeButton from "./VscodeButton";
 
 export function ArchivedBlocks({
   items,
