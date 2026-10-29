@@ -16,6 +16,7 @@ import {
   contextOf,
   type ExplorationView,
   type RunDetail,
+  type RunRequest,
   type TrailView,
   type WorkspaceView,
 } from "./workspace-contract.ts";
@@ -782,7 +783,7 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(failed.status, "failed");
     assert.equal(failed.result?.code, "operation_failed");
     assert.equal(failed.attempts[0]?.status, "failed");
-    // Keep the control cell unchanged so Quit is tested against active work.
+    // Keep a nonterminating bounded program for active cancellation.
     const loop = await runFixture(engine, "+[]");
     const running = await actualRunning(() => engine.startRun(loop));
     assert.equal(running.status, "running");
@@ -793,10 +794,20 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(cancelled.status, "cancelled");
     assert.equal(cancelled.attempts[0]?.status, "cancelled");
     assert.deepEqual(await engine.startRun(loop), cancelled);
-    const shutdownIntent = { ...loop, key: randomUUID() };
-    const shutdown = await actualRunning(() => engine.startRun(shutdownIntent));
-    assert.equal(shutdown.status, "running");
+    const endedBeforeQuit = await finished(
+      engine,
+      loop.context,
+      await engine.startRun({ ...loop, key: randomUUID() }),
+    );
+    assert.equal(endedBeforeQuit.status, "failed");
+    assert.equal(endedBeforeQuit.result?.code, "operation_failed");
+    // A running snapshot cannot keep a bounded program active until a later Quit.
+    // Deliver admission and EOF together to test graceful close without a client race.
     await engine.close();
+    const shutdown = await closeAfterAdmission(root, {
+      ...loop,
+      key: randomUUID(),
+    });
     engine = await Engine.connect(binary, worker, root);
     await engine.workspace({
       kind: "open",
@@ -809,6 +820,15 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     })) as RunDetail;
     assert.equal(restored.status, "cancelled");
     assert.equal(restored.result?.code, "session_closed");
+    assert.deepEqual(
+      await engine.workspace({
+        kind: "run_detail",
+        context: loop.context,
+        run_id: endedBeforeQuit.id,
+      }),
+      endedBeforeQuit,
+      "Quit must preserve an already failed Run rather than relabel it as cancelled",
+    );
     assert.deepEqual(
       await engine.workspace({
         kind: "run_detail",
@@ -1048,4 +1068,62 @@ async function actualRunning(
   );
   assert.equal(run.attempts[0]?.status, "running");
   return run;
+}
+
+async function closeAfterAdmission(
+  root: string,
+  request: RunRequest,
+): Promise<RunDetail> {
+  const owner = spawn(
+    binary,
+    ["--ipc", "--worker", worker ?? "", "--data-root", root],
+    { stdio: ["pipe", "pipe", "ignore"] },
+  );
+  const lines = createInterface({ input: owner.stdout });
+  const exit = once(owner, "exit");
+  const send = async (value: object, end = false) => {
+    const reply = once(lines, "line", { signal: AbortSignal.timeout(3000) });
+    const frame = `${JSON.stringify(value)}\n`;
+    if (end) owner.stdin.end(frame);
+    else owner.stdin.write(frame);
+    return JSON.parse((await reply)[0] as string) as {
+      type: string;
+      data: RunDetail;
+    };
+  };
+  try {
+    assert.equal(
+      (
+        await send({
+          type: "hello",
+          id: 1,
+          protocol: contract.protocol,
+          engine: contract.engine,
+          nonce: "0123456789abcdef0123456789abcdef",
+        })
+      ).type,
+      "ready",
+    );
+    assert.equal(
+      (
+        await send({
+          type: "workspace",
+          id: 2,
+          command: { kind: "open", workspace_id: request.context.workspace_id },
+        })
+      ).type,
+      "workspace",
+    );
+    const admitted = await send({ type: "start_run", id: 3, request }, true);
+    assert.equal(admitted.type, "run");
+    assert.equal(admitted.data.status, "queued");
+    assert.deepEqual(await exit, [0, null]);
+    return admitted.data;
+  } finally {
+    if (owner.exitCode === null && owner.signalCode === null) {
+      owner.kill();
+      await exit;
+    }
+    lines.close();
+  }
 }
