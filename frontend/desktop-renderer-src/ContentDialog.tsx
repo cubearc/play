@@ -4,12 +4,18 @@ import VscodeTextfield from "@vscode-elements/react-elements/dist/components/Vsc
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 
-export type DialogKind = "exploration" | "stage" | "text" | "image";
+export type DialogKind =
+  | "exploration"
+  | "stage"
+  | "text"
+  | "image"
+  | "annotation";
 const titles: Record<DialogKind, string> = {
   exploration: "New Exploration",
   stage: "New Stage",
   text: "Add text block",
   image: "Add image with caption",
+  annotation: "Add annotation",
 };
 export function ContentDialog({
   kind,
@@ -65,7 +71,7 @@ export function ContentDialog({
           />
         </>
       ) : null}
-      {kind === "text" || kind === "image" ? (
+      {kind === "text" || kind === "image" || kind === "annotation" ? (
         <>
           <label htmlFor="content-text">
             {kind === "image" ? "Caption" : "Text"}
@@ -82,7 +88,12 @@ export function ContentDialog({
             }}
           />
           <small>
-            Up to {limits.text_bytes.toLocaleString()} UTF-8 bytes
+            Up to{" "}
+            {(kind === "annotation"
+              ? limits.note_bytes
+              : limits.text_bytes
+            ).toLocaleString()}{" "}
+            UTF-8 bytes
             {kind === "image" ? " · PNG images up to 128 KiB" : ""}.
           </small>
         </>
@@ -99,7 +110,9 @@ export function ContentDialog({
             ? "Choose PNG"
             : kind === "text"
               ? "Add text"
-              : "Create"}
+              : kind === "annotation"
+                ? "Add annotation"
+                : "Create"}
         </VscodeButton>
       </div>
     </dialog>

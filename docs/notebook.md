@@ -5,13 +5,51 @@
 <a id="private-notes-and-artifacts"></a>
 
 Each Exploration has its own local Stages. A Stage combines ordered content
-Blocks, cell results and saved reasoning. Choose **New Stage** in the Explorer
+Blocks, annotations, cell results and saved reasoning. Choose **New Stage** in the Explorer
 to create another local part without importing a Challenge.
 
 Use [Add text, Add image or Add file](workspace.md) to add clues. An image caption stays in
 the image's figure, with its own input Asset identity. Clicking an Asset opens a
 Trail canvas in the same Exploration; [Explorations and Trails](explorations.md)
 explains the relationship.
+
+## Add and save annotations
+
+Choose **Add annotation**, give it a title and enter your observation. The title
+is set when created; the text stays editable beside the clues. Annotations use
+plain text, including any markup, up to 2048 UTF-8 bytes per saved revision.
+They do not become operation inputs or open a Trail canvas.
+
+Choose **Save annotation** or press Cmd/Ctrl+S inside that annotation. Only that
+Note is saved: other annotation and reasoning drafts stay independent. Wait for
+its **Saved** status. **Discard draft** restores that Note's latest saved text.
+If another revision was saved first, Play keeps your draft and reports a
+conflict. Copy anything you want to keep, then discard the draft to review the
+latest saved revision before editing again.
+
+![Two independent annotation cells with saved observations and a separate Reasoning cell in the Stage notebook.](assets/desktop/annotation-notebook.png)
+
+Each annotation has its own save status and revision. [Open full size](assets/desktop/annotation-notebook.png).
+
+Use the heading arrows to reorder an annotation. The copy icon creates a new
+Note immediately after it, with independent content and a label identifying the
+source revision. Saving either Note never edits the other. Copy and archive
+require saving or discarding that annotation's draft first. Saved Note revisions
+are preserved; this preview does not include a revision browser.
+
+The archive icon moves the annotation to **Archived blocks** as read-only text.
+**Restore** brings back the original Note and Block identities, saved revision
+and copy origin. Annotations have no **Open evidence** or Run action. The unique
+**Reasoning** cell remains active and cannot be copied or archived.
+
+![Archived annotation with read-only saved text and a Restore button, beside the remaining notebook cells.](assets/desktop/archived-annotation.png)
+
+An archived annotation retains its saved content. [Open full size](assets/desktop/archived-annotation.png).
+
+Drafts stay in the current app session when changing Stage or Exploration.
+Closing or quitting with unsaved Notes offers **Keep editing** or **Discard
+draft**. Save before quitting; drafts do not survive a crash. Cmd/Ctrl+Enter
+inside an annotation or reasoning never runs another cell.
 
 ## Run a text cell
 
@@ -107,11 +145,11 @@ Block; move it between clues or place it first.
 
 Tab to a move button and press Enter to use the keyboard. After a successful
 move, focus follows the Block and its position is announced. Cmd/Ctrl+Enter in a
-text or caption Block runs that Block's selected operation. In reasoning, that
+text or caption Block runs that Block's selected operation. In any Note, that
 shortcut does not run another Block.
 
 Moves save immediately and survive reopening. They preserve Asset identities,
-saved revisions, Trails, earlier Runs and unsaved reasoning. If another action
+saved revisions, Trails, earlier Runs and unsaved Note drafts. If another action
 changed the order first, Play shows the latest order and keeps your draft; try
 the move again. Reordering is visual organization, not Pipeline scheduling.
 
@@ -206,7 +244,7 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 | Toggle Explorer | Cmd+B | Ctrl+B |
 | Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
 | Run active text cell | Cmd+Enter | Ctrl+Enter |
-| Save editor or reasoning | Cmd+S | Ctrl+S |
+| Save editor or focused Note | Cmd+S | Ctrl+S |
 
 Windows/Linux worker execution is refused by the current native policy, even
 though the UI has keyboard bindings. [Installation](installation.md) states the

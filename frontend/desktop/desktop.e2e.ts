@@ -13,6 +13,223 @@ import {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("annotation Blocks save independently, preserve drafts and restore their Note identity", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-annotations-"));
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Notebook annotations");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Observations");
+    const add = async (title: string, text: string) => {
+      await notebook(page)
+        .getByRole("button", { name: "Add annotation", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: "Add annotation",
+        exact: true,
+      });
+      await dialog
+        .getByRole("textbox", { name: "Title", exact: true })
+        .fill(title);
+      await dialog
+        .getByRole("textbox", { name: "Text", exact: true })
+        .fill(text);
+      await dialog
+        .getByRole("button", { name: "Add annotation", exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+      await expect(
+        notebook(page).getByRole("article", {
+          name: `${title} block`,
+          exact: true,
+        }),
+      ).toBeVisible();
+    };
+    await add("Observation", "The caption may be encoded.");
+    await add("Alternative", "Inspect the pixels first.");
+    const cell = (title: string) =>
+      notebook(page).getByRole("article", {
+        name: `${title} block`,
+        exact: true,
+      });
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Reasoning draft stays independent.");
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "Reasoning block",
+        exact: true,
+      }),
+    ).toContainText("Unsaved draft");
+    await cell("Observation")
+      .getByRole("textbox", { name: "Annotation text", exact: true })
+      .fill("<script>globalThis.noteExecuted=true</script>");
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(
+      cell("Observation").getByRole("status", {
+        name: "Note save status",
+        exact: true,
+      }),
+    ).toHaveText("Saved");
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Reasoning draft stays independent.",
+    );
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "Reasoning block",
+        exact: true,
+      }),
+    ).toContainText("Unsaved draft");
+    await expect(
+      cell("Alternative").getByRole("textbox", {
+        name: "Annotation text",
+        exact: true,
+      }),
+    ).toHaveValue("Inspect the pixels first.");
+    assert.equal(
+      await page.evaluate(() => Object.hasOwn(globalThis, "noteExecuted")),
+      false,
+    );
+    await page.keyboard.press("ControlOrMeta+Enter");
+    assert.equal((await current(page)).exploration.trails.length, 0);
+    const concurrent = (await current(page)).exploration;
+    const alternative = concurrent.stage.blocks.find(
+      (block) => block.kind === "note" && block.note.title === "Alternative",
+    );
+    assert.ok(alternative?.kind === "note");
+    const alternativeText = cell("Alternative").getByRole("textbox", {
+      name: "Annotation text",
+      exact: true,
+    });
+    await alternativeText.fill("My independent draft");
+    await page.evaluate(
+      ({ exploration, note }) =>
+        window.play.workspace({
+          kind: "save_note",
+          context: {
+            workspace_id: exploration.workspaceId,
+            exploration_id: exploration.id,
+            stage_id: exploration.stage.id,
+          },
+          key: crypto.randomUUID(),
+          note_id: note.id,
+          expected_revision: note.revision,
+          text: "A concurrently saved observation",
+        }),
+      { exploration: concurrent, note: alternative.note },
+    );
+    await alternativeText.focus();
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(page.getByRole("alert")).toContainText(
+      "The saved note changed. Your draft was kept.",
+    );
+    await expect(alternativeText).toHaveValue("My independent draft");
+    await cell("Alternative")
+      .getByRole("button", { name: "Discard draft", exact: true })
+      .click();
+    await expect(alternativeText).toHaveValue(
+      "A concurrently saved observation",
+    );
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Reasoning draft stays independent.",
+    );
+    await cell("Observation")
+      .getByRole("button", { name: "Duplicate Observation", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(cell("Observation (copy)")).toBeFocused();
+    await expect(cell("Observation (copy)")).toContainText(
+      "Copied from Observation · r2",
+    );
+    const before = await current(page);
+    const blockId = await cell("Observation").getAttribute("data-block-id");
+    const original = before.exploration.stage.blocks.find(
+      (b) => b.id === blockId,
+    );
+    assert.ok(original?.kind === "note");
+    await cell("Observation")
+      .getByRole("textbox", { name: "Annotation text", exact: true })
+      .fill("Unsaved variation");
+    await expect(
+      cell("Observation").getByRole("button", {
+        name: "Archive Observation",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await cell("Observation")
+      .getByRole("button", { name: "Discard draft", exact: true })
+      .click();
+    await cell("Observation")
+      .getByRole("button", { name: "Archive Observation", exact: true })
+      .click();
+    await notebook(page)
+      .getByRole("button", { name: "Archived blocks (1)", exact: true })
+      .click();
+    const archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await expect(archive).toContainText(
+      "<script>globalThis.noteExecuted=true</script>",
+    );
+    await expect(
+      archive.getByRole("button", { name: /Open evidence/ }),
+    ).toHaveCount(0);
+    await archive
+      .getByRole("button", { name: "Restore Observation", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(cell("Observation")).toBeFocused();
+    assert.deepEqual(
+      (await current(page)).exploration.stage.blocks.find(
+        (b) => b.id === original.id,
+      ),
+      original,
+    );
+    await cell("Alternative")
+      .getByRole("button", { name: "Move Alternative down", exact: true })
+      .click();
+    await expect(cell("Alternative")).toBeFocused();
+    await saveNote(page, "Reasoning draft stays independent.");
+    await create(page, "Exploration", "Separate notes");
+    await expect(notebook(page)).not.toContainText("Observation");
+    await explorer(page)
+      .getByRole("button", { name: "Observations", exact: true })
+      .click();
+    await expect(cell("Observation")).toBeVisible();
+    const saved = await current(page);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(cell("Observation")).toBeVisible();
+    assert.deepEqual(await current(page), saved);
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("saved output Blocks preserve the original Run and can feed a new text operation", {
   timeout: 90000,
 }, async () => {
@@ -886,7 +1103,9 @@ async function saveNote(page: Page, text: string) {
   await page.getByLabel("Stage note", { exact: true }).fill(text);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(
-    page.getByRole("status", { name: "Note save status" }),
+    notebook(page)
+      .getByRole("article", { name: "Reasoning block", exact: true })
+      .getByRole("status", { name: "Note save status" }),
   ).toHaveText("Saved");
 }
 async function capture(application: ElectronApplication, name: string) {
@@ -2057,7 +2276,9 @@ test("archive frees an active slot while retained evidence and restore limits st
     assert.equal(saved.stage.blocks.length, 8);
     assert.equal(saved.stage.archivedBlocks.length, 1);
     assert.equal(
-      saved.stage.archivedBlocks[0]?.block.asset.title,
+      saved.stage.archivedBlocks[0]?.block.kind === "asset"
+        ? saved.stage.archivedBlocks[0].block.asset.title
+        : null,
       "Replacement",
     );
     await create(page, "Exploration", "Independent study");

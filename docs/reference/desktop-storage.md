@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **6**, SQLite application ID
+The native store uses generation **2**, schema version **7**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql` and `results.sql`.
-Recognized native schemas 1–5 upgrade to schema 6 under the owner lock, preserving content,
+`files.sql`, `results.sql` and `annotations.sql`.
+Recognized native schemas 1–6 upgrade to schema 7 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -80,7 +80,7 @@ and exact revisions. PNG bytes are copied into SQLite; imports never write their
 source file. Main obtains the file through a native chooser; the engine validates
 it with Core's bounded image decoder.
 
-Asset, Note and Pipeline revision rows are immutable. Saving reasoning supplies
+Asset, Note and Pipeline revision rows are immutable. Saving a Note supplies
 the Note's expected revision and appends a revision atomically. Stale edits receive
 `state_conflict`; the renderer keeps the draft. Per-command receipts bind an intent
 UUID to its payload digest and committed response. Matching retries do not create
@@ -143,7 +143,7 @@ multiple roots for that selection. Guards preserve the origin, prevent further
 root content revisions and exclude simultaneous copy/Run origins. Existing
 `asset_origins` still records the immediate parent of an independent copy.
 
-Protocol 9 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
+Protocol 10 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
 and `title`; `kind: run_output` has `runId`, `attemptId`, `nodeId`, `trailId`,
 `port`, `semanticType`, `operationName` and the engine `sequence`. There is no
 untagged-origin fallback. Run-origin fields derive from immutable stored evidence,
@@ -167,7 +167,8 @@ accepting promotion.
 Stage views return one ordered active `blocks` sequence tagged with `kind: asset` or
 `kind: note`. The reasoning Note is a Block with its own ID and revisioned Note
 content; there is no separate `Stage.note` field. Image and caption belong to one
-Asset Block. The current baseline has exactly one reasoning Block per Stage.
+Asset Block. Each Stage has exactly one active reasoning Block and may have independent
+annotation Note Blocks. Both use the same Note identities and revision storage.
 
 The closed `reorder_blocks` intent carries `context`, `key`, `expected_revision`
 and `block_ids`. Supply every active Block UUID in that Stage exactly once, including
@@ -181,22 +182,22 @@ responses for matching retries. The command never revises Assets, Notes, Trails,
 Pipelines or Runs. A failed move changes nothing. Reopening returns the saved
 sequence, independently for every Stage and Exploration.
 
-Stage revisions track structural membership and order. Adding text, an image or a file
-also advances this revision; editing content or saving reasoning uses its own
+Stage revisions track structural membership and order. Adding text, an image, a file or an annotation
+also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **7**, with no older
+change that order. The coordinated app/engine wire protocol is **10**, with no older
 DTO fallback.
 
 ## Block copies and provenance
 
 The closed `duplicate_block` intent carries `context`, `key`, `block_id`,
 `expected_revision` and `source`. `expected_revision` is the Stage's structural
-revision. `source` contains `asset: { asset_id, revision }` and a matching
-`caption` reference or `null`. Both source references must match the selected
-Block's saved bindings. Concurrent content edits are conflicts even when the
-Stage order did not change. Missing/foreign Blocks fail; Note Blocks return
-`invalid_block_type`.
+revision. `source` is tagged: `kind: asset` carries `asset: { asset_id, revision }`
+and a matching `caption` reference or `null`; `kind: note` carries `note_id` and
+`revision`. The snapshot must match the selected Block's saved bindings. Concurrent content edits are conflicts even when the
+Stage order did not change. Missing/foreign Blocks fail; the protected reasoning Block returns
+`invalid_block_type`. Annotation copies follow the shared Note rules below.
 
 One transaction checks the Block and retained byte ceilings, copies the selected
 content into new Asset UUIDs at revision 1, records their exact source revisions,
@@ -214,8 +215,9 @@ titles with numbered suffixes when needed.
 
 `asset_origins` stores the copied Asset ID, source Asset ID and source revision
 under the same Workspace/Exploration foreign keys. Update/delete triggers make
-that relationship immutable. Asset views expose optional
-`origin: { assetId, revision, title }`; originals omit it. Editing a copy appends
+that relationship immutable. Asset views expose an optional tagged
+`origin: { kind: asset, assetId, revision, title }`; originals omit it.
+Editing a copy appends
 its own revision while retaining this origin. Copying a copy records the immediate
 source revision, preserving the lineage chain.
 
@@ -232,11 +234,13 @@ single reasoning Block has no copy action in this preview.
 `expected_revision` and the same closed `source` snapshot as duplication.
 Admission checks the exact owning Stage, structural revision and primary/caption
 bindings. Concurrent content edits conflict even if the Stage order is unchanged.
-Note Blocks return `invalid_block_type`.
+The protected reasoning Block returns `invalid_block_type`; annotations use
+the same lifecycle with an exact Note revision snapshot.
 
 Schema 4 adds nullable `blocks.archived_revision`. `NULL` means active; a positive
-value pins the Stage revision that last archived that Block. A CHECK constraint
-keeps the unique reasoning Block active. A deletion trigger preserves Block rows.
+value pins the Stage revision that last archived that Block. Schema 7 adds
+insert/update triggers that keep the unique reasoning Block active while
+permitting archived annotations. A deletion trigger preserves Block rows.
 There is no permanent-delete command or implicit data cleanup.
 
 One transaction changes the archive state, advances the Stage revision and
@@ -246,15 +250,17 @@ return the original accepted response and never reapply an old archive after a
 later restoration. Failures leave membership, content and evidence unchanged.
 
 Stage responses contain `archivedBlocks`, newest archive revision first. Each
-record has `archivedRevision` and `block: { id, asset, caption? }`; the inner Block
-is always asset content, without a Note variant. Active Blocks retain their tagged
-shape. Restoring inserts the original Block before trailing reasoning, otherwise
-at the active end. IDs, Asset revisions, copy provenance, Trail bindings,
+record has `archivedRevision` and `block`, using the same tagged Asset or Note
+Block union as active content. A Note view includes its role, title, text, revision
+and optional copy origin. Restoring inserts the original Block before trailing
+reasoning, otherwise
+at the active end. IDs, Asset/Note revisions, copy provenance, Trail bindings,
 Pipelines and Runs are retained. `Trail.archived` is derived from its active Block
 binding rather than stored as a second mutable status.
 
-Archived text/captions cannot be edited or duplicated. New Run admission rejects
-their source in the engine; already admitted work keeps its original supervision,
+Archived text/captions and annotations cannot be edited or duplicated.
+Annotations remain inert read-only text, without a Trail or execution history.
+New Run admission rejects archived Asset sources in the engine; already admitted work keeps its original supervision,
 completion/cancellation and history. Content/image reads and existing Run evidence
 remain scoped and available. An active copy can still run when its source of
 provenance is archived.
@@ -266,6 +272,36 @@ Archiving remains possible at the retained ceiling, so an active/archived pair c
 still be exchanged. All retained revisions and Runs continue to consume byte
 quotas; archiving does not reclaim that budget. Renderer controls are capacity
 hints; Rust enforces the limits and ownership independently.
+
+## Annotation Notes
+
+`add_annotation` carries `context`, `key`, `title` and `text`. Titles are nonempty,
+at most 120 UTF-8 bytes; content is at most 2048 UTF-8 bytes. The transaction
+creates an annotation Note at revision 1 and its ordered Block, checks the active,
+retained and aggregate byte ceilings, and advances the Stage revision. A trailing
+reasoning Block stays last; a trailing annotation does not receive special placement.
+
+`notes.kind` distinguishes `reasoning` from `annotation`; `one_reasoning_note`
+permits one reasoning Note per Stage. Both roles use `save_note` with `context`,
+`key`, `note_id`, `expected_revision` and `text`. Ownership, active membership,
+revision and byte admission are checked before appending an immutable
+`note_revisions` row and advancing only that Note's current revision. Saving does
+not advance the Stage's structural revision or save another Note. Archived Notes
+reject saves with `block_archived`; stale revisions return `state_conflict`.
+
+Annotation copies allocate new Block/Note UUIDs, start content at revision 1 and
+pin their immediate source Note and revision. A composite foreign key binds that
+origin to `note_revisions`; views expose optional
+`origin: { noteId, revision, title }`. Note titles, roles, ownership and source
+fields are immutable. Content edits append revisions, preserving the origin.
+No Asset, Trail, Pipeline or Run is created for an annotation.
+
+The renderer keeps drafts by Note UUID with the original context and expected
+revision. Cmd/Ctrl+S inside a Note saves only that Note. Conflict reloads retain
+the draft; discarding it reveals the latest saved revision. Copy/archive controls
+require a clean saved annotation, while moves preserve drafts. Notes are plain
+text and never interpret HTML or execute Cmd/Ctrl+Enter. Schema-6 upgrades retain
+existing reasoning, results and Runs before enabling annotations.
 
 ## Text and caption revisions
 
@@ -301,11 +337,11 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | Active Blocks per Stage, including reasoning | 8 |
 | Retained Blocks per Stage, including active content, archives and reasoning | 16 |
 | Text Asset or image caption | 1024 bytes |
-| One reasoning revision | 2048 bytes |
+| One Note revision, including reasoning and annotations | 2048 bytes |
 | One imported PNG | 131072 bytes (128 KiB) |
 | One imported file | 131072 bytes (128 KiB) |
 | File preview source prefix | 256 bytes (512 hexadecimal characters for binary content) |
-| Asset, reasoning and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
+| Asset, Note and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
 | Runs per Exploration / Workspace | 64 / 128 |
 | Pending Run output reservation | 131072 bytes (128 KiB) |
 | SQLite database | 16777216 bytes (16 MiB), 4096 pages |

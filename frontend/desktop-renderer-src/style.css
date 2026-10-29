@@ -985,6 +985,7 @@ h1 {
 }
 .note-save {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   margin-top: 12px;
@@ -992,6 +993,11 @@ h1 {
 .note-save span {
   color: #8b9d97;
   font-size: 11px;
+}
+.annotation-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px / 1.6 var(--vscode-editor-font-family);
 }
 .content-dialog {
   width: min(480px, calc(100vw - 60px));

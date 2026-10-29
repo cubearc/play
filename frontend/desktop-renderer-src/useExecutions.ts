@@ -307,7 +307,10 @@ export function useExecutions(
         ...exploration.stage.blocks
           .filter((b) => b.kind === "asset")
           .map((b) => b.asset),
-        ...exploration.stage.archivedBlocks.map((b) => b.block.asset),
+        ...exploration.stage.archivedBlocks
+          .map((b) => b.block)
+          .filter((b) => b.kind === "asset")
+          .map((b) => b.asset),
       ];
       return assets.some(
         (asset) =>

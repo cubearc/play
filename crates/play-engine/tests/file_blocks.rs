@@ -31,7 +31,7 @@ fn import(context: &Context, name: &str, bytes: &[u8]) -> Value {
     json!({"kind":"add_file","context":context,"key":Uuid::new_v4(),"title":name,"base64":STANDARD.encode(bytes)})
 }
 fn source(block: &Value) -> Value {
-    json!({"asset":{"asset_id":block["asset"]["id"],"revision":block["asset"]["revision"]},"caption":null})
+    json!({"kind":"asset","asset":{"asset_id":block["asset"]["id"],"revision":block["asset"]["revision"]},"caption":null})
 }
 #[test]
 fn imported_files_preserve_exact_bytes_identity_lineage_and_scoped_lifecycle() {

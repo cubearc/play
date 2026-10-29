@@ -280,6 +280,7 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       block_id: sourceBlock.id,
       expected_revision: afterOrder.stage.revision,
       source: {
+        kind: "asset",
         asset: { asset_id: asset.id, revision: asset.revision },
         caption: null,
       },
@@ -540,6 +541,7 @@ test("archive keeps admitted native work supervised and refuses new work until r
       block_id: block.id,
       expected_revision: before.stage.revision,
       source: {
+        kind: "asset",
         asset: { asset_id: block.asset.id, revision: block.asset.revision },
         caption: null,
       },

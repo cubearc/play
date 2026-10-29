@@ -36,7 +36,7 @@ fn setup(manager: &mut Manager, image: bool) -> (Context, Value) {
 }
 fn source(block: &Value) -> Value {
     let reference = |asset: &Value| json!({"asset_id":asset["id"],"revision":asset["revision"]});
-    json!({"asset":reference(&block["asset"]),"caption":block.get("caption").map(reference)})
+    json!({"kind":"asset","asset":reference(&block["asset"]),"caption":block.get("caption").map(reference)})
 }
 fn lifecycle(context: &Context, view: &Value, block: &Value, archived: bool) -> Value {
     json!({"kind":if archived{"archive_block"}else{"restore_block"},"context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":view["stage"]["revision"],"source":source(block)})

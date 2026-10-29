@@ -24,23 +24,39 @@ pub(super) async fn binding(
     id: Uuid,
     expected: &BlockSource,
 ) -> Result<Binding> {
-    if expected.asset.revision < 1 || expected.caption.as_ref().is_some_and(|c| c.revision < 1) {
+    let invalid = match expected {
+        BlockSource::Asset { asset, caption } => {
+            asset.revision < 1 || caption.as_ref().is_some_and(|c| c.revision < 1)
+        }
+        BlockSource::Note { revision, .. } => *revision < 1,
+    };
+    if invalid {
         return Err("input_limit");
     }
-    let row=sqlx::query("SELECT position,kind,asset_id,asset_revision,caption_id,caption_revision,archived_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
+    let row=sqlx::query("SELECT b.position,b.kind,b.asset_id,b.asset_revision,b.caption_id,b.caption_revision,b.note_id,b.archived_revision,n.kind AS note_kind,n.current_revision AS note_revision FROM blocks b LEFT JOIN notes n ON (b.workspace_id,b.exploration_id,b.note_id)=(n.workspace_id,n.exploration_id,n.id) WHERE b.workspace_id=? AND b.exploration_id=? AND b.stage_id=? AND b.id=?")
         .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).bind(id.to_string())
         .fetch_optional(connection).await.map_err(storage::failure)?.ok_or("not_found")?;
-    if row.get::<String, _>("kind") != "asset" {
+    if row.get::<Option<String>, _>("note_kind").as_deref() == Some("reasoning") {
         return Err("invalid_block_type");
     }
-    let caption = row
-        .get::<Option<String>, _>("caption_id")
-        .zip(row.get::<Option<i64>, _>("caption_revision"))
-        .map(|(id, rev)| reference(id, rev))
-        .transpose()?;
-    let source = BlockSource {
-        asset: reference(row.get("asset_id"), row.get("asset_revision"))?,
-        caption,
+    let source = if row.get::<String, _>("kind") == "note" {
+        if row.get::<Option<String>, _>("note_kind").as_deref() != Some("annotation") {
+            return Err("corrupt_store");
+        }
+        BlockSource::Note {
+            note_id: Uuid::parse_str(row.get("note_id")).map_err(|_| "corrupt_store")?,
+            revision: row.get("note_revision"),
+        }
+    } else {
+        let caption = row
+            .get::<Option<String>, _>("caption_id")
+            .zip(row.get::<Option<i64>, _>("caption_revision"))
+            .map(|(id, rev)| reference(id, rev))
+            .transpose()?;
+        BlockSource::Asset {
+            asset: reference(row.get("asset_id"), row.get("asset_revision"))?,
+            caption,
+        }
     };
     if source != *expected {
         return Err("state_conflict");

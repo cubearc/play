@@ -16,6 +16,36 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("annotations use bounded Note text and exact tagged Note lifecycle snapshots", () => {
+  const add = {
+    kind: "add_annotation",
+    context: owner,
+    key: randomUUID(),
+    title: "Observation",
+    text: "á".repeat(1024),
+  };
+  assert.deepEqual(request(add), add);
+  assert.throws(() => request({ ...add, text: `${add.text}x` }), /input_limit/);
+  for (const kind of ["duplicate_block", "archive_block", "restore_block"]) {
+    const value = {
+      kind,
+      context: owner,
+      key: randomUUID(),
+      block_id: randomUUID(),
+      expected_revision: 1,
+      source: { kind: "note", note_id: randomUUID(), revision: 2 },
+    };
+    assert.deepEqual(request(value), value);
+    for (const source of [
+      { ...value.source, revision: 0 },
+      { ...value.source, asset: { asset_id: randomUUID(), revision: 1 } },
+      { note_id: value.source.note_id, revision: 2 },
+      { kind: "asset", asset: { asset_id: randomUUID(), revision: 1 } },
+      { asset: { asset_id: randomUUID(), revision: 1 }, caption: null },
+    ])
+      assert.throws(() => request({ ...value, source }), /invalid_command/);
+  }
+});
 test("saving an output requires a closed Run/attempt/port intent without renderer output data", () => {
   const value = {
     kind: "pin_run_output",
@@ -66,7 +96,11 @@ test("archive and restore require the exact closed Block snapshot and structural
       key: randomUUID(),
       block_id: randomUUID(),
       expected_revision: 2,
-      source: { asset: { asset_id: randomUUID(), revision: 1 }, caption: null },
+      source: {
+        kind: "asset",
+        asset: { asset_id: randomUUID(), revision: 1 },
+        caption: null,
+      },
     };
     assert.deepEqual(request(intent), intent);
     for (const invalid of [
@@ -101,7 +135,11 @@ test("duplication accepts closed exact source snapshots without path or partial 
     key: randomUUID(),
     block_id: randomUUID(),
     expected_revision: 1,
-    source: { asset: { asset_id: randomUUID(), revision: 2 }, caption: null },
+    source: {
+      kind: "asset",
+      asset: { asset_id: randomUUID(), revision: 2 },
+      caption: null,
+    },
   };
   assert.deepEqual(request(intent), intent);
   const caption = { asset_id: randomUUID(), revision: 1 };

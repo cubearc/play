@@ -1,14 +1,14 @@
 use super::{
     blocks,
     model::{AssetRevision, BlockSource, Content, Context},
-    mutations, order, queries, storage,
+    mutations, notes, order, queries, storage,
 };
 use crate::Result;
 use serde_json::{Value, json};
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
-fn copy_title(title: &str, number: usize) -> String {
+pub(super) fn copy_title(title: &str, number: usize) -> String {
     let suffix = if number == 1 {
         " (copy)".into()
     } else {
@@ -111,13 +111,21 @@ pub(super) async fn duplicate(
         return Err("block_archived");
     }
     blocks::admit_new(connection, context).await?;
-    let primary = fork_asset(connection, context, &source.asset).await?;
-    let caption = if let Some(source) = &source.caption {
+    let position = bound.position.checked_add(1).ok_or("corrupt_store")?;
+    if let BlockSource::Note { note_id, revision } = source {
+        let id = notes::duplicate(connection, context, *note_id, *revision, position).await?;
+        let revision = order::advance(connection, context, expected).await?;
+        return Ok(json!({"blockId":id,"stageId":context.stage_id,"revision":revision}));
+    }
+    let BlockSource::Asset { asset, caption } = source else {
+        return Err("invalid_block_type");
+    };
+    let primary = fork_asset(connection, context, asset).await?;
+    let caption = if let Some(source) = caption {
         Some(fork_asset(connection, context, source).await?)
     } else {
         None
     };
-    let position = bound.position.checked_add(1).ok_or("corrupt_store")?;
     order::make_space(connection, context, position).await?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")

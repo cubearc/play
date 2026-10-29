@@ -1,11 +1,12 @@
 import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import type {
   ArchivedBlockView,
-  AssetBlockData,
   AssetView,
+  BlockView,
   Context,
   RunOutputOrigin,
 } from "../desktop/workspace-contract";
+import { blockTitle } from "../desktop/workspace-contract";
 import { NotebookAsset } from "./NotebookAsset";
 
 export function ArchivedBlocks({
@@ -22,7 +23,7 @@ export function ArchivedBlocks({
   busy: boolean;
   full: boolean;
   openAsset: (asset: AssetView) => void;
-  restore: (block: AssetBlockData) => void;
+  restore: (block: BlockView) => void;
   openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   return (
@@ -36,27 +37,46 @@ export function ArchivedBlocks({
         <article
           className="archived-cell"
           key={block.id}
-          aria-label={`Archived ${block.asset.title}`}
+          aria-label={`Archived ${blockTitle(block)}`}
         >
           <header className="block-heading">
-            <strong>{block.asset.title}</strong>
-            <span className="badge">Archived · r{block.asset.revision}</span>
+            <strong>{blockTitle(block)}</strong>
+            <span className="badge">
+              Archived · r
+              {block.kind === "note"
+                ? block.note.revision
+                : block.asset.revision}
+            </span>
           </header>
-          <NotebookAsset
-            block={block}
-            context={context}
-            openAsset={openAsset}
-            openSourceRun={openSourceRun}
-          />
+          {block.kind === "note" ? (
+            <div className="annotation-preview">
+              {block.note.origin ? (
+                <p className="copy-origin">
+                  Copied from {block.note.origin.title} · r
+                  {block.note.origin.revision}
+                </p>
+              ) : null}
+              <pre>{block.note.text || "Empty annotation"}</pre>
+            </div>
+          ) : (
+            <NotebookAsset
+              block={block}
+              context={context}
+              openAsset={openAsset}
+              openSourceRun={openSourceRun}
+            />
+          )}
           <div className="notebook-actions">
-            <VscodeButton
-              secondary
-              icon="history"
-              onClick={() => openAsset(block.caption ?? block.asset)}
-              aria-label={`Open evidence ${block.asset.title}`}
-            >
-              Open evidence
-            </VscodeButton>
+            {block.kind === "asset" ? (
+              <VscodeButton
+                secondary
+                icon="history"
+                onClick={() => openAsset(block.caption ?? block.asset)}
+                aria-label={`Open evidence ${block.asset.title}`}
+              >
+                Open evidence
+              </VscodeButton>
+            ) : null}
             <VscodeButton
               icon="discard"
               disabled={busy || full}
@@ -66,7 +86,7 @@ export function ArchivedBlocks({
                   ? "Archive another block to make room"
                   : "Restore this block"
               }
-              aria-label={`Restore ${block.asset.title}`}
+              aria-label={`Restore ${blockTitle(block)}`}
               onClick={() => restore(block)}
             >
               Restore

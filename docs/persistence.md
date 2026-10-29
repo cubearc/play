@@ -6,13 +6,13 @@
 <a id="writes-and-recovery"></a>
 
 Quit and reopen the Electron preview to restore the last successfully opened
-Workspace, Exploration and Stage. The Rust engine saves text/image/file Blocks, Asset
+Workspace, Exploration and Stage. The Rust engine saves text/image/file and annotation Blocks, Asset/Note
 identities and revisions, the complete Block order, saved reasoning, Trails, initial Pipeline definitions
 and accepted single-node Runs in private local storage.
 
 Retained outputs reopen beside their cells and in Trail history. A Run accepted
 without output retention reopens with an explicit gap. Operation-selection
-drafts and open canvas tabs are not persisted. Save reasoning and wait for
+drafts and open canvas tabs are not persisted. Save each annotation or reasoning Note and wait for
 **Saved** before switching. Save text/caption editors with **Save changes**; their
 revisions persist under the original Asset IDs. Unsaved drafts do not survive a
 crash. Editing never rewrites an earlier Run's input revision or result.
@@ -21,6 +21,8 @@ Their source revision labels remain pinned even after the original is edited.
 Saved result Blocks retain their exact Run/attempt/port origin and typed value.
 Their source link opens the chosen Run after later edits or executions. A text
 result's independent Runs also reopen without changing that original evidence.
+Annotation Notes reopen with independent saved revisions and pinned copy origins.
+Their drafts are kept only in the current app session.
 Archived Blocks and their Run history also survive reopening. Use **Archived
 blocks** in the Stage notebook to inspect or restore them. Restoring preserves
 their identities and revisions; archiving never discards stored content.

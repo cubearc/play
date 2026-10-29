@@ -17,15 +17,27 @@ pub struct AssetRevision {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct BlockSource {
-    pub asset: AssetRevision,
-    pub caption: Option<AssetRevision>,
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BlockSource {
+    Asset {
+        asset: AssetRevision,
+        caption: Option<AssetRevision>,
+    },
+    Note {
+        note_id: Uuid,
+        revision: i64,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    AddAnnotation {
+        context: Context,
+        key: Uuid,
+        title: String,
+        text: String,
+    },
     PinRunOutput {
         context: Context,
         key: Uuid,
@@ -142,6 +154,7 @@ impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
             Self::CreateExploration { key, .. }
+            | Self::AddAnnotation { key, .. }
             | Self::PinRunOutput { key, .. }
             | Self::CreateStage { key, .. }
             | Self::SaveNote { key, .. }
@@ -261,15 +274,32 @@ pub struct AssetBlock {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchivedBlock {
-    pub block: AssetBlock,
+    pub block: Block,
     pub archived_revision: i64,
 }
 
 #[derive(Serialize)]
 pub struct Note {
     pub id: String,
+    pub kind: NoteKind,
+    pub title: String,
     pub revision: i64,
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<NoteOrigin>,
+}
+#[derive(Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteKind {
+    Reasoning,
+    Annotation,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteOrigin {
+    pub note_id: String,
+    pub revision: i64,
+    pub title: String,
 }
 
 #[derive(Clone, Serialize)]

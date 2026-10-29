@@ -73,6 +73,13 @@ supervision, then cancel it and reject new work until restoration. Schema fixtur
 reconstruct exact earlier native stores with their real domain records and verify
 protected evidence after upgrade.
 
+Use **Add annotation** for narrative text independent of Asset operations. The
+annotation Electron journey checks per-Note keyboard saves, separate reasoning
+drafts, inert markup, revision-conflict recovery and discard, keyboard copy/order,
+archive/restore, Exploration isolation and restart. Engine checks cover the same
+Note revision storage, stale snapshots, byte/capacity admission, immutable source
+lineage and protected reasoning, including schema-6 upgrades with saved evidence.
+
 ## Source boundaries
 
 - `frontend/desktop-renderer-src`: VSCode Elements workbench and presentation.

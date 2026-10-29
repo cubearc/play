@@ -41,10 +41,9 @@ export interface AssetRevisionRef {
   asset_id: string;
   revision: number;
 }
-export interface BlockSource {
-  asset: AssetRevisionRef;
-  caption: AssetRevisionRef | null;
-}
+export type BlockSource =
+  | { kind: "asset"; asset: AssetRevisionRef; caption: AssetRevisionRef | null }
+  | { kind: "note"; note_id: string; revision: number };
 export interface TextAssetView extends AssetView {
   content: { kind: "text"; text: string };
 }
@@ -57,13 +56,16 @@ export interface AssetBlockView extends AssetBlockData {
   kind: "asset";
 }
 export interface ArchivedBlockView {
-  block: AssetBlockData;
+  block: BlockView;
   archivedRevision: number;
 }
 export interface NoteView {
   id: string;
+  kind: "reasoning" | "annotation";
+  title: string;
   revision: number;
   text: string;
+  origin?: { noteId: string; revision: number; title: string };
 }
 export interface NoteBlockView {
   kind: "note";
@@ -77,9 +79,29 @@ export interface StageView extends Summary {
   archivedBlocks: ArchivedBlockView[];
 }
 export function reasoningOf(stage: StageView): NoteView {
-  const block = stage.blocks.find((block) => block.kind === "note");
-  if (!block) throw new Error("invalid_stage");
+  const block = stage.blocks.find(
+    (block) => block.kind === "note" && block.note.kind === "reasoning",
+  );
+  if (block?.kind !== "note") throw new Error("invalid_stage");
   return block.note;
+}
+export function blockSource(block: BlockView): BlockSource {
+  if (block.kind === "note")
+    return {
+      kind: "note",
+      note_id: block.note.id,
+      revision: block.note.revision,
+    };
+  return {
+    kind: "asset",
+    asset: { asset_id: block.asset.id, revision: block.asset.revision },
+    caption: block.caption
+      ? { asset_id: block.caption.id, revision: block.caption.revision }
+      : null,
+  };
+}
+export function blockTitle(block: BlockView): string {
+  return block.kind === "note" ? block.note.title : block.asset.title;
 }
 export interface PipelineView extends Summary {
   input: string;
@@ -123,6 +145,13 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "add_annotation";
+      context: Context;
+      key: string;
+      title: string;
+      text: string;
+    }
   | {
       kind: "pin_run_output";
       context: Context;
@@ -307,6 +336,7 @@ export interface MutationResult {
   blockId?: string;
 }
 export interface Responses {
+  add_annotation: { blockId: string };
   pin_run_output: { blockId: string; stageId: string; revision: number };
   list_runs: RunPage;
   run_detail: RunDetail;
@@ -353,6 +383,7 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    add_annotation: ["context", "key", "title", "text"],
     pin_run_output: [
       "context",
       "key",
@@ -413,9 +444,15 @@ export function request(value: unknown): WorkspaceRequest {
     if (field === "context") context(value);
     else if (field === "source") {
       const source = object(value);
-      keys(source, ["asset", "caption"]);
-      assetRevision(source.asset);
-      if (source.caption !== null) assetRevision(source.caption);
+      if (source.kind === "asset") {
+        keys(source, ["kind", "asset", "caption"]);
+        assetRevision(source.asset);
+        if (source.caption !== null) assetRevision(source.caption);
+      } else if (source.kind === "note") {
+        keys(source, ["kind", "note_id", "revision"]);
+        if (!id(source.note_id) || !revision(source.revision))
+          throw new Error("invalid_command");
+      } else throw new Error("invalid_command");
     } else if (field === "block_ids") {
       if (!Array.isArray(value) || value.length > limits.block_limit)
         throw new Error("input_limit");
@@ -440,7 +477,9 @@ export function request(value: unknown): WorkspaceRequest {
       if (
         !bytes(
           value,
-          kind === "save_note" ? limits.note_bytes : limits.text_bytes,
+          kind === "save_note" || kind === "add_annotation"
+            ? limits.note_bytes
+            : limits.text_bytes,
         )
       )
         throw new Error("input_limit");

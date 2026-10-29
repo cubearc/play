@@ -67,7 +67,7 @@ fn intent(context: &Context, state: &Value, run: &Value, port: &str) -> Value {
     json!({"kind":"pin_run_output","context":context,"key":Uuid::new_v4(),"expected_revision":state["stage"]["revision"],"run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":port})
 }
 fn source(block: &Value) -> Value {
-    json!({"asset":{"asset_id":block["asset"]["id"],"revision":block["asset"]["revision"]},"caption":null})
+    json!({"kind":"asset","asset":{"asset_id":block["asset"]["id"],"revision":block["asset"]["revision"]},"caption":null})
 }
 
 #[test]

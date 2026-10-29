@@ -50,6 +50,14 @@ Brainfuck bytes as Files. The Electron journey follows the original Run after
 later edits/dispatch, preserves reasoning drafts and result identities through
 archive/restore and restart, and keeps a second Exploration independent.
 
+Annotation checks verify independent Note content/revisions, copy lineage,
+conflicts, scoped snapshots, byte limits, retained/restore capacity, immutable
+identity and protected reasoning. A schema-6 fixture retains saved results, Runs
+and reasoning before accepting annotations. The Electron journey saves only the
+focused Note, preserves other drafts, rejects silent concurrent overwrites,
+discards to the latest saved version, keeps markup inert, copies/orders/archives/
+restores exact identities, isolates Explorations and reopens the private profile.
+
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not
 prove worker/PTY enforcement; unsupported native execution must refuse. None of

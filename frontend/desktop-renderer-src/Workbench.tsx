@@ -384,15 +384,17 @@ export function Workbench() {
                 <Notebook
                   exploration={exploration}
                   executions={executions}
-                  note={state.noteValue}
-                  noteDirty={state.noteDirty}
-                  noteSaving={state.noteSaving}
+                  notes={{
+                    state: state.noteState,
+                    edit: state.editNote,
+                    save: state.saveNote,
+                    discard: state.discardNote,
+                  }}
                   busy={state.busy}
-                  onNote={state.editNote}
-                  saveNote={() => void state.saveNote()}
                   addText={() => setDialog("text")}
                   addImage={() => setDialog("image")}
                   addFile={() => void state.importFile()}
+                  addAnnotation={() => setDialog("annotation")}
                   openTrail={openTrail}
                   editText={editText}
                   reorderBlocks={state.reorderBlocks}
@@ -446,6 +448,8 @@ export function Workbench() {
               return state.createExploration(title, key);
             if (dialog === "stage") return state.createStage(title, key);
             if (dialog === "text") return state.addText(title, text, key);
+            if (dialog === "annotation")
+              return state.addAnnotation(title, text, key);
             return state.importImage(text, key);
           }}
         />

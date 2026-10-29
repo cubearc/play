@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use uuid::Uuid;
 
 pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
-    assert!((1..=5).contains(&target));
+    assert!((1..=6).contains(&target));
     let directory = root.join(workspace.to_string());
     let database = directory.join("workspace.sqlite3");
     let source = directory.join("schema-fixture-source.sqlite3");
@@ -19,8 +19,10 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         if target>=3 {sqlx::raw_sql(include_str!("../../src/workspace/copies.sql")).execute(&mut connection).await.unwrap();}
         if target>=4 {sqlx::raw_sql(include_str!("../../src/workspace/archive.sql")).execute(&mut connection).await.unwrap();}
         if target>=5 {sqlx::raw_sql(include_str!("../../src/workspace/files.sql")).execute(&mut connection).await.unwrap();}
+        if target>=6 {sqlx::raw_sql(include_str!("../../src/workspace/results.sql")).execute(&mut connection).await.unwrap();}
         sqlx::query("ATTACH DATABASE ? AS original").bind(source.to_str().unwrap()).execute(&mut connection).await.unwrap();
-        let results:i64=sqlx::query_scalar("SELECT count(*) FROM original.result_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(results,0,"an older native fixture cannot represent Result Assets");
+        let annotations:i64=sqlx::query_scalar("SELECT count(*) FROM original.notes WHERE kind<>'reasoning' OR source_note_id IS NOT NULL").fetch_one(&mut connection).await.unwrap();assert_eq!(annotations,0,"an older native fixture cannot represent annotation Notes");
+        if target<6 {let results:i64=sqlx::query_scalar("SELECT count(*) FROM original.result_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(results,0,"an older native fixture cannot represent Result Assets");}
         if target<5 {let files:i64=sqlx::query_scalar("SELECT count(*) FROM original.assets WHERE kind='file'").fetch_one(&mut connection).await.unwrap();assert_eq!(files,0,"an older native fixture cannot represent File Assets");}
         if target<4 {let archived:i64=sqlx::query_scalar("SELECT count(*) FROM original.blocks WHERE archived_revision IS NOT NULL").fetch_one(&mut connection).await.unwrap();assert_eq!(archived,0,"an older native fixture cannot represent archived content");}
         if target<3 {let origins:i64=sqlx::query_scalar("SELECT count(*) FROM original.asset_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(origins,0);}
@@ -35,7 +37,7 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         for sql in [
             "INSERT INTO explorations SELECT * FROM original.explorations",
             "INSERT INTO stages SELECT * FROM original.stages",
-            "INSERT INTO notes SELECT * FROM original.notes",
+            "INSERT INTO notes SELECT workspace_id,exploration_id,stage_id,id,current_revision FROM original.notes",
             "INSERT INTO note_revisions SELECT * FROM original.note_revisions",
             "INSERT INTO assets SELECT * FROM original.assets",
             "INSERT INTO asset_revisions SELECT * FROM original.asset_revisions",
@@ -48,6 +50,7 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         ] { sqlx::raw_sql(sql).execute(&mut connection).await.unwrap(); }
         let blocks=if target>=4 {"INSERT INTO blocks SELECT * FROM original.blocks"} else {"INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision,caption_kind,note_id) SELECT workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision,caption_kind,note_id FROM original.blocks"};
         sqlx::raw_sql(blocks).execute(&mut connection).await.unwrap();
+        if target>=6 {sqlx::raw_sql("INSERT INTO result_origins SELECT * FROM original.result_origins").execute(&mut connection).await.unwrap();}
         if target>=3 {sqlx::raw_sql("INSERT INTO asset_origins SELECT * FROM original.asset_origins").execute(&mut connection).await.unwrap();}
         sqlx::query("INSERT INTO workspace_meta SELECT id,generation,? FROM original.workspace_meta").bind(target).execute(&mut connection).await.unwrap();
         sqlx::raw_sql("COMMIT; DETACH DATABASE original;").execute(&mut connection).await.unwrap();

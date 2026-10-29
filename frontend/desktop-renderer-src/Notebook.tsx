@@ -1,72 +1,33 @@
 import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
-import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useEffect, useRef, useState } from "react";
 import contract from "../../desktop/protocol.json" with { type: "json" };
 import type {
-  AssetBlockData,
   AssetBlockView,
   AssetView,
+  BlockView,
   Context,
   ExplorationView,
   RunOutputOrigin,
   TextAssetView,
   TrailView,
 } from "../desktop/workspace-contract";
-import { contextOf } from "../desktop/workspace-contract";
+import { blockTitle, contextOf } from "../desktop/workspace-contract";
 import { ArchivedBlocks } from "./ArchivedBlocks";
 import { NotebookAsset } from "./NotebookAsset";
+import { NoteCell, type NoteEditing } from "./NoteCell";
 import { OperationCell } from "./OperationCell";
 import type { Executions } from "./useExecutions";
 
-function Reasoning({
-  value,
-  dirty,
-  saving,
-  onChange,
-  onSave,
-}: {
-  value: string;
-  dirty: boolean;
-  saving: boolean;
-  onChange: (value: string) => void;
-  onSave: () => void;
-}) {
-  const field = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
-  return (
-    <>
-      <VscodeTextarea
-        ref={field}
-        label="Stage note"
-        value={value}
-        rows={3}
-        disabled={saving}
-        resize="vertical"
-        onInput={() => onChange(field.current?.value ?? "")}
-      />
-      <div className="note-save">
-        <VscodeButton icon="save" disabled={!dirty || saving} onClick={onSave}>
-          Save reasoning
-        </VscodeButton>
-        <span role="status" aria-label="Note save status">
-          {saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}
-        </span>
-      </div>
-    </>
-  );
-}
 export function Notebook({
   exploration,
   executions,
-  note,
-  onNote,
+  notes,
   openTrail,
-  saveNote,
-  noteDirty,
-  noteSaving,
   addText,
   addImage,
   addFile,
+  addAnnotation,
   busy,
   editText,
   reorderBlocks,
@@ -78,19 +39,16 @@ export function Notebook({
 }: {
   exploration: ExplorationView;
   executions: Executions;
-  note: string;
-  noteDirty: boolean;
-  noteSaving: boolean;
+  notes: NoteEditing;
   busy: boolean;
   editText: (block: AssetBlockView, asset: TextAssetView) => void;
-  saveNote: () => void;
   addText: () => void;
   addImage: () => void;
   addFile: () => void;
+  addAnnotation: () => void;
   openSourceRun: (origin: RunOutputOrigin) => void;
   focusBlockId: string | null;
   onFocusHandled: () => void;
-  onNote: (value: string) => void;
   openTrail: (trail: TrailView) => void;
   reorderBlocks: (
     context: Context,
@@ -100,18 +58,20 @@ export function Notebook({
   duplicateBlock: (
     context: Context,
     revision: number,
-    block: AssetBlockView,
+    block: BlockView,
   ) => Promise<string | null>;
   setArchived: (
     context: Context,
     revision: number,
-    block: AssetBlockData,
+    block: BlockView,
     archived: boolean,
   ) => Promise<boolean>;
 }) {
   const cells = useRef(new Map<string, HTMLElement>());
   const reasoningBlockId =
-    exploration.stage.blocks.find((block) => block.kind === "note")?.id ?? "";
+    exploration.stage.blocks.find(
+      (block) => block.kind === "note" && block.note.kind === "reasoning",
+    )?.id ?? "";
   const archivePanel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (focusBlockId) {
@@ -169,7 +129,7 @@ export function Notebook({
     );
     if (trail) openTrail(trail);
   };
-  const duplicate = async (block: AssetBlockView) => {
+  const duplicate = async (block: BlockView) => {
     const id = await duplicateBlock(
       contextOf(exploration),
       exploration.stage.revision,
@@ -179,10 +139,10 @@ export function Notebook({
       setMoved({
         stageId: exploration.stage.id,
         blockId: id,
-        message: `Copied ${block.asset.title}. The copy was inserted after its source.`,
+        message: `Copied ${blockTitle(block)}. The copy was inserted after its source.`,
       });
   };
-  const changeArchive = async (block: AssetBlockData, archived: boolean) => {
+  const changeArchive = async (block: BlockView, archived: boolean) => {
     if (archived && !exploration.stage.archivedBlocks.length)
       setArchiveStage(null);
     const blocks = exploration.stage.blocks;
@@ -190,7 +150,9 @@ export function Notebook({
     const next =
       blocks[index + 1] ??
       blocks[index - 1] ??
-      blocks.find((entry) => entry.kind === "note");
+      blocks.find(
+        (entry) => entry.kind === "note" && entry.note.kind === "reasoning",
+      );
     if (
       await setArchived(
         contextOf(exploration),
@@ -205,8 +167,8 @@ export function Notebook({
         stageId: exploration.stage.id,
         blockId: archived ? (next?.id ?? "") : block.id,
         message: archived
-          ? `Archived ${block.asset.title}. Content and Run history are kept in Archived blocks.`
-          : `Restored ${block.asset.title}. Its original Assets and Run history are available.`,
+          ? `Archived ${blockTitle(block)}. Saved content and evidence are kept in Archived blocks.`
+          : `Restored ${blockTitle(block)}. Its original identity and saved content are available.`,
       });
     }
   };
@@ -259,6 +221,16 @@ export function Notebook({
           </VscodeButton>
           <VscodeButton
             secondary
+            icon="note"
+            disabled={busy || !canAdd}
+            aria-disabled={busy || !canAdd ? "true" : "false"}
+            title={canAdd ? undefined : limitMessage}
+            onClick={addAnnotation}
+          >
+            Add annotation
+          </VscodeButton>
+          <VscodeButton
+            secondary
             icon="archive"
             disabled={!exploration.stage.archivedBlocks.length}
             aria-disabled={
@@ -281,7 +253,11 @@ export function Notebook({
         </span>
       </header>
       {exploration.stage.blocks.map((block, index) => {
-        const title = block.kind === "note" ? "Reasoning" : block.asset.title;
+        const title = blockTitle(block);
+        const draft = block.kind === "note" ? notes.state(block.note) : null;
+        const protectedReasoning =
+          block.kind === "note" && block.note.kind === "reasoning";
+        const unsavedNote = Boolean(draft?.dirty || draft?.saving);
         const textAsset =
           block.kind === "asset"
             ? (block.caption ??
@@ -308,6 +284,19 @@ export function Notebook({
               else cells.current.delete(block.id);
             }}
             onKeyDownCapture={(event) => {
+              if (
+                block.kind === "note" &&
+                event.key.toLowerCase() === "s" &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.altKey &&
+                !event.shiftKey &&
+                !event.repeat
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                void notes.save(block.note.id);
+                return;
+              }
               if (
                 event.key !== "Enter" ||
                 !(event.metaKey || event.ctrlKey) ||
@@ -345,9 +334,9 @@ export function Notebook({
                 </span>
                 <span className="badge">
                   {block.kind === "note"
-                    ? noteSaving
+                    ? draft?.saving
                       ? "Saving…"
-                      : noteDirty
+                      : draft?.dirty
                         ? "Unsaved draft"
                         : `Saved · r${block.note.revision}`
                     : `${block.asset.origin?.kind === "run_output" ? "Result" : "Asset"} · r${block.asset.revision}`}
@@ -365,29 +354,39 @@ export function Notebook({
                   </VscodeButton>
                 ) : null}
                 <div className="block-order-controls">
-                  {block.kind === "asset" ? (
+                  {!protectedReasoning ? (
                     <VscodeButton
                       secondary
                       iconOnly
                       icon="copy"
                       aria-label={`Duplicate ${title}`}
                       title={
-                        !canAdd ? limitMessage : "Duplicate this saved block"
+                        unsavedNote
+                          ? "Save or discard this note draft first"
+                          : !canAdd
+                            ? limitMessage
+                            : "Duplicate this saved block"
                       }
-                      disabled={busy || !canAdd}
-                      aria-disabled={busy || !canAdd ? "true" : "false"}
+                      disabled={busy || !canAdd || unsavedNote}
+                      aria-disabled={
+                        busy || !canAdd || unsavedNote ? "true" : "false"
+                      }
                       onClick={() => void duplicate(block)}
                     />
                   ) : null}
-                  {block.kind === "asset" ? (
+                  {!protectedReasoning ? (
                     <VscodeButton
                       secondary
                       iconOnly
                       icon="archive"
                       aria-label={`Archive ${title}`}
-                      title="Archive this saved block and keep its evidence"
-                      disabled={busy}
-                      aria-disabled={busy ? "true" : "false"}
+                      title={
+                        unsavedNote
+                          ? "Save or discard this note draft first"
+                          : "Archive this saved block and keep its evidence"
+                      }
+                      disabled={busy || unsavedNote}
+                      aria-disabled={busy || unsavedNote ? "true" : "false"}
                       onClick={() => void changeArchive(block, true)}
                     />
                   ) : null}
@@ -420,13 +419,7 @@ export function Notebook({
                 </div>
               </div>
               {block.kind === "note" ? (
-                <Reasoning
-                  value={note}
-                  dirty={noteDirty}
-                  saving={noteSaving}
-                  onChange={onNote}
-                  onSave={saveNote}
-                />
+                <NoteCell note={block.note} editing={notes} />
               ) : (
                 <>
                   <NotebookAsset

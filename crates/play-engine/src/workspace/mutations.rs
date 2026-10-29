@@ -1,7 +1,7 @@
 use super::{
     assets, blocks, copies, files,
     model::{Command, Context},
-    order, queries, results,
+    notes, order, queries, results,
     storage::{self, Owned},
 };
 use crate::{Result, protocol};
@@ -77,7 +77,7 @@ async fn stage(
     let note = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO stages(workspace_id,exploration_id,id,title,revision,position) VALUES(?,?,?,?,1,(SELECT count(*) FROM stages WHERE workspace_id=? AND exploration_id=?))")
         .bind(workspace).bind(exploration).bind(&id).bind(title(name)?).bind(workspace).bind(exploration).execute(&mut *connection).await.map_err(storage::failure)?;
-    sqlx::query("INSERT INTO notes VALUES(?,?,?,?,1)")
+    sqlx::query("INSERT INTO notes VALUES(?,?,?,?,1,'reasoning','Reasoning',NULL,NULL)")
         .bind(workspace)
         .bind(exploration)
         .bind(&id)
@@ -122,36 +122,6 @@ async fn new_exploration(
         .map_err(storage::failure)?;
     let stage = stage(connection, workspace, &id, "Stage 1").await?;
     Ok(json!({"explorationId":id,"stageId":stage}))
-}
-
-async fn save_note(
-    connection: &mut SqliteConnection,
-    context: &Context,
-    note: Uuid,
-    expected: i64,
-    text: &str,
-) -> Result<Value> {
-    if text.len() > protocol::contract().note_bytes || expected < 1 || expected == i64::MAX {
-        return Err("input_limit");
-    }
-    let workspace = context.workspace_id.to_string();
-    let exploration = context.exploration_id.to_string();
-    bytes(connection, &workspace, &exploration, text.len()).await?;
-    let updated = sqlx::query("UPDATE notes SET current_revision=current_revision+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND current_revision=?")
-        .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(note.to_string()).bind(expected).execute(&mut *connection).await.map_err(storage::failure)?;
-    if updated.rows_affected() != 1 {
-        return Err("state_conflict");
-    }
-    sqlx::query("INSERT INTO note_revisions VALUES(?,?,?,?,?)")
-        .bind(workspace)
-        .bind(exploration)
-        .bind(note.to_string())
-        .bind(expected + 1)
-        .bind(text)
-        .execute(connection)
-        .await
-        .map_err(storage::failure)?;
-    Ok(json!({"noteId":note,"revision":expected+1}))
 }
 
 async fn pipeline(connection: &mut SqliteConnection, workspace: &str) -> Result<String> {
@@ -369,6 +339,15 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         return serde_json::from_str(previous.get::<&str, _>(1)).map_err(|_| "corrupt_store");
     }
     let result = match command {
+        Command::AddAnnotation {
+            context,
+            title,
+            text,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            notes::add(connection, context, title, text).await?
+        }
         Command::PinRunOutput {
             context,
             expected_revision,
@@ -428,7 +407,7 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
             text,
         } => {
             queries::context(connection, owner, context).await?;
-            save_note(connection, context, *note_id, *expected_revision, text).await?
+            notes::save(connection, context, *note_id, *expected_revision, text).await?
         }
         Command::AddText {
             context,

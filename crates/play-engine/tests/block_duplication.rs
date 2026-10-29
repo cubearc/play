@@ -38,7 +38,7 @@ fn setup(manager: &mut Manager, image: bool) -> (Context, Value) {
 fn copy(context: &Context, view: &Value, index: usize) -> Value {
     let block = &view["stage"]["blocks"][index];
     let reference = |asset: &Value| json!({"asset_id":asset["id"],"revision":asset["revision"]});
-    json!({"kind":"duplicate_block","context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":view["stage"]["revision"],"source":{"asset":reference(&block["asset"]),"caption":block.get("caption").map(reference)}})
+    json!({"kind":"duplicate_block","context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":view["stage"]["revision"],"source":{"kind":"asset","asset":reference(&block["asset"]),"caption":block.get("caption").map(reference)}})
 }
 fn edit(manager: &mut Manager, context: &Context, block: &Value, asset: &Value, text: &str) {
     command(

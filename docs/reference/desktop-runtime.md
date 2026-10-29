@@ -124,7 +124,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **9** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **10** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -132,7 +132,7 @@ then sends an internal `add_file` command. Renderer paths, URLs, raw file bytes
 and extra fields are refused. Preview text never becomes HTML or a resource URL.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
 add text, revise existing text/captions, reorder, duplicate, archive or restore Stage content Blocks,
-save retained Run outputs as Blocks, save reasoning, list scoped Run summaries
+save retained Run outputs as Blocks, add annotations, save individual Notes, list scoped Run summaries
 and read Run details. Internal image import/read and file import commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
@@ -141,7 +141,8 @@ plus explicit archived records. Trail views expose their derived `archived` stat
 `reorder_blocks` pins the Stage revision and every Block UUID; see
 [Block ordering](desktop-storage.md#block-ordering) for conflict and identity rules.
 `duplicate_block` pins that structural revision plus the primary and optional
-caption Asset IDs/revisions. [Copy provenance](desktop-storage.md#block-copies-and-provenance)
+caption Asset IDs/revisions, or the tagged annotation Note ID/revision.
+Only the current closed `asset` or `note` source shapes are accepted. [Copy provenance](desktop-storage.md#block-copies-and-provenance)
 defines the independent identities, transaction and immutable origin record.
 `archive_block` and `restore_block` use that same exact Block/source snapshot and
 Stage revision. [Block lifecycle](desktop-storage.md#block-archive-and-restoration)
@@ -183,7 +184,7 @@ engine after a short shutdown grace. It never reports interrupted work as succes
 
 Closing a window revokes that frame; the application and engine keep supervising
 accepted Runs while alive. Activation opens another trusted window.
-Unsaved reasoning prompts for keeping the editor open or discarding its draft.
+Unsaved Note content prompts for keeping the editor open or discarding its draft.
 Saved content survives explicit Quit, which closes SQLite before releasing its
 OS lock and waits for engine shutdown. An active Run is killed/reaped and
 committed as cancelled on private-session closure. The complete

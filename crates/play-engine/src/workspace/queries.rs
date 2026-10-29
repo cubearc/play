@@ -221,8 +221,6 @@ pub async fn exploration(
         .iter()
         .find(|stage| stage.id == selected)
         .ok_or("not_found")?;
-    let note = sqlx::query("SELECT n.id,n.current_revision,r.text FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id,n.current_revision)=(r.workspace_id,r.exploration_id,r.note_id,r.revision) WHERE n.workspace_id=? AND n.exploration_id=? AND n.stage_id=?")
-        .bind(&workspace).bind(&exploration).bind(&selected).fetch_one(&mut *connection).await.map_err(storage::failure)?;
     let block_rows = sqlx::query("SELECT id,kind,asset_id,asset_revision,caption_id,caption_revision,note_id,archived_revision FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? ORDER BY archived_revision DESC,position,id")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_all(&mut *connection).await.map_err(storage::failure)?;
     if block_rows.len() > crate::protocol::contract().retained_block_limit
@@ -242,32 +240,31 @@ pub async fn exploration(
         if archived.is_some_and(|revision| revision < 1) {
             return Err("corrupt_store");
         }
-        if row.get::<String, _>("kind") == "note" {
-            if archived.is_some() || row.get::<String, _>("note_id") != note.get::<String, _>("id")
-            {
-                return Err("corrupt_store");
+        let block = if row.get::<String, _>("kind") == "note" {
+            let note = super::notes::read(connection, &workspace, &exploration, row.get("note_id"))
+                .await?;
+            if note.kind == NoteKind::Reasoning {
+                if archived.is_some() {
+                    return Err("corrupt_store");
+                }
+                reasoning_count += 1;
             }
-            reasoning_count += 1;
-            blocks.push(Block::Note {
+            Block::Note {
                 id: row.get("id"),
-                note: Note {
-                    id: note.get(0),
-                    revision: note.get(1),
-                    text: note.get(2),
-                },
+                note,
+            }
+        } else {
+            Block::Asset {
+                block: Box::new(asset_block(connection, &workspace, &exploration, &row).await?),
+            }
+        };
+        if let Some(revision) = archived {
+            archived_blocks.push(ArchivedBlock {
+                block,
+                archived_revision: revision,
             });
         } else {
-            let block = asset_block(connection, &workspace, &exploration, &row).await?;
-            if let Some(revision) = archived {
-                archived_blocks.push(ArchivedBlock {
-                    block,
-                    archived_revision: revision,
-                });
-            } else {
-                blocks.push(Block::Asset {
-                    block: Box::new(block),
-                });
-            }
+            blocks.push(block);
         }
     }
     if reasoning_count != 1 {

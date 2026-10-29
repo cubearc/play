@@ -38,11 +38,11 @@ pub(super) async fn append_position(
     connection: &mut SqliteConnection,
     context: &Context,
 ) -> Result<i64> {
-    let row = sqlx::query("SELECT position,kind FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND archived_revision IS NULL ORDER BY position DESC,id DESC LIMIT 1")
+    let row = sqlx::query("SELECT b.position,n.kind AS note_kind FROM blocks b LEFT JOIN notes n ON (b.workspace_id,b.exploration_id,b.note_id)=(n.workspace_id,n.exploration_id,n.id) WHERE b.workspace_id=? AND b.exploration_id=? AND b.stage_id=? AND b.archived_revision IS NULL ORDER BY b.position DESC,b.id DESC LIMIT 1")
         .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string())
         .fetch_one(connection).await.map_err(storage::failure)?;
     let position: i64 = row.get("position");
-    if row.get::<String, _>("kind") == "note" {
+    if row.get::<Option<String>, _>("note_kind").as_deref() == Some("reasoning") {
         Ok(position)
     } else {
         position.checked_add(1).ok_or("corrupt_store")

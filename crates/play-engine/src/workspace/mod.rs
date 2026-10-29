@@ -4,6 +4,7 @@ mod copies;
 mod files;
 mod model;
 mod mutations;
+mod notes;
 mod order;
 mod queries;
 mod results;

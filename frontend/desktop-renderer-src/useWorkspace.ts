@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  AssetBlockData,
-  AssetBlockView,
+  BlockView,
   Context,
   ExplorationView,
+  NoteView,
   WorkspaceList,
   WorkspaceRequest,
   WorkspaceView,
 } from "../desktop/workspace-contract";
-import { contextOf, reasoningOf } from "../desktop/workspace-contract";
+import {
+  blockSource,
+  contextOf,
+  reasoningOf,
+} from "../desktop/workspace-contract";
 
 const messages: Record<string, string> = {
   result_read_only:
@@ -123,11 +127,14 @@ export function useWorkspace() {
       ) {
         setExploration(data);
         setDrafts((previous) => {
-          const note = reasoningOf(data.stage);
-          const draft = previous[note.id];
-          if (!draft || draft.value !== note.text) return previous;
+          const notes = [
+            ...data.stage.blocks,
+            ...data.stage.archivedBlocks.map((entry) => entry.block),
+          ].filter((block) => block.kind === "note");
           const next = { ...previous };
-          delete next[note.id];
+          for (const block of notes)
+            if (next[block.note.id]?.value === block.note.text)
+              delete next[block.note.id];
           return next;
         });
         return data;
@@ -377,7 +384,7 @@ export function useWorkspace() {
   const setArchived = (
     context: Context,
     revision: number,
-    block: AssetBlockData,
+    block: BlockView,
     archived: boolean,
   ) =>
     execute(async () => {
@@ -388,12 +395,7 @@ export function useWorkspace() {
           key: crypto.randomUUID(),
           block_id: block.id,
           expected_revision: revision,
-          source: {
-            asset: { asset_id: block.asset.id, revision: block.asset.revision },
-            caption: block.caption
-              ? { asset_id: block.caption.id, revision: block.caption.revision }
-              : null,
-          },
+          source: blockSource(block),
         });
       } catch (error) {
         if (
@@ -417,7 +419,7 @@ export function useWorkspace() {
   const duplicateBlock = async (
     context: Context,
     revision: number,
-    block: AssetBlockView,
+    block: BlockView,
   ): Promise<string | null> => {
     const slot = `${context.workspace_id}/${context.exploration_id}/${context.stage_id}/${block.id}`;
     const intent: Extract<WorkspaceRequest, { kind: "duplicate_block" }> =
@@ -427,12 +429,7 @@ export function useWorkspace() {
         key: crypto.randomUUID(),
         block_id: block.id,
         expected_revision: revision,
-        source: {
-          asset: { asset_id: block.asset.id, revision: block.asset.revision },
-          caption: block.caption
-            ? { asset_id: block.caption.id, revision: block.caption.revision }
-            : null,
-        },
+        source: blockSource(block),
       };
     let copied: string | null = null;
     const accepted = await execute(async () => {
@@ -501,9 +498,13 @@ export function useWorkspace() {
       }
       await reloadCurrent(context);
     });
-  const editNote = (value: string) => {
-    if (!exploration) return;
-    const note = reasoningOf(exploration.stage);
+  const editNote = (note: NoteView, value: string) => {
+    if (
+      !exploration?.stage.blocks.some(
+        (block) => block.kind === "note" && block.note.id === note.id,
+      )
+    )
+      return;
     setDrafts((previous) => {
       const next = { ...previous };
       if (value === note.text) delete next[note.id];
@@ -520,11 +521,20 @@ export function useWorkspace() {
       return next;
     });
   };
-  const saveNote = async () => {
-    if (!exploration) return;
-    const noteId = reasoningOf(exploration.stage).id;
+  const discardNote = (id: string) => {
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[id];
+      return next;
+    });
+    setError("");
+  };
+  const saveNote = async (id?: string): Promise<boolean> => {
+    const noteId =
+      id ?? (exploration ? reasoningOf(exploration.stage).id : null);
+    if (!noteId) return false;
     const draft = drafts[noteId];
-    if (!draft || saving[noteId]) return;
+    if (!draft || saving[noteId]) return false;
     setSaving((previous) => ({ ...previous, [noteId]: true }));
     setError("");
     try {
@@ -542,7 +552,10 @@ export function useWorkspace() {
         return next;
       });
       setExploration((previous) =>
-        previous && reasoningOf(previous.stage).id === noteId
+        previous &&
+        previous.workspaceId === draft.context.workspace_id &&
+        previous.id === draft.context.exploration_id &&
+        previous.stage.id === draft.context.stage_id
           ? {
               ...previous,
               stage: {
@@ -552,7 +565,7 @@ export function useWorkspace() {
                     ? {
                         ...block,
                         note: {
-                          id: noteId,
+                          ...block.note,
                           revision: result.revision,
                           text: draft.value,
                         },
@@ -563,13 +576,36 @@ export function useWorkspace() {
             }
           : previous,
       );
+      return true;
     } catch (error) {
-      setError(errorMessage(error));
+      if (error instanceof Error && error.message.includes("state_conflict")) {
+        await reloadCurrent(draft.context).catch(() => {});
+        setError(
+          "The saved note changed. Your draft was kept. Discard the draft to review the latest saved version.",
+        );
+      } else setError(errorMessage(error));
+      return false;
     } finally {
       setSaving((previous) => ({ ...previous, [noteId]: false }));
     }
   };
-  const note = exploration ? reasoningOf(exploration.stage) : null;
+  const addAnnotation = (
+    title: string,
+    text: string,
+    key: string = crypto.randomUUID(),
+  ) =>
+    execute(async () => {
+      if (!exploration) return;
+      const context = contextOf(exploration);
+      await window.play.workspace({
+        kind: "add_annotation",
+        context,
+        key,
+        title,
+        text,
+      });
+      await refresh(context);
+    });
   return {
     list,
     workspace,
@@ -595,9 +631,15 @@ export function useWorkspace() {
     hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,
-    noteValue: note ? (drafts[note.id]?.value ?? note.text) : "",
-    noteDirty: note ? Boolean(drafts[note.id]) : false,
-    noteSaving: note ? Boolean(saving[note.id]) : false,
+    discardNote,
+    addAnnotation,
+    noteState: (note: NoteView) => ({
+      value: drafts[note.id]?.value ?? note.text,
+      dirty: Boolean(drafts[note.id]),
+      saving: Boolean(saving[note.id]),
+    }),
+    noteDirty: Object.keys(drafts).length > 0,
+    noteSaving: Object.values(saving).some(Boolean),
   };
 }
 export type WorkspaceState = ReturnType<typeof useWorkspace>;
