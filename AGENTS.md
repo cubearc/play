@@ -7,6 +7,12 @@
   renderer is a presentation adapter; the Rust engine owns scoped domain,
   private storage and Run supervision. Algorithms and operation metadata belong
   to versioned `cube-core`; native CLI/PTY integration runs the real Cube CLI.
+- For changes to user-facing UI, interactions, navigation, copy or visual
+  presentation, read and apply the
+  [Cube/Play UX/UI skill](.agents/skills/cube-play-ux-ui/SKILL.md)
+  before implementation and during review. Apply it to feature work and fixes,
+  even when the request does not explicitly mention design. Respect review-only
+  and planning-only scope.
 - Every changed operation needs its canonical Core descriptor, named schemas,
   generated reference, real conformance fixture and tested Play adapter/viewer.
   Catalog presence does not grant native execution. Preserve direct-only
