@@ -6,6 +6,11 @@
 notebook. Its Trail canvas opens in the same Exploration and shows the imported
 image with zoom controls. The original source file stays unchanged.
 
+
+![Image Trail canvas displaying the imported PNG at 125 percent with zoom controls.](assets/desktop/image-canvas.png)
+
+The image opens in a separate inspection canvas; this capture shows 125% zoom. [Open full size](assets/desktop/image-canvas.png).
+
 Click the caption to open its own text canvas. Its ROT13 or Brainfuck operation
 uses the caption Asset, not the image pixels. The caption still appears with the
 image in the notebook.

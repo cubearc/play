@@ -16,6 +16,8 @@ and open an Asset in its own Trail canvas.
 - Run ROT13 or Brainfuck on text and inspect results beside the cell.
 - Reopen saved content, reasoning and retained Run evidence.
 
+![Electron notebook showing an image with its caption and inline ROT13 result.](docs/assets/desktop/image-caption.png)
+
 ## Try the Electron preview
 
 The source preview executes operations on macOS. Windows/Linux worker execution,

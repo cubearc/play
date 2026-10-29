@@ -25,6 +25,11 @@ exact bound Asset revision, selected reusable Pipeline and accepted Run history.
 The image's canvas supports inspection and zoom. Results stay with the cell or
 canvas that produced them.
 
+
+![Caption Trail canvas with its exact source Asset, reusable Pipeline and completed ROT13 Run.](assets/desktop/caption-canvas.png)
+
+Opening the caption creates its own canvas tab inside the same Exploration. [Open full size](assets/desktop/caption-canvas.png).
+
 A Trail holds investigation context and input bindings. A Pipeline is the
 Workspace-owned reusable operation definition. The current source preview
 creates/reuses single-node definitions from Core's native adapters. Different

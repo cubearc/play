@@ -15,6 +15,11 @@ without output retention reopens with an explicit gap. Operation-selection
 drafts and open canvas tabs are not persisted. Save reasoning and wait for
 **Saved** before switching; unsaved drafts do not survive a crash.
 
+
+![Reopened notebook with two Explorations and an earlier retained Run selected in the expanded history.](assets/desktop/run-history.png)
+
+After reopening, the notebook can show an earlier Run with its stored input and attempt evidence. [Open full size](assets/desktop/run-history.png).
+
 ## Interrupted execution
 
 Closing a canvas or window leaves supervision active while the app stays alive.

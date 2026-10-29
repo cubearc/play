@@ -66,3 +66,17 @@ define those boundaries. Do not add another operation catalog to the frontend.
 for native checks, coverage, exact operation conformance and remaining repository
 checks. The old web/container implementation still has required tests pending
 its replacement; running it is not part of trying the Electron app.
+
+## Maintain guide screenshots
+
+Use real macOS Electron captures with disposable example data. The native smoke
+writes PNGs to `frontend/playwright-report/`; capture additional guide states
+through the actual app. Keep sources and private profiles outside published
+images. Check that the full figure, operation and result are visible at a readable
+window size or zoom.
+
+Store reviewed PNGs in `docs/assets/desktop/`. Add descriptive Markdown alt text, a
+short caption explaining the visible state and a link to the full-size PNG. Update
+affected captures with visible UI changes. The portal copies these assets from
+the pinned product revision; review their rendered desktop/mobile layout and
+verify the published image bytes alongside the page.

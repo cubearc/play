@@ -24,6 +24,11 @@ its private store and validates them with Core; the original file is unchanged.
 A cancelled chooser adds no Block. The import does not authorize sibling files
 or turn the source folder into a browsable Workspace.
 
+
+![PNG and caption together in one Stage Block, followed by the caption ROT13 result.](assets/desktop/image-caption.png)
+
+The image and its caption share one figure; ROT13 uses the caption Asset directly. [Open full size](assets/desktop/image-caption.png).
+
 Click the image to open its inspection canvas, or the caption to open its text
 Trail canvas. Running ROT13 below the caption transforms that caption's exact
 Asset revision. It does not extract letters from the pixels. The image canvas

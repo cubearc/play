@@ -20,6 +20,11 @@ Asset and the real Core ROT13 operation; it does not require a Challenge or a fi
    Cmd+S. Quit and reopen the app: the notebook, saved reasoning and retained
    result reopen in the same Exploration.
 
+
+![Electron Stage notebook with the encoded text, ROT13 result and saved reasoning.](assets/desktop/first-notebook.png)
+
+The macOS source preview after decoding the clue; the result stays beside its cell. [Open full size](assets/desktop/first-notebook.png).
+
 Use **New Exploration** to keep a second investigation independent. Use
 **New Stage** to add a local part to the selected Exploration. Notes and results
 from the first Exploration do not become content in the second.
