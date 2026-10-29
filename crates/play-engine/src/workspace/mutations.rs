@@ -124,10 +124,15 @@ async fn new_exploration(
     Ok(json!({"explorationId":id,"stageId":stage}))
 }
 
-async fn pipeline(connection: &mut SqliteConnection, workspace: &str) -> Result<String> {
+async fn pipeline(
+    connection: &mut SqliteConnection,
+    workspace: &str,
+    operation: &str,
+) -> Result<String> {
     let existing: Option<String> =
-        sqlx::query_scalar("SELECT id FROM pipelines WHERE workspace_id=? ORDER BY rowid LIMIT 1")
+        sqlx::query_scalar("SELECT pipeline_id FROM pipeline_revisions WHERE workspace_id=? AND revision=1 AND json_extract(definition,'$.nodes[0].operation')=? ORDER BY rowid LIMIT 1")
             .bind(workspace)
+            .bind(operation)
             .fetch_optional(&mut *connection)
             .await
             .map_err(storage::failure)?;
@@ -135,13 +140,20 @@ async fn pipeline(connection: &mut SqliteConnection, workspace: &str) -> Result<
         return Ok(id);
     }
     let descriptor =
-        cube_core::operations::require("cipher.rot13").map_err(|_| "unsupported_operation")?;
+        cube_core::operations::require(operation).map_err(|_| "unsupported_operation")?;
     let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
     let id = Uuid::new_v4().to_string();
     let definition = json!({"formatVersion":1,"inputs":[{"name":"source","semanticType":descriptor.input_type}],"nodes":[{"id":Uuid::new_v4(),"operation":descriptor.id,"operation_version":contract.operation_version,"input":"source"}]}).to_string();
-    sqlx::query("INSERT INTO pipelines VALUES(?,?,'Text transform',1)")
+    sqlx::query("INSERT INTO pipelines VALUES(?,?,?,1)")
         .bind(workspace)
         .bind(&id)
+        .bind(if operation == "cipher.rot13" {
+            "Text transform"
+        } else {
+            descriptor
+                .metadata()
+                .map_or(descriptor.command, |m| m.canonical_name)
+        })
         .execute(&mut *connection)
         .await
         .map_err(storage::failure)?;
@@ -196,8 +208,13 @@ async fn asset(
     let id = store_asset(connection, context, name, kind, data).await?;
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
-    let pipeline_id = if kind == "text" {
-        Some(pipeline(connection, &workspace).await?)
+    let operation = match kind {
+        "text" => Some("cipher.rot13"),
+        "image" => Some("image.pixels.read"),
+        _ => None,
+    };
+    let pipeline_id = if let Some(operation) = operation {
+        Some(pipeline(connection, &workspace, operation).await?)
     } else {
         None
     };
@@ -339,6 +356,20 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         return serde_json::from_str(previous.get::<&str, _>(1)).map_err(|_| "corrupt_store");
     }
     let result = match command {
+        Command::AddPage {
+            context,
+            title,
+            text,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            if text.len() > protocol::contract().text_bytes {
+                return Err("input_limit");
+            }
+            add_block(connection, context, title, "page", text.as_bytes(), None)
+                .await?
+                .value()
+        }
         Command::AddAnnotation {
             context,
             title,
@@ -524,4 +555,14 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         .map_err(storage::failure)?;
     transaction.commit().await.map_err(storage::failure)?;
     Ok(result)
+}
+
+// Bind existing image inspection Trails without changing their identities or evidence.
+pub(super) async fn bind_image_trails(connection: &mut SqliteConnection) -> Result<()> {
+    let workspaces: Vec<String> = sqlx::query_scalar("SELECT DISTINCT t.workspace_id FROM trails t JOIN assets a ON (t.workspace_id,t.exploration_id,t.source_id)=(a.workspace_id,a.exploration_id,a.id) WHERE a.kind='image' AND t.pipeline_id IS NULL").fetch_all(&mut *connection).await.map_err(storage::failure)?;
+    for workspace in workspaces {
+        let id = pipeline(connection, &workspace, "image.pixels.read").await?;
+        sqlx::query("UPDATE trails SET pipeline_id=?,pipeline_revision=1 WHERE workspace_id=? AND pipeline_id IS NULL AND EXISTS(SELECT 1 FROM assets a WHERE (a.workspace_id,a.exploration_id,a.id)=(trails.workspace_id,trails.exploration_id,trails.source_id) AND a.kind='image')").bind(id).bind(workspace).execute(&mut *connection).await.map_err(storage::failure)?;
+    }
+    Ok(())
 }

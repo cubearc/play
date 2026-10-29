@@ -32,6 +32,12 @@ pub enum BlockSource {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    AddPage {
+        context: Context,
+        key: Uuid,
+        title: String,
+        text: String,
+    },
     AddAnnotation {
         context: Context,
         key: Uuid,
@@ -155,6 +161,7 @@ impl Command {
         match self {
             Self::CreateExploration { key, .. }
             | Self::AddAnnotation { key, .. }
+            | Self::AddPage { key, .. }
             | Self::PinRunOutput { key, .. }
             | Self::CreateStage { key, .. }
             | Self::SaveNote { key, .. }
@@ -200,6 +207,9 @@ pub enum Content {
         text: String,
     },
     Image,
+    Page {
+        text: String,
+    },
     File {
         byte_length: usize,
         sha256: String,

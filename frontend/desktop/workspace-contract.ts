@@ -15,7 +15,10 @@ export interface AssetView {
   explorationId: string;
   revision: number;
   title: string;
-  content: { kind: "image" } | { kind: "text"; text: string } | FileContent;
+  content:
+    | { kind: "image" }
+    | { kind: "text" | "page"; text: string }
+    | FileContent;
   origin?:
     | { kind: "asset"; assetId: string; revision: number; title: string }
     | RunOutputOrigin;
@@ -44,7 +47,10 @@ export interface AssetRevisionRef {
 export type BlockSource =
   | { kind: "asset"; asset: AssetRevisionRef; caption: AssetRevisionRef | null }
   | { kind: "note"; note_id: string; revision: number };
-export interface TextAssetView extends AssetView {
+export interface EditableAssetView extends AssetView {
+  content: { kind: "text" | "page"; text: string };
+}
+export interface TextAssetView extends EditableAssetView {
   content: { kind: "text"; text: string };
 }
 export interface AssetBlockData {
@@ -145,6 +151,13 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "add_page";
+      context: Context;
+      key: string;
+      title: string;
+      text: string;
+    }
   | {
       kind: "add_annotation";
       context: Context;
@@ -337,6 +350,7 @@ export interface MutationResult {
 }
 export interface Responses {
   add_annotation: { blockId: string };
+  add_page: { blockId: string };
   pin_run_output: { blockId: string; stageId: string; revision: number };
   list_runs: RunPage;
   run_detail: RunDetail;
@@ -384,6 +398,7 @@ export function request(value: unknown): WorkspaceRequest {
   const kind = record.kind;
   const fields: Record<string, string[]> = {
     add_annotation: ["context", "key", "title", "text"],
+    add_page: ["context", "key", "title", "text"],
     pin_run_output: [
       "context",
       "key",

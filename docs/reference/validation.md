@@ -58,6 +58,17 @@ focused Note, preserves other drafts, rejects silent concurrent overwrites,
 discards to the latest saved version, keeps markup inert, copies/orders/archives/
 restores exact identities, isolates Explorations and reopens the private profile.
 
+The complete notebook journey combines inert Page source, grouped image/caption,
+File, annotation and Result Blocks. It uses keyboard creation/edit/copy/order/
+archive/restore, selects compatible image and caption operations, checks exact
+image Asset binding and RGB bytes, switches Explorations and reopens all saved
+identities. Hostile page scripts/forms/embeds stay text. axe-core runs in the real
+Electron document with WCAG 2 A/AA and 2.1 AA rules for notebook and image canvas;
+no rules are disabled. Tests cover tab arrow/Home/End navigation, readable
+contrast and keyboard access to the image viewport. Native IPC also saves actual
+pixel bytes as a File result and rejects archived-image dispatch; schema-7
+fixtures preserve Notes and bind prior image Trails without losing evidence.
+
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not
 prove worker/PTY enforcement; unsupported native execution must refuse. None of

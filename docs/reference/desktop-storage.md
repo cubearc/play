@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **7**, SQLite application ID
+The native store uses generation **2**, schema version **8**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql` and `annotations.sql`.
-Recognized native schemas 1–6 upgrade to schema 7 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql` and `notebook.sql`.
+Recognized native schemas 1–7 upgrade to schema 8 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -93,6 +93,27 @@ freeze their chosen definition, resolved inputs and Core contract; see
 [native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
 and interruption recovery. Candidates, Solutions, submissions and official
 evaluation are separate deliveries.
+
+## Inert Page content
+
+`add_page` carries `context`, `key`, `title` and `text`. Source is bounded by the
+same 1024 UTF-8-byte ceiling as text Assets, with a nonempty title up to 120 bytes.
+One transaction creates a `kind: page` Asset/revision, ordered Block and inspection
+Trail, advances the Stage revision and checks the same active/retained/aggregate
+ceilings. `Content::Page` exposes the exact text; it is never a URL or rendered HTML.
+
+Pages use `revise_text` with exact Block/Asset/revision bindings. Copying allocates
+independent Asset/Trail identities with immutable immediate-source provenance;
+archive/restore preserves their saved source and revisions. Page Trails have no
+executable Pipeline binding. File extensions do not grant Page identity or
+execution. Scripts/forms/links remain source text in active, archived and canvas
+views. No webview, iframe or content-created resource/IPC authority is introduced.
+
+Schema 8 widens the Asset-kind constraint and restores the existing immutable
+result admission guard during the table rebuild. It also binds prior image
+inspection Trails to a Workspace-owned native pixel-reading definition without
+changing their IDs, captions or Run evidence. The upgrade still uses the verified
+private-copy transaction under exclusive ownership.
 
 ## File content and previews
 
@@ -143,7 +164,7 @@ multiple roots for that selection. Guards preserve the origin, prevent further
 root content revisions and exclude simultaneous copy/Run origins. Existing
 `asset_origins` still records the immediate parent of an independent copy.
 
-Protocol 10 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
+Protocol 11 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
 and `title`; `kind: run_output` has `runId`, `attemptId`, `nodeId`, `trailId`,
 `port`, `semanticType`, `operationName` and the engine `sequence`. There is no
 untagged-origin fallback. Run-origin fields derive from immutable stored evidence,
@@ -182,11 +203,11 @@ responses for matching retries. The command never revises Assets, Notes, Trails,
 Pipelines or Runs. A failed move changes nothing. Reopening returns the saved
 sequence, independently for every Stage and Exploration.
 
-Stage revisions track structural membership and order. Adding text, an image, a file or an annotation
+Stage revisions track structural membership and order. Adding text, an image, a file, a Page or an annotation
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **10**, with no older
+change that order. The coordinated app/engine wire protocol is **11**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -308,8 +329,8 @@ existing reasoning, results and Runs before enabling annotations.
 The closed `revise_text` intent carries `context`, `key`, `block_id`, `asset_id`,
 `expected_revision` and `text`. The engine resolves a text Asset actually bound
 to that Stage Block, checks its current and latest revision, validates UTF-8 byte
-limits and charges retained bytes before appending. Image and File Assets are not editable
-through this intent. Another owner's IDs or an unrelated Block/Asset pair fail.
+limits and charges retained bytes before appending. Image and File bytes are not editable
+through this intent; Page source uses the same revision behavior as text. Another owner's IDs or an unrelated Block/Asset pair fail.
 
 One transaction appends immutable content/digest, advances the Block's matching
 Asset or caption reference and advances matching working Trail bindings in that
@@ -336,7 +357,7 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | Stages per Exploration | 16 |
 | Active Blocks per Stage, including reasoning | 8 |
 | Retained Blocks per Stage, including active content, archives and reasoning | 16 |
-| Text Asset or image caption | 1024 bytes |
+| Text Asset, Page source or image caption | 1024 bytes |
 | One Note revision, including reasoning and annotations | 2048 bytes |
 | One imported PNG | 131072 bytes (128 KiB) |
 | One imported file | 131072 bytes (128 KiB) |

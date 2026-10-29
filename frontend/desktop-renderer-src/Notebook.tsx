@@ -7,9 +7,9 @@ import type {
   AssetView,
   BlockView,
   Context,
+  EditableAssetView,
   ExplorationView,
   RunOutputOrigin,
-  TextAssetView,
   TrailView,
 } from "../desktop/workspace-contract";
 import { blockTitle, contextOf } from "../desktop/workspace-contract";
@@ -27,6 +27,7 @@ export function Notebook({
   addText,
   addImage,
   addFile,
+  addPage,
   addAnnotation,
   busy,
   editText,
@@ -41,10 +42,11 @@ export function Notebook({
   executions: Executions;
   notes: NoteEditing;
   busy: boolean;
-  editText: (block: AssetBlockView, asset: TextAssetView) => void;
+  editText: (block: AssetBlockView, asset: EditableAssetView) => void;
   addText: () => void;
   addImage: () => void;
   addFile: () => void;
+  addPage: () => void;
   addAnnotation: () => void;
   openSourceRun: (origin: RunOutputOrigin) => void;
   focusBlockId: string | null;
@@ -221,6 +223,14 @@ export function Notebook({
           </VscodeButton>
           <VscodeButton
             secondary
+            icon="file-code"
+            disabled={busy || !canAdd}
+            onClick={addPage}
+          >
+            Add page
+          </VscodeButton>
+          <VscodeButton
+            secondary
             icon="note"
             disabled={busy || !canAdd}
             aria-disabled={busy || !canAdd ? "true" : "false"}
@@ -261,7 +271,8 @@ export function Notebook({
         const textAsset =
           block.kind === "asset"
             ? (block.caption ??
-              (block.asset.content.kind === "text"
+              (["text", "page"].includes(block.asset.content.kind) &&
+              "text" in block.asset.content
                 ? { ...block.asset, content: block.asset.content }
                 : null))
             : null;
@@ -350,7 +361,11 @@ export function Notebook({
                     disabled={busy}
                     onClick={() => editText(block, textAsset)}
                   >
-                    {block.caption ? "Edit caption" : "Edit text"}
+                    {block.caption
+                      ? "Edit caption"
+                      : block.asset.content.kind === "page"
+                        ? "Edit page"
+                        : "Edit text"}
                   </VscodeButton>
                 ) : null}
                 <div className="block-order-controls">

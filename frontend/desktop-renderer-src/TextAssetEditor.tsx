@@ -2,7 +2,7 @@ import VscodeButton from "@vscode-elements/react-elements/dist/components/Vscode
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
-import type { TextAssetView } from "../desktop/workspace-contract";
+import type { EditableAssetView } from "../desktop/workspace-contract";
 
 export function TextAssetEditor({
   asset,
@@ -12,7 +12,7 @@ export function TextAssetEditor({
   onDirty,
   onSave,
 }: {
-  asset: TextAssetView;
+  asset: EditableAssetView;
   caption: boolean;
   error: string;
   onClose: () => void;
@@ -27,7 +27,9 @@ export function TextAssetEditor({
   const changed = text !== asset.content.text;
   const length = new TextEncoder().encode(text).byteLength;
   const valid = changed && length <= limits.text_bytes;
-  const label = caption ? "Caption" : "Text";
+  const page = asset.content.kind === "page";
+  const title = caption ? "Edit caption" : page ? "Edit page" : "Edit text";
+  const label = caption ? "Caption" : page ? "Page source" : "Text";
   useEffect(() => {
     dialog.current?.showModal();
     field.current?.focus();
@@ -46,7 +48,7 @@ export function TextAssetEditor({
     <dialog
       ref={dialog}
       className="content-dialog text-editor"
-      aria-label={caption ? "Edit caption" : "Edit text"}
+      aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
         if (!saving) onClose();
@@ -63,7 +65,7 @@ export function TextAssetEditor({
         }
       }}
     >
-      <h2>{caption ? "Edit caption" : "Edit text"}</h2>
+      <h2>{title}</h2>
       <p>
         {asset.title} · r{asset.revision}
       </p>

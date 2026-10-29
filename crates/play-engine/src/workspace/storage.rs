@@ -12,12 +12,13 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
 pub const COPY_SCHEMA: &str = include_str!("copies.sql");
 pub const ARCHIVE_SCHEMA: &str = include_str!("archive.sql");
 pub const FILE_SCHEMA: &str = include_str!("files.sql");
 pub const RESULT_SCHEMA: &str = include_str!("results.sql");
+pub const NOTEBOOK_SCHEMA: &str = include_str!("notebook.sql");
 pub const ANNOTATION_SCHEMA: &str = include_str!("annotations.sql");
 pub type Schemas = Vec<Vec<(String, String, String)>>;
 pub const SCHEMA: &str = include_str!("schema.sql");
@@ -387,12 +388,16 @@ async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()
             (5, FILE_SCHEMA),
             (6, RESULT_SCHEMA),
             (7, ANNOTATION_SCHEMA),
+            (8, NOTEBOOK_SCHEMA),
         ] {
             if version < i64::from(next) && next <= target {
                 sqlx::raw_sql(schema)
                     .execute(&mut *transaction)
                     .await
                     .map_err(failure)?;
+                if next == 8 {
+                    super::mutations::bind_image_trails(&mut transaction).await?;
+                }
             }
         }
         sqlx::query("PRAGMA foreign_key_check")

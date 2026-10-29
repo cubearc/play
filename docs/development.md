@@ -80,6 +80,17 @@ archive/restore, Exploration isolation and restart. Engine checks cover the same
 Note revision storage, stale snapshots, byte/capacity admission, immutable source
 lineage and protected reasoning, including schema-6 upgrades with saved evidence.
 
+The complete notebook journey combines inert Page source, grouped image/caption,
+File, annotation and Result Blocks. It uses keyboard creation/edit/copy/order/
+archive/restore, selects compatible image and caption operations, checks exact
+image Asset binding and RGB bytes, switches Explorations and reopens all saved
+identities. Hostile page scripts/forms/embeds stay text. axe-core runs in the real
+Electron document with WCAG 2 A/AA and 2.1 AA rules for notebook and image canvas;
+no rules are disabled. Tests cover tab arrow/Home/End navigation, readable
+contrast and keyboard access to the image viewport. Native IPC also saves actual
+pixel bytes as a File result and rejects archived-image dispatch; schema-7
+fixtures preserve Notes and bind prior image Trails without losing evidence.
+
 ## Source boundaries
 
 - `frontend/desktop-renderer-src`: VSCode Elements workbench and presentation.

@@ -8,7 +8,7 @@ Each Exploration has its own local Stages. A Stage combines ordered content
 Blocks, annotations, cell results and saved reasoning. Choose **New Stage** in the Explorer
 to create another local part without importing a Challenge.
 
-Use [Add text, Add image or Add file](workspace.md) to add clues. An image caption stays in
+Use [Add text, Add image or Add file](workspace.md) or **Add page** to add clues. An image caption stays in
 the image's figure, with its own input Asset identity. Clicking an Asset opens a
 Trail canvas in the same Exploration; [Explorations and Trails](explorations.md)
 explains the relationship.
@@ -50,6 +50,29 @@ Drafts stay in the current app session when changing Stage or Exploration.
 Closing or quitting with unsaved Notes offers **Keep editing** or **Discard
 draft**. Save before quitting; drafts do not survive a crash. Cmd/Ctrl+Enter
 inside an annotation or reasoning never runs another cell.
+
+## Add an inert page
+
+Choose **Add page**, enter a title and paste the page source, then choose
+**Add page**. HTML, scripts, forms, links and embedded content appear as plain
+text. Nothing executes, navigates or downloads. A Page has its own revisioned
+Asset; a file imported with **Add file** remains a File even if it contains HTML.
+The current page-source limit is 1024 UTF-8 bytes.
+
+Choose **Edit page** to revise the source, then **Save changes** or Cmd/Ctrl+S.
+Saved revisions and copy origins remain intact. A stale edit keeps the draft and
+reports a conflict; cancel and reopen the editor to review the saved revision.
+Cmd/Ctrl+Enter inside the editor does not execute a background cell.
+
+![An inert HTML Page Block with Edit page, copy and ordering controls, beside an independent annotation and saved reasoning.](assets/desktop/page-notebook.png)
+
+The page source stays readable without granting it application access. [Open full size](assets/desktop/page-notebook.png).
+
+Click the Page to inspect its source in a Trail canvas. It has no Pipeline or Run
+action. Use the same keyboard-accessible copy, move, archive and restore controls
+as other content. Restoring retains the original Block/Asset identities and saved
+revision. Archived page source stays inert. Hosted interactive pages and forms
+belong to the separate Cloud integration.
 
 ## Run a text cell
 
@@ -163,7 +186,7 @@ reasoning elsewhere, new content is appended without moving the existing Blocks.
 
 ## Duplicate a clue
 
-Choose the copy icon in a text, image or file Block's heading. Tab to
+Choose the copy icon in a text, image, file or Page Block's heading. Tab to
 **Duplicate First clue** (or the Block's title) and press Enter to use the
 keyboard. The saved content is copied immediately after the source, and focus
 follows it. An image and its caption stay together.
@@ -195,7 +218,7 @@ disabled when a Block ceiling is reached.
 
 ## Archive and restore a Block
 
-Choose the archive icon in a text, image or file Block's heading. The Block leaves the
+Choose the archive icon in a text, image, file or Page Block's heading. The Block leaves the
 active notebook, while its Assets, source links, Trails and Run history stay in
 the Stage. Images and captions are archived together. Saved reasoning and any
 reasoning draft stay in place; the unique **Reasoning** Block cannot be archived.
@@ -241,6 +264,7 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 
 | Action | macOS | Windows/Linux UI |
 | --- | --- | --- |
+| Switch open tabs | Arrow keys, Home, End on a tab | Arrow keys, Home, End on a tab |
 | Toggle Explorer | Cmd+B | Ctrl+B |
 | Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
 | Run active text cell | Cmd+Enter | Ctrl+Enter |

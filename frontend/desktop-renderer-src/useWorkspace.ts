@@ -255,7 +255,8 @@ export function useWorkspace() {
     setWorkspace(data);
     await load(context.workspace_id, context.exploration_id, context.stage_id);
   };
-  const addText = (
+  const addContent = (
+    kind: "add_text" | "add_page",
     title: string,
     text: string,
     key: string = crypto.randomUUID(),
@@ -264,7 +265,7 @@ export function useWorkspace() {
       if (!exploration) return;
       const context = contextOf(exploration);
       await window.play.workspace({
-        kind: "add_text",
+        kind,
         context,
         key,
         title,
@@ -620,7 +621,10 @@ export function useWorkspace() {
     createStage,
     selectExploration,
     selectStage,
-    addText,
+    addText: (title: string, text: string, key?: string) =>
+      addContent("add_text", title, text, key),
+    addPage: (title: string, text: string, key?: string) =>
+      addContent("add_page", title, text, key),
     importImage,
     importFile,
     reviseText,

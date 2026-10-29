@@ -42,7 +42,7 @@ export function OperationCell({
               executions.selectOperation(trail, selector.current?.value ?? "")
             }
           >
-            {executions.operations.map((entry) => (
+            {executions.operationsFor(trail).map((entry) => (
               <VscodeOption key={entry.operation} value={entry.operation}>
                 {entry.name}
               </VscodeOption>
@@ -90,6 +90,12 @@ export function OperationCell({
           {operation?.description ??
             (executions.catalogError || "Connecting to Core…")}
         </p>
+        {operation && trail.source.content.kind === "image" ? (
+          <p className="binding">
+            Fixed parameters:{" "}
+            <code>{JSON.stringify(operation.parameters)}</code>
+          </p>
+        ) : null}
         {operation && operation.operation !== pipeline?.initialOperation ? (
           <small>
             Selected operation will be frozen in this Run’s Pipeline definition

@@ -9,13 +9,15 @@ export type DialogKind =
   | "stage"
   | "text"
   | "image"
-  | "annotation";
+  | "annotation"
+  | "page";
 const titles: Record<DialogKind, string> = {
   exploration: "New Exploration",
   stage: "New Stage",
   text: "Add text block",
   image: "Add image with caption",
   annotation: "Add annotation",
+  page: "Add page",
 };
 export function ContentDialog({
   kind,
@@ -71,15 +73,28 @@ export function ContentDialog({
           />
         </>
       ) : null}
-      {kind === "text" || kind === "image" || kind === "annotation" ? (
+      {kind === "text" ||
+      kind === "image" ||
+      kind === "annotation" ||
+      kind === "page" ? (
         <>
           <label htmlFor="content-text">
-            {kind === "image" ? "Caption" : "Text"}
+            {kind === "image"
+              ? "Caption"
+              : kind === "page"
+                ? "Page source"
+                : "Text"}
           </label>
           <VscodeTextarea
             ref={textField}
             id="content-text"
-            label={kind === "image" ? "Caption" : "Text"}
+            label={
+              kind === "image"
+                ? "Caption"
+                : kind === "page"
+                  ? "Page source"
+                  : "Text"
+            }
             value={text}
             rows={4}
             onInput={() => {
@@ -110,9 +125,11 @@ export function ContentDialog({
             ? "Choose PNG"
             : kind === "text"
               ? "Add text"
-              : kind === "annotation"
-                ? "Add annotation"
-                : "Create"}
+              : kind === "page"
+                ? "Add page"
+                : kind === "annotation"
+                  ? "Add annotation"
+                  : "Create"}
         </VscodeButton>
       </div>
     </dialog>

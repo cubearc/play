@@ -69,7 +69,7 @@ button:focus-visible {
 .command-center kbd {
   margin-left: auto;
   font-size: 10px;
-  color: #858585;
+  color: #9d9d9d;
 }
 .title-actions {
   display: flex;
@@ -89,7 +89,7 @@ button:focus-visible {
   border: 0;
   border-left: 2px solid transparent;
   background: transparent;
-  color: #858585;
+  color: #9d9d9d;
   cursor: pointer;
 }
 .activity vscode-icon {
@@ -135,7 +135,7 @@ button:focus-visible {
   padding: 12px 16px 4px;
 }
 .workspace-label {
-  color: #858585;
+  color: #9d9d9d;
   font-size: 11px;
   padding: 0 16px 20px;
 }
@@ -183,7 +183,7 @@ button:focus-visible {
 
 .tree-section {
   margin: 12px 0 4px 42px;
-  color: #858585;
+  color: #9d9d9d;
   font-size: 11px;
 }
 .tree-label {
@@ -196,7 +196,7 @@ button:focus-visible {
   font-size: 12px;
 }
 .pipeline-reference p {
-  color: #858585;
+  color: #9d9d9d;
   line-height: 1.6;
   margin: 9px 0 0;
 }
@@ -218,7 +218,7 @@ button:focus-visible {
   line-height: 1.6;
 }
 .muted {
-  color: #858585;
+  color: #9d9d9d;
 }
 .editor {
   display: flex;
@@ -251,21 +251,10 @@ button:focus-visible {
   cursor: pointer;
   font-size: 12px;
 }
-.editor-tab.selected,
-.tab-with-close.selected {
+.editor-tab.selected {
   border-top: 1px solid #0078d4;
   background: #1f1f1f;
   color: #fff;
-}
-.tab-with-close {
-  display: flex;
-  flex-shrink: 0;
-  border-top: 1px solid transparent;
-  border-right: 1px solid #2b2b2b;
-}
-.tab-with-close .editor-tab {
-  border: 0;
-  height: 34px;
 }
 .close-tab {
   background: transparent;
@@ -381,7 +370,7 @@ h1 {
 .cell-number {
   padding-top: 15px;
   min-width: 20px;
-  color: #60686f;
+  color: #9d9d9d;
   font: 11px var(--vscode-editor-font-family);
 }
 .block-body {
@@ -606,7 +595,7 @@ h1 {
   background: #263a38;
 }
 .cell-description {
-  color: #858585;
+  color: #9d9d9d;
   font-size: 11px;
   line-height: 1.6;
   margin: 0;
@@ -755,11 +744,7 @@ h1 {
   height: 270px;
   overflow: auto;
   padding: 12px;
-  display: flex;
-  align-items: flex-start;
-}
-.image-viewport > div {
-  flex-shrink: 0;
+  display: block;
 }
 .image-tools {
   display: flex;
@@ -776,7 +761,7 @@ h1 {
 .canvas-note {
   max-width: 660px;
   margin: 18px auto;
-  color: #858585;
+  color: #9d9d9d;
   font-size: 11px;
   line-height: 1.7;
 }
@@ -914,7 +899,7 @@ h1 {
 }
 .workspace-welcome small {
   display: block;
-  color: #858585;
+  color: #9d9d9d;
   line-height: 1.7;
 }
 .workspace-recents {
@@ -1028,7 +1013,7 @@ h1 {
 }
 .content-dialog small {
   display: block;
-  color: #858585;
+  color: #9d9d9d;
   font-size: 11px;
   line-height: 1.7;
   margin-top: 8px;
@@ -1059,4 +1044,32 @@ h1 {
 }
 .inline-result li button[aria-current="true"] {
   border-color: var(--vscode-focusBorder);
+}
+
+.page-source pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.page-source > span {
+  display: block;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  text-align: left;
+}
+
+.editor-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.image-viewport .image-tools {
+  margin: 0 0 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  background: #181818;
 }

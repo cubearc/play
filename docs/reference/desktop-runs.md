@@ -1,9 +1,9 @@
 # Native PipelineRuns
 
-Running a text cell creates a durable, Exploration-owned PipelineRun. Its saved
+Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
-The development executor supports one node using the installed native ROT13 or
-Brainfuck adapter. General DAG planning, joins, parallelism, executor output reuse and
+The development executor supports one node using the installed native ROT13,
+Brainfuck or image pixel-reading adapter. General DAG planning, joins, parallelism, executor output reuse and
 contextual CLI execution are separate deliveries.
 
 ## Accepted invocation
@@ -25,7 +25,9 @@ An accepted Run pins:
 - Its engine-generated UUID, owning context, caller and intent digest.
 - The immutable Pipeline definition/revision, stable node ID and target set.
 - Named input Asset revisions and any adapter-supplied literals. Brainfuck's
-  input byte stream is explicitly empty in this development adapter.
+  input byte stream is explicitly empty in this development adapter. Image reads
+  bind `image.samples` from the exact authorized PNG revision, with fixed top-left
+  coordinates and palette expansion disabled.
 - Core operation/schema/adapter identity, complete contract and contract digest.
 - Effective parameters, execution ceilings and the `none` reuse policy.
 

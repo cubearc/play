@@ -4,6 +4,7 @@ use super::{
     queries, storage,
 };
 use crate::{Result, protocol::Invocation};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use sqlx::{Row, SqliteConnection};
 use uuid::Uuid;
@@ -56,8 +57,13 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         asset_revision,
     )
     .await?;
-    let Content::Text { text } = asset.content else {
-        return Err("invalid_asset_type");
+    let (text, semantic_type) = match asset.content {
+        Content::Text { text } if request.operation != "image.pixels.read" => (text, "text"),
+        Content::Image if request.operation == "image.pixels.read" => {
+            let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset_id).bind(asset_revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
+            (STANDARD.encode(bytes), "image.samples")
+        }
+        _ => return Err("invalid_asset_type"),
     };
     let invocation = Invocation {
         operation: request.operation.clone(),
@@ -97,6 +103,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
             id
         } else {
             let id = Uuid::new_v4().to_string();
+            definition["inputs"][0]["semanticType"] = json!(semantic_type);
             definition["nodes"][0]["id"] = json!(Uuid::new_v4());
             definition["nodes"][0]["operation"] = json!(invocation.operation);
             definition["nodes"][0]["operation_version"] = json!(invocation.operation_version);
@@ -131,11 +138,11 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     let input_port = contract
         .inputs
         .iter()
-        .find(|port| port.semantic_type == "text")
+        .find(|port| port.semantic_type == semantic_type)
         .ok_or("contract_mismatch")?
         .name
         .clone();
-    let mut inputs = json!({input_port.clone():{"assetId":asset_id,"revision":asset_revision,"semanticType":"text"}});
+    let mut inputs = json!({input_port.clone():{"assetId":asset_id,"revision":asset_revision,"semanticType":semantic_type}});
     if invocation.operation == "esolang.brainfuck.execute" {
         inputs["input"] = json!({"literal":[]});
     }

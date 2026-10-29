@@ -124,14 +124,14 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **10** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **11** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
 then sends an internal `add_file` command. Renderer paths, URLs, raw file bytes
 and extra fields are refused. Preview text never becomes HTML or a resource URL.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
-add text, revise existing text/captions, reorder, duplicate, archive or restore Stage content Blocks,
+add text/Page source, revise existing text/captions/Pages, reorder, duplicate, archive or restore Stage content Blocks,
 save retained Run outputs as Blocks, add annotations, save individual Notes, list scoped Run summaries
 and read Run details. Internal image import/read and file import commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
@@ -159,6 +159,17 @@ Managed `run` replies acknowledge durable admission immediately. Clients query
 recorded progress/detail; the engine commits final state independently and never
 sends unsolicited transport replies. The unbound `invoke`/`cancel` entry remains
 only for native capability tests and is absent from the renderer bridge.
+
+The native catalog reports each adapter's Core input semantic type and effective
+parameters. Text selectors expose text adapters; image selectors expose
+`image.pixels.read` with fixed `x: 0`, `y: 0`, `expand_palette: false`. Rust resolves
+and verifies the authorized PNG revision, validates decoded `image.samples`
+against Core's named schema and freezes the parameters in the Run. The isolated
+worker receives bounded Base64 PNG bytes through its inherited pipe, never an
+Asset path or database handle. Its image-specific bound is the encoded form of
+the existing 128 KiB image ceiling; the 8192-byte text invocation ceiling and
+262144-byte frame ceiling, 16384-byte output ceiling and worker limits remain unchanged. Samples come from Core;
+named byte outputs use the same retained result contract as Brainfuck.
 
 The first command must be `hello` within the handshake deadline. A mismatched
 binary/protocol or malformed first frame closes the session. The nonce binds the

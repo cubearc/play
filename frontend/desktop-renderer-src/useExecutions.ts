@@ -210,8 +210,18 @@ export function useExecutions(
       current = false;
     };
   }, [exploration, load]);
+  const operationsFor = (trail: TrailView) =>
+    operations.filter(
+      (operation) =>
+        operation.input_type ===
+        (trail.source.content.kind === "text"
+          ? "text"
+          : trail.source.content.kind === "image"
+            ? "image.samples"
+            : null),
+    );
   const operationFor = (trail: TrailView) =>
-    operations.find(
+    operationsFor(trail).find(
       (operation) =>
         operation.operation ===
         (selected[trail.id] ?? trail.pipeline?.initialOperation),
@@ -325,6 +335,7 @@ export function useExecutions(
     history,
     busy,
     operationFor,
+    operationsFor,
     run,
     cancel,
     load,

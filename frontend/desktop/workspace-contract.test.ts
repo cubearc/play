@@ -16,6 +16,27 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("Page source is bounded plain text and cannot request paths or executable views", () => {
+  const page = {
+    kind: "add_page",
+    context: owner,
+    key: randomUUID(),
+    title: "Clue",
+    text: '<script>window.play.workspace({kind:"create"})</script>',
+  };
+  assert.deepEqual(request(page), page);
+  assert.throws(
+    () => request({ ...page, text: "é".repeat(513) }),
+    /input_limit/,
+  );
+  for (const extra of [
+    { path: "/tmp/clue.html" },
+    { url: "file:///etc/passwd" },
+    { webPreferences: { nodeIntegration: true } },
+    { execute: true },
+  ])
+    assert.throws(() => request({ ...page, ...extra }), /invalid_command/);
+});
 test("annotations use bounded Note text and exact tagged Note lifecycle snapshots", () => {
   const add = {
     kind: "add_annotation",

@@ -20,6 +20,7 @@ export function AssetCanvas({
   const [zoom, setZoom] = useState(100);
   const image = trail.source.content.kind === "image";
   const text = trail.source.content.kind === "text";
+  const page = trail.source.content.kind === "page";
   return (
     <section className="asset-canvas scroll-surface" aria-label="Trail canvas">
       <header className="document-heading">
@@ -36,7 +37,9 @@ export function AssetCanvas({
               ? "Image inspection"
               : text
                 ? `Pipeline · ${trail.pipeline?.title} · r${trail.pipeline?.revision}`
-                : "File inspection"}
+                : page
+                  ? "Page source · inert"
+                  : "File inspection"}
           </span>
         </div>
       </header>
@@ -62,6 +65,25 @@ export function AssetCanvas({
           </div>
           {trail.source.content.kind === "image" ? (
             <div className="image-viewport">
+              <div className="image-tools">
+                <VscodeButton
+                  secondary
+                  icon="zoom-out"
+                  disabled={zoom <= 50}
+                  onClick={() => setZoom((value) => value - 25)}
+                >
+                  Zoom out
+                </VscodeButton>
+                <output aria-label="Image zoom">{zoom}%</output>
+                <VscodeButton
+                  secondary
+                  icon="zoom-in"
+                  disabled={zoom >= 200}
+                  onClick={() => setZoom((value) => value + 25)}
+                >
+                  Zoom in
+                </VscodeButton>
+              </div>
               <div style={{ width: `${zoom}%` }}>
                 <AssetImage
                   asset={trail.source}
@@ -85,30 +107,14 @@ export function AssetCanvas({
             <span className="port-dot" />
           </div>
         </article>
-        {image ? (
-          <div className="image-tools">
-            <VscodeButton
-              secondary
-              icon="zoom-out"
-              disabled={zoom <= 50}
-              onClick={() => setZoom((value) => value - 25)}
-            >
-              Zoom out
-            </VscodeButton>
-            <output aria-label="Image zoom">{zoom}%</output>
-            <VscodeButton
-              secondary
-              icon="zoom-in"
-              disabled={zoom >= 200}
-              onClick={() => setZoom((value) => value + 25)}
-            >
-              Zoom in
-            </VscodeButton>
-          </div>
-        ) : text ? (
+
+        {trail.pipelineId ? (
           <>
             <div className="canvas-connection">
-              <span /> <code>text → {trail.pipeline?.input}</code>{" "}
+              <span />{" "}
+              <code>
+                {trail.source.content.kind} → {trail.pipeline?.input}
+              </code>{" "}
               <VscodeIcon name="arrow-down" />
             </div>
             <article
@@ -120,10 +126,10 @@ export function AssetCanvas({
           </>
         ) : null}
       </div>
-      {image ? (
+      {page ? (
         <p className="canvas-note">
-          Image transformations are not available in this preview. You can
-          inspect and zoom the source here.
+          Page source is plain text. Scripts, forms, links and embedded content
+          do not execute or load.
         </p>
       ) : null}
       {trail.source.content.kind === "file" ? (

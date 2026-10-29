@@ -35,7 +35,7 @@ The image and its caption share one figure; ROT13 uses the caption Asset directl
 Click the image to open its inspection canvas, or the caption to open its text
 Trail canvas. Running ROT13 below the caption transforms that caption's exact
 Asset revision. It does not extract letters from the pixels. The image canvas
-currently supports preview and zoom, rather than a full image operation graph.
+supports preview, zoom and a [native first-pixel Run](visual-lab.md#read-the-first-pixel).
 
 ## Edit saved content
 
@@ -80,7 +80,7 @@ original bytes, identities and order survive reopening.
 
 ## Limits and recovery
 
-The preview accepts text, PNG images and bounded inert files. Video playback and
+The preview accepts text, PNG images, bounded inert files and [Page source](notebook.md#add-an-inert-page). Video playback and
 executable pages are not available. A Stage allows 8 active and 16 retained Blocks,
 including reasoning. [Archiving](notebook.md#archive-and-restore-a-block) frees
 an active slot while retaining content and evidence;

@@ -33,6 +33,11 @@ export function NotebookAsset({
           <AssetImage asset={block.asset} context={context} />
         ) : block.asset.content.kind === "file" ? (
           <FilePreview content={block.asset.content} />
+        ) : block.asset.content.kind === "page" ? (
+          <div className="page-source">
+            <span>Page source · inert</span>
+            <pre>{block.asset.content.text}</pre>
+          </div>
         ) : (
           <code>{block.asset.content.text}</code>
         )}

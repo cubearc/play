@@ -2,14 +2,20 @@ use crate::{
     Result,
     protocol::{self, Invocation},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 
 pub fn validate(invocation: &Invocation) -> Result<()> {
-    if invocation.input.len() > protocol::contract().input_bytes {
+    let probe = Probe::parse(&invocation.operation)?;
+    let maximum = if matches!(probe, Probe::Pixel) {
+        protocol::contract().image_bytes.div_ceil(3) * 4
+    } else {
+        protocol::contract().input_bytes
+    };
+    if invocation.input.len() > maximum {
         return Err("input_limit");
     }
-    Probe::parse(&invocation.operation)?;
     let descriptor = cube_core::operations::require(&invocation.operation)
         .map_err(|_| "unsupported_operation")?;
     let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
@@ -22,12 +28,14 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
 enum Probe {
     Rot13,
     Brainfuck,
+    Pixel,
 }
 
 impl Probe {
     fn parse(operation: &str) -> Result<Self> {
         match operation {
             "cipher.rot13" => Ok(Self::Rot13),
+            "image.pixels.read" => Ok(Self::Pixel),
             "esolang.brainfuck.execute" => Ok(Self::Brainfuck),
             _ => Err("unsupported_operation"),
         }
@@ -35,6 +43,10 @@ impl Probe {
 
     fn execute(self, input: &str) -> Result<Value> {
         match self {
+            Self::Pixel => image(input)?
+                .pixel(0, 0)
+                .map(|bytes| json!({"bytes":bytes}))
+                .map_err(|_| "operation_failed"),
             Self::Rot13 => Ok(json!({"text": cube_core::ciphers::rot13(input)})),
             Self::Brainfuck => {
                 let limits = brainfuck_limits();
@@ -44,6 +56,14 @@ impl Probe {
             }
         }
     }
+}
+
+fn image(input: &str) -> Result<cube_core::image::Image> {
+    let data = STANDARD.decode(input).map_err(|_| "invalid_image")?;
+    if data.len() > protocol::contract().image_bytes || !data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("invalid_image");
+    }
+    cube_core::image::Image::decode(&data).map_err(|_| "invalid_image")
 }
 
 fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
@@ -56,6 +76,7 @@ fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
 pub fn parameters(operation: &str) -> Result<Value> {
     match Probe::parse(operation)? {
         Probe::Rot13 => Ok(json!({})),
+        Probe::Pixel => Ok(json!({"x":0,"y":0,"expand_palette":false})),
         Probe::Brainfuck => serde_json::to_value(brainfuck_limits()).map_err(|_| "invalid_state"),
     }
 }
@@ -67,9 +88,16 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
     let port = contract
         .inputs
         .iter()
-        .find(|port| port.semantic_type == "text")
+        .find(|port| ["text", "image.samples"].contains(&port.semantic_type.as_str()))
         .ok_or("contract_mismatch")?;
-    let mut inputs = json!({port.name.clone():invocation.input});
+    let value = if port.semantic_type == "image.samples" {
+        json!(cube_core::operations::contracts::values::Image::from(
+            &image(&invocation.input)?
+        ))
+    } else {
+        json!(invocation.input)
+    };
+    let mut inputs = json!({port.name.clone():value});
     if invocation.operation == "esolang.brainfuck.execute" {
         inputs["input"] = json!([]);
     }
@@ -84,7 +112,7 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
             }
             json!(text)
         }
-        Probe::Brainfuck => {
+        Probe::Brainfuck | Probe::Pixel => {
             let bytes = output["bytes"].as_array().ok_or("invalid_response")?;
             if bytes.len() > protocol::contract().output_bytes {
                 return Err("output_limit");
@@ -119,7 +147,7 @@ pub fn catalog() -> Result<Value> {
                 .map_or(descriptor.command, |metadata| metadata.canonical_name);
             Ok(
                 json!({"operation":descriptor.id, "operation_version":contract.operation_version,
-                "name":name, "description":descriptor.description}),
+                "name":name, "description":descriptor.description, "input_type":contract.inputs.iter().find(|port| ["text", "image.samples"].contains(&port.semantic_type.as_str())).ok_or("contract_mismatch")?.semantic_type, "parameters":parameters(descriptor.id)?}),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -170,6 +198,53 @@ mod tests {
             input: "++++++++[>++++++++<-]>+.".into(),
         };
         assert_eq!(execute(invocation).unwrap(), json!({"bytes":[65]}));
+    }
+
+    #[test]
+    fn pixel_adapter_uses_real_core_samples_and_catalog_filters_match_contracts() {
+        let input = STANDARD.encode(include_bytes!("../../../tests/fixtures/sample.png"));
+        let invocation = Invocation {
+            operation: "image.pixels.read".into(),
+            operation_version: 1,
+            input,
+        };
+        assert_eq!(
+            execute(invocation.clone()).unwrap(),
+            json!({"bytes":[20,80,50]})
+        );
+        let inputs = named_inputs(&invocation).unwrap();
+        let contract = cube_core::operations::require("image.pixels.read")
+            .unwrap()
+            .contract()
+            .unwrap();
+        contract.validate_inputs(&inputs).unwrap();
+        contract
+            .validate_parameters(&parameters("image.pixels.read").unwrap())
+            .unwrap();
+        contract
+            .validate_outputs(
+                &named_outputs("image.pixels.read", &json!({"bytes":[20,80,50]})).unwrap(),
+            )
+            .unwrap();
+        let entries = catalog().unwrap();
+        for (operation, kind) in [
+            ("cipher.rot13", "text"),
+            ("esolang.brainfuck.execute", "text"),
+            ("image.pixels.read", "image.samples"),
+        ] {
+            assert_eq!(
+                entries
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|e| e["operation"] == operation)
+                    .unwrap()["input_type"],
+                kind
+            );
+        }
+        let mut bad = invocation;
+        bad.input = "invalid".into();
+        assert_eq!(execute(bad), Err("invalid_image"));
     }
 
     #[test]

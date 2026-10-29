@@ -48,7 +48,8 @@ pub(super) async fn revise_text(
     ) {
         return Err("result_read_only");
     }
-    let Content::Text { text: previous } = original.content else {
+    let (Content::Text { text: previous } | Content::Page { text: previous }) = original.content
+    else {
         return Err("invalid_asset_type");
     };
     if previous == text {

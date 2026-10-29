@@ -15,6 +15,8 @@ export interface Operation {
   name: string;
   operation_version: number;
   description: string;
+  input_type: string;
+  parameters: Record<string, unknown>;
 }
 
 export type RunResult =

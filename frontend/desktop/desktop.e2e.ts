@@ -10,8 +10,299 @@ import {
   expect,
   type Page,
 } from "@playwright/test";
+import axe from "axe-core";
+
+declare global {
+  interface Window {
+    axe: typeof axe;
+  }
+}
+
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
+
+test("complete notebook keeps Pages inert and runs the selected image through its typed source", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-notebook-complete-"));
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Complete notebook");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Mixed clues");
+    const activate = async (button: ReturnType<Page["getByRole"]>) => {
+      await button.focus();
+      await page.keyboard.press("Enter");
+    };
+    await activate(
+      notebook(page).getByRole("button", { name: "Add page", exact: true }),
+    );
+    let dialog = page.getByRole("dialog", { name: "Add page", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue page");
+    const hostile =
+      '<script>globalThis.pageExecuted=true;window.play.workspace({kind:"create",title:"Injected"})</script><iframe src="file:///etc/passwd"></iframe><form action="https://invalid.test/"><input autofocus></form>';
+    await dialog
+      .getByRole("textbox", { name: "Page source", exact: true })
+      .fill(hostile);
+    await activate(
+      dialog.getByRole("button", { name: "Add page", exact: true }),
+    );
+    await expect(dialog).toBeHidden();
+    const cell = (title: string) =>
+      notebook(page).getByRole("article", {
+        name: `${title} block`,
+        exact: true,
+      });
+    await expect(cell("Clue page")).toContainText(hostile);
+    assert.equal(
+      await page.evaluate(() => Object.hasOwn(globalThis, "pageExecuted")),
+      false,
+    );
+    assert.equal(
+      await page.locator("iframe,form,script:not([src])").count(),
+      0,
+    );
+    await activate(
+      cell("Clue page").getByRole("button", {
+        name: "Explore Clue page",
+        exact: true,
+      }),
+    );
+    let canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await expect(canvas).toContainText("Page source · inert");
+    await expect(
+      canvas.getByRole("button", { name: "Run cell", exact: true }),
+    ).toHaveCount(0);
+    await page.keyboard.press("ControlOrMeta+Enter");
+    assert.equal(
+      (await current(page)).exploration.trails.filter((t) => t.pipelineId)
+        .length,
+      0,
+    );
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await activate(
+      cell("Clue page").getByRole("button", { name: "Edit page", exact: true }),
+    );
+    dialog = page.getByRole("dialog", { name: "Edit page", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Page source", exact: true })
+      .fill("<h1>Revised clue</h1>");
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(dialog).toBeHidden();
+    await expect(cell("Clue page")).toContainText("Revised clue");
+    await activate(
+      cell("Clue page").getByRole("button", {
+        name: "Duplicate Clue page",
+        exact: true,
+      }),
+    );
+    await expect(cell("Clue page (copy)")).toBeFocused();
+    await expect(cell("Clue page (copy)")).toContainText(
+      "Copied from Clue page · r2",
+    );
+    await activate(
+      cell("Clue page (copy)").getByRole("button", {
+        name: "Move Clue page (copy) up",
+        exact: true,
+      }),
+    );
+    await expect(cell("Clue page (copy)")).toBeFocused();
+    await activate(
+      cell("Clue page").getByRole("button", {
+        name: "Archive Clue page",
+        exact: true,
+      }),
+    );
+    await activate(
+      notebook(page).getByRole("button", {
+        name: "Archived blocks (1)",
+        exact: true,
+      }),
+    );
+    const archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await expect(archive).toContainText("Revised clue");
+    await activate(
+      archive.getByRole("button", { name: "Restore Clue page", exact: true }),
+    );
+    await expect(cell("Clue page")).toBeFocused();
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Gur xrl.");
+    await dialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await activate(
+      cell("sample.png").getByRole("button", {
+        name: "Explore sample.png",
+        exact: true,
+      }),
+    );
+    canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(
+      canvas.getByRole("combobox", { name: "Operation", exact: true }),
+    ).not.toHaveText("ROT13");
+    await expect(canvas).toContainText('"x":0');
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).focus();
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect(
+      canvas.getByRole("region", { name: "Cell result", exact: true }),
+    ).toContainText("Base64 FFAy");
+    await expect(
+      canvas.getByRole("img", { name: "sample.png", exact: true }),
+    ).toBeInViewport({ ratio: 0.3 });
+    const imageAccessibility = await accessibility(page);
+    assert.deepEqual(imageAccessibility.violations, []);
+    await capture(application, "native-image-operation");
+    await page.getByRole("tab", { name: "sample.png", exact: true }).focus();
+    await page.keyboard.press("Home");
+    await expect(notebook(page)).toBeVisible();
+    await page.keyboard.press("End");
+    await expect(canvas).toBeVisible();
+    const afterImage = (await current(page)).exploration;
+    const imageTrail = afterImage.trails.find(
+      (t) => t.source.content.kind === "image",
+    );
+    assert.ok(imageTrail);
+    const runs = await page.evaluate(
+      (t) =>
+        window.play.workspace({
+          kind: "list_runs",
+          context: {
+            workspace_id: t.workspaceId,
+            exploration_id: t.explorationId,
+            stage_id: t.stageId,
+          },
+          trail_id: t.id,
+          before: null,
+        }),
+      imageTrail,
+    );
+    assert.equal(runs.runs.length, 1);
+    const firstRun = runs.runs[0];
+    assert.ok(firstRun);
+    const detail = await page.evaluate(
+      ({ t, id }) =>
+        window.play.workspace({
+          kind: "run_detail",
+          context: {
+            workspace_id: t.workspaceId,
+            exploration_id: t.explorationId,
+            stage_id: t.stageId,
+          },
+          run_id: id,
+        }),
+      { t: imageTrail, id: firstRun.id },
+    );
+    const input = detail.plan.inputs.input;
+    assert.ok(input && "assetId" in input);
+    assert.equal(input.assetId, imageTrail.source.id);
+    assert.equal(input.semanticType, "image.samples");
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await activate(
+      cell("sample.png").getByRole("button", {
+        name: "Explore Image caption",
+        exact: true,
+      }),
+    );
+    canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(
+      canvas.getByRole("combobox", { name: "Operation", exact: true }),
+    ).toHaveText("ROT13");
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(canvas).toContainText("output: The key.");
+    await canvas
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await expect(notebook(page)).toBeVisible();
+    await notebook(page)
+      .getByRole("button", { name: "Add annotation", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Add annotation", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Observation");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Compare the selected image and caption evidence.");
+    await activate(
+      dialog.getByRole("button", { name: "Add annotation", exact: true }),
+    );
+    await expect(dialog).toBeHidden();
+    const file = join(profile, "clue.html");
+    await writeFile(file, hostile);
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, file);
+    await activate(
+      notebook(page).getByRole("button", { name: "Add file", exact: true }),
+    );
+    await expect(cell("clue.html")).toContainText("bytes");
+    await saveNote(
+      page,
+      "Pages remain inert; image and caption have independent typed Runs.",
+    );
+    await create(page, "Exploration", "Separate notebook");
+    await expect(notebook(page)).not.toContainText("Clue page");
+    await explorer(page)
+      .getByRole("button", { name: "Mixed clues", exact: true })
+      .click();
+    await expect(cell("Clue page")).toBeVisible();
+    const saved = await current(page);
+    const notebookAccessibility = await accessibility(page);
+    assert.deepEqual(notebookAccessibility.violations, []);
+    await capture(application, "native-page-notebook");
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(cell("Clue page")).toBeVisible();
+    assert.deepEqual(await current(page), saved);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
 
 test("annotation Blocks save independently, preserve drafts and restore their Note identity", {
   timeout: 90000,
@@ -1099,6 +1390,14 @@ async function create(
   await expect(dialog).toBeHidden();
   await expect(notebook(page)).toBeVisible();
 }
+async function accessibility(page: Page) {
+  await page.evaluate(axe.source);
+  return page.evaluate(async () => {
+    return window.axe.run(document, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
+    });
+  });
+}
 async function saveNote(page: Page, text: string) {
   await page.getByLabel("Stage note", { exact: true }).fill(text);
   await page.keyboard.press("ControlOrMeta+s");
@@ -1397,9 +1696,22 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     const second = await current(page);
     assert.equal(
       second.workspace.pipelines.length,
-      1,
-      "trails reuse the workspace pipeline",
+      2,
+      "text and image Trails reuse their own compatible Workspace pipelines",
     );
+    assert.equal(
+      second.workspace.pipelines.filter(
+        (p) => p.initialOperation === "cipher.rot13",
+      ).length,
+      1,
+    );
+    assert.equal(
+      second.workspace.pipelines.filter(
+        (p) => p.initialOperation === "image.pixels.read",
+      ).length,
+      1,
+    );
+
     await notebook(page)
       .getByText("Keep result in private history", { exact: true })
       .click();
@@ -1474,9 +1786,12 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     await expect
       .poll(async () => (await image.boundingBox())?.width ?? 0)
       .toBeGreaterThan(width * 1.2);
-    await expect(canvas.getByRole("button", { name: "Run cell" })).toHaveCount(
-      0,
-    );
+    await expect(
+      canvas.getByRole("button", { name: "Run cell" }),
+    ).toBeEnabled();
+    await expect(
+      canvas.getByRole("combobox", { name: "Operation", exact: true }),
+    ).not.toHaveText("ROT13");
     await capture(application, "native-image-canvas");
     await page
       .getByRole("button", { name: "Close sample.png canvas", exact: true })

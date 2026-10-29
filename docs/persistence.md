@@ -6,7 +6,7 @@
 <a id="writes-and-recovery"></a>
 
 Quit and reopen the Electron preview to restore the last successfully opened
-Workspace, Exploration and Stage. The Rust engine saves text/image/file and annotation Blocks, Asset/Note
+Workspace, Exploration and Stage. The Rust engine saves text/image/file/Page and annotation Blocks, Asset/Note
 identities and revisions, the complete Block order, saved reasoning, Trails, initial Pipeline definitions
 and accepted single-node Runs in private local storage.
 

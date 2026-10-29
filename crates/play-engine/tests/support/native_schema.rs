@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use uuid::Uuid;
 
 pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
-    assert!((1..=6).contains(&target));
+    assert!((1..=7).contains(&target));
     let directory = root.join(workspace.to_string());
     let database = directory.join("workspace.sqlite3");
     let source = directory.join("schema-fixture-source.sqlite3");
@@ -20,8 +20,11 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         if target>=4 {sqlx::raw_sql(include_str!("../../src/workspace/archive.sql")).execute(&mut connection).await.unwrap();}
         if target>=5 {sqlx::raw_sql(include_str!("../../src/workspace/files.sql")).execute(&mut connection).await.unwrap();}
         if target>=6 {sqlx::raw_sql(include_str!("../../src/workspace/results.sql")).execute(&mut connection).await.unwrap();}
+        if target>=7 {sqlx::raw_sql(include_str!("../../src/workspace/annotations.sql")).execute(&mut connection).await.unwrap();}
+
         sqlx::query("ATTACH DATABASE ? AS original").bind(source.to_str().unwrap()).execute(&mut connection).await.unwrap();
-        let annotations:i64=sqlx::query_scalar("SELECT count(*) FROM original.notes WHERE kind<>'reasoning' OR source_note_id IS NOT NULL").fetch_one(&mut connection).await.unwrap();assert_eq!(annotations,0,"an older native fixture cannot represent annotation Notes");
+        let pages:i64=sqlx::query_scalar("SELECT count(*) FROM original.assets WHERE kind='page'").fetch_one(&mut connection).await.unwrap();assert_eq!(pages,0,"an older native fixture cannot represent Page Assets");
+        let annotations:i64=sqlx::query_scalar("SELECT count(*) FROM original.notes WHERE kind<>'reasoning' OR source_note_id IS NOT NULL").fetch_one(&mut connection).await.unwrap();if target<7 {assert_eq!(annotations,0,"an older native fixture cannot represent annotation Notes");}
         if target<6 {let results:i64=sqlx::query_scalar("SELECT count(*) FROM original.result_origins").fetch_one(&mut connection).await.unwrap();assert_eq!(results,0,"an older native fixture cannot represent Result Assets");}
         if target<5 {let files:i64=sqlx::query_scalar("SELECT count(*) FROM original.assets WHERE kind='file'").fetch_one(&mut connection).await.unwrap();assert_eq!(files,0,"an older native fixture cannot represent File Assets");}
         if target<4 {let archived:i64=sqlx::query_scalar("SELECT count(*) FROM original.blocks WHERE archived_revision IS NOT NULL").fetch_one(&mut connection).await.unwrap();assert_eq!(archived,0,"an older native fixture cannot represent archived content");}
@@ -37,7 +40,7 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
         for sql in [
             "INSERT INTO explorations SELECT * FROM original.explorations",
             "INSERT INTO stages SELECT * FROM original.stages",
-            "INSERT INTO notes SELECT workspace_id,exploration_id,stage_id,id,current_revision FROM original.notes",
+            if target>=7 {"INSERT INTO notes SELECT * FROM original.notes"} else {"INSERT INTO notes SELECT workspace_id,exploration_id,stage_id,id,current_revision FROM original.notes"},
             "INSERT INTO note_revisions SELECT * FROM original.note_revisions",
             "INSERT INTO assets SELECT * FROM original.assets",
             "INSERT INTO asset_revisions SELECT * FROM original.asset_revisions",

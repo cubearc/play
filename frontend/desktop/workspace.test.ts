@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -35,6 +35,131 @@ const worker =
       )
     : undefined;
 
+test("native image adapter pins authorized image input and preserves exact Core pixel bytes", {
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-image-ipc-"));
+  const engine = await Engine.connect(
+    binary,
+    worker,
+    join(temporary, "private"),
+  );
+  try {
+    const w = (await engine.workspace({
+      kind: "create",
+      key: randomUUID(),
+      title: "Image study",
+    })) as WorkspaceView;
+    const e = (await engine.workspace({
+      kind: "create_exploration",
+      workspace_id: w.id,
+      key: randomUUID(),
+      title: "Pixels",
+    })) as { explorationId: string; stageId: string };
+    const open = {
+      kind: "open_exploration",
+      workspace_id: w.id,
+      exploration_id: e.explorationId,
+      stage_id: e.stageId,
+    };
+    let view = (await engine.workspace(open)) as ExplorationView;
+    const context = contextOf(view);
+    const data = await readFile(
+      new URL("../../tests/fixtures/sample.png", import.meta.url),
+    );
+    await engine.workspace({
+      kind: "add_image",
+      context,
+      key: randomUUID(),
+      title: "Image",
+      caption: "Gur xrl.",
+      png: data.toString("base64"),
+    });
+    view = (await engine.workspace(open)) as ExplorationView;
+    const t = view.trails.find((t) => t.source.content.kind === "image");
+    assert.ok(t?.pipeline);
+    const request = {
+      context,
+      key: randomUUID(),
+      trail_id: t.id,
+      pipeline_id: t.pipeline.id,
+      pipeline_revision: 1,
+      source_asset_id: t.source.id,
+      source_revision: 1,
+      operation: "image.pixels.read",
+      operation_version: 1,
+      retain_output: true,
+    };
+    await assert.rejects(
+      engine.startRun({
+        ...request,
+        key: randomUUID(),
+        operation: "cipher.rot13",
+      }),
+      /invalid_asset_type/,
+    );
+    const run = await finished(engine, context, await engine.startRun(request));
+    if (process.platform !== "darwin") {
+      assert.equal(run.status, "failed");
+      return;
+    }
+    assert.equal(run.status, "completed");
+    assert.deepEqual(run.result?.outputs, { output: { base64: "FFAy" } });
+    assert.deepEqual(run.plan.inputs, {
+      input: {
+        assetId: t.source.id,
+        revision: 1,
+        semanticType: "image.samples",
+      },
+    });
+    const attempt = run.attempts[0];
+    assert.ok(attempt);
+    const saved = (await engine.workspace({
+      kind: "pin_run_output",
+      context,
+      key: randomUUID(),
+      expected_revision: view.stage.revision,
+      run_id: run.id,
+      attempt_id: attempt.id,
+      port: "output",
+    })) as { blockId: string };
+    const next = (await engine.workspace(open)) as ExplorationView;
+    const b = next.stage.blocks.find((b) => b.id === saved.blockId);
+    assert.ok(b?.kind === "asset" && b.asset.content.kind === "file");
+    assert.equal(b.asset.content.preview.text, "145032");
+    assert.ok(b.asset.origin?.kind === "run_output");
+    assert.equal(b.asset.origin.runId, run.id);
+    const image = next.stage.blocks.find(
+      (b) => b.kind === "asset" && b.asset.id === t.source.id,
+    );
+    assert.ok(image?.kind === "asset");
+    await engine.workspace({
+      kind: "archive_block",
+      context,
+      key: randomUUID(),
+      block_id: image.id,
+      expected_revision: next.stage.revision,
+      source: {
+        kind: "asset",
+        asset: { asset_id: image.asset.id, revision: 1 },
+        caption: image.caption
+          ? { asset_id: image.caption.id, revision: 1 }
+          : null,
+      },
+    });
+    await assert.rejects(
+      engine.startRun({ ...request, key: randomUUID() }),
+      /block_archived/,
+    );
+    assert.deepEqual(
+      await engine.workspace({ kind: "run_detail", context, run_id: run.id }),
+      run,
+    );
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
 test("a real retained byte Run becomes an exact file result with immutable attempt provenance", {
   timeout: 15000,
 }, async () => {

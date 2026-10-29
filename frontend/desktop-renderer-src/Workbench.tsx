@@ -7,8 +7,8 @@ import {
   type AssetBlockView,
   type Context,
   contextOf,
+  type EditableAssetView,
   type RunOutputOrigin,
-  type TextAssetView,
   type TrailView,
 } from "../desktop/workspace-contract";
 import { AssetCanvas } from "./AssetCanvas";
@@ -26,7 +26,7 @@ const modifier = mac ? "⌘" : "Ctrl+";
 interface TextEdit {
   context: Context;
   blockId: string;
-  asset: TextAssetView;
+  asset: EditableAssetView;
   caption: boolean;
 }
 
@@ -122,12 +122,11 @@ export function Workbench() {
     }
   };
   const run = () => {
-    if (runnableTrail?.source.content.kind !== "text" || runnableTrail.archived)
-      return;
+    if (!runnableTrail?.pipelineId || runnableTrail.archived) return;
     const operation = executions.operationFor(runnableTrail);
     if (operation) void executions.run(runnableTrail, operation);
   };
-  const editText = (block: AssetBlockView, asset: TextAssetView) => {
+  const editText = (block: AssetBlockView, asset: EditableAssetView) => {
     if (!exploration) return;
     state.clearError();
     setEditing({
@@ -180,7 +179,7 @@ export function Workbench() {
         executions.busy ||
         !runnableTrail ||
         runnableTrail.archived ||
-        runnableTrail.source.content.kind !== "text" ||
+        !runnableTrail.pipelineId ||
         !executions.operationFor(runnableTrail),
       execute: run,
     },
@@ -306,54 +305,79 @@ export function Workbench() {
             </section>
           ) : (
             <>
-              <div
-                className="editor-tabbar"
-                role="tablist"
-                aria-label="Exploration tabs"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "notebook"}
-                  className={`editor-tab ${activeTab === "notebook" ? "selected" : ""}`}
-                  onClick={openNotebook}
+              <div className="editor-tabbar">
+                <div
+                  role="tablist"
+                  aria-label="Exploration tabs"
+                  className="editor-tabs"
+                  onKeyDown={(event) => {
+                    const tabs = Array.from(
+                      event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                        '[role="tab"]',
+                      ),
+                    );
+                    const index = tabs.indexOf(
+                      event.target as HTMLButtonElement,
+                    );
+                    const next =
+                      event.key === "ArrowRight"
+                        ? (index + 1) % tabs.length
+                        : event.key === "ArrowLeft"
+                          ? (index + tabs.length - 1) % tabs.length
+                          : event.key === "Home"
+                            ? 0
+                            : event.key === "End"
+                              ? tabs.length - 1
+                              : null;
+                    if (next !== null) {
+                      event.preventDefault();
+                      tabs[next]?.focus();
+                      tabs[next]?.click();
+                    }
+                  }}
                 >
-                  <VscodeIcon name="notebook" />
-                  {exploration.stage.title}
-                </button>
-                {openTabs.map((trail) => (
-                  <div
-                    className={`tab-with-close ${activeTab === trail.id ? "selected" : ""}`}
-                    key={trail.id}
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "notebook"}
+                    className={`editor-tab ${activeTab === "notebook" ? "selected" : ""}`}
+                    onClick={openNotebook}
                   >
+                    <VscodeIcon name="notebook" />
+                    {exploration.stage.title}
+                  </button>
+                  {openTabs.map((trail) => (
                     <button
+                      key={trail.id}
                       type="button"
                       role="tab"
                       aria-selected={activeTab === trail.id}
-                      className="editor-tab"
+                      className={`editor-tab ${activeTab === trail.id ? "selected" : ""}`}
                       onClick={() => openTrail(trail)}
                     >
                       <VscodeIcon name="git-branch" />
                       {trail.source.title}
                     </button>
-                    <button
-                      type="button"
-                      className="close-tab"
-                      aria-label={`Close ${trail.source.title} canvas`}
-                      onClick={() => {
-                        setTabs((previous) => ({
-                          ...previous,
-                          [contextKey]: (previous[contextKey] ?? []).filter(
-                            (id) => id !== trail.id,
-                          ),
-                        }));
-                        if (activeTab === trail.id) openNotebook();
-                      }}
-                    >
-                      <VscodeIcon name="close" />
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                {activeTrail ? (
+                  <button
+                    type="button"
+                    className="close-tab"
+                    aria-label={`Close ${activeTrail.source.title} canvas`}
+                    onClick={() => {
+                      setTabs((previous) => ({
+                        ...previous,
+                        [contextKey]: (previous[contextKey] ?? []).filter(
+                          (id) => id !== activeTrail.id,
+                        ),
+                      }));
+                      openNotebook();
+                    }}
+                  >
+                    <VscodeIcon name="close" />
+                  </button>
+                ) : null}
               </div>
               <div className="breadcrumbs">
                 <span>{workspace?.title ?? "Cube Play"}</span>
@@ -395,6 +419,7 @@ export function Workbench() {
                   addImage={() => setDialog("image")}
                   addFile={() => void state.importFile()}
                   addAnnotation={() => setDialog("annotation")}
+                  addPage={() => setDialog("page")}
                   openTrail={openTrail}
                   editText={editText}
                   reorderBlocks={state.reorderBlocks}
@@ -448,6 +473,7 @@ export function Workbench() {
               return state.createExploration(title, key);
             if (dialog === "stage") return state.createStage(title, key);
             if (dialog === "text") return state.addText(title, text, key);
+            if (dialog === "page") return state.addPage(title, text, key);
             if (dialog === "annotation")
               return state.addAnnotation(title, text, key);
             return state.importImage(text, key);

@@ -50,6 +50,9 @@ pub async fn asset(
                 return Err("corrupt_store");
             },
         },
+        "page" if data.len() <= crate::protocol::contract().text_bytes => Content::Page {
+            text: String::from_utf8(data).map_err(|_| "corrupt_store")?,
+        },
         "image" if data.len() <= crate::protocol::contract().image_bytes => Content::Image,
         "file" => super::files::content(&data, row.get("digest"))?,
         _ => return Err("corrupt_store"),
