@@ -4,6 +4,10 @@ use std::io::{BufRead, Read, Write};
 
 #[derive(Deserialize)]
 pub struct Contract {
+    pub pipeline_node_limit: usize,
+    pub pipeline_definition_bytes: usize,
+    pub pipeline_literal_bytes: usize,
+    pub pipeline_canvas_limit: u16,
     pub pipeline_limit: usize,
     pub pipeline_revision_limit: usize,
     pub pipeline_parameter_bytes: usize,

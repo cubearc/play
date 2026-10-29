@@ -4,7 +4,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use std::{
-    io::{self, BufReader, Read, Write},
+    io::{self, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command as Process, Stdio},
     sync::mpsc::{self, Receiver, RecvTimeoutError},
@@ -29,7 +29,7 @@ impl Drop for Active {
 }
 
 impl Active {
-    fn spawn(id: u32, worker: &Path, invocation: &Invocation) -> Result<Self> {
+    fn spawn(id: u32, worker: &Path, task: &crate::worker::Task) -> Result<Self> {
         let mut child = Process::new(worker)
             .arg("--worker")
             .env_clear()
@@ -49,23 +49,33 @@ impl Active {
             deadline: Instant::now() + Duration::from_millis(protocol::contract().run_ms),
         };
         thread::spawn(move || {
-            let result = (|| {
-                let mut bytes = Vec::new();
-                stdout
-                    .take(protocol::contract().frame_bytes as u64 + 1)
-                    .read_to_end(&mut bytes)
-                    .map_err(|_| "worker_failed")?;
-                if bytes.len() > protocol::contract().frame_bytes {
-                    return Err("output_limit");
+            let mut reader = BufReader::new(stdout);
+            let mut total = 0usize;
+            loop {
+                let frame = match protocol::read_frame(&mut reader) {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => break,
+                    Err(code) => {
+                        let _ = sender.send(Err(code));
+                        break;
+                    }
+                };
+                total = total.saturating_add(frame.len());
+                if total > protocol::contract().frame_bytes {
+                    let _ = sender.send(Err("output_limit"));
+                    break;
                 }
-                let text = std::str::from_utf8(&bytes).map_err(|_| "worker_failed")?;
-                cube_core::pipeline::json::parse(text).map_err(|_| "worker_failed")
-            })();
-            let _ = sender.send(result);
+                let parsed = std::str::from_utf8(&frame)
+                    .map_err(|_| "worker_failed")
+                    .and_then(|s| cube_core::pipeline::json::parse(s).map_err(|_| "worker_failed"));
+                if sender.send(parsed).is_err() {
+                    break;
+                }
+            }
         });
         // Closing stdin is the worker's complete input boundary, including EOF.
         let mut input = active.child.stdin.take().ok_or("worker_failed")?;
-        protocol::write_frame(&mut input, invocation)?;
+        protocol::write_frame(&mut input, task)?;
         drop(input);
         Ok(active)
     }
@@ -75,7 +85,14 @@ impl Active {
             return Err("deadline_exceeded");
         }
         if let Ok(result) = self.output.try_recv() {
-            self.result = Some(result?);
+            let result = result?;
+            if matches!(
+                result["type"].as_str(),
+                Some("node_started" | "node_finished")
+            ) {
+                return Ok(Some(result));
+            }
+            self.result = Some(result);
         }
         if let Some(status) = self.child.try_wait().map_err(|_| "worker_failed")? {
             if !status.success() {
@@ -166,7 +183,7 @@ fn launch(
     if active.is_some() {
         return reject(output, id, "busy");
     }
-    match Active::spawn(id, worker, &invocation) {
+    match Active::spawn(id, worker, &crate::worker::Task::Probe { invocation }) {
         Ok(run) => {
             let worker_pid = run.child.id();
             *active = Some(run);
@@ -224,9 +241,14 @@ fn dispatch(
                 Err(code) => return reject(output, id, code),
             };
             let identity = prepared.identity;
-            match Active::spawn(id, worker, &prepared.invocation) {
+            match Active::spawn(
+                id,
+                worker,
+                &crate::worker::Task::Pipeline {
+                    invocation: prepared.invocation,
+                },
+            ) {
                 Ok(mut child) => {
-                    manager.start_attempt(&identity)?;
                     child.durable = Some(identity.clone());
                     *active = Some(child);
                 }
@@ -370,7 +392,21 @@ pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
         if let Some(run) = &mut active {
             match run.poll() {
                 Ok(Some(response)) => {
-                    finish_active(&mut active, &mut store, response, &mut output)?
+                    if matches!(
+                        response["type"].as_str(),
+                        Some("node_started" | "node_finished")
+                    ) {
+                        if let Err(code) = progress(run, store.as_mut(), response) {
+                            finish_active(
+                                &mut active,
+                                &mut store,
+                                json!({"status":"failed","code":code}),
+                                &mut output,
+                            )?;
+                        }
+                    } else {
+                        finish_active(&mut active, &mut store, response, &mut output)?;
+                    }
                 }
                 Ok(None) => (),
                 Err(code) => finish_active(
@@ -407,4 +443,20 @@ fn finish_active(
         protocol::write_frame(output, &result)?;
     }
     Ok(())
+}
+
+fn progress(
+    run: &Active,
+    store: Option<&mut crate::workspace::Manager>,
+    event: Value,
+) -> Result<()> {
+    let mut identity = run.durable.clone().ok_or("worker_failed")?;
+    identity.node_id =
+        serde_json::from_value(event["nodeId"].clone()).map_err(|_| "worker_failed")?;
+    let manager = store.ok_or("workspace_closed")?;
+    match event["type"].as_str() {
+        Some("node_started") => manager.start_attempt(&identity),
+        Some("node_finished") => manager.finish_attempt(&identity, event),
+        _ => Err("worker_failed"),
+    }
 }

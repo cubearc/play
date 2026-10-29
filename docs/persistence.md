@@ -7,8 +7,8 @@
 
 Quit and reopen the Electron preview to restore the last successfully opened
 Workspace, Exploration and Stage. The Rust engine saves text/image/file/Page and annotation Blocks, Asset/Note
-identities and revisions, the complete Block order, saved reasoning, Trails, initial Pipeline definitions
-and accepted single-node Runs in private local storage.
+identities and revisions, the complete Block order, saved reasoning, Trails, versioned Pipeline definitions
+and accepted graph Runs in private local storage.
 
 Retained outputs reopen beside their cells and in Trail history. A Run accepted
 without output retention reopens with an explicit gap. Operation-selection

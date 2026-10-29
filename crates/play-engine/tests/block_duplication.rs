@@ -110,7 +110,7 @@ fn text_copy_forks_current_content_with_lineage_independent_edits_and_no_invente
     let old_run=manager.finish_run(&running.identity,json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&running.invocation.input)}})).unwrap();
     assert_eq!(old_run["result"]["outputs"]["output"], "First.");
     assert_eq!(
-        old_run["plan"]["inputs"]["input"]["assetId"],
+        old_run["plan"]["inputs"]["source"]["assetId"],
         source["asset"]["id"]
     );
     let nested = command(&mut manager, copy(&context, &edited, 1));

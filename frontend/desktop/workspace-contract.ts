@@ -113,15 +113,32 @@ export interface PipelineRef {
   id: string;
   revision: number;
 }
-export interface PipelineView extends Summary {
-  nodeId: string;
-  inputType: string;
+export type GraphSource =
+  | { kind: "input"; name: "source" }
+  | { kind: "output"; nodeId: string; port: string }
+  | { kind: "literal"; value: unknown };
+export interface GraphNode {
+  id: string;
+  operation: string;
+  operationVersion: number;
   parameters: Record<string, unknown>;
+  position: { x: number; y: number };
+  inputs: Record<string, GraphSource>;
+}
+export interface PipelineDefinition {
+  formatVersion: 3;
+  inputs: [{ name: "source"; semanticType: string }];
+  nodes: GraphNode[];
+  output: string;
+}
+export interface PipelineView extends Summary {
+  definition: PipelineDefinition;
+  outputNodeId: string;
+  inputType: string;
+  outputOperation: string;
+  operationVersion: number;
   revisions: number[];
   origin?: { pipelineId: string; revision: number };
-  input: string;
-  initialOperation: string;
-  operationVersion: number;
 }
 export interface TrailView {
   revision: number;
@@ -166,9 +183,7 @@ export type WorkspaceRequest =
       workspace_id: string;
       key: string;
       title: string;
-      operation: string;
-      operation_version: number;
-      parameters: Record<string, unknown>;
+      definition: PipelineDefinition;
     }
   | {
       kind: "revise_pipeline";
@@ -176,9 +191,7 @@ export type WorkspaceRequest =
       key: string;
       pipeline_id: string;
       expected_revision: number;
-      operation: string;
-      operation_version: number;
-      parameters: Record<string, unknown>;
+      definition: PipelineDefinition;
     }
   | {
       kind: "fork_pipeline";
@@ -355,6 +368,8 @@ export interface RunSummary {
 export interface RunDetail extends RunSummary {
   plan: {
     pipeline: { id: string; revision: number; definition: unknown };
+    executionOrder?: string[];
+    nodes?: { id: string; operation: { name: string } }[];
     contract: {
       operation: string;
       operation_version: number;
@@ -386,6 +401,7 @@ export interface RunDetail extends RunSummary {
     startedMs: number;
     finishedMs: number | null;
     status: RunStatus;
+    result?: RunDetail["result"];
   }[];
 }
 export interface RunPage {
@@ -454,22 +470,13 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
-    create_pipeline: [
-      "workspace_id",
-      "key",
-      "title",
-      "operation",
-      "operation_version",
-      "parameters",
-    ],
+    create_pipeline: ["workspace_id", "key", "title", "definition"],
     revise_pipeline: [
       "workspace_id",
       "key",
       "pipeline_id",
       "expected_revision",
-      "operation",
-      "operation_version",
-      "parameters",
+      "definition",
     ],
     fork_pipeline: ["workspace_id", "key", "pipeline_id", "revision", "title"],
     get_pipeline: ["workspace_id", "pipeline_id", "revision"],
@@ -548,6 +555,8 @@ export function request(value: unknown): WorkspaceRequest {
         if (!id(p.id) || !revision(p.revision))
           throw new Error("invalid_command");
       }
+    } else if (field === "definition") {
+      graphDefinition(value);
     } else if (field === "parameters") {
       object(value);
       if (!bytes(JSON.stringify(value), limits.pipeline_parameter_bytes))
@@ -688,4 +697,80 @@ export function contextOf(exploration: ExplorationView): Context {
     exploration_id: exploration.id,
     stage_id: exploration.stage.id,
   };
+}
+
+export function graphDefinition(value: unknown): PipelineDefinition {
+  const d = object(value);
+  keys(d, ["formatVersion", "inputs", "nodes", "output"]);
+  if (!bytes(JSON.stringify(d), limits.pipeline_definition_bytes))
+    throw new Error("input_limit");
+  if (
+    d.formatVersion !== 3 ||
+    !id(d.output) ||
+    !Array.isArray(d.inputs) ||
+    d.inputs.length !== 1 ||
+    !Array.isArray(d.nodes) ||
+    d.nodes.length < 1 ||
+    d.nodes.length > limits.pipeline_node_limit
+  )
+    throw new Error("invalid_command");
+  const input = object(d.inputs[0]);
+  keys(input, ["name", "semanticType"]);
+  if (
+    input.name !== "source" ||
+    !["text", "image.samples"].includes(String(input.semanticType))
+  )
+    throw new Error("invalid_command");
+  for (const item of d.nodes) {
+    const n = object(item);
+    keys(n, [
+      "id",
+      "operation",
+      "operationVersion",
+      "parameters",
+      "position",
+      "inputs",
+    ]);
+    if (
+      !id(n.id) ||
+      !bytes(n.operation, 128) ||
+      !n.operation ||
+      !revision(n.operationVersion) ||
+      Number(n.operationVersion) > 0xffffffff
+    )
+      throw new Error("invalid_command");
+    object(n.parameters);
+    if (!bytes(JSON.stringify(n.parameters), limits.pipeline_parameter_bytes))
+      throw new Error("input_limit");
+    const p = object(n.position);
+    keys(p, ["x", "y"]);
+    if (
+      !Object.values(p).every(
+        (v) =>
+          typeof v === "number" &&
+          Number.isInteger(v) &&
+          v >= 0 &&
+          v <= limits.pipeline_canvas_limit,
+      )
+    )
+      throw new Error("invalid_command");
+    for (const [port, v] of Object.entries(object(n.inputs))) {
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(port))
+        throw new Error("invalid_command");
+      const source = object(v);
+      if (source.kind === "input") {
+        keys(source, ["kind", "name"]);
+        if (source.name !== "source") throw new Error("invalid_command");
+      } else if (source.kind === "output") {
+        keys(source, ["kind", "nodeId", "port"]);
+        if (!id(source.nodeId) || !bytes(source.port, 64) || !source.port)
+          throw new Error("invalid_command");
+      } else if (source.kind === "literal") {
+        keys(source, ["kind", "value"]);
+        if (!bytes(JSON.stringify(source.value), limits.pipeline_literal_bytes))
+          throw new Error("input_limit");
+      } else throw new Error("invalid_command");
+    }
+  }
+  return d as unknown as PipelineDefinition;
 }

@@ -1,3 +1,6 @@
+#[path = "support/graph.rs"]
+mod graph;
+use graph::configuration;
 #[path = "support/native_schema.rs"]
 mod native_schema;
 use play_engine::workspace::{Command, Context, Manager, RunRequest};
@@ -46,9 +49,7 @@ fn a_run_pins_owned_inputs_contract_and_named_outputs_then_reopens_immutable_evi
     );
     assert_eq!(completed["plan"]["contract"]["operation"], "cipher.rot13");
     assert_eq!(
-        completed["plan"]["inputs"][completed["plan"]["contract"]["inputs"][0]["name"]
-            .as_str()
-            .unwrap()]["assetId"],
+        completed["plan"]["inputs"]["source"]["assetId"],
         view["stage"]["blocks"][0]["asset"]["id"]
     );
     assert_eq!(completed["attempts"].as_array().unwrap().len(), 1);
@@ -159,7 +160,7 @@ fn explicitly_saved_pipeline_freezes_a_reusable_definition_and_real_bytes_contra
     parameters["max_output_bytes"] = json!(16384);
     let pipeline = command(
         &mut manager,
-        json!({"kind":"create_pipeline","workspace_id":request.context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","operation":request.operation,"operation_version":2,"parameters":parameters}),
+        json!({"kind":"create_pipeline","workspace_id":request.context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","definition":configuration(&request.operation,2,json!(parameters))}),
     );
     command(
         &mut manager,
@@ -176,7 +177,10 @@ fn explicitly_saved_pipeline_freezes_a_reusable_definition_and_real_bytes_contra
         .unwrap();
     assert_eq!(run["pipelineId"], request.pipeline_id.to_string());
     assert_eq!(run["plan"]["contract"]["inputs"][0]["name"], "source");
-    assert_eq!(run["plan"]["inputs"]["input"]["literal"], json!([]));
+    assert_eq!(
+        run["plan"]["pipeline"]["definition"]["nodes"][0]["inputs"]["input"]["value"],
+        json!([])
+    );
     assert_eq!(run["result"]["outputs"]["output"]["base64"], "QQD/");
     request.key = Uuid::new_v4();
     let second = manager.prepare_run(&request).unwrap();

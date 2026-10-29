@@ -263,6 +263,13 @@ impl Manager {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
         self.runtime.block_on(runs::started(store, run))
     }
+    pub fn finish_attempt(&mut self, run: &RunIdentity, result: Value) -> Result<()> {
+        self.runtime.block_on(runs::finish_attempt(
+            self.active.as_mut().ok_or("workspace_closed")?,
+            run,
+            result,
+        ))
+    }
     pub fn finish_run(&mut self, run: &RunIdentity, result: Value) -> Result<Value> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
         self.runtime

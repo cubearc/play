@@ -10,6 +10,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
+import { singleGraph } from "./graph-fixture.js";
 import {
   type Context,
   contextOf,
@@ -108,7 +109,7 @@ test("native image adapter pins authorized image input and preserves exact Core 
     assert.equal(run.status, "completed");
     assert.deepEqual(run.result?.outputs, { output: { base64: "FFAy" } });
     assert.deepEqual(run.plan.inputs, {
-      input: {
+      source: {
         assetId: t.source.id,
         revision: 1,
         semanticType: "image.samples",
@@ -466,7 +467,7 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       );
       assert.equal(copiedRun.status, "completed");
       assert.deepEqual(copiedRun.result?.outputs, { output: "The key." });
-      const input = copiedRun.plan.inputs.input;
+      const input = copiedRun.plan.inputs.source;
       assert.ok(input && "assetId" in input);
       assert.equal(input.assetId, copied.asset.id);
     }
@@ -783,7 +784,7 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(failed.attempts[0]?.status, "failed");
     // Keep the control cell unchanged so Quit is tested against active work.
     const loop = await runFixture(engine, "+[]");
-    const running = await engine.startRun(loop);
+    const running = await actualRunning(() => engine.startRun(loop));
     assert.equal(running.status, "running");
     const cancelled = await engine.cancelRun({
       context: loop.context,
@@ -792,7 +793,8 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
     assert.equal(cancelled.status, "cancelled");
     assert.equal(cancelled.attempts[0]?.status, "cancelled");
     assert.deepEqual(await engine.startRun(loop), cancelled);
-    const shutdown = await engine.startRun({ ...loop, key: randomUUID() });
+    const shutdownIntent = { ...loop, key: randomUUID() };
+    const shutdown = await actualRunning(() => engine.startRun(shutdownIntent));
     assert.equal(shutdown.status, "running");
     await engine.close();
     engine = await Engine.connect(binary, worker, root);
@@ -864,7 +866,21 @@ test("killing the real engine recovers a running node as interrupted without inv
       command: { kind: "open", workspace_id: request.context.workspace_id },
     });
     const started = await send({ type: "start_run", id: 3, request });
-    assert.equal(started.data.status, "running");
+    let queryId = 4;
+    await actualRunning(
+      async () =>
+        (
+          await send({
+            type: "workspace",
+            id: queryId++,
+            command: {
+              kind: "run_detail",
+              context: request.context,
+              run_id: started.data.id,
+            },
+          })
+        ).data,
+    );
     const exit = once(owner, "exit");
     owner.kill("SIGKILL");
     await exit;
@@ -915,7 +931,7 @@ test("editing an input during a real worker Run preserves its plan and rejects s
     })) as ExplorationView;
     const block = opened.stage.blocks.find((block) => block.kind === "asset");
     assert.ok(block);
-    const running = await engine.startRun(request);
+    const running = await actualRunning(() => engine.startRun(request));
     assert.equal(running.status, "running");
     const mutation = {
       kind: "revise_text",
@@ -1002,9 +1018,7 @@ async function saveOperation(
     workspace_id: context.workspace_id,
     key: randomUUID(),
     title: operation.name,
-    operation: id,
-    operation_version: operation.operation_version,
-    parameters: operation.parameters,
+    definition: singleGraph(operation),
   })) as { pipelineId: string; revision: number };
   await engine.workspace({
     kind: "save_trail",
@@ -1016,4 +1030,22 @@ async function saveOperation(
     pipeline: { id: pipeline.pipelineId, revision: pipeline.revision },
   });
   return { id: pipeline.pipelineId, revision: pipeline.revision };
+}
+
+async function actualRunning(
+  read: () => Promise<RunDetail>,
+): Promise<RunDetail> {
+  const deadline = Date.now() + contract.run_ms;
+  let run = await read();
+  while (run.status === "queued" && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10));
+    run = await read();
+  }
+  assert.equal(
+    run.status,
+    "running",
+    "a worker must report a real started node before testing active lifecycle behavior",
+  );
+  assert.equal(run.attempts[0]?.status, "running");
+  return run;
 }

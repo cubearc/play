@@ -3,7 +3,7 @@ use super::{
     model::{Content, RunRequest},
     queries, storage,
 };
-use crate::{Result, protocol::Invocation};
+use crate::{Result, worker::PipelineInvocation};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use sqlx::{Row, SqliteConnection};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 pub struct Plan {
     pub value: Value,
-    pub invocation: Invocation,
+    pub invocation: PipelineInvocation,
     pub pipeline_id: String,
     pub pipeline_revision: i64,
     pub node_id: Uuid,
@@ -39,8 +39,10 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         request.pipeline_revision,
     )
     .await?;
-    if definition["nodes"][0]["operation"] != request.operation
-        || definition["nodes"][0]["operation_version"] != request.operation_version
+    let graph = crate::graph::Definition::parse(definition.clone())?;
+    let target = graph.node(graph.output)?;
+    if target.operation != request.operation
+        || target.operation_version != request.operation_version
     {
         return Err("pipeline_mismatch");
     }
@@ -60,59 +62,33 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     )
     .await?;
     let (text, semantic_type) = match asset.content {
-        Content::Text { text } if request.operation != "image.pixels.read" => (text, "text"),
-        Content::Image if request.operation == "image.pixels.read" => {
+        Content::Text { text } if graph.inputs[0].semantic_type == "text" => (text, "text"),
+        Content::Image if graph.inputs[0].semantic_type == "image.samples" => {
             let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset_id).bind(asset_revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
             (STANDARD.encode(bytes), "image.samples")
         }
         _ => return Err("invalid_asset_type"),
     };
-    let invocation = Invocation {
-        parameters: definition["nodes"][0]["parameters"].clone(),
-        operation: request.operation.clone(),
-        operation_version: request.operation_version,
+    let schedule = graph.schedule()?;
+    let mut selected = graph.clone();
+    selected.nodes.retain(|n| schedule.contains(&n.id));
+    let invocation = PipelineInvocation {
+        definition: selected,
         input: text,
     };
-    crate::worker::validate(&invocation)?;
-    let descriptor = cube_core::operations::require(&invocation.operation)
-        .map_err(|_| "unsupported_operation")?;
-    let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
-    if contract.policy.private_input
-        || contract.policy.private_output
-        || !contract.policy.sensitive_parameters.is_empty()
-    {
-        return Err("retention_policy_unavailable");
-    }
-    contract
-        .validate_inputs(&crate::worker::named_inputs(&invocation)?)
-        .map_err(|_| "contract_mismatch")?;
-    let parameters = invocation.parameters.clone();
-    contract
-        .validate_parameters(&parameters)
-        .map_err(|_| "contract_mismatch")?;
-    let name = descriptor
-        .metadata()
-        .map_or(descriptor.command, |metadata| metadata.canonical_name);
+    crate::worker::validate_pipeline(&invocation)?;
+    let contract = target.contract()?;
     let pipeline_id = request.pipeline_id.to_string();
     let pipeline_revision = request.pipeline_revision;
-    let node_id = Uuid::parse_str(
-        definition["nodes"][0]["id"]
-            .as_str()
-            .ok_or("corrupt_store")?,
-    )
-    .map_err(|_| "corrupt_store")?;
-    let input_port = contract
-        .inputs
+    let node_id = *schedule.first().ok_or("invalid_pipeline")?;
+    let input_port = "source".to_owned();
+    let inputs = json!({"source":{"assetId":asset_id,"revision":asset_revision,"semanticType":semantic_type}});
+    let nodes = schedule
         .iter()
-        .find(|port| port.semantic_type == semantic_type)
-        .ok_or("contract_mismatch")?
-        .name
-        .clone();
-    let mut inputs = json!({input_port.clone():{"assetId":asset_id,"revision":asset_revision,"semanticType":semantic_type}});
-    if invocation.operation == "esolang.brainfuck.execute" {
-        inputs["input"] = json!({"literal":[]});
-    }
-    let value = json!({"formatVersion":1,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[node_id],"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":1,"contract":contract,"contractDigest":cube_core::hashing::sha256(serde_json::to_string(&contract).map_err(|_| "invalid_state")?.as_bytes()),"operation":{"operation":invocation.operation,"operationVersion":invocation.operation_version,"name":name},"inputs":inputs,"parameters":parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+        .map(|id| node_plan(graph.node(*id)?))
+        .collect::<Result<Vec<_>>>()?;
+    let target_plan = node_plan(target)?;
+    let value = json!({"formatVersion":2,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[graph.output],"executionOrder":schedule,"nodes":nodes,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":2,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }
@@ -126,4 +102,13 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         asset_revision,
         input_port,
     })
+}
+
+pub fn node_plan(node: &crate::graph::Node) -> Result<Value> {
+    let d = cube_core::operations::require(&node.operation).map_err(|_| "unsupported_operation")?;
+    let c = node.contract()?;
+    let name = d.metadata().map_or(d.command, |m| m.canonical_name);
+    Ok(
+        json!({"id":node.id,"operation":{"operation":node.operation,"operationVersion":node.operation_version,"name":name},"contract":c,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&c).map_err(|_|"invalid_state")?),"parameters":node.parameters,"inputs":node.inputs}),
+    )
 }

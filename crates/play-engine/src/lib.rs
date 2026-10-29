@@ -1,3 +1,4 @@
+pub mod graph;
 pub mod native;
 pub mod protocol;
 pub mod session;

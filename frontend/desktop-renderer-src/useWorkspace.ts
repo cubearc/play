@@ -19,6 +19,14 @@ import {
 import type { PipelineDraft, PipelineMode } from "./PipelineEditor";
 
 const messages: Record<string, string> = {
+  pipeline_cycle:
+    "This connection creates a cycle. Disconnect a dependency before saving the Pipeline.",
+  invalid_connection:
+    "Choose an existing node and a compatible named output for every input.",
+  invalid_pipeline:
+    "Review node identities, parameters and positions before saving the Pipeline.",
+  contract_mismatch:
+    "The connection, value or operation version does not match the installed Core contract. Review the selected node's inputs.",
   pipeline_binding_conflict:
     "The Pipeline was saved, but this Trail changed. Cancel this editor, reopen the Trail and choose the saved definition through Edit Trail.",
   invalid_parameters:
@@ -28,7 +36,7 @@ const messages: Record<string, string> = {
   pipeline_mismatch:
     "The requested operation differs from the selected Pipeline revision. Save and select a revision before running it.",
   unsupported_pipeline:
-    "This historical Pipeline definition is evidence only. Choose a current saved revision.",
+    "This Pipeline definition is unsupported. Review its nodes, source type and selected output.",
   result_read_only:
     "Saved results preserve their original output. Duplicate this block to edit an alternative.",
   result_not_available:
@@ -660,9 +668,7 @@ export function useWorkspace() {
       const configuration = {
         workspace_id: trail.workspaceId,
         key: draft.key,
-        operation: draft.operation,
-        operation_version: draft.operationVersion,
-        parameters: draft.parameters,
+        definition: draft.definition,
       };
       const result =
         mode === "create"

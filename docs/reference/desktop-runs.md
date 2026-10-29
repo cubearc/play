@@ -2,9 +2,11 @@
 
 Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
-The development executor supports one node using the installed native ROT13,
-Brainfuck or image pixel-reading adapter. General DAG planning, joins, parallelism, executor output reuse and
-contextual CLI execution are separate deliveries.
+The executor plans the selected output node and its ancestors in a typed graph,
+using native ROT13, Brainfuck or image pixel-reading adapters. One sandboxed worker
+executes the plan sequentially. Extra Asset slots, explicit byte-representation
+conversions, parallelism, executor output reuse and contextual CLI execution are
+separate deliveries.
 
 ## Accepted invocation
 
@@ -23,9 +25,9 @@ state is resolved in the engine, independently of disabled UI controls.
 An accepted Run pins:
 
 - Its engine-generated UUID, owning context, caller and intent digest.
-- The immutable Pipeline definition/revision, stable node ID and target set.
-- Named input Asset revisions and any adapter-supplied literals. Brainfuck's
-  input byte stream is explicitly empty in this development adapter. Image reads
+- The immutable Pipeline definition/revision, selected output and ordered ancestor set.
+- The named source Asset revision and explicit literals/connections. Brainfuck's
+  input stream is a literal byte array, empty by default. Image reads
   bind `image.samples` from the exact authorized PNG revision, with the coordinates
   and palette-expansion choice frozen in the selected definition.
 - Core operation/schema/adapter identity, complete contract and contract digest.
@@ -49,8 +51,10 @@ rewrite its evidence. Its existing Run stays supervised and cancellable. Matchin
 accepted-intent retries and scoped Run history remain available; new work requires
 restoring the Block first.
 
-The engine commits `queued` before spawning the worker, then records an actual
-node attempt and `running`. It owns supervision independently of React and
+The engine commits `queued` before spawning the worker, then records `running` and each actual
+node attempt on worker progress. Completed node results commit before the next
+node can start. A failed/cancelled worker preserves prior completed attempts;
+unstarted consumers have no fabricated attempt. It owns supervision independently of React and
 commits terminal evidence before a client can observe success.
 
 | State | Meaning |
@@ -98,10 +102,11 @@ command text or paths. There is no automatic terminal or remote capture.
 Retained outputs use Core's named ports and representations: ROT13's `output`
 is text; Brainfuck's `output` is the Core bytes object with Base64 representation.
 The engine validates that payload against Core before atomically committing it
-with Run/attempt terminal state. The UI labels bytes as Base64 instead of guessing
+with the actual node attempt terminal state. The final result belongs to the
+selected output node; the evidence view also shows retained intermediate outputs. The UI labels bytes as Base64 instead of guessing
 a text conversion.
 
-Without retention, the completed record has `output_not_retained` as an explicit
+Without retention, every completed node and the Run record has `output_not_retained` as an explicit
 replay gap, and contains neither output bytes nor their fingerprint. It cannot
 silently recover discarded output. These records are private local evidence,
 not Candidates, Solutions, official Challenge validation or a general replay
@@ -114,7 +119,7 @@ retained output to create its own notebook Asset and Trail. The Block keeps a
 Run/actual-attempt/port origin; opening its source selects that exact historical
 Run even after the working input changes. The immutable Run remains unchanged.
 
-Text results can be bound to a new single-node text execution. That Run still
+Text results can bind another saved Pipeline through their own Trail. That Run still
 uses `reusePolicy: none` and records its own actual attempt, with the saved result
 Asset as input. Byte results preserve exact bytes in an inspection-only File
 representation. Saving a Block never fabricates an execution, recovers an
@@ -130,11 +135,14 @@ panel.
 
 The shared [protocol limits](https://github.com/cubearc/play/blob/main/desktop/protocol.json)
 allow 64 Runs per Exploration and 128 per Workspace. Completed evidence is never
-automatically evicted to admit more work. Run snapshots, results and pending
+automatically evicted to admit more work. Run snapshots, per-node results and pending
 reservations count toward the 4 MiB Exploration payload ceiling; SQLite retains
 its 16 MiB page ceiling. Admission reserves 128 KiB in the same transaction for
-bounded terminal output, plus a 16 KiB plan allowance. Finalization releases that
-reservation. Storage failure never becomes a successful Run.
+bounded terminal output, plus a 16 KiB plan allowance. Committed node results consume that reservation; finalization releases its
+remainder. The aggregate raw node outputs are bounded by the existing
+16384-byte Run output ceiling. Wall time (2 seconds), CPU (1 second) and VM growth
+(128 MiB) apply to the one worker for the whole Run; adding nodes never multiplies
+those budgets. Storage failure never becomes a successful Run.
 
 The [native storage reference](desktop-storage.md) owns schema/upgrade and
 filesystem rules. The [IPC reference](desktop-runtime.md) owns sender authority,

@@ -196,3 +196,12 @@ schema-8 store and signed Core Run fixture prove schema-9 upgrades preserve
 historical evidence. Worker tests exercise saved pixel coordinates and Brainfuck
 limits. The real Electron journey edits hypotheses and definitions, reuses a
 chosen older revision, checks accessibility and preserves the preceding result.
+
+Typed graph checks retain connections, positions, output selection and exact
+revisions; reject cycles, invalid ports, versions and implicit representation
+coercions; execute real Core ancestor chains; preserve partial failure evidence;
+and enforce per-node retention. A real schema-9 database fixture preserves its
+finished Run unchanged during schema-10 migration. The Electron graph journey
+adds/connects nodes, moves one by keyboard, executes both under the real worker
+policy, inspects their distinct results, promotes the output node and reopens the
+same evidence after restart. axe-core runs with the existing rules enabled.

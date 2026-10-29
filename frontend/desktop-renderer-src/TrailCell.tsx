@@ -45,7 +45,9 @@ export function TrailCell({
         </div>
         <div className="cell-controls">
           <strong className="operation-name" title={operation?.operation}>
-            {operation?.name ?? "Unavailable operation"}
+            {pipeline.definition.nodes.length > 1
+              ? `${pipeline.definition.nodes.length} nodes → ${operation?.name ?? "Unavailable operation"}`
+              : (operation?.name ?? "Unavailable operation")}
           </strong>
           <VscodeButton
             icon="play"
@@ -74,7 +76,7 @@ export function TrailCell({
           Keep result in private history
         </VscodeCheckbox>
         <p className="binding">
-          <span className="port-dot" /> {pipeline?.input} ← {trail.source.title}{" "}
+          <span className="port-dot" /> source ← {trail.source.title}{" "}
           <span className="muted">@ r{trail.source.revision}</span>
         </p>
         <p className="cell-description">
@@ -84,7 +86,13 @@ export function TrailCell({
         {operation && trail.source.content.kind === "image" ? (
           <p className="binding">
             Saved parameters:{" "}
-            <code>{JSON.stringify(pipeline?.parameters)}</code>
+            <code>
+              {JSON.stringify(
+                pipeline.definition.nodes.find(
+                  (n) => n.id === pipeline.outputNodeId,
+                )?.parameters,
+              )}
+            </code>
           </p>
         ) : null}
       </div>

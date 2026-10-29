@@ -1,3 +1,6 @@
+#[path = "support/graph.rs"]
+mod graph;
+use graph::configuration;
 #[path = "support/native_schema.rs"]
 mod native_schema;
 use play_engine::workspace::{Context, Manager, RunRequest};
@@ -58,7 +61,7 @@ fn complete(
         parameters["max_output_bytes"] = json!(16384);
         let pipeline = command(
             manager,
-            json!({"kind":"create_pipeline","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","operation":operation,"operation_version":2,"parameters":parameters}),
+            json!({"kind":"create_pipeline","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","definition":configuration(operation,2,json!(parameters))}),
         );
         command(
             manager,

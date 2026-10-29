@@ -11,6 +11,11 @@ export interface Invocation {
 }
 
 export interface Operation {
+  contract: {
+    inputs: { name: string; semantic_type: string; schema: unknown }[];
+    outputs: { name: string; semantic_type: string; schema: unknown }[];
+    parameters: unknown;
+  };
   operation: string;
   name: string;
   operation_version: number;

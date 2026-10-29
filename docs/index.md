@@ -16,8 +16,8 @@ are not available through this source workflow.
 | Understand unavailable official/terminal journeys | [Challenges](challenges.md), [Candidates and Solutions](solutions.md), [terminal](terminal.md) |
 | Develop and verify the native app | [Development](development.md), [Contributing](../CONTRIBUTING.md) |
 
-The current executor supports single-node ROT13 and Brainfuck Runs. General graph
-editing/planning, parallel branches, contextual terminal execution and Cloud
+The executor supports bounded typed graphs using ROT13, Brainfuck and image pixel
+reads. Parallel branches, additional Asset bindings, contextual terminal execution and Cloud
 participation are tracked in the [refactor milestone](https://github.com/cubearc/play/milestone/3).
 Catalog discovery alone does not make an operation executable in this preview.
 

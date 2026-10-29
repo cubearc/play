@@ -3,76 +3,13 @@ use super::{
     mutations, storage,
 };
 use crate::{Result, worker};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Row, SqliteConnection};
 use uuid::Uuid;
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct Input {
-    name: String,
-    semantic_type: String,
-}
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Node {
-    id: Uuid,
-    operation: String,
-    operation_version: u32,
-    input: String,
-    parameters: Value,
-}
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct Definition {
-    format_version: u32,
-    inputs: [Input; 1],
-    nodes: [Node; 1],
-}
-
-fn definition(
-    node_id: Uuid,
-    operation: &str,
-    version: u32,
-    parameters: &Value,
-) -> Result<Definition> {
-    if parameters.to_string().len() > crate::protocol::contract().pipeline_parameter_bytes {
-        return Err("input_limit");
-    }
-    worker::validate_configuration(operation, version, parameters)?;
-    let descriptor =
-        cube_core::operations::require(operation).map_err(|_| "unsupported_operation")?;
-    Ok(Definition {
-        format_version: 2,
-        inputs: [Input {
-            name: "source".into(),
-            semantic_type: descriptor.input_type.into(),
-        }],
-        nodes: [Node {
-            id: node_id,
-            operation: operation.into(),
-            operation_version: version,
-            input: "source".into(),
-            parameters: parameters.clone(),
-        }],
-    })
-}
+use crate::graph::Definition;
 fn parse(text: &str) -> Result<Definition> {
-    let d: Definition = serde_json::from_str(text).map_err(|_| "unsupported_pipeline")?;
-    if d.format_version != 2 || d.inputs[0].name != "source" || d.nodes[0].input != "source" {
-        return Err("unsupported_pipeline");
-    }
-    let checked = definition(
-        d.nodes[0].id,
-        &d.nodes[0].operation,
-        d.nodes[0].operation_version,
-        &d.nodes[0].parameters,
-    )?;
-    if d.inputs[0].semantic_type != checked.inputs[0].semantic_type {
-        return Err("contract_mismatch");
-    }
-    Ok(d)
+    Definition::parse(serde_json::from_str(text).map_err(|_| "unsupported_pipeline")?)
 }
 async fn stored(c: &mut SqliteConnection, w: &str, id: &str, rev: i64) -> Result<String> {
     sqlx::query_scalar("SELECT definition FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND revision=?").bind(w).bind(id).bind(rev).fetch_optional(c).await.map_err(storage::failure)?.ok_or("not_found")
@@ -93,18 +30,18 @@ pub async fn read(c: &mut SqliteConnection, w: &str, id: &str, rev: i64) -> Resu
         .fetch_one(&mut *c)
         .await
         .map_err(storage::failure)?;
-    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=2 ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
+    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=3 ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
     let origin=sqlx::query("SELECT source_pipeline_id,source_revision FROM pipeline_origins WHERE workspace_id=? AND pipeline_id=?").bind(w).bind(id).fetch_optional(c).await.map_err(storage::failure)?.map(|r|PipelineOrigin{pipeline_id:r.get(0),revision:r.get(1)});
+    let node = d.node(d.output)?;
     Ok(Pipeline {
+        definition: serde_json::to_value(&d).map_err(|_| "invalid_state")?,
+        output_node_id: d.output.to_string(),
         id: id.into(),
         title,
         revision: rev,
-        input: "source".into(),
-        initial_operation: d.nodes[0].operation.clone(),
-        operation_version: d.nodes[0].operation_version,
-        node_id: d.nodes[0].id.to_string(),
+        output_operation: node.operation.clone(),
+        operation_version: node.operation_version,
         input_type: d.inputs[0].semantic_type.clone(),
-        parameters: d.nodes[0].parameters.clone(),
         revisions,
         origin,
     })
@@ -139,26 +76,16 @@ pub async fn create(
     c: &mut SqliteConnection,
     w: &str,
     title: &str,
-    op: &str,
-    version: u32,
-    params: &Value,
+    value: &Value,
 ) -> Result<Value> {
-    insert(
-        c,
-        w,
-        title,
-        &definition(Uuid::new_v4(), op, version, params)?,
-    )
-    .await
+    insert(c, w, title, &Definition::parse(value.clone())?).await
 }
 pub async fn revise(
     c: &mut SqliteConnection,
     w: &str,
     id: &str,
     expected: i64,
-    op: &str,
-    version: u32,
-    params: &Value,
+    value: &Value,
 ) -> Result<Value> {
     let head: i64 =
         sqlx::query_scalar("SELECT current_revision FROM pipelines WHERE workspace_id=? AND id=?")
@@ -172,15 +99,15 @@ pub async fn revise(
         return Err("state_conflict");
     }
     let old = stored(c, w, id, head).await?;
-    let old_definition = parse(&old)?;
-    let next = definition(old_definition.nodes[0].id, op, version, params)?;
+    let next = Definition::parse(value.clone())?;
     let next = serde_json::to_string(&next).map_err(|_| "invalid_state")?;
     if serde_json::from_str::<Value>(&old).map_err(|_| "corrupt_store")?
         == serde_json::from_str::<Value>(&next).map_err(|_| "invalid_state")?
     {
         return Ok(json!({"pipelineId":id,"revision":head}));
     }
-    if head >= crate::protocol::contract().pipeline_revision_limit as i64 {
+    let count:i64=sqlx::query_scalar("SELECT count(*) FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=3").bind(w).bind(id).fetch_one(&mut *c).await.map_err(storage::failure)?;
+    if count >= crate::protocol::contract().pipeline_revision_limit as i64 {
         return Err("storage_quota");
     }
     sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,?,?)")
@@ -228,9 +155,15 @@ pub async fn default_for(
     let rows=sqlx::query("SELECT pipeline_id,revision,definition FROM pipeline_revisions WHERE workspace_id=? ORDER BY rowid").bind(w).fetch_all(&mut *c).await.map_err(storage::failure)?;
     for row in rows {
         if let Ok(d) = parse(row.get("definition"))
-            && d.nodes[0].operation == operation
-            && d.nodes[0].operation_version == version
-            && d.nodes[0].parameters == params
+            && d.nodes.len() == 1
+            && serde_json::to_value(&d).map_err(|_| "invalid_state")?
+                == serde_json::to_value(Definition::single(
+                    d.nodes[0].id,
+                    operation,
+                    version,
+                    params.clone(),
+                )?)
+                .map_err(|_| "invalid_state")?
         {
             return Ok(PipelineRef {
                 id: Uuid::parse_str(row.get("pipeline_id")).map_err(|_| "corrupt_store")?,
@@ -242,7 +175,13 @@ pub async fn default_for(
     let name = descriptor
         .metadata()
         .map_or(descriptor.command, |m| m.canonical_name);
-    let result = create(c, w, name, operation, version, &params).await?;
+    let result = insert(
+        c,
+        w,
+        name,
+        &Definition::single(Uuid::new_v4(), operation, version, params)?,
+    )
+    .await?;
     Ok(PipelineRef {
         id: serde_json::from_value(result["pipelineId"].clone()).map_err(|_| "invalid_state")?,
         revision: 1,
@@ -291,7 +230,7 @@ pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
     for row in rows {
         let raw: Value =
             serde_json::from_str(row.get("definition")).map_err(|_| "corrupt_store")?;
-        if raw["formatVersion"] == 2 {
+        if matches!(raw["formatVersion"].as_u64(), Some(2 | 3)) {
             continue;
         }
         if raw["formatVersion"] != 1 || raw["nodes"].as_array().is_none_or(|n| n.len() != 1) {
@@ -302,7 +241,7 @@ pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
         let rev: i64 = row.get("current_revision");
         let node = &raw["nodes"][0];
         let op = node["operation"].as_str().ok_or("corrupt_store")?;
-        let d = definition(
+        let d = historical_definition(
             serde_json::from_value(node["id"].clone()).map_err(|_| "corrupt_store")?,
             op,
             serde_json::from_value(node["operation_version"].clone())
@@ -325,6 +264,55 @@ pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
             .await
             .map_err(storage::failure)?;
         sqlx::query("UPDATE trails SET pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND pipeline_id=? AND pipeline_revision=?").bind(rev+1).bind(w).bind(id).bind(rev).execute(&mut *c).await.map_err(storage::failure)?;
+    }
+    Ok(())
+}
+
+fn historical_definition(id: Uuid, op: &str, version: u32, params: &Value) -> Result<Value> {
+    let d = Definition::single(id, op, version, params.clone())?;
+    Ok(
+        json!({"formatVersion":2,"inputs":d.inputs,"nodes":[{"id":id,"operation":op,"operation_version":version,"input":"source","parameters":params}]}),
+    )
+}
+pub async fn upgrade_graphs(c: &mut SqliteConnection) -> Result<()> {
+    let rows=sqlx::query("SELECT workspace_id,pipeline_id,revision,definition FROM pipeline_revisions WHERE json_extract(definition,'$.formatVersion')=2 ORDER BY workspace_id,pipeline_id,revision").fetch_all(&mut *c).await.map_err(storage::failure)?;
+    for r in rows {
+        let raw: Value = serde_json::from_str(r.get("definition")).map_err(|_| "corrupt_store")?;
+        let n = &raw["nodes"][0];
+        let d = Definition::single(
+            serde_json::from_value(n["id"].clone()).map_err(|_| "corrupt_store")?,
+            n["operation"].as_str().ok_or("corrupt_store")?,
+            serde_json::from_value(n["operation_version"].clone()).map_err(|_| "corrupt_store")?,
+            n["parameters"].clone(),
+        )?;
+        let w: String = r.get("workspace_id");
+        let id: String = r.get("pipeline_id");
+        let rev: i64 = r.get("revision");
+        let head: i64 = sqlx::query_scalar(
+            "SELECT current_revision FROM pipelines WHERE workspace_id=? AND id=?",
+        )
+        .bind(&w)
+        .bind(&id)
+        .fetch_one(&mut *c)
+        .await
+        .map_err(storage::failure)?;
+        let next = head + 1;
+        sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,?,?)")
+            .bind(&w)
+            .bind(&id)
+            .bind(next)
+            .bind(serde_json::to_string(&d).map_err(|_| "invalid_state")?)
+            .execute(&mut *c)
+            .await
+            .map_err(storage::failure)?;
+        sqlx::query("UPDATE pipelines SET current_revision=? WHERE workspace_id=? AND id=?")
+            .bind(next)
+            .bind(&w)
+            .bind(&id)
+            .execute(&mut *c)
+            .await
+            .map_err(storage::failure)?;
+        sqlx::query("UPDATE trails SET pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND pipeline_id=? AND pipeline_revision=?").bind(next).bind(&w).bind(&id).bind(rev).execute(&mut *c).await.map_err(storage::failure)?;
     }
     Ok(())
 }

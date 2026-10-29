@@ -36,18 +36,14 @@ pub enum Command {
         workspace_id: Uuid,
         key: Uuid,
         title: String,
-        operation: String,
-        operation_version: u32,
-        parameters: serde_json::Value,
+        definition: serde_json::Value,
     },
     RevisePipeline {
         workspace_id: Uuid,
         key: Uuid,
         pipeline_id: Uuid,
         expected_revision: i64,
-        operation: String,
-        operation_version: u32,
-        parameters: serde_json::Value,
+        definition: serde_json::Value,
     },
     ForkPipeline {
         workspace_id: Uuid,
@@ -368,17 +364,16 @@ pub struct PipelineOrigin {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pipeline {
-    pub node_id: String,
+    pub definition: serde_json::Value,
+    pub output_node_id: String,
     pub input_type: String,
-    pub parameters: serde_json::Value,
     pub revisions: Vec<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<PipelineOrigin>,
     pub id: String,
     pub title: String,
     pub revision: i64,
-    pub input: String,
-    pub initial_operation: String,
+    pub output_operation: String,
     pub operation_version: u32,
 }
 

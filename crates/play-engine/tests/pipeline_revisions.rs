@@ -1,3 +1,6 @@
+#[path = "support/graph.rs"]
+mod graph;
+use graph::configuration;
 use play_engine::workspace::{Context, Manager};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -40,7 +43,7 @@ fn text(m: &mut Manager, c: &Context, title: &str, text: &str) -> Value {
 fn create(m: &mut Manager, c: &Context) -> Value {
     call(
         m,
-        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Shared ROT13","operation":"cipher.rot13","operation_version":1,"parameters":{}}),
+        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Shared ROT13","definition":configuration("cipher.rot13",1,json!({}))}),
     )
 }
 fn save(m: &mut Manager, c: &Context, t: &Value, p: &Value, h: &str) -> Value {
@@ -51,7 +54,7 @@ fn save(m: &mut Manager, c: &Context, t: &Value, p: &Value, h: &str) -> Value {
 }
 fn run(m: &mut Manager, c: &Context, t: &Value) -> Value {
     let p = &t["pipeline"];
-    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":p["initialOperation"],"operation_version":p["operationVersion"],"retain_output":true})).unwrap();
+    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":p["outputOperation"],"operation_version":p["operationVersion"],"retain_output":true})).unwrap();
     let prepared = m.prepare_run(&request).unwrap();
     m.start_attempt(&prepared.identity).unwrap();
     let text = cube_core::ciphers::rot13(&prepared.invocation.input);
@@ -96,7 +99,7 @@ fn trails_share_saved_revisions_without_sharing_hypotheses_or_accepted_evidence(
     assert_eq!(accepted["result"]["outputs"]["output"], "The key.");
     let revision = call(
         &mut m,
-        json!({"kind":"revise_pipeline","workspace_id":a.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":1,"operation":"cipher.rot13","operation_version":1,"parameters":{}}),
+        json!({"kind":"revise_pipeline","workspace_id":a.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":1,"definition":configuration("cipher.rot13",1,json!({}))}),
     );
     assert_eq!(revision["revision"], 1, "identical definitions are a no-op");
     let mut limits =
@@ -104,7 +107,7 @@ fn trails_share_saved_revisions_without_sharing_hypotheses_or_accepted_evidence(
     limits["max_output_bytes"] = json!(16384);
     let revision = call(
         &mut m,
-        json!({"kind":"revise_pipeline","workspace_id":a.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":1,"operation":"esolang.brainfuck.execute","operation_version":2,"parameters":limits}),
+        json!({"kind":"revise_pipeline","workspace_id":a.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":1,"definition":configuration("esolang.brainfuck.execute",2,json!(limits))}),
     );
     assert_eq!(revision["revision"], 2);
     assert_eq!(view(&mut m, &a)["trails"][0]["pipeline"]["revision"], 1);
@@ -117,9 +120,9 @@ fn trails_share_saved_revisions_without_sharing_hypotheses_or_accepted_evidence(
         &mut m,
         json!({"kind":"get_pipeline","workspace_id":a.workspace_id,"pipeline_id":p["pipelineId"],"revision":2}),
     );
-    assert_eq!(old["nodeId"], new["nodeId"]);
-    assert_eq!(old["initialOperation"], "cipher.rot13");
-    assert_eq!(new["initialOperation"], "esolang.brainfuck.execute");
+    assert_eq!(old["outputNodeId"], new["outputNodeId"]);
+    assert_eq!(old["outputOperation"], "cipher.rot13");
+    assert_eq!(new["outputOperation"], "esolang.brainfuck.execute");
     assert_eq!(
         m.run_detail(&a, serde_json::from_value(accepted["id"].clone()).unwrap())
             .unwrap(),
@@ -151,9 +154,9 @@ fn pipeline_forks_pin_the_exact_source_and_invalid_edits_change_nothing() {
     assert_eq!(f["origin"]["revision"], 1);
     let before = view(&mut m, &c);
     for value in [
-        json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":2,"operation":"cipher.rot13","operation_version":1,"parameters":{}}),
-        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Unknown","operation":"shell.execute","operation_version":1,"parameters":{}}),
-        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Wrong version","operation":"cipher.rot13","operation_version":3,"parameters":{}}),
+        json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["pipelineId"],"expected_revision":2,"definition":configuration("cipher.rot13",1,json!({}))}),
+        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Unknown","definition":configuration("shell.execute",1,json!({}))}),
+        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Wrong version","definition":configuration("cipher.rot13",3,json!({}))}),
     ] {
         assert!(m.handle(serde_json::from_value(value).unwrap()).is_err());
         assert_eq!(view(&mut m, &c), before);
@@ -230,9 +233,9 @@ fn previous_native_store_keeps_actual_run_evidence_during_pipeline_upgrade() {
     let upgraded = view(&mut m, &c);
     assert_eq!(upgraded["stage"], fixture["view"]["stage"]);
     for t in upgraded["trails"].as_array().unwrap() {
-        assert_eq!(t["pipeline"]["revision"], 2);
-        assert_eq!(t["revision"], 2);
-        assert_eq!(t["pipeline"]["revisions"], json!([2]));
+        assert_eq!(t["pipeline"]["revision"], 3);
+        assert_eq!(t["revision"], 3);
+        assert_eq!(t["pipeline"]["revisions"], json!([3]));
         let old = fixture["view"]["trails"]
             .as_array()
             .unwrap()
@@ -250,7 +253,7 @@ fn previous_native_store_keeps_actual_run_evidence_during_pipeline_upgrade() {
         .unwrap();
     let next = run(&mut m, &c, t);
     assert_eq!(next["result"]["outputs"]["output"], "The key.");
-    assert_eq!(next["plan"]["pipeline"]["definition"]["formatVersion"], 2);
+    assert_eq!(next["plan"]["pipeline"]["definition"]["formatVersion"], 3);
     drop(m);
     let mut m = Manager::new(root).unwrap();
     call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
@@ -278,15 +281,17 @@ fn saved_definitions_are_typed_bounded_scoped_and_never_implicitly_replaced_by_r
     ];
     for config in bad_parameters {
         let mut command = json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Invalid"});
-        for (k, v) in config.as_object().unwrap() {
-            command[k] = v.clone();
-        }
+        command["definition"] = configuration(
+            &config["operation"],
+            &config["operation_version"],
+            config["parameters"].clone(),
+        );
         assert!(m.handle(serde_json::from_value(command).unwrap()).is_err());
         assert_eq!(view(&mut m, &c), before);
     }
     let image = call(
         &mut m,
-        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Image pipeline","operation":"image.pixels.read","operation_version":1,"parameters":{"x":1,"y":0,"expand_palette":false}}),
+        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Image pipeline","definition":configuration("image.pixels.read",1,json!({"x":1,"y":0,"expand_palette":false}))}),
     );
     let command = json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Wrong type","pipeline":{"id":image["pipelineId"],"revision":1}});
     assert_eq!(
@@ -327,28 +332,28 @@ fn revising_a_default_does_not_change_later_asset_defaults_and_limits_preserve_s
     params["max_output_bytes"] = json!(16384);
     call(
         &mut m,
-        json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["id"],"expected_revision":1,"operation":"esolang.brainfuck.execute","operation_version":2,"parameters":params}),
+        json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":p["id"],"expected_revision":1,"definition":configuration("esolang.brainfuck.execute",2,json!(params))}),
     );
     let second = text(&mut m, &c, "Later", "Frpbaq.");
     assert_eq!(second["pipeline"]["id"], p["id"]);
     assert_eq!(second["pipeline"]["revision"], 1);
-    assert_eq!(second["pipeline"]["initialOperation"], "cipher.rot13");
+    assert_eq!(second["pipeline"]["outputOperation"], "cipher.rot13");
     assert_eq!(
         run(&mut m, &c, &second)["result"]["outputs"]["output"],
         "Second."
     );
-    let intent = json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Pixel sampling","operation":"image.pixels.read","operation_version":1,"parameters":{"x":0,"y":0,"expand_palette":false}});
+    let intent = json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Pixel sampling","definition":configuration("image.pixels.read",1,json!({"x":0,"y":0,"expand_palette":false}))});
     let image = call(&mut m, intent.clone());
     assert_eq!(call(&mut m, intent), image);
     for revision in 1..32 {
         let result = call(
             &mut m,
-            json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":image["pipelineId"],"expected_revision":revision,"operation":"image.pixels.read","operation_version":1,"parameters":{"x":revision,"y":0,"expand_palette":false}}),
+            json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":image["pipelineId"],"expected_revision":revision,"definition":configuration("image.pixels.read",1,json!({"x":revision,"y":0,"expand_palette":false}))}),
         );
         assert_eq!(result["revision"], revision + 1);
     }
     let before = view(&mut m, &c);
-    let overflow = json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":image["pipelineId"],"expected_revision":32,"operation":"image.pixels.read","operation_version":1,"parameters":{"x":32,"y":0,"expand_palette":false}});
+    let overflow = json!({"kind":"revise_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"pipeline_id":image["pipelineId"],"expected_revision":32,"definition":configuration("image.pixels.read",1,json!({"x":32,"y":0,"expand_palette":false}))});
     assert_eq!(
         m.handle(serde_json::from_value(overflow).unwrap())
             .unwrap_err(),
@@ -359,7 +364,7 @@ fn revising_a_default_does_not_change_later_asset_defaults_and_limits_preserve_s
         create(&mut m, &c);
     }
     let before = view(&mut m, &c);
-    let overflow = json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"One too many","operation":"cipher.rot13","operation_version":1,"parameters":{}});
+    let overflow = json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"One too many","definition":configuration("cipher.rot13",1,json!({}))});
     assert_eq!(
         m.handle(serde_json::from_value(overflow).unwrap())
             .unwrap_err(),

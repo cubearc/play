@@ -18,7 +18,7 @@ SQLite, Node filesystem APIs or an unrestricted command channel.
 | Trusted frames, commands, wire protocol and worker policies | [IPC and native execution](reference/desktop-runtime.md) |
 | Managed stores, revisions, limits and refusal | [Native storage](reference/desktop-storage.md) |
 | Saved definitions, Trail hypotheses and revision selection | [Saved Pipelines](reference/desktop-pipelines.md) |
-| Accepted single-node invocations, attempts and output retention | [PipelineRuns](reference/desktop-runs.md) |
+| Accepted graph invocations, attempts and output retention | [PipelineRuns](reference/desktop-runs.md) |
 
 Native adapters currently execute ROT13, Brainfuck and image pixel reads on macOS. Their metadata
 and schemas come from Core; catalog discovery does not authorize an adapter.

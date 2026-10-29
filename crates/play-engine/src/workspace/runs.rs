@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     Result,
-    protocol::{self, Invocation},
+    protocol::{self},
 };
 use serde_json::{Value, json};
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteRow};
@@ -20,7 +20,7 @@ pub struct RunIdentity {
 }
 pub struct PreparedRun {
     pub identity: RunIdentity,
-    pub invocation: Invocation,
+    pub invocation: crate::worker::PipelineInvocation,
 }
 fn now() -> Result<i64> {
     SystemTime::now()
@@ -120,8 +120,14 @@ pub async fn started(store: &mut Owned, run: &RunIdentity) -> Result<()> {
         .begin()
         .await
         .map_err(storage::failure)?;
-    let target:Option<String>=sqlx::query_scalar("SELECT json_extract(plan,'$.targetNodes[0]') FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND status='queued'").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.context.stage_id.to_string()).bind(run.id.to_string()).fetch_optional(&mut *tx).await.map_err(storage::failure)?;
-    if target.as_deref() != Some(run.node_id.to_string().as_str()) {
+    let row=sqlx::query("SELECT plan,status FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND status IN ('queued','running')").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.context.stage_id.to_string()).bind(run.id.to_string()).fetch_optional(&mut *tx).await.map_err(storage::failure)?.ok_or("state_conflict")?;
+    let plan: Value = serde_json::from_str(row.get("plan")).map_err(|_| "corrupt_store")?;
+    let previous=sqlx::query("SELECT node_id,status FROM node_attempts WHERE workspace_id=? AND exploration_id=? AND run_id=? ORDER BY started_ms,rowid").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).fetch_all(&mut *tx).await.map_err(storage::failure)?;
+    if previous
+        .iter()
+        .any(|p| p.get::<&str, _>("status") != "completed")
+        || plan["executionOrder"][previous.len()] != run.node_id.to_string()
+    {
         return Err("state_conflict");
     }
     let time = now()?;
@@ -135,10 +141,7 @@ pub async fn started(store: &mut Owned, run: &RunIdentity) -> Result<()> {
         .execute(&mut *tx)
         .await
         .map_err(storage::failure)?;
-    let updated=sqlx::query("UPDATE pipeline_runs SET status='running' WHERE workspace_id=? AND exploration_id=? AND id=? AND status='queued'").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).execute(&mut *tx).await.map_err(storage::failure)?;
-    if updated.rows_affected() != 1 {
-        return Err("state_conflict");
-    }
+    sqlx::query("UPDATE pipeline_runs SET status='running' WHERE workspace_id=? AND exploration_id=? AND id=? AND status='queued'").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).execute(&mut *tx).await.map_err(storage::failure)?;
     tx.commit().await.map_err(storage::failure)
 }
 
@@ -154,6 +157,16 @@ pub async fn finish(store: &mut Owned, run: &RunIdentity, result: Value) -> Resu
         return Err("state_conflict");
     }
     let plan: Value = serde_json::from_str(row.get("plan")).map_err(|_| "corrupt_store")?;
+    if result["status"] == "completed"
+        && plan["executionOrder"]
+            .as_array()
+            .is_some_and(|v| v.len() > 1)
+    {
+        let count:i64=sqlx::query_scalar("SELECT count(*) FROM node_attempts WHERE workspace_id=? AND exploration_id=? AND run_id=? AND status='completed'").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).fetch_one(&mut *tx).await.map_err(storage::failure)?;
+        if Some(count as usize) != plan["executionOrder"].as_array().map(Vec::len) {
+            return Err("invalid_response");
+        }
+    }
     let result = normalize(result, &plan, row.get::<bool, _>("retain_output"))?;
     let status = result["status"].as_str().ok_or("invalid_response")?;
     let time = now()?;
@@ -218,9 +231,12 @@ pub async fn detail(store: &mut Owned, context: &Context, id: Uuid) -> Result<Va
         .transpose()
         .map_err(|_| "corrupt_store")?
         .unwrap_or(Value::Null);
-    let attempts=sqlx::query("SELECT id,node_id,attempt,started_ms,finished_ms,status FROM node_attempts WHERE workspace_id=? AND exploration_id=? AND run_id=? ORDER BY attempt")
+    let attempts=sqlx::query("SELECT n.id,n.node_id,n.attempt,n.started_ms,n.finished_ms,n.status,r.result FROM node_attempts n LEFT JOIN node_results r ON (n.workspace_id,n.exploration_id,n.run_id,n.id)=(r.workspace_id,r.exploration_id,r.run_id,r.attempt_id) WHERE n.workspace_id=? AND n.exploration_id=? AND n.run_id=? ORDER BY n.started_ms,n.rowid")
   .bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(id.to_string()).fetch_all(store.connection()?).await.map_err(storage::failure)?;
-    value["attempts"]=json!(attempts.into_iter().map(|row|json!({"id":row.get::<String,_>(0),"nodeId":row.get::<String,_>(1),"attempt":row.get::<i64,_>(2),"startedMs":row.get::<i64,_>(3),"finishedMs":row.get::<Option<i64>,_>(4),"status":row.get::<String,_>(5)})).collect::<Vec<_>>());
+    value["attempts"]=json!(attempts.into_iter().map(|row| {
+        let mut v=json!({"id":row.get::<String,_>(0),"nodeId":row.get::<String,_>(1),"attempt":row.get::<i64,_>(2),"startedMs":row.get::<i64,_>(3),"finishedMs":row.get::<Option<i64>,_>(4),"status":row.get::<String,_>(5)});
+        if let Some(result)=row.get::<Option<&str>,_>(6) {v["result"]=serde_json::from_str::<Value>(result).map_err(|_|"corrupt_store")?;} Ok(v)
+    }).collect::<Result<Vec<_>>>()?);
     Ok(value)
 }
 
@@ -265,5 +281,39 @@ pub async fn recover(connection: &mut SqliteConnection) -> Result<()> {
     .execute(&mut *tx)
     .await
     .map_err(storage::failure)?;
+    tx.commit().await.map_err(storage::failure)
+}
+
+pub async fn finish_attempt(store: &mut Owned, run: &RunIdentity, result: Value) -> Result<()> {
+    authorize(store, &run.context).await?;
+    let mut tx = store
+        .connection()?
+        .begin()
+        .await
+        .map_err(storage::failure)?;
+    let row=sqlx::query("SELECT p.plan,p.retain_output,n.id FROM pipeline_runs p JOIN node_attempts n ON (p.workspace_id,p.exploration_id,p.id)=(n.workspace_id,n.exploration_id,n.run_id) WHERE p.workspace_id=? AND p.exploration_id=? AND p.stage_id=? AND p.id=? AND p.status='running' AND n.node_id=? AND n.status='running'").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.context.stage_id.to_string()).bind(run.id.to_string()).bind(run.node_id.to_string()).fetch_optional(&mut *tx).await.map_err(storage::failure)?.ok_or("state_conflict")?;
+    let plan: Value = serde_json::from_str(row.get("plan")).map_err(|_| "corrupt_store")?;
+    let node = plan["nodes"]
+        .as_array()
+        .and_then(|nodes| nodes.iter().find(|n| n["id"] == run.node_id.to_string()))
+        .ok_or("corrupt_store")?;
+    let result = normalize(result, node, row.get("retain_output"))?;
+    let attempt: String = row.get("id");
+    let size = result.to_string().len() as i64;
+    let remaining:i64=sqlx::query_scalar("SELECT length(reservation) FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND id=?").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).fetch_one(&mut *tx).await.map_err(storage::failure)?;
+    if size > remaining {
+        return Err("storage_quota");
+    }
+    sqlx::query("UPDATE pipeline_runs SET reservation=substr(reservation,1,?) WHERE workspace_id=? AND exploration_id=? AND id=?").bind(remaining-size).bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).execute(&mut *tx).await.map_err(storage::failure)?;
+    sqlx::query("INSERT INTO node_results VALUES(?,?,?,?,?)")
+        .bind(run.context.workspace_id.to_string())
+        .bind(run.context.exploration_id.to_string())
+        .bind(run.id.to_string())
+        .bind(&attempt)
+        .bind(result.to_string())
+        .execute(&mut *tx)
+        .await
+        .map_err(storage::failure)?;
+    sqlx::query("UPDATE node_attempts SET status=?,finished_ms=? WHERE workspace_id=? AND exploration_id=? AND run_id=? AND id=? AND status='running'").bind(result["status"].as_str().ok_or("invalid_response")?).bind(now()?).bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).bind(&attempt).execute(&mut *tx).await.map_err(storage::failure)?;
     tx.commit().await.map_err(storage::failure)
 }

@@ -43,19 +43,39 @@ Choose a saved revision and keep this Trail's hypothesis. [Open full size](asset
 
 ## Save and reuse a Pipeline
 
-Choose **New Pipeline** to name a reusable single-node definition. Select an
-operation by its Core name, review its parameters and choose **Create Pipeline**.
+Choose **New Pipeline** to name a reusable graph. Select an operation by its Core
+name, review its typed inputs and parameters and choose **Create Pipeline**.
 The Trail selects the saved revision. Choose **Run cell** to execute it against
 this Trail's bound Asset.
 
-**Edit Pipeline** opens the current head for editing. **Save revision** freezes a
-new configuration and selects it only for the current Trail. An identical
+**Edit Pipeline** opens the current head for editing. Choose **Add node** to add
+an operation, select a node in the canvas and bind each input to the source, a
+compatible named output or an explicit literal. For example, two connected ROT13
+nodes transform `Gur xrl.` into `The key.` and back into `Gur xrl.`. Move a node
+by dragging it or focusing it and pressing an arrow key. Choose **Use as output**
+to select the result and its required dependencies. Rust rejects cycles and
+incompatible ports before saving.
+
+![Pipeline graph editor with two connected ROT13 nodes, typed input selection and the second node chosen as output.](assets/desktop/pipeline-graph-editor.png)
+
+Connect named ports and save the complete revision. [Open full size](assets/desktop/pipeline-graph-editor.png).
+
+**Save revision** freezes a new configuration and selects it only for the current Trail. An identical
 configuration keeps the same revision. Other Trails stay pinned to their chosen
 revisions; previous Runs keep their evidence and results.
 
 ![Trail canvas after selecting Pipeline revision 2, with the preceding ROT13 Run preserved.](assets/desktop/pipeline-revision.png)
 
 The working revision and historical Run keep separate configurations. [Open full size](assets/desktop/pipeline-revision.png).
+
+The worker executes dependencies sequentially within one Run's resource limits.
+Expand **Saved Run & input evidence** to inspect each actual node attempt and
+retained intermediate output. Disconnected nodes do not execute. Saving an output
+as a Block refers to the selected output node's actual attempt.
+
+![Completed two-node ROT13 Run with both intermediate results and the exact source and Pipeline evidence.](assets/desktop/pipeline-graph-run.png)
+
+Inspect the actual attempts beside the result. [Open full size](assets/desktop/pipeline-graph-run.png).
 
 To reuse a definition in another Exploration, open its Asset canvas, choose
 **Edit Trail**, then choose **Saved Pipeline** and **Pipeline revision**. Keep a

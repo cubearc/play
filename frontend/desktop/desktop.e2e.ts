@@ -21,6 +21,177 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("typed graph editing executes dependent nodes and preserves their evidence after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-graph-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Graph notebook");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Decoding study");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const text = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await text
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Graph clue");
+    await text
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await text.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Graph clue", exact: true })
+      .click();
+    let canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    const editor = page.getByRole("dialog", {
+      name: "Edit Pipeline",
+      exact: true,
+    });
+    await editor.getByRole("button", { name: "Add node", exact: true }).click();
+    await expect(
+      editor.getByRole("button", { name: "Node 2: ROT13", exact: true }),
+    ).toBeVisible();
+    await editor
+      .getByRole("button", { name: "Node 2: ROT13", exact: true })
+      .focus();
+    await page.keyboard.press("ArrowDown");
+    await capture(application, "native-pipeline-graph-editor");
+    await editor
+      .getByRole("button", { name: "Save revision", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const saved = await current(page);
+    const trail = saved.exploration.trails[0];
+    assert.ok(trail?.pipeline);
+    assert.equal(trail.pipeline.definition.nodes.length, 2);
+    assert.equal(trail.pipeline.definition.nodes[1]?.position.y, 80);
+    assert.equal(
+      trail.pipeline.definition.nodes[1]?.inputs.input?.kind,
+      "output",
+    );
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result", exact: true }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: Gur xrl." : "Execution rejected",
+    );
+    if (process.platform === "darwin") {
+      let evidence = await page.evaluate(async () => {
+        const w = await window.play.workspace({ kind: "list" });
+        if (!w.lastWorkspaceId) throw new Error("workspace_missing");
+        const workspace = await window.play.workspace({
+          kind: "view",
+          workspace_id: w.lastWorkspaceId,
+        });
+        if (!workspace.selectedExplorationId)
+          throw new Error("exploration_missing");
+        const e = await window.play.workspace({
+          kind: "open_exploration",
+          workspace_id: workspace.id,
+          exploration_id: workspace.selectedExplorationId,
+          stage_id: workspace.selectedStageId,
+        });
+        const t = e.trails[0];
+        if (!t) throw new Error("trail_missing");
+        const context = {
+          workspace_id: e.workspaceId,
+          exploration_id: e.id,
+          stage_id: e.stage.id,
+        };
+        const runs = await window.play.workspace({
+          kind: "list_runs",
+          context,
+          trail_id: t.id,
+          before: null,
+        });
+        const first = runs.runs[0];
+        if (!first) throw new Error("run_missing");
+        return window.play.workspace({
+          kind: "run_detail",
+          context,
+          run_id: first.id,
+        });
+      });
+      assert.equal(evidence.attempts.length, 2);
+      assert.equal(evidence.attempts[0]?.result?.outputs?.output, "The key.");
+      assert.equal(evidence.attempts[1]?.result?.outputs?.output, "Gur xrl.");
+      await canvas
+        .getByText("Saved Run & input evidence", { exact: false })
+        .click();
+      await expect(
+        canvas.getByText("2 actual node attempt(s)", { exact: false }),
+      ).toBeVisible();
+      await application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((w) => w.isVisible())
+          ?.webContents.setZoomFactor(0.55),
+      );
+      await capture(application, "native-pipeline-graph-run");
+      await application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((w) => w.isVisible())
+          ?.webContents.setZoomFactor(1),
+      );
+      assert.deepEqual((await accessibility(page)).violations, []);
+      await canvas
+        .getByRole("button", { name: "Save output as block", exact: true })
+        .click();
+      await expect(
+        notebook(page).getByText("Gur xrl.", { exact: true }),
+      ).toHaveCount(2);
+      const retained = evidence;
+      await application.close();
+      application = await electron.launch({
+        args: [main, `--user-data-dir=${profile}`],
+      });
+      page = await application.firstWindow();
+      page.setDefaultTimeout(5000);
+      await notebook(page)
+        .getByRole("button", { name: "Explore Graph clue", exact: true })
+        .click();
+      canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
+      await expect(
+        canvas.getByRole("region", { name: "Cell result", exact: true }),
+      ).toContainText("output: Gur xrl.");
+      evidence = await page.evaluate(
+        async ({ context, id }) =>
+          window.play.workspace({ kind: "run_detail", context, run_id: id }),
+        {
+          context: {
+            workspace_id: saved.workspace.id,
+            exploration_id: saved.exploration.id,
+            stage_id: saved.exploration.stage.id,
+          },
+          id: retained.id,
+        },
+      );
+      assert.deepEqual(evidence, retained);
+    }
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("explicit Pipeline revisions preserve separate Trail hypotheses and accepted evidence", {
   timeout: 90000,
 }, async () => {
@@ -114,11 +285,11 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     const revised = await current(page);
     assert.equal(revised.exploration.trails[0]?.pipeline?.revision, 2);
     assert.equal(
-      revised.exploration.trails[0]?.pipeline?.nodeId,
-      first.pipeline.nodeId,
+      revised.exploration.trails[0]?.pipeline?.outputNodeId,
+      first.pipeline.outputNodeId,
     );
     assert.equal(
-      revised.exploration.trails[0]?.pipeline?.initialOperation,
+      revised.exploration.trails[0]?.pipeline?.outputOperation,
       "esolang.brainfuck.execute",
     );
     await expect(canvas.getByRole("note")).toContainText(
@@ -520,7 +691,7 @@ test("complete notebook keeps Pages inert and runs the selected image through it
         }),
       { t: imageTrail, id: firstRun.id },
     );
-    const input = detail.plan.inputs.input;
+    const input = detail.plan.inputs.source;
     assert.ok(input && "assetId" in input);
     assert.equal(input.assetId, imageTrail.source.id);
     assert.equal(input.semanticType, "image.samples");
@@ -2006,13 +2177,13 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     );
     assert.equal(
       second.workspace.pipelines.filter(
-        (p) => p.initialOperation === "cipher.rot13",
+        (p) => p.outputOperation === "cipher.rot13",
       ).length,
       1,
     );
     assert.equal(
       second.workspace.pipelines.filter(
-        (p) => p.initialOperation === "image.pixels.read",
+        (p) => p.outputOperation === "image.pixels.read",
       ).length,
       1,
     );

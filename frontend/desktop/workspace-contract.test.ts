@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { singleGraph } from "./graph-fixture.js";
 import {
   assetRead,
   cancelRun,
@@ -315,16 +316,43 @@ test("Pipeline intents freeze required bounded configuration and cannot carry pr
     workspace_id: owner.workspace_id,
     key: randomUUID(),
     title: "Decode clue",
-    operation: "cipher.rot13",
-    operation_version: 1,
-    parameters: {},
+    definition: singleGraph({
+      operation: "cipher.rot13",
+      operation_version: 1,
+      parameters: {},
+      input_type: "text",
+      contract: {
+        inputs: [{ name: "input", semantic_type: "text", schema: {} }],
+        outputs: [],
+        parameters: {},
+      },
+    }),
   };
   assert.deepEqual(request(pipeline), pipeline);
   for (const value of [
     { ...pipeline, path: "/private" },
-    { ...pipeline, parameters: null },
-    { ...pipeline, operation_version: 4294967296 },
-    { ...pipeline, parameters: { text: "é".repeat(1024) } },
+    { ...pipeline, definition: null },
+    {
+      ...pipeline,
+      definition: {
+        ...pipeline.definition,
+        nodes: [
+          { ...pipeline.definition.nodes[0], operationVersion: 4294967296 },
+        ],
+      },
+    },
+    {
+      ...pipeline,
+      definition: {
+        ...pipeline.definition,
+        nodes: [
+          {
+            ...pipeline.definition.nodes[0],
+            parameters: { text: "é".repeat(1024) },
+          },
+        ],
+      },
+    },
   ])
     assert.throws(() => request(value));
   const trail = {
@@ -349,6 +377,6 @@ test("Pipeline intents freeze required bounded configuration and cannot carry pr
     () => request({ ...trail, hypothesis: "é".repeat(1025) }),
     /input_limit/,
   );
-  const { parameters: _parameters, ...missing } = pipeline;
+  const { definition: _definition, ...missing } = pipeline;
   assert.throws(() => request(missing), /invalid_command/);
 });

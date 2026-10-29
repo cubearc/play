@@ -5,6 +5,7 @@ import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
 import { FilePreview } from "./FilePreview";
+import { PipelineGraph } from "./PipelineGraph";
 import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
 
@@ -42,7 +43,9 @@ export function AssetCanvas({
             </VscodeButton>
             <VscodeButton
               secondary
-              disabled={trail.archived}
+              disabled={
+                trail.archived || !executions.operationsFor(trail).length
+              }
               onClick={() => editPipeline("create")}
             >
               New Pipeline
@@ -51,14 +54,14 @@ export function AssetCanvas({
               <>
                 <VscodeButton
                   secondary
-                  disabled={trail.archived}
+                  disabled={trail.archived || !executions.operations.length}
                   onClick={() => editPipeline("revise")}
                 >
                   Edit Pipeline
                 </VscodeButton>
                 <VscodeButton
                   secondary
-                  disabled={trail.archived}
+                  disabled={trail.archived || !executions.operations.length}
                   onClick={() => editPipeline("fork")}
                 >
                   Fork Pipeline
@@ -153,12 +156,15 @@ export function AssetCanvas({
         {trail.pipelineId ? (
           <>
             <div className="canvas-connection">
-              <span />{" "}
-              <code>
-                {trail.source.content.kind} → {trail.pipeline?.input}
-              </code>{" "}
+              <span /> <code>{trail.source.content.kind} → source</code>{" "}
               <VscodeIcon name="arrow-down" />
             </div>
+            {trail.pipeline && trail.pipeline.definition.nodes.length > 1 ? (
+              <PipelineGraph
+                definition={trail.pipeline.definition}
+                operations={executions.operations}
+              />
+            ) : null}
             <article
               className="canvas-node operation-node"
               aria-label="Pipeline node"

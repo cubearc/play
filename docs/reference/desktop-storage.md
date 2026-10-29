@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **9**, SQLite application ID
+The native store uses generation **2**, schema version **10**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql` and `pipelines.sql`.
-Recognized native schemas 1–8 upgrade to schema 9 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql` and `graphs.sql`.
+Recognized native schemas 1–9 upgrade to schema 10 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -365,7 +365,7 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | One imported PNG | 131072 bytes (128 KiB) |
 | One imported file | 131072 bytes (128 KiB) |
 | File preview source prefix | 256 bytes (512 hexadecimal characters for binary content) |
-| Asset, Note, Trail hypothesis and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
+| Asset, Note, Trail hypothesis, Run and node-result payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
 | Runs per Exploration / Workspace | 64 / 128 |
 | Pending Run output reservation | 131072 bytes (128 KiB) |
 | SQLite database | 16777216 bytes (16 MiB), 4096 pages |

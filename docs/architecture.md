@@ -31,8 +31,8 @@ Pipeline definition. A PipelineRun freezes an invocation and its node evidence.
 
 The engine owns private SQLite and an OS-held owner lock. Scoped commands check
 Workspace/Exploration ownership before reading or writing. Reasoning, Asset and
-Pipeline revisions are immutable; accepted single-node Runs preserve their plan,
-inputs, actual attempt and chosen output retention. Sources remain separate and
+Pipeline revisions are immutable; accepted graph Runs preserve their plan,
+inputs, actual attempts and chosen output retention. Sources remain separate and
 unchanged. [Native storage](reference/desktop-storage.md) owns exact format,
 upgrade/refusal rules, quotas and recovery.
 

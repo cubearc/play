@@ -220,8 +220,8 @@ export function useExecutions(
             : null),
     );
   const operationFor = (trail: TrailView) =>
-    operationsFor(trail).find(
-      (operation) => operation.operation === trail.pipeline?.initialOperation,
+    operations.find(
+      (operation) => operation.operation === trail.pipeline?.outputOperation,
     );
   const run = useCallback(
     async (trail: TrailView, operation: Operation) => {
@@ -327,7 +327,9 @@ export function useExecutions(
         (asset) =>
           asset.origin?.kind === "run_output" &&
           asset.origin.runId === run.id &&
-          asset.origin.attemptId === run.attempts[0]?.id &&
+          asset.origin.attemptId ===
+            run.attempts.find((a) => run.plan.targetNodes.includes(a.nodeId))
+              ?.id &&
           asset.origin.port === port,
       );
     },

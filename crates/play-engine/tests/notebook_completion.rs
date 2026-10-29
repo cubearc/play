@@ -143,7 +143,7 @@ fn image_run_uses_the_exact_image_revision_and_rejects_text_operations() {
     assert_eq!(prepared.invocation.input, STANDARD.encode(data));
     let record = m.run_detail(&c, prepared.identity.id).unwrap();
     assert_eq!(
-        record["plan"]["inputs"]["input"]["semanticType"],
+        record["plan"]["inputs"]["source"]["semanticType"],
         "image.samples"
     );
     assert_eq!(record["plan"]["parameters"]["x"], 0);
@@ -213,7 +213,7 @@ fn schema_seven_preserves_notes_and_assets_while_binding_prior_image_trails() {
         .iter()
         .find(|t| t["source"]["content"]["kind"] == "image")
         .unwrap();
-    assert_eq!(image["pipeline"]["initialOperation"], "image.pixels.read");
+    assert_eq!(image["pipeline"]["outputOperation"], "image.pixels.read");
     assert_eq!(
         image["source"]["id"],
         before["stage"]["blocks"][1]["asset"]["id"]

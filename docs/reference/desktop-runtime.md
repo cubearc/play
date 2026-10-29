@@ -13,7 +13,7 @@ opens the actual Electron application. No web server, Docker or browser launcher
 participates in this path. The [notebook preview](../development.md#explore-the-notebook-preview)
 uses this boundary for managed notebooks. The engine persists Workspace content
 and reasoning in [native storage](desktop-storage.md), and resolves exact owned
-text Asset revisions for Core execution in a separate worker. Single-node
+text Asset revisions for Core execution in a separate worker. Graph
 [PipelineRuns](desktop-runs.md) preserve accepted configuration, actual attempts
 and the chosen private output retention. Credential storage is not implemented.
 
@@ -165,9 +165,12 @@ read exact definitions. `save_trail` carries its expected revision, hypothesis a
 nullable Pipeline reference. All fields are required at the desktop boundary;
 prior payload shapes are refused. Worker invocations include saved parameters.
 
-The native catalog reports each adapter's Core input semantic type and effective
-default parameters. The Pipeline editor filters compatible adapters and saves
-complete parameters in an immutable revision. Image defaults are `x: 0`, `y: 0`,
+The native catalog reports each adapter's full Core contract, input semantic type
+and effective default parameters. The editor presents compatible named ports
+and saves complete graphs in immutable revisions. Rust owns dependency planning;
+the worker receives only that selected closure, the bounded source bytes and
+explicit literals, with no database or filesystem authority. Private node progress
+frames let the engine persist each actual attempt/result before final completion. Image defaults are `x: 0`, `y: 0`,
 `expand_palette: false`; saved revisions can choose supported coordinates. Rust resolves
 and verifies the authorized PNG revision, validates decoded `image.samples`
 against Core's named schema and freezes the parameters in the Run. The isolated

@@ -53,8 +53,11 @@ export function InlineResult({
           <pre role="status">{value(run)}</pre>
           {run.status === "completed" &&
           run.retainOutput &&
-          run.attempts.length === 1 &&
-          run.attempts[0]?.status === "completed"
+          run.attempts.some(
+            (a) =>
+              run.plan.targetNodes.includes(a.nodeId) &&
+              a.status === "completed",
+          )
             ? Object.keys(run.result?.outputs ?? {})
                 .filter((port) =>
                   run.plan.contract.outputs.some(
@@ -133,6 +136,25 @@ export function InlineResult({
               <dt>Attempts</dt>
               <dd>
                 {run.attempts.length} actual node attempt(s) · reuse: none
+                <ol>
+                  {run.attempts.map((a) => (
+                    <li key={a.id}>
+                      {run.plan.nodes?.find((n) => n.id === a.nodeId)?.operation
+                        .name ?? run.operation.name}{" "}
+                      · {a.status}
+                      {a.result?.outputs ? (
+                        <pre>
+                          {Object.entries(a.result.outputs)
+                            .map(
+                              ([port, v]) =>
+                                `${port}: ${typeof v === "string" ? v : `Base64 ${v.base64}`}`,
+                            )
+                            .join("\n")}
+                        </pre>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
               </dd>
             </dl>
             <ol>

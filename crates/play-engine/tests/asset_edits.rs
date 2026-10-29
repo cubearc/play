@@ -71,7 +71,7 @@ fn editing_text_preserves_accepted_input_and_reopens_new_content_with_old_eviden
     );
     assert_eq!(accepted.invocation.input, "Gur xrl.");
     let old = manager.finish_run(&accepted.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&accepted.invocation.input)}})).unwrap();
-    assert_eq!(old["plan"]["inputs"]["input"]["revision"], 1);
+    assert_eq!(old["plan"]["inputs"]["source"]["revision"], 1);
     assert_eq!(old["result"]["outputs"]["output"], "The key.");
     assert_eq!(manager.existing_run(&request).unwrap().unwrap(), old);
     let mut stale = request.clone();
@@ -89,7 +89,7 @@ fn editing_text_preserves_accepted_input_and_reopens_new_content_with_old_eviden
     manager.start_attempt(&current.identity).unwrap();
     let new = manager.finish_run(&current.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&current.invocation.input)}})).unwrap();
     assert_eq!(new["result"]["outputs"]["output"], "Second clue.");
-    assert_eq!(new["plan"]["inputs"]["input"]["revision"], 2);
+    assert_eq!(new["plan"]["inputs"]["source"]["revision"], 2);
     let mut different = mutation;
     different["text"] = json!("different retry");
     assert_eq!(

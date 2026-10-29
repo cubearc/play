@@ -67,12 +67,13 @@ export function Workbench() {
   const executions = useExecutions(state.exploration, state.refreshSummary, {
     busy: state.busy,
     save: async (trail, run, port) => {
-      const attempt = run.attempts[0];
+      const attempt = run.attempts.find((a) =>
+        run.plan.targetNodes.includes(a.nodeId),
+      );
       if (
         !exploration ||
         exploration.id !== trail.explorationId ||
         exploration.stage.id !== trail.stageId ||
-        run.attempts.length !== 1 ||
         !attempt
       )
         return;
@@ -511,7 +512,12 @@ export function Workbench() {
         <PipelineEditor
           mode={editingPipeline.mode}
           pipeline={editingPipeline.pipeline}
-          operations={executions.operationsFor(editingPipeline.trail)}
+          operations={executions.operations}
+          inputType={
+            editingPipeline.trail.source.content.kind === "image"
+              ? "image.samples"
+              : "text"
+          }
           error={state.error}
           onClose={closeConfiguration}
           onDirty={setEditorDirty}
