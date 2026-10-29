@@ -5,7 +5,7 @@ import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
 import { FilePreview } from "./FilePreview";
-import { OperationCell } from "./OperationCell";
+import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
 
 export function AssetCanvas({
@@ -163,10 +163,12 @@ export function AssetCanvas({
               className="canvas-node operation-node"
               aria-label="Pipeline node"
             >
-              <OperationCell trail={trail} executions={executions} />
+              <TrailCell trail={trail} executions={executions} />
             </article>
           </>
-        ) : null}
+        ) : (
+          <TrailCell trail={trail} executions={executions} />
+        )}
       </div>
       {page ? (
         <p className="canvas-note">

@@ -5,7 +5,7 @@ import type { TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
 import type { Executions } from "./useExecutions";
 
-export function OperationCell({
+export function TrailCell({
   trail,
   executions,
 }: {
@@ -20,6 +20,22 @@ export function OperationCell({
     history?.runs.some(
       (run) => run.status === "running" || run.status === "queued",
     ) ?? false;
+  const cancel = running ? (
+    <VscodeButton
+      secondary
+      icon="debug-stop"
+      onClick={() => void executions.cancel(trail)}
+    >
+      Cancel
+    </VscodeButton>
+  ) : null;
+  if (!pipeline)
+    return (
+      <>
+        {cancel}
+        <InlineResult trail={trail} executions={executions} />
+      </>
+    );
   return (
     <div className="operation-cell">
       <div className="cell-code">
@@ -44,15 +60,7 @@ export function OperationCell({
           >
             Run cell
           </VscodeButton>
-          {running ? (
-            <VscodeButton
-              secondary
-              icon="debug-stop"
-              onClick={() => void executions.cancel(trail)}
-            >
-              Cancel
-            </VscodeButton>
-          ) : null}
+          {cancel}
         </div>
         <VscodeCheckbox
           ref={keep}

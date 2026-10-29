@@ -61,6 +61,14 @@ To reuse a definition in another Exploration, open its Asset canvas, choose
 **Edit Trail**, then choose **Saved Pipeline** and **Pipeline revision**. Keep a
 separate hypothesis and save. Each Trail supplies its own Asset and history.
 
+Choose **No Pipeline** in **Edit Trail** to inspect the Asset without an active
+operation. Saved Run history remains visible in the notebook and canvas, including
+after restarting the app.
+
+![Asset canvas without a selected Pipeline, displaying its retained ROT13 result and original Run evidence.](assets/desktop/unbound-history.png)
+
+The accepted result remains inspectable independently of the working configuration. [Open full size](assets/desktop/unbound-history.png).
+
 Choose **Fork Pipeline** to create an independently versioned alternative from
 the selected revision. The fork records its source; edits to either definition
 do not change the other. Use **Edit Pipeline** after the fork to change its

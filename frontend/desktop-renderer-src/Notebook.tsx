@@ -16,7 +16,7 @@ import { blockTitle, contextOf } from "../desktop/workspace-contract";
 import { ArchivedBlocks } from "./ArchivedBlocks";
 import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
-import { OperationCell } from "./OperationCell";
+import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
 
 export function Notebook({
@@ -443,8 +443,8 @@ export function Notebook({
                     openAsset={openAsset}
                     openSourceRun={openSourceRun}
                   />
-                  {trail?.pipelineId ? (
-                    <OperationCell trail={trail} executions={executions} />
+                  {trail ? (
+                    <TrailCell trail={trail} executions={executions} />
                   ) : null}
                 </>
               )}

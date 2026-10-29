@@ -25,11 +25,11 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
   timeout: 90000,
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-pipeline-revisions-"));
-  const application = await electron.launch({
+  let application = await electron.launch({
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
-    const page = await application.firstWindow();
+    let page = await application.firstWindow();
     page.setDefaultTimeout(5000);
     await page
       .getByRole("textbox", { name: "Workspace name", exact: true })
@@ -208,6 +208,30 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
         ? "output: Second clue."
         : "Execution rejected",
     );
+    await canvas
+      .getByRole("button", { name: "Edit Trail", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Trail", exact: true });
+    await editor
+      .getByRole("combobox", { name: "Saved Pipeline", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "No Pipeline", exact: true })
+      .click();
+    await editor
+      .getByRole("button", { name: "Save Trail", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await expect(
+      canvas.getByRole("button", { name: "Run cell", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin"
+        ? "output: Second clue."
+        : "Execution rejected",
+    );
     await explorer(page)
       .getByRole("button", { name: "First investigation", exact: true })
       .click();
@@ -217,6 +241,49 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
       "The clue uses ROT13.",
     );
     assert.equal(restored.exploration.trails[0]?.pipeline?.id, fork.id);
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    await explorer(page)
+      .getByRole("button", { name: "Second investigation", exact: true })
+      .click();
+    await expect(
+      notebook(page).getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin"
+        ? "output: Second clue."
+        : "Execution rejected",
+    );
+    const unbound = await current(page);
+    assert.equal(unbound.exploration.trails[0]?.pipeline, null);
+    await notebook(page)
+      .getByRole("button", { name: "Explore Another clue", exact: true })
+      .click();
+    const reopened = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await expect(
+      reopened.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin"
+        ? "output: Second clue."
+        : "Execution rejected",
+    );
+    await expect(
+      reopened.getByRole("button", { name: "Run cell", exact: true }),
+    ).toHaveCount(0);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((w) => w.isVisible())
+        ?.webContents.setZoomFactor(0.8),
+    );
+    await capture(application, "native-unbound-history");
   } finally {
     await application
       .evaluate(({ dialog }) => {

@@ -202,7 +202,7 @@ export function useExecutions(
     void (async () => {
       for (const trail of exploration.trails) {
         if (!current) return;
-        if (trail.pipelineId) await load(trail);
+        await load(trail);
       }
     })();
     return () => {
