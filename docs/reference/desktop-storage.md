@@ -2,8 +2,8 @@
 
 The Rust engine owns each managed Workspace, its independent Explorations, local
 Stages, ordered content Blocks, Assets, Trails and reusable Pipeline definitions.
-The [desktop walkthrough](../development.md#explore-the-notebook-preview) shows
-creation, PNG import, reasoning and reopening. The
+The [first notebook](../getting-started.md) shows creation, reasoning and
+reopening; [Asset imports](../workspace.md) covers PNG selection. The
 [domain contract](desktop-domain.md) defines the complete product model; this
 reference describes the implemented storage slice.
 

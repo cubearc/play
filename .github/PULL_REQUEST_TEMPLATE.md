@@ -9,4 +9,5 @@ If none is needed, explain why. Follow the shared documentation guide.
 
 ## Validation
 
-List the checks actually run; distinguish local, browser, container and hosted CI evidence.
+List the checks actually run; distinguish native engine/Electron, remaining browser/container, hosted CI and
+packaged release evidence. Do not infer one from another.

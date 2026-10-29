@@ -1,157 +1,77 @@
-# Architecture
+# Native desktop architecture
 
-For the Electron refactor, use the
-[desktop domain contract](reference/desktop-domain.md) for canonical ownership,
-evidence identity and interface retirement. The runtime below describes the
-currently implemented application.
+<a id="architecture"></a>
+<a id="core-and-storage-boundaries"></a>
 
-Cube Play is a local application with one Rust API and one React interface.
-The Rust workspace contains `crates/play-local`, the host-side `crates/play-launcher`
-and `crates/play-runner`, alongside the React `frontend`. Local state uses SQLx/SQLite and private filesystem storage; there is
-no second operation registry or idle execution service.
-
-## Request boundary
-
-Native serving defaults to `127.0.0.1:7331`. The production backend serves the Vite
-build, public readiness at `/healthz`, session exchange at `POST /api/session` and
-authenticated health at `/api/health`. All surfaces validate the exact configured
-Host and any Origin; mutations require the exact Origin. Cross-site fetches and
-forwarded-host headers are rejected. There is no CORS allowance.
-
-A random per-process capability appears in the explicit startup URL fragment.
-The frontend removes it before requests, validates it through `POST /api/session`
-and stores it in per-tab `sessionStorage`, scoped to the complete browser origin
-including its port. API requests carry `Authorization: Bearer ...` with credentials
-omitted and redirects rejected. Cookies never grant API authority; startup expires
-the legacy cookie. Authenticated health includes bounded UUID/name context, while
-public readiness includes neither workspace metadata nor host paths. Process
-restart invalidates the capability. Credential comparison is constant-time.
-
-Media elements and explicit downloads obtain a separate bounded read capability
-through `POST /api/read-links` with `{uri}`. A link authorizes only the exact
-workspace-media or artifact-content/export URL for one hour. It grants no other
-path, query, mutation or terminal access. At most 256 links remain active, expired
-links release capacity, and source authorization still runs on every request.
-Preview retry renews access; export obtains a fresh link on the explicit action.
-Terminal upgrades supply the API capability through a WebSocket subprotocol;
-responses select only `cube-play.v1`, never the authentication value. These
-boundaries do not protect against an attacker controlling the host account.
-
-Responses use a restrictive Content Security Policy, no-referrer and no-store.
-Session bodies are limited to 1 KiB. Streaming imports have a 32 MiB/30-second limit;
-URLs/queries are limited to 16 KiB. Static serving is limited to the
-trusted frontend build directory; user workspaces must never be served from it.
-Diagnostics log process events without request URLs, tokens or payloads.
-
-The [workspace boundary](workspace.md) opens directory capabilities once and
-rejects symlinks/special files. Two bounded workers handle shallow discovery and
-Core reader APIs. Streaming responses retain their permit until closed. Imports
-commit atomically into separate private storage; source files are never overwritten.
+The implemented Electron preview loads a local React workbench, uses a narrow
+preload to reach Electron main, and sends scoped commands over private pipes to
+the Rust engine. It uses no browser server or Docker runtime in this path.
+Algorithms, operation metadata and input/output contracts belong to `cube-core`.
 
 ## Runtime ownership
 
-The complete local runtime has two containers:
-
 | Component | Responsibility |
 | --- | --- |
-| Play Local | Frontend, Axum API, workspace authorization, typed Core calls, SQLite, notes/artifacts and terminal coordination |
-| Cube Runner | Real Cube CLI execution, PTYs, restricted workspace access and process/resource boundaries |
+| React renderer | VSCode Elements workbench, Stage notebook, Asset canvases and inline Run views |
+| Typed preload | Closed application commands without Node, path or database authority |
+| Electron main | Trusted-frame validation, native file chooser, app lifecycle and exact engine startup |
+| Rust engine (`crates/play-engine`) | Ownership, private SQLite, revisions, admission and Run supervision |
+| Native worker | Bounded Core operation execution under the platform policy |
 
-The local runtime runs both Play Local and the [isolated Cube terminal](terminal.md). The trusted host-side Play launcher owns Docker;
-the Cube CLI delegates `cube play [path]` to it. Neither container receives a Docker
-socket or equivalent host control. Runner networking must be disabled by default;
-its private session transport must work within that constraint, the constrained
-Unix socket described in the terminal contract. No runner port is published.
+The preview has one trusted window and one active managed Workspace. The full
+domain permits multiple independent Explorations in that Workspace. Multiwindow
+attachment, external contextual CLI sessions and native PTYs are not implemented.
 
-The Compose development default uses UID/GID 65532; the host launcher builds Unix
-runtime images for the calling user's UID/GID so private source files remain readable
-without chmod or root. Windows uses an unprivileged UID with Desktop sharing. Generated
-Compose configuration publishes Play Local only on `127.0.0.1`
-with dropped capabilities/no-new-privileges, a read-only root filesystem, bounded
-CPU/memory/processes and a Compose bridge network. Play Local needs a reachable
-loopback-published HTTP port; Docker Desktop versions can make internal-only bridges
-unreachable through host port forwarding. This bridge does not enforce an egress
-firewall. The application has no outgoing network APIs or automatic reporting;
-Runner uses its separate network-disabled boundary and Landlock file restrictions. Container wildcard binding requires
-explicit process configuration; never pair it with non-loopback host publication.
-Images and build dependencies are pinned by verified digest/lockfile. Docker is
-defense in depth, not an absolute sandbox.
+## Domain and persistence
 
-The [launcher contract](launcher.md) defines installation, path resolution, stable
-workspace IDs, bounded host commands, locking, reuse, cancellation and platform limits.
-Local host JSON configuration authorizes roots and identifies runtime resources;
-investigation records remain the responsibility of SQLite. The source is read-only,
-data/artifacts use separate named volumes, and no shutdown removes them. Ownership
-labels and runtime configuration are checked before reuse. Remote Docker contexts
-and source roots containing Docker control sockets are rejected.
+**Workspace → Exploration → Stage → ordered Blocks** organizes local work. An
+image and caption share one Block while exposing separate Asset identities and
+revisions. A Trail belongs to an Exploration and binds Assets to a Workspace
+Pipeline definition. A PipelineRun freezes an invocation and its node evidence.
 
-The launcher's separate loopback workspace chooser owns native folder dialogs and
-new/open/recent intents. Trusted React assets are embedded at build time; container
-assets never acquire host authority. Its bearer capability remains in that origin's
-per-tab storage. Application handoffs include only the ready application's own
-capability and a non-secret chooser return origin. The chooser reuses the launcher's
-runtime lifecycle and private registry rather than introducing another storage layer.
-Source roots must remain separate from private launcher state.
+The engine owns private SQLite and an OS-held owner lock. Scoped commands check
+Workspace/Exploration ownership before reading or writing. Reasoning, Asset and
+Pipeline revisions are immutable; accepted single-node Runs preserve their plan,
+inputs, actual attempt and chosen output retention. Sources remain separate and
+unchanged. [Native storage](reference/desktop-storage.md) owns exact format,
+upgrade/refusal rules, quotas and recovery.
 
-## Core and storage boundaries
+The [domain contract](reference/desktop-domain.md) defines the complete target
+model. Native Candidates/Solutions and official Cloud outcomes are separate
+future deliveries, rather than implied by current Run records.
 
-The prerelease consumes the sibling Cube 0.18.0 library directly, with a pinned CI
-checkout. Docker's `cube_engine` context contains workspace metadata, Core/CLI
-sources and the minimal Python member manifest/entry point needed by Cargo.
-Credentials, history, fixtures and build caches are excluded. Only compiled Rust
-binaries enter the runtime image.
-Hosted CI checks out the public Core repository over HTTPS at a pinned revision.
+## Request boundary
 
-The [typed Lab API](lab-api.md) derives discovery from Core, resolves authorized
-inputs and executes one bounded operation in a short-lived backend worker. It
-terminates and reaps workers on timeout/cancellation; generated result bundles
-use the existing artifact volume, separate from source and private SQLite state.
-Bundle writes retain their directory capability until both files are flushed,
-then close it before the atomic publication rename. Recovery closes each pending
-directory before removing it, preserving Windows capability-handle semantics.
+Only the registered top frame at `cube-play://app/index.html` can use the bridge.
+Renderer sandboxing and context isolation are enabled; Node integration, webviews
+and arbitrary navigation are disabled. Another window loading the same URL does
+not acquire authority. Main owns file selection and passes bounded content; the
+renderer cannot submit arbitrary host paths.
 
-Use the versioned direct `cube-core` dependency for algorithms, semantic types,
-validation and operation metadata. Descriptors describe functions, not universal
-dispatch. Existing pipeline execution applies only to its bounded adapter allowlist;
-image/media operations can use direct typed APIs. Preserve explicit binary/text
-representations, stable IDs and engine/adapter compatibility versions. Do not parse
-human terminal output into Lab results or copy algorithms into TypeScript.
+The engine supervises real workers independently of React. It records acceptance
+before dispatch and commits terminal evidence before reporting success. Worker
+inputs are minimum scoped bytes, not database or credential access. The
+[IPC contract](reference/desktop-runtime.md) owns exact frames, commands, sender
+checks, resource accounting and adversarial validation.
 
-The [persistence foundation](persistence.md) uses SQLx/SQLite with versioned migrations
-for local metadata, notes, sessions, progress, saved navigation and imported-file
-references. Large binary artifacts live in
-separate filesystem storage on persistent volumes. Authorize source roots explicitly
-and mount them read-only by default. Output storage is separate; exports require
-explicit non-destructive destination authorization. Resolve symlinks, reject traversal
-and bound discovery, parsing and operations before processing untrusted files.
+## Native execution and delivery scope
 
-[Local challenge definitions](challenges.md) are bounded non-executable JSON data,
-separate from private progress/answers. Current Core JSON recipes are not stage
-manifests or a full `.cube` DSL. Import never invokes an executor or fetches assets. Free Lab
-must work independently of challenges. Cloud services, remote execution, collaboration
-and speculative synchronization frameworks are outside the local MVP.
+The macOS proof uses a locally ad-hoc-signed App Sandbox helper with filesystem,
+network, CPU/time, output and process controls. It runs ROT13 and Brainfuck from
+Core. Windows/Linux reject worker execution with `native_policy_unavailable`
+until their native policies are proved. Rust tests on those systems are not
+proof of a complete native execution boundary.
 
-The [visual Lab](visual-lab.md) consumes typed Core responses. Canvas 2D only
-draws a bounded viewport; ECharts plots returned counts. Transient pixel/histogram/
-comparison probes use the existing worker without allocating permanent result bundles.
+General DAG planning, parallel branches, contextual CLI/PTY, authenticated Cloud,
+signed packages and verified updates remain incomplete. Local build digests and
+ad-hoc signing are development checks, not publisher authentication. See
+[contributor verification](reference/validation.md) for actual checks.
 
-The [notebook](notebook.md) names immutable Core result bundles in SQLite and
-serializes note autosave with revision conflicts. Exports are authenticated browser
-downloads; containers never receive a host write destination.
+## Repository transition
 
-Private stage candidates append typed selection/conversion revisions in the same
-SQLite database. They reference named immutable Core bundles and preserve lineage;
-Core decodes explicitly selected Base64 fields. No verification or submission occurs.
-
-[Typed explorations](explorations.md) separate immutable configuration revisions
-from actual execution attempts. Named-port schemas come from versioned Core
-contracts; Play adds tested interface adapters, capability resolution and UI
-controls. Execution evidence points to existing immutable artifact bundles instead
-of duplicating result bytes or private parameters in SQLite.
-
-[Private solutions](solutions.md) append immutable explanations and snapshots of
-the actual selected artifact dependency path. Configuration projections contain
-only its executed steps; the original exploration keeps all branches. Optional
-stage associations freeze existing local candidate revisions without changing
-progress or submitting answers. Binary data stays in the shared filesystem
-bundles, and missing evidence produces explicit replay gaps.
+The source tree still contains `play-local`, `play-launcher`, `play-runner`, the
+served web frontend and Docker checks. They are outside the Electron invocation
+path. [#56](https://github.com/cubearc/play/issues/56) owns their required removal;
+this documentation update does not establish retirement. Existing tests remain
+required until reviewed native replacements land. There is no native fallback
+into those runtimes and no old product-store converter.

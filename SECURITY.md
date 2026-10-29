@@ -2,48 +2,54 @@
 
 ## Report privately
 
-This repository is currently private. Authorized collaborators can use its
-[private issue tracker](https://github.com/cubearc/play/issues/new) to ask maintainers
-for a confidential reporting channel. Include the affected version and a request
-for coordination; withhold exploit details, credentials and private investigation
-files until maintainers establish the channel. There is no configured security
-email address or verified external-reporter channel.
+Do not post exploit details, credentials or private investigation files in public
+issues. This repository is public. Use a private advisory only if its Security
+tab offers a private reporting form. Otherwise, open a minimal issue asking
+maintainers to establish a confidential channel, without including sensitive
+material. There is no security email address documented by this project; do not
+assume an unverified address or public issue is a confidential reporting channel.
 
-GitHub private vulnerability reporting is a public-repository feature. Do not assume
-the advisory reporting form is available here. If maintainers later make the project
-public, they must enable and verify private reporting, update this policy and monitor
-reports before directing reporters to that form. Repository visibility is a separate
-maintainer decision. Never post sensitive details in public issues.
+Include the affected commit/build, operating system and scope after a private
+channel is established. Security fixes currently target `main`.
 
 ## Local trust boundary
 
-Cube Play is intended for use on the same machine as its browser. Host exposure must
-remain loopback-only. Host/Origin validation, same-site HttpOnly cookies and short-lived
-process credentials protect against unauthorized browser access and DNS rebinding.
-The session link grants access to that local process; do not share it or include it
-in diagnostics. A restart rotates the credential. Session cookies use HTTP on loopback;
-they are not a remote-access or multi-user authentication system.
+The Electron preview is a private local application. Its renderer has sandboxing
+and context isolation, no Node integration and no unrestricted shell, path or
+SQLite API. Main accepts closed commands only from the registered trusted top
+frame. It launches the exact local Rust engine over private pipes; there is no
+session URL or localhost server in this invocation path.
 
-The host launcher may control a local Docker daemon. Application containers never
-receive its socket or equivalent privileges. The launcher rejects remote Docker
-endpoints and source roots containing the active or standard Docker socket paths.
-Only the selected source directory and minimal workspace metadata are mounted,
-read-only. Generated data and artifacts use separate named volumes.
+The engine validates Workspace/Exploration ownership and exact Asset revisions.
+Private stores have an OS-held owner lock and explicit schema refusal; unsupported
+stores are preserved, not reset. Native PNG selection copies only the selected
+bounded input into private storage and does not overwrite the source or grant
+access to sibling files. Remote content must not gain application preload or
+native authority, and Challenge content never executes automatically.
 
-The runtime is non-root, read-only and resource-bounded, without privileged mode.
-On Unix it uses the invoking user's UID/GID so private sources remain readable
-without changing their permissions; running the launcher as root is rejected.
-Unsupported Docker file sharing or user mappings fail explicitly. Docker isolation
-is defense in depth, not an absolute security boundary. File discovery uses bounded,
-capability-relative reads. Symlinks and special files are shown but not opened.
-Text is inert; inline media types and processing budgets are restricted. Imports
-require explicit confirmation and commit into private storage without overwriting
-sources or existing files. See the [workspace boundary](docs/workspace.md).
-Terminal execution and challenge stages remain separate work; inspecting a challenge
-does not execute it.
-Future changes must preserve the [documented boundaries](docs/architecture.md).
+macOS execution uses a locally ad-hoc-signed App Sandbox helper with bounded
+inputs/outputs and enforced file/network/process/time controls. Windows/Linux
+workers refuse execution while native enforcement is unavailable. These are
+explicit development boundaries, not a complete signed release or aggregate
+process-tree/PTY guarantee. See [native execution](docs/reference/desktop-runtime.md)
+for precise accounting, limits and unimplemented release requirements.
 
-There are no implicit telemetry calls, uploads or Cloud services. Dependency/image
-downloads occur during setup and builds. Structured diagnostics must omit session
-credentials, command contents and private paths; the explicit startup session link
-is the only intentional credential output. Security fixes currently target `main`.
+Local results and reasoning stay private. Retaining a Run output is an explicit
+choice; a result is not an official Challenge evaluation. The preview has no
+Cloud credential store, submission or automatic reporting. Dependency downloads
+occur during setup/builds. Diagnostics must omit credentials, private payloads,
+command contents and unnecessary source paths. Protect the host account: the
+application does not defend against an attacker controlling that account.
+
+## Repository transition
+
+The served-web, host launcher and container Runner still exist pending
+[required retirement](https://github.com/cubearc/play/issues/56). Their session,
+Host/Origin, source, network and resource checks remain required until replaced;
+they are not fallback policies for native execution. Do not add container-control
+privileges to application workers or weaken tests while retiring those paths.
+
+Follow the [native architecture](docs/architecture.md) and
+[contributor verification](docs/reference/validation.md) when changing a boundary.
+A passing protocol test or local signature does not establish packaged platform,
+update or hosted-service security.

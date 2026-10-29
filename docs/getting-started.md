@@ -1,24 +1,30 @@
-# Inspect your first file
+# Decode a clue in your first notebook
 
-[Install Play](installation.md). In a POSIX shell, create an original input:
+<a id="inspect-your-first-file"></a>
 
-```sh
-mkdir cube-play-example
-printf 'Cube' > cube-play-example/sample.bin
-cube play ./cube-play-example
-```
+[Open the Electron preview](installation.md) on macOS. This example uses a text
+Asset and the real Core ROT13 operation; it does not require a Challenge or a file.
 
-The browser opens after readiness. In **Files**, select `sample.bin` and inspect
-its four bytes: `43 75 62 65`. Unknown signatures remain observations; they do not
-make the file unavailable. Opening a source file does not import or change it.
+1. On the welcome screen, enter a Workspace name, such as **Signal studies**, and
+   choose **Create workspace**.
+2. Choose **New Exploration**, enter **Spiral signal** and choose **Create**.
+   Its first local Stage opens as a notebook.
+3. Choose **Add text**. Give the Block a title and enter
+   `Gur xrl vf va gur cvkryf.` as its text, then choose **Add text**.
+4. Keep **ROT13** selected and **Keep result in private history** checked.
+   Choose **Run cell**. The result beside that cell is `The key is in the pixels.`
+5. Click the text Asset to open its **Trail canvas**. The canvas shows its bound
+   input, selected Pipeline and Run result. Expand **Saved Run & input evidence**
+   to inspect the accepted configuration and source revision.
+6. Write an observation in **Stage note**, then choose **Save reasoning** or press
+   Cmd+S. Quit and reopen the app: the notebook, saved reasoning and retained
+   result reopen in the same Exploration.
 
-Use **Workspaces** to open another folder or resume an investigation.
-Keep the private session link to yourself. To stop this workspace:
+Use **New Exploration** to keep a second investigation independent. Use
+**New Stage** to add a local part to the selected Exploration. Notes and results
+from the first Exploration do not become content in the second.
 
-```sh
-cube play --stop ./cube-play-example
-```
-
-The workspace's saved data survives shutdown. Continue with
-[browse and import files](workspace.md), [visual analysis](visual-lab.md), or
-[private notes](notebook.md).
+For a visual clue, [add an image with its caption](workspace.md). The caption
+appears with its image and can feed ROT13 directly; there is no need to copy it
+into a separate text cell. [Notebook controls](notebook.md) cover retention,
+reasoning and keyboard shortcuts.

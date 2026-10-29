@@ -1,38 +1,38 @@
-# Browse and inspect local files
+# Add text and image Assets
 
-The workbench uses the full window width, with the workspace name and connection
-state in its compact header. The sidebar groups Files, Explorations and Notes under
-Investigate, Artifacts and Solutions under Library, and Local challenges and Terminal
-under Tools. Narrow windows use a horizontal section bar. Section changes retain
-mounted editors and drafts. Select the investigation name or **Rename** to reveal its
-name editor; navigation-save status remains in the compact investigation toolbar.
+<a id="browse-and-inspect-local-files"></a>
+<a id="import-explicitly"></a>
 
-Open a directory with `cube play [path]`. **Source files** navigates its read-only
-contents; **Imported files** shows copies explicitly saved locally. Navigation is
-shallow. Direct-file launches retain siblings. Exactly one compatible file in a
-complete listing opens automatically; incomplete listings never claim uniqueness.
+A Stage notebook holds ordered Blocks. Each text Block has a revisioned Asset.
+An image Block holds the image and its caption together; the caption is a
+separate text Asset within that same Block. Both can be opened in a Trail canvas.
 
-Select a file for a preview. Core validates supported PNG/JPEG/GIF/BMP/WebP rasters
-before their original bytes are served. Rejected images retain metadata and byte
-inspection. MP4/MOV/WebM container metadata also comes from Core. Audio/video
-playback depends on browser codecs and starts muted; enable sound in the controls.
-Unsupported playback retains available metadata and hexadecimal/ASCII inspection.
+## Add text
 
-Filename categories are extension hints. Core header signatures are separate
-evidence, never proof of structural validity. Unknown files remain selectable.
-HTML, SVG and scripts are inert UTF-8 text, never embedded documents. Unsupported
-text/control bytes use byte inspection without silently converting original data.
+Choose **Add text**, enter a title and text, then choose **Add text** in the dialog.
+The Block appears in the selected Stage. Its text can feed the native ROT13 or
+Brainfuck adapter. The current ceiling is 1024 UTF-8 bytes per text Asset.
 
-## Import explicitly
+## Add an image with its caption
 
-Choose a file, review **Save as**, then select **Import into workspace**. Selection
-alone sends no bytes. Imports go into private data-volume storage, never the source.
-Existing names are rejected; choose another name rather than overwriting them.
-Imports survive restart/recreation with stable SQLite references. See
-[local persistence](persistence.md) for saved navigation and missing-file recovery.
+1. Choose **Add image** in the notebook.
+2. Enter a caption, such as `Gur xrl vf va gur cvkryf.`.
+3. Choose **Choose PNG** and select your own PNG, up to 128 KiB.
 
-An interrupted import can have completed after its commit point; refresh before retrying. See [import publication](reference/workspace.md#atomic-import-publication) for recovery details.
+The image and caption render as one figure. Play copies the selected bytes into
+its private store and validates them with Core; the original file is unchanged.
+A cancelled chooser adds no Block. The import does not authorize sibling files
+or turn the source folder into a browsable Workspace.
+
+Click the image to open its inspection canvas, or the caption to open its text
+Trail canvas. Running ROT13 below the caption transforms that caption's exact
+Asset revision. It does not extract letters from the pixels. The image canvas
+currently supports preview and zoom, rather than a full image operation graph.
 
 ## Limits and recovery
 
-Listings and previews are bounded and identify incomplete results. Refresh after host renames or removals and narrow large directories when needed. The [workspace reference](reference/workspace.md#limits-and-recovery) lists exact quotas, supported paths, authorization and storage requirements.
+The preview accepts PNG image imports and text, rather than arbitrary files,
+videos or executable pages. A Stage allows 8 Blocks including reasoning;
+historical revisions and retained Runs also consume the Exploration's budget.
+A rejected import preserves existing content and the source. Exact limits and
+ownership rules are in [native storage](reference/desktop-storage.md).

@@ -21,8 +21,8 @@ The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper
 Linux and Windows negotiate the protocol and expose Core adapter descriptions,
 but reject execution with `native_policy_unavailable`. Neither has an
 unrestricted or container fallback. This is not a release-supported desktop
-distribution. The full application and native terminal still require the
-corresponding shell, storage, worker and packaging deliveries.
+distribution. The complete application and native terminal still require the
+remaining shell, storage, worker and packaging deliveries.
 
 The proof adapters invoke `cube-core`'s `cipher.rot13` and
 `esolang.brainfuck.execute`. Their descriptions and versions come from actual Core
@@ -35,12 +35,14 @@ The private unbound capability probe returns only its test envelope.
 
 ## Trust and process topology
 
-The canonical desktop has one Electron main process per user application
+The target desktop topology has one Electron main process per user application
 instance, with one Rust engine per open Workspace identity. Multiple windows
-attach to the same owner engine; they never open independent writable SQLite
-connections. The engine owns domain authorization, its private store and assets.
-Workers and native PTYs are children of its execution supervisor. Algorithms and
-operation metadata belong to Core.
+must attach to the same owner engine, never independent writable SQLite
+connections. The implemented preview has one trusted window and one active
+Workspace; multiwindow and external CLI attachment remain separate deliveries.
+The engine owns domain authorization, its private store and assets. In the target
+topology, workers and native PTYs belong to its execution supervisor. Algorithms
+and operation metadata belong to Core.
 
 Main starts the exact bundled engine through inherited private stdin/stdout
 pipes. These are not discoverable TCP services. The proof verifies build-time

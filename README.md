@@ -1,54 +1,60 @@
 # Cube Play
 
+<a id="start-an-investigation"></a>
+
 > [!WARNING]
 > **Beta software.** CubeArc projects are under active development and are not yet
 > stable. Features, APIs, file formats and workflows may change without backward
 > compatibility. Bugs and incomplete features are expected. Keep backups of
 > important data and independently verify results before relying on them.
 
-A local investigation workspace powered by [Cube](https://github.com/cubearc/cube).
-Use the visual Lab, a real Cube terminal, private notes and retained findings.
-Structured challenges are optional.
+A local investigation IDE powered by [Cube](https://github.com/cubearc/cube).
+Organize independent Explorations in a Workspace, keep clues in Stage notebooks,
+and open an Asset in its own Trail canvas.
 
-- Browse and inspect local files while preserving the source.
-- Transform images and data, connect typed operations and retain their results.
-- Resume investigations, notes, artifacts and private solution revisions.
+- Keep an image and its caption together, with distinct input Asset identities.
+- Run ROT13 or Brainfuck on text and inspect results beside the cell.
+- Reopen saved content, reasoning and retained Run evidence.
 
-## Start an investigation
+## Try the Electron preview
 
-[Install from source](docs/installation.md), then open a directory:
+The source preview executes operations on macOS. Windows/Linux worker execution,
+signed installers, the native terminal and Cloud integration are still being
+implemented. See [installation](docs/installation.md) for prerequisites and scope.
+
+From a trusted Play checkout with Cube beside it:
 
 ```sh
-cube play ./investigation
+npm ci --prefix frontend
+npm run desktop:build --prefix frontend
+npm run desktop:proof --prefix frontend
 ```
 
-The launcher opens the workspace in your browser. It uses local Linux containers
-and keeps investigation state in private local storage.
-Follow [Getting Started](docs/getting-started.md) for your first inspection.
+This opens the Electron application with its local Rust engine. Docker, WSL and a
+browser server are not required for this path. Follow the
+[first notebook](docs/getting-started.md) to create an Exploration and decode a clue.
 
 ## Documentation
 
-- [Workspace](docs/workspace.md): browse, preview and explicitly import files.
-- [Visual Lab](docs/visual-lab.md) and [explorations](docs/explorations.md): inspect and transform data.
-- [Notebook](docs/notebook.md) and [solutions](docs/solutions.md): retain findings.
-- [Terminal](docs/terminal.md): run Cube commands in the isolated workspace.
-- [Challenges](docs/challenges.md): use local stages and private progress.
-- [All documentation](docs/index.md): tasks, reference and contributor material.
+- [Workspaces](docs/launcher.md) and [Explorations](docs/explorations.md): organize work.
+- [Notebook](docs/notebook.md), [Assets](docs/workspace.md) and [image inspection](docs/visual-lab.md): keep and explore clues.
+- [Saved state](docs/persistence.md): resume reasoning and private Run history.
+- [Documentation index](docs/index.md): current capabilities and native references.
 
 ## Contribute
 
-See [Contributing](CONTRIBUTING.md) for the developer quick start and checks.
+See [Contributing](CONTRIBUTING.md) for development and verification.
 Track work in [Issues](https://github.com/cubearc/play/issues) and
 [CubeArc Roadmap](https://github.com/orgs/cubearc/projects/1).
 Report vulnerabilities through [Security](SECURITY.md).
 Licensed under [Apache-2.0](LICENSE).
 
 <a id="developer-quick-start"></a>
-
-The former developer quick start is in [Development](docs/development.md).
 <a id="docker-development"></a>
 
-Container development is covered by [Development](docs/development.md#containers).
+The [development guide](docs/development.md) describes the native workflow;
+[contributor verification](docs/reference/validation.md) distinguishes it from
+checks still required while the repository refactor is underway.
 
 ## Support CubeArc
 

@@ -1,79 +1,54 @@
-# Private notes and artifacts
+# Work in a Stage notebook
 
-Open **Notes**, then use **New note** to record a hypothesis. Notes autosave after 400 ms and serialize
-edits made during an active write. Wait for **Notes saved locally** before leaving.
-A note can refer to the selected source/imported file or the investigation. Notes
-are plain text; HTML and scripts are inert. Stale revisions stop autosave and retain
-the draft in the editor. Copy it before explicitly reloading/discarding it; newer
-stored content is never silently overwritten. Empty titles must be corrected.
+<a id="export-an-artifact"></a>
+<a id="persistence-and-api"></a>
+<a id="private-notes-and-artifacts"></a>
 
-For a typed exploration result, choose **Output port**, then **Annotate selected
-output**. In Notes, choose **New note for selected execution** or associate the
-current note with that execution. Existing drafts are preserved. **Annotate
-execution** in execution history can also record observations about failed attempts.
-The association identifies the actual attempt and optional output port; changing
-the graph or running it again never redirects the note to a newer result.
+Each Exploration has its own local Stages. A Stage combines ordered content
+Blocks, cell results and saved reasoning. Choose **New Stage** in the Explorer
+to create another local part without importing a Challenge.
 
-Choose **Inspect linked execution** to read its status, configuration revision,
-recorded evidence and retained output without running it again. Missing/corrupt
-artifacts remain explicit errors while the note reference and editable commentary
-remain available. Unretained output cannot acquire an output association.
-Notes use the same SQLite association field for files, investigations and
-execution references.
+Use [Add text or Add image](workspace.md) to add clues. An image caption stays in
+the image's figure, with its own input Asset identity. Clicking an Asset opens a
+Trail canvas in the same Exploration; [Explorations and Trails](explorations.md)
+explains the relationship.
 
-Select any generated Lab result, enter an artifact name and choose **Save named
-artifact**. Names and optimistic revisions live in the existing SQLite database;
-exact bytes, type, parameters, digests and lineage stay in immutable Lab bundles on
-the artifact volume. No second database or binary copy is created. Refresh the
-**Artifacts** section to reopen or rename results. **Load operation history** reads at
-most 64 retained bundles; it performs no recursive source analysis. References to
-missing/corrupt results remain visible for recovery. Reopened image results can
-use the same visual controls; two compatible saved images can be compared by Core.
+## Run a text cell
 
-Under **Explorations**, expand **Quick text and byte tools** for single-operation
-Core tools with default parameters. With
-no file selected it accepts explicit private text; with a file it uses the selected
-Core input type and strict text decoding or exact bytes. It does not parse terminal
-output or implement encoding algorithms. Use the real terminal for other parameters.
-Text previews are bounded to 64 KiB; byte previews use Base64 API transport without
-implicit UTF-8 conversion. Explicit export retains all original result bytes.
+Select **ROT13** or the Brainfuck adapter (`esolang brainfuck run`) and choose
+**Run cell** on macOS. The operation
+runs through Core in a supervised native worker. Progress, cancellation and the
+result appear beside that cell, with the same Run visible in its Trail canvas.
+There is no shared Output panel. The preview does not execute a multistep graph.
 
-## Export an artifact
+**Keep result in private history** chooses whether the accepted Run stores its
+output. When checked, the result survives restart. When cleared, the saved Run
+records **output was not retained**; the output cannot be recovered from history.
+Brainfuck output is labeled as Base64 bytes, without an implicit text conversion.
 
-**Export selected artifact** is a deliberate browser download. Its authenticated
-endpoint accepts a bounded portable filename, never a host destination path. Your
-browser owns destination authorization and normal collision handling; ordinary
-browser downloads preserve existing names by choosing another filename. Play cannot
-write through host paths, follow destination symlinks or overwrite sources. Use the
-browser's save controls to choose a location; any explicit browser replacement is
-a separate user decision. The server neither mounts an export directory writable
-nor writes back into the source.
+Expand **Saved Run & input evidence** to inspect an earlier Run or load older
+history. Accepted Runs pin the input revision and Pipeline/Core configuration;
+choosing another operation does not rewrite previous evidence. See
+[native PipelineRuns](reference/desktop-runs.md) for states and exact retention.
 
-Export errors leave bundles and database records
-unchanged; an incomplete browser download can be discarded and retried.
+## Save reasoning
 
-## Persistence and API
+Write in **Stage note**, then choose **Save reasoning** or Cmd/Ctrl+S. Wait for
+**Saved** before leaving the Stage. Saving appends an immutable reasoning revision;
+a conflict preserves the draft rather than silently replacing stored content.
+Closing or quitting with unsaved reasoning offers **Keep editing** or
+**Discard draft**. Unsaved drafts are not crash-recovery records.
 
-State survives server restart and container recreation using the existing private
-volumes. Names are limited to 512 UTF-8 bytes; notes to 100 records/64 KiB body;
-results have a 64-bundle/64-MiB quota. No files, notes, commands or
-artifacts are uploaded and no telemetry is added. Preserve stopped volumes and
-SQLite/WAL files for recovery as described in [persistence](persistence.md).
+## Keyboard controls
 
-Library endpoints use the local session and Host/Origin checks:
-`GET/PUT /api/lab/library`, `GET /api/lab/history`, and
-`GET /api/lab/results/{id}/export?name=result.bin`. Library writes use an existing
-result UUID, title and revision (0 creates; subsequent writes use the returned
-revision). Export names reject paths, reserved names and header injection.
+| Action | macOS | Windows/Linux UI |
+| --- | --- | --- |
+| Toggle Explorer | Cmd+B | Ctrl+B |
+| Open command palette | Cmd+Shift+P | Ctrl+Shift+P |
+| Run active text cell | Cmd+Enter | Ctrl+Enter |
+| Save reasoning | Cmd+S | Ctrl+S |
 
-Note `target` is `null`, `{store, path}`, or `{execution_id, output_port}` with a
-local attempt UUID and a recorded retained port name (or `null` for the whole
-attempt). Unknown attempts, other workspaces, invalid ports and mixed reference
-fields are rejected. `GET /api/explorations/executions/{id}` returns the actual
-attempt and configuration reference; it performs no operation or implicit replay.
-
-Historical cipher profiles use the typed exploration controls. See the
-[Core cipher reference](https://github.com/cubearc/cube/blob/main/docs/ciphers.md)
-for transformations and output fields, and
-[private inputs and retention](explorations.md#private-inputs-and-retention) for
-per-run secrets and output choices.
+Windows/Linux worker execution is refused by the current native policy, even
+though the UI has keyboard bindings. [Installation](installation.md) states the
+platform scope. Blocks currently support creation and ordered display; a general
+content editor, drag reordering and result export are not available in this preview.

@@ -14,7 +14,7 @@ than a second repository backlog.
 | Workspace | A local identity with authorized source roots, private storage and a native execution boundary. |
 | Exploration | An independent investigation inside a Workspace. It owns its local notebook, hypotheses, evidence and progress. |
 | Stage | An ordered local part of an Exploration, optionally derived from a published Challenge stage. |
-| Block | An ordered content item in a Stage: text, image, caption, file, inert page, annotation or retained result. |
+| Block | An ordered content item in a Stage: text, image with an optional caption, file, inert page, annotation or retained result. |
 | Asset | A logical, revisioned identity for content that can be inspected or used as an operation input. |
 | Trail | An Exploration's hypothesis and investigation history, with a selected Pipeline revision and explicit input bindings. |
 | Pipeline | A reusable, versioned graph of typed operation nodes and declared input slots. |
@@ -25,9 +25,10 @@ than a second repository backlog.
 | Challenge edition | An immutable published activity version identified by the remote service. |
 
 Exploration names the investigation container throughout Rust, TypeScript,
-storage and commands. The current graph called `Exploration` supplies the basis
-for Trail/Pipeline responsibilities; `Investigation` is retired. The cutover does
-not translate old records or retain these names as executable aliases.
+storage and commands. The superseded graph called `Exploration` supplies the basis
+for Trail/Pipeline responsibilities; `Investigation` is excluded from the native
+model. The old implementation remains subject to the retirement inventory below;
+the native cutover does not translate old records or expose those names as aliases.
 
 ## Ownership and cardinality
 
