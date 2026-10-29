@@ -109,12 +109,22 @@ export function blockSource(block: BlockView): BlockSource {
 export function blockTitle(block: BlockView): string {
   return block.kind === "note" ? block.note.title : block.asset.title;
 }
+export interface PipelineRef {
+  id: string;
+  revision: number;
+}
 export interface PipelineView extends Summary {
+  nodeId: string;
+  inputType: string;
+  parameters: Record<string, unknown>;
+  revisions: number[];
+  origin?: { pipelineId: string; revision: number };
   input: string;
   initialOperation: string;
   operationVersion: number;
 }
 export interface TrailView {
+  revision: number;
   archived: boolean;
   id: string;
   workspaceId: string;
@@ -151,6 +161,48 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "create_pipeline";
+      workspace_id: string;
+      key: string;
+      title: string;
+      operation: string;
+      operation_version: number;
+      parameters: Record<string, unknown>;
+    }
+  | {
+      kind: "revise_pipeline";
+      workspace_id: string;
+      key: string;
+      pipeline_id: string;
+      expected_revision: number;
+      operation: string;
+      operation_version: number;
+      parameters: Record<string, unknown>;
+    }
+  | {
+      kind: "fork_pipeline";
+      workspace_id: string;
+      key: string;
+      pipeline_id: string;
+      revision: number;
+      title: string;
+    }
+  | {
+      kind: "get_pipeline";
+      workspace_id: string;
+      pipeline_id: string;
+      revision: number;
+    }
+  | {
+      kind: "save_trail";
+      context: Context;
+      key: string;
+      trail_id: string;
+      expected_revision: number;
+      hypothesis: string;
+      pipeline: PipelineRef | null;
+    }
   | {
       kind: "add_page";
       context: Context;
@@ -349,6 +401,11 @@ export interface MutationResult {
   blockId?: string;
 }
 export interface Responses {
+  create_pipeline: { pipelineId: string; revision: number };
+  revise_pipeline: { pipelineId: string; revision: number };
+  fork_pipeline: { pipelineId: string; revision: number };
+  get_pipeline: PipelineView;
+  save_trail: { trailId: string; revision: number };
   add_annotation: { blockId: string };
   add_page: { blockId: string };
   pin_run_output: { blockId: string; stageId: string; revision: number };
@@ -397,6 +454,33 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    create_pipeline: [
+      "workspace_id",
+      "key",
+      "title",
+      "operation",
+      "operation_version",
+      "parameters",
+    ],
+    revise_pipeline: [
+      "workspace_id",
+      "key",
+      "pipeline_id",
+      "expected_revision",
+      "operation",
+      "operation_version",
+      "parameters",
+    ],
+    fork_pipeline: ["workspace_id", "key", "pipeline_id", "revision", "title"],
+    get_pipeline: ["workspace_id", "pipeline_id", "revision"],
+    save_trail: [
+      "context",
+      "key",
+      "trail_id",
+      "expected_revision",
+      "hypothesis",
+      "pipeline",
+    ],
     add_annotation: ["context", "key", "title", "text"],
     add_page: ["context", "key", "title", "text"],
     pin_run_output: [
@@ -457,7 +541,23 @@ export function request(value: unknown): WorkspaceRequest {
   for (const field of expected) {
     const value = record[field];
     if (field === "context") context(value);
-    else if (field === "source") {
+    else if (field === "pipeline") {
+      if (value !== null) {
+        const p = object(value);
+        keys(p, ["id", "revision"]);
+        if (!id(p.id) || !revision(p.revision))
+          throw new Error("invalid_command");
+      }
+    } else if (field === "parameters") {
+      object(value);
+      if (!bytes(JSON.stringify(value), limits.pipeline_parameter_bytes))
+        throw new Error("input_limit");
+    } else if (field === "hypothesis") {
+      if (!bytes(value, limits.hypothesis_bytes))
+        throw new Error("input_limit");
+    } else if (field === "operation") {
+      if (!bytes(value, 128) || !value) throw new Error("invalid_command");
+    } else if (field === "source") {
       const source = object(value);
       if (source.kind === "asset") {
         keys(source, ["kind", "asset", "caption"]);
@@ -477,8 +577,16 @@ export function request(value: unknown): WorkspaceRequest {
         new Set(value).size !== value.length
       )
         throw new Error("invalid_command");
-    } else if (field === "expected_revision") {
-      if (!revision(value)) throw new Error("invalid_command");
+    } else if (
+      field === "expected_revision" ||
+      field === "revision" ||
+      field === "operation_version"
+    ) {
+      if (
+        !revision(value) ||
+        (field === "operation_version" && Number(value) > 0xffffffff)
+      )
+        throw new Error("invalid_command");
     } else if (field === "before") {
       if (value !== null && !revision(value))
         throw new Error("invalid_command");

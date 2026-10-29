@@ -1,0 +1,370 @@
+{
+  "identity": {
+    "product": "cubearc.play.workspace",
+    "generation": 2,
+    "workspace_id": "34ef4959-9f89-465f-8058-d6e41ed7b350",
+    "title": "Pipeline evolution",
+    "creation_key": "32d140a3-3d3d-4af4-aa9a-5f65962ea087",
+    "creation_digest": "3554a410a79aa09f9e7ab484f3483008799f6b6972ba41661d6bf44b282e8f55"
+  },
+  "context": {
+    "workspace_id": "34ef4959-9f89-465f-8058-d6e41ed7b350",
+    "exploration_id": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+    "stage_id": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c"
+  },
+  "view": {
+    "id": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+    "revision": 1,
+    "stage": {
+      "archivedBlocks": [],
+      "blocks": [
+        {
+          "asset": {
+            "content": {
+              "kind": "text",
+              "text": "Gur xrl."
+            },
+            "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+            "id": "0a8a0cab-0a6a-4b13-8024-48eaa9f4b962",
+            "revision": 1,
+            "title": "Prior clue"
+          },
+          "id": "94706220-5139-475a-ad86-708f5eee1d32",
+          "kind": "asset"
+        },
+        {
+          "asset": {
+            "content": {
+              "kind": "image"
+            },
+            "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+            "id": "11160703-d070-43ab-bf52-93fab441ec79",
+            "revision": 1,
+            "title": "Prior image"
+          },
+          "caption": {
+            "content": {
+              "kind": "text",
+              "text": "Gur cvpgher."
+            },
+            "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+            "id": "a8f510f6-157b-438d-a5b1-eaeb48707295",
+            "revision": 1,
+            "title": "Image caption"
+          },
+          "id": "61234a47-b592-400a-b14e-c890e5157942",
+          "kind": "asset"
+        },
+        {
+          "id": "e85c86a1-923e-43e4-bd78-b8d6063f8878",
+          "kind": "note",
+          "note": {
+            "id": "3df5b14a-d2de-424b-9f83-f3ecd53d0943",
+            "kind": "reasoning",
+            "revision": 1,
+            "text": "",
+            "title": "Reasoning"
+          }
+        }
+      ],
+      "id": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c",
+      "introduction": "",
+      "revision": 3,
+      "title": "Stage 1"
+    },
+    "stages": [
+      {
+        "id": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c",
+        "revision": 3,
+        "title": "Stage 1"
+      }
+    ],
+    "title": "Prior evidence",
+    "trails": [
+      {
+        "archived": false,
+        "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+        "hypothesis": "",
+        "id": "b0884474-463e-4820-b7e7-80bfe3dcb6bd",
+        "pipeline": {
+          "id": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+          "initialOperation": "cipher.rot13",
+          "input": "source",
+          "operationVersion": 1,
+          "revision": 1,
+          "title": "Text transform"
+        },
+        "pipelineId": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+        "source": {
+          "content": {
+            "kind": "text",
+            "text": "Gur xrl."
+          },
+          "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+          "id": "0a8a0cab-0a6a-4b13-8024-48eaa9f4b962",
+          "revision": 1,
+          "title": "Prior clue"
+        },
+        "stageId": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c",
+        "title": "Explore Prior clue",
+        "workspaceId": "34ef4959-9f89-465f-8058-d6e41ed7b350"
+      },
+      {
+        "archived": false,
+        "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+        "hypothesis": "",
+        "id": "94d808e3-445f-4d82-b9a9-896912ecbe93",
+        "pipeline": {
+          "id": "beaa094c-8748-40c0-b143-150c57c644f9",
+          "initialOperation": "image.pixels.read",
+          "input": "source",
+          "operationVersion": 1,
+          "revision": 1,
+          "title": "image pixel"
+        },
+        "pipelineId": "beaa094c-8748-40c0-b143-150c57c644f9",
+        "source": {
+          "content": {
+            "kind": "image"
+          },
+          "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+          "id": "11160703-d070-43ab-bf52-93fab441ec79",
+          "revision": 1,
+          "title": "Prior image"
+        },
+        "stageId": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c",
+        "title": "Explore Prior image",
+        "workspaceId": "34ef4959-9f89-465f-8058-d6e41ed7b350"
+      },
+      {
+        "archived": false,
+        "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+        "hypothesis": "",
+        "id": "e984f856-3340-4d16-adc7-0280a1d049ce",
+        "pipeline": {
+          "id": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+          "initialOperation": "cipher.rot13",
+          "input": "source",
+          "operationVersion": 1,
+          "revision": 1,
+          "title": "Text transform"
+        },
+        "pipelineId": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+        "source": {
+          "content": {
+            "kind": "text",
+            "text": "Gur cvpgher."
+          },
+          "explorationId": "c266fa82-f481-4560-8b2c-1439f5120a3a",
+          "id": "a8f510f6-157b-438d-a5b1-eaeb48707295",
+          "revision": 1,
+          "title": "Image caption"
+        },
+        "stageId": "538e76e8-bebe-4d2a-8b0b-07529c4ab76c",
+        "title": "Explore Image caption",
+        "workspaceId": "34ef4959-9f89-465f-8058-d6e41ed7b350"
+      }
+    ],
+    "workspaceId": "34ef4959-9f89-465f-8058-d6e41ed7b350"
+  },
+  "run": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "finishedMs": 1793276772838,
+        "id": "e09b82d0-c6f2-4bda-bd4c-b689f07b197c",
+        "nodeId": "72519e77-79d8-4596-8e2f-a82727863598",
+        "startedMs": 1793276772583,
+        "status": "completed"
+      }
+    ],
+    "createdMs": 1793276772576,
+    "finishedMs": 1793276772838,
+    "id": "7466f017-7385-4126-b213-66ac3c0ae2a5",
+    "operation": {
+      "name": "ROT13",
+      "operation": "cipher.rot13",
+      "operationVersion": 1
+    },
+    "pipelineId": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+    "pipelineRevision": 1,
+    "plan": {
+      "adapterVersion": 1,
+      "caller": "desktop",
+      "contract": {
+        "category": "ciphers",
+        "description": "Rotate ASCII letters by 13; preserve other Unicode.",
+        "deterministic": true,
+        "errors": {
+          "$defs": {
+            "ErrorCode": {
+              "description": "Machine-readable failure category. New categories may be added compatibly.",
+              "oneOf": [
+                {
+                  "enum": [
+                    "invalid_input",
+                    "invalid_parameter",
+                    "unsupported_format",
+                    "resource_limit",
+                    "io"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "cancelled",
+                  "description": "Cooperative pipeline cancellation at a bounded operation boundary.",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "description": "Operation failure with safe context and an optional original cause.",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "message": {
+              "type": "string"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "operation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "parameter": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "OperationError",
+          "type": "object"
+        },
+        "example": "cube cipher rot13 --text Hello",
+        "inputs": [
+          {
+            "name": "input",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "title": "string",
+              "type": "string"
+            },
+            "semantic_type": "text"
+          }
+        ],
+        "limits": {
+          "max_input_bytes": null,
+          "max_items": null,
+          "max_memory_bytes": null,
+          "max_output_bytes": null,
+          "max_work": null
+        },
+        "operation": "cipher.rot13",
+        "operation_version": 1,
+        "outputs": [
+          {
+            "name": "output",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "title": "string",
+              "type": "string"
+            },
+            "semantic_type": "text"
+          }
+        ],
+        "parameters": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "pipeline_adapter": 1,
+        "policy": {
+          "automatic_capture": false,
+          "grants_filesystem_access": false,
+          "grants_network_access": false,
+          "private_input": false,
+          "private_output": false,
+          "sensitive_parameters": []
+        },
+        "reversible": true,
+        "schema_version": 1
+      },
+      "contractDigest": "0f3f1af1053752a0cdb1bf965795073bea81aa8e3ad25767f4bf92ae0d9f23be",
+      "formatVersion": 1,
+      "inputs": {
+        "input": {
+          "assetId": "0a8a0cab-0a6a-4b13-8024-48eaa9f4b962",
+          "revision": 1,
+          "semanticType": "text"
+        }
+      },
+      "limits": {
+        "cpuSeconds": 1,
+        "outputBytes": 16384,
+        "runMs": 2000,
+        "vmGrowthBytes": 134217728
+      },
+      "operation": {
+        "name": "ROT13",
+        "operation": "cipher.rot13",
+        "operationVersion": 1
+      },
+      "parameters": {},
+      "pipeline": {
+        "definition": {
+          "formatVersion": 1,
+          "inputs": [
+            {
+              "name": "source",
+              "semanticType": "text"
+            }
+          ],
+          "nodes": [
+            {
+              "id": "72519e77-79d8-4596-8e2f-a82727863598",
+              "input": "source",
+              "operation": "cipher.rot13",
+              "operation_version": 1
+            }
+          ]
+        },
+        "id": "95a3b5d1-03e9-4c00-bc76-8bf69581fb80",
+        "revision": 1
+      },
+      "reusePolicy": "none",
+      "reusedOutputs": [],
+      "targetNodes": [
+        "72519e77-79d8-4596-8e2f-a82727863598"
+      ]
+    },
+    "result": {
+      "outputs": {
+        "output": "The key."
+      },
+      "status": "completed"
+    },
+    "retainOutput": true,
+    "sequence": 1,
+    "status": "completed",
+    "trailId": "b0884474-463e-4820-b7e7-80bfe3dcb6bd"
+  }
+}

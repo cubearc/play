@@ -26,16 +26,16 @@ An accepted Run pins:
 - The immutable Pipeline definition/revision, stable node ID and target set.
 - Named input Asset revisions and any adapter-supplied literals. Brainfuck's
   input byte stream is explicitly empty in this development adapter. Image reads
-  bind `image.samples` from the exact authorized PNG revision, with fixed top-left
-  coordinates and palette expansion disabled.
+  bind `image.samples` from the exact authorized PNG revision, with the coordinates
+  and palette-expansion choice frozen in the selected definition.
 - Core operation/schema/adapter identity, complete contract and contract digest.
-- Effective parameters, execution ceilings and the `none` reuse policy.
+- Effective parameters, Trail hypothesis/revision, execution ceilings and the `none` reuse policy.
 
-Selecting another operation freezes a separate Workspace Pipeline definition;
-other Trails and earlier Runs retain their chosen definitions. Matching
-single-node definitions can be reused with independent input bindings. This is
-configuration reuse; outputs are executed again and never presented as reused
-attempts. The operation selector remains a draft for the next accepted Run.
+[Save and select a Pipeline revision](../explorations.md#save-and-reuse-a-pipeline)
+before executing another configuration. A Run never creates or substitutes a
+Pipeline implicitly. A requested operation/version that differs from the selected
+definition returns `pipeline_mismatch`. Reusing a definition is configuration
+reuse: outputs execute again and are never presented as reused attempts.
 
 The intent UUID identifies one accepted action. A matching retry returns the
 original Run in its recorded state, including after restart. Changing its payload

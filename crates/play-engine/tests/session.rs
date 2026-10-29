@@ -67,7 +67,8 @@ fn rejects_unscoped_execution_and_replayed_ids_without_exposing_input() {
     ] {
         assert_eq!(
             request(json!({"type":"invoke","id":id,"invocation":{
-            "operation":operation,"operation_version":version,"input":"private-input"}}))["code"],
+            "operation":operation,"operation_version":version,"input":"private-input","parameters":{}}}))
+                ["code"],
             expected
         );
     }

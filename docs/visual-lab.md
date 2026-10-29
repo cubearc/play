@@ -15,8 +15,10 @@ The image opens in a separate canvas with zoom and its native operation controls
 
 Open the image's canvas and choose **Run cell** on macOS. The native
 `image.pixels.read` adapter reads the pixel at top-left coordinates `x: 0`,
-`y: 0`, with palette expansion disabled. The canvas displays these fixed
-parameters. This preset does not yet offer arbitrary pixel-coordinate editing.
+`y: 0`, with palette expansion disabled. The canvas displays these saved
+parameters. Choose **Edit Pipeline** to change `x`, `y` or `expand_palette`, then
+**Save revision** and **Run cell**. Out-of-bounds coordinates are rejected before
+execution. Other Trails keep their selected revision.
 Core supplies the operation name, contract, decoding and sample-reading algorithm.
 
 The result is bytes displayed as Base64, without an implicit text conversion.
@@ -26,9 +28,14 @@ bytes as a File result. The Run pins the selected image Asset and revision;
 its retained result reopens with the canvas and survives archiving the source.
 An archived image cannot start another Run until restored.
 
-![Image canvas with the native pixel-reading operation, fixed zero coordinates and retained Base64 FFAy result.](assets/desktop/image-operation.png)
+![Image canvas with the native pixel-reading operation, saved zero coordinates and retained Base64 FFAy result.](assets/desktop/image-operation.png)
 
 The image operation records its own Run, independently of the caption. [Open full size](assets/desktop/image-operation.png).
+
+For the same fixture, save a revision with `x: 1`, `y: 0` and
+`expand_palette: false`, then run it. The bytes are `[230, 220, 190]`, displayed
+as `5ty+`. The preceding Run keeps `FFAy` and is labeled as an earlier Pipeline
+revision when selected.
 
 Only installed compatible native adapters appear for each source. Image input is
 validated as `image.samples`; ROT13 and Brainfuck require text. The engine also

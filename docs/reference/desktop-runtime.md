@@ -121,10 +121,10 @@ renderer cannot target another invocation by guessing an ID.
 | `workspace` | Closed `command` intent | `workspace` with scoped domain data. |
 | `start_run` | Closed Run `request` | `run` containing the accepted or idempotently recovered record. |
 | `cancel_run` | Exact `context`, `run_id` UUID | `run` after killing/reaping and recording cancellation, or the original terminal record. |
-| `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
+| `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **11** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **12** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -160,9 +160,15 @@ recorded progress/detail; the engine commits final state independently and never
 sends unsolicited transport replies. The unbound `invoke`/`cancel` entry remains
 only for native capability tests and is absent from the renderer bridge.
 
+[Pipeline commands](desktop-pipelines.md#closed-commands) create, revise, fork and
+read exact definitions. `save_trail` carries its expected revision, hypothesis and
+nullable Pipeline reference. All fields are required at the desktop boundary;
+prior payload shapes are refused. Worker invocations include saved parameters.
+
 The native catalog reports each adapter's Core input semantic type and effective
-parameters. Text selectors expose text adapters; image selectors expose
-`image.pixels.read` with fixed `x: 0`, `y: 0`, `expand_palette: false`. Rust resolves
+default parameters. The Pipeline editor filters compatible adapters and saves
+complete parameters in an immutable revision. Image defaults are `x: 0`, `y: 0`,
+`expand_palette: false`; saved revisions can choose supported coordinates. Rust resolves
 and verifies the authorized PNG revision, validates decoded `image.samples`
 against Core's named schema and freezes the parameters in the Run. The isolated
 worker receives bounded Base64 PNG bytes through its inherited pipe, never an

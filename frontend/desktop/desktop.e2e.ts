@@ -21,6 +21,216 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("explicit Pipeline revisions preserve separate Trail hypotheses and accepted evidence", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-pipeline-revisions-"));
+  const application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Pipeline notebook");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "First investigation");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Encoded clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Encoded clue", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("region", { name: "Trail canvas", exact: true })
+        .getByRole("button", { name: "Edit Pipeline", exact: true }),
+    ).toBeVisible();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "Edit Trail", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", { name: "Edit Trail", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Hypothesis", exact: true })
+      .fill("The clue uses ROT13.");
+    await editor
+      .getByRole("button", { name: "Save Trail", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await expect(canvas).toContainText("The clue uses ROT13.");
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Clue transform");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: The key." : "Execution rejected",
+    );
+    const initial = await current(page);
+    const first = initial.exploration.trails[0];
+    assert.ok(first?.pipeline);
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+    await editor
+      .getByRole("combobox", { name: "Operation", exact: true })
+      .click();
+    await editor
+      .getByRole("option")
+      .filter({ hasText: /brainfuck/i })
+      .click();
+    await editor
+      .getByRole("button", { name: "Save revision", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const revised = await current(page);
+    assert.equal(revised.exploration.trails[0]?.pipeline?.revision, 2);
+    assert.equal(
+      revised.exploration.trails[0]?.pipeline?.nodeId,
+      first.pipeline.nodeId,
+    );
+    assert.equal(
+      revised.exploration.trails[0]?.pipeline?.initialOperation,
+      "esolang.brainfuck.execute",
+    );
+    await expect(canvas.getByRole("note")).toContainText(
+      "Earlier Pipeline · r1",
+    );
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "output: The key." : "Execution rejected",
+    );
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((w) => w.isVisible())
+        ?.webContents.setZoomFactor(0.65),
+    );
+    await capture(application, "native-pipeline-revision");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((w) => w.isVisible())
+        ?.webContents.setZoomFactor(1),
+    );
+    await canvas
+      .getByRole("button", { name: "Fork Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Fork Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Alternative program");
+    await editor
+      .getByRole("button", { name: "Fork Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const forked = await current(page);
+    const fork = forked.exploration.trails[0]?.pipeline;
+    assert.ok(fork?.origin);
+    assert.equal(fork.origin.pipelineId, first.pipeline.id);
+    assert.equal(fork.origin.revision, 2);
+    await create(page, "Exploration", "Second investigation");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Add text block", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Another clue");
+    await editor
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Frpbaq pyhr.");
+    await editor.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Another clue", exact: true })
+      .click();
+    await canvas
+      .getByRole("button", { name: "Edit Trail", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Trail", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Hypothesis", exact: true })
+      .fill("A separate hypothesis for another clue.");
+    await editor
+      .getByRole("combobox", { name: "Saved Pipeline", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "Clue transform", exact: true })
+      .click();
+    await editor
+      .getByRole("combobox", { name: "Pipeline revision", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "Revision 1", exact: true })
+      .click();
+    await capture(application, "native-trail-editor");
+    await editor
+      .getByRole("button", { name: "Save Trail", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const second = await current(page);
+    assert.equal(second.exploration.trails[0]?.pipeline?.id, first.pipeline.id);
+    assert.equal(second.exploration.trails[0]?.pipeline?.revision, 1);
+    assert.notEqual(second.exploration.trails[0]?.source.id, first.source.id);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin"
+        ? "output: Second clue."
+        : "Execution rejected",
+    );
+    await explorer(page)
+      .getByRole("button", { name: "First investigation", exact: true })
+      .click();
+    const restored = await current(page);
+    assert.equal(
+      restored.exploration.trails[0]?.hypothesis,
+      "The clue uses ROT13.",
+    );
+    assert.equal(restored.exploration.trails[0]?.pipeline?.id, fork.id);
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("complete notebook keeps Pages inert and runs the selected image through its typed source", {
   timeout: 90000,
 }, async () => {
@@ -168,9 +378,7 @@ test("complete notebook keeps Pages inert and runs the selected image through it
       }),
     );
     canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
-    await expect(
-      canvas.getByRole("combobox", { name: "Operation", exact: true }),
-    ).not.toHaveText("ROT13");
+    await expect(canvas.locator(".operation-name")).not.toHaveText("ROT13");
     await expect(canvas).toContainText('"x":0');
     await canvas.getByRole("button", { name: "Run cell", exact: true }).focus();
     await page.keyboard.press("ControlOrMeta+Enter");
@@ -257,9 +465,7 @@ test("complete notebook keeps Pages inert and runs the selected image through it
       }),
     );
     canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
-    await expect(
-      canvas.getByRole("combobox", { name: "Operation", exact: true }),
-    ).toHaveText("ROT13");
+    await expect(canvas.locator(".operation-name")).toHaveText("ROT13");
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(canvas).toContainText("output: The key.");
     await canvas
@@ -1431,6 +1637,18 @@ async function saveNote(page: Page, text: string) {
 }
 async function capture(application: ElectronApplication, name: string) {
   await mkdir("playwright-report", { recursive: true });
+  const page = await application.firstWindow();
+  await page.locator(".scroll-surface").evaluateAll((elements) =>
+    elements.forEach((element) => {
+      element.scrollTop = 0;
+    }),
+  );
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
   const png = await application.evaluate(async ({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows().find((entry) =>
       entry.isVisible(),
@@ -1655,9 +1873,7 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
       page.getByRole("region", { name: "Output", exact: true }),
     ).toHaveCount(0);
     await saveNote(page, "The caption belongs with the image.");
-    await expect(page.getByRole("combobox", { name: "Operation" })).toHaveText(
-      "ROT13",
-    );
+    await expect(page.locator(".operation-name")).toHaveText("ROT13");
     await imageBlock
       .getByRole("button", { name: "Run cell", exact: true })
       .click();
@@ -1811,9 +2027,7 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     await expect(
       canvas.getByRole("button", { name: "Run cell" }),
     ).toBeEnabled();
-    await expect(
-      canvas.getByRole("combobox", { name: "Operation", exact: true }),
-    ).not.toHaveText("ROT13");
+    await expect(canvas.locator(".operation-name")).not.toHaveText("ROT13");
     await capture(application, "native-image-canvas");
     await page
       .getByRole("button", { name: "Close sample.png canvas", exact: true })

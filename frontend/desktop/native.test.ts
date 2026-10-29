@@ -83,7 +83,7 @@ test("invokes Core through a signed sandboxed worker", {
       {
         status: "completed",
         type: "finished",
-        id: 2,
+        id: 3,
         output: { text: "Uryyb, nçãb!" },
       },
     );
@@ -219,6 +219,12 @@ test("cancellation acknowledgement follows actual worker reaping", {
     return JSON.parse(line.value as string) as Record<string, unknown>;
   };
   try {
+    const probeEngine = await Engine.connect(binary);
+    const brainfuck = (await probeEngine.catalog()).find(
+      (o) => o.operation === "esolang.brainfuck.execute",
+    );
+    assert.ok(brainfuck);
+    await probeEngine.close();
     const commands = [
       {
         type: "hello",
@@ -234,6 +240,7 @@ test("cancellation acknowledgement follows actual worker reaping", {
           operation: "esolang.brainfuck.execute",
           operation_version: 2,
           input: "+[]",
+          parameters: brainfuck.parameters,
         },
       },
       { type: "cancel", id: 3, run_id: 2 },

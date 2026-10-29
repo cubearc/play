@@ -16,6 +16,7 @@
     - [Domain contract](reference/desktop-domain.md)
     - [IPC and native execution](reference/desktop-runtime.md)
     - [Workspace storage](reference/desktop-storage.md)
+    - [Saved Pipelines](reference/desktop-pipelines.md)
     - [PipelineRuns](reference/desktop-runs.md)
     - [Scoped Exploration commands](reference/explorations.md)
     - [App lifecycle](reference/launcher.md)

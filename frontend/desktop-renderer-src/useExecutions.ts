@@ -41,7 +41,6 @@ export function useExecutions(
 ) {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [catalogError, setCatalogError] = useState("");
-  const [selected, setSelected] = useState<Record<string, string>>({});
   const [retention, setRetention] = useState<Record<string, boolean>>({});
   const [history, setHistory] = useState<Record<string, History>>({});
   const [busy, setBusy] = useState(false);
@@ -222,9 +221,7 @@ export function useExecutions(
     );
   const operationFor = (trail: TrailView) =>
     operationsFor(trail).find(
-      (operation) =>
-        operation.operation ===
-        (selected[trail.id] ?? trail.pipeline?.initialOperation),
+      (operation) => operation.operation === trail.pipeline?.initialOperation,
     );
   const run = useCallback(
     async (trail: TrailView, operation: Operation) => {
@@ -242,6 +239,10 @@ export function useExecutions(
       const request: RunRequest =
         previous &&
         previous.operation === operation.operation &&
+        previous.pipeline_id === trail.pipeline.id &&
+        previous.pipeline_revision === trail.pipeline.revision &&
+        previous.source_asset_id === trail.source.id &&
+        previous.source_revision === trail.source.revision &&
         previous.retain_output === keep
           ? previous
           : {
@@ -343,8 +344,6 @@ export function useExecutions(
     keepOutput: (trail: TrailView) => retention[trail.id] ?? true,
     setKeepOutput: (trail: TrailView, value: boolean) =>
       setRetention((previous) => ({ ...previous, [trail.id]: value })),
-    selectOperation: (trail: TrailView, value: string) =>
-      setSelected((previous) => ({ ...previous, [trail.id]: value })),
   };
 }
 export type Executions = ReturnType<typeof useExecutions>;

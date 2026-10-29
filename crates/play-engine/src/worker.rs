@@ -3,6 +3,7 @@ use crate::{
     protocol::{self, Invocation},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, Read};
 
@@ -16,11 +17,84 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
     if invocation.input.len() > maximum {
         return Err("input_limit");
     }
-    let descriptor = cube_core::operations::require(&invocation.operation)
-        .map_err(|_| "unsupported_operation")?;
-    let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
-    if contract.operation_version != invocation.operation_version {
+    validate_configuration(
+        &invocation.operation,
+        invocation.operation_version,
+        &invocation.parameters,
+    )?;
+    if matches!(probe, Probe::Pixel) {
+        let p: PixelParameters = serde_json::from_value(invocation.parameters.clone())
+            .map_err(|_| "invalid_parameters")?;
+        let image = image(&invocation.input)?;
+        image
+            .view(p.expand_palette)
+            .map_err(|_| "invalid_image")?
+            .pixel(p.x, p.y)
+            .map_err(|_| "invalid_parameters")?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PixelParameters {
+    x: u32,
+    y: u32,
+    expand_palette: bool,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrainfuckParameters {
+    max_instructions: u64,
+    max_output_bytes: usize,
+    max_memory_bytes: usize,
+}
+fn configured_limits(value: &Value) -> Result<cube_core::esolang::brainfuck::Limits> {
+    let p: BrainfuckParameters =
+        serde_json::from_value(value.clone()).map_err(|_| "invalid_parameters")?;
+    let maximum = brainfuck_limits();
+    if p.max_instructions == 0
+        || p.max_instructions > maximum.max_instructions
+        || p.max_output_bytes == 0
+        || p.max_output_bytes > maximum.max_output_bytes
+        || p.max_memory_bytes == 0
+        || p.max_memory_bytes > maximum.max_memory_bytes
+    {
+        return Err("input_limit");
+    }
+    Ok(cube_core::esolang::brainfuck::Limits {
+        max_instructions: p.max_instructions,
+        max_output_bytes: p.max_output_bytes,
+        max_memory_bytes: p.max_memory_bytes,
+    })
+}
+pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
+    let probe = Probe::parse(operation)?;
+    let contract = cube_core::operations::require(operation)
+        .map_err(|_| "unsupported_operation")?
+        .contract()
+        .map_err(|_| "contract_mismatch")?;
+    if contract.operation_version != version {
         return Err("contract_mismatch");
+    }
+    if contract.policy.private_input
+        || contract.policy.private_output
+        || !contract.policy.sensitive_parameters.is_empty()
+    {
+        return Err("retention_policy_unavailable");
+    }
+    contract
+        .validate_parameters(parameters)
+        .map_err(|_| "invalid_parameters")?;
+    match probe {
+        Probe::Rot13 => {}
+        Probe::Pixel => {
+            let _: PixelParameters =
+                serde_json::from_value(parameters.clone()).map_err(|_| "invalid_parameters")?;
+        }
+        Probe::Brainfuck => {
+            configured_limits(parameters)?;
+        }
     }
     Ok(())
 }
@@ -41,15 +115,21 @@ impl Probe {
         }
     }
 
-    fn execute(self, input: &str) -> Result<Value> {
+    fn execute(self, input: &str, parameters: &Value) -> Result<Value> {
         match self {
-            Self::Pixel => image(input)?
-                .pixel(0, 0)
-                .map(|bytes| json!({"bytes":bytes}))
-                .map_err(|_| "operation_failed"),
+            Self::Pixel => {
+                let p: PixelParameters =
+                    serde_json::from_value(parameters.clone()).map_err(|_| "invalid_parameters")?;
+                image(input)?
+                    .view(p.expand_palette)
+                    .map_err(|_| "operation_failed")?
+                    .pixel(p.x, p.y)
+                    .map(|bytes| json!({"bytes":bytes}))
+                    .map_err(|_| "operation_failed")
+            }
             Self::Rot13 => Ok(json!({"text": cube_core::ciphers::rot13(input)})),
             Self::Brainfuck => {
-                let limits = brainfuck_limits();
+                let limits = configured_limits(parameters)?;
                 cube_core::esolang::brainfuck::execute(input, &[], limits)
                     .map(|bytes| json!({"bytes": bytes}))
                     .map_err(|_| "operation_failed")
@@ -156,7 +236,7 @@ pub fn catalog() -> Result<Value> {
 
 fn execute(invocation: Invocation) -> Result<Value> {
     validate(&invocation)?;
-    Probe::parse(&invocation.operation)?.execute(&invocation.input)
+    Probe::parse(&invocation.operation)?.execute(&invocation.input, &invocation.parameters)
 }
 
 pub fn run() -> Result<()> {
@@ -188,12 +268,14 @@ mod tests {
     fn invokes_real_core_and_preserves_unicode() {
         let invocation = Invocation {
             operation: "cipher.rot13".into(),
+            parameters: parameters("cipher.rot13").unwrap(),
             operation_version: 1,
             input: "Hello, ação!".into(),
         };
         assert_eq!(execute(invocation).unwrap(), json!({"text":"Uryyb, nçãb!"}));
         let invocation = Invocation {
             operation: "esolang.brainfuck.execute".into(),
+            parameters: parameters("esolang.brainfuck.execute").unwrap(),
             operation_version: 2,
             input: "++++++++[>++++++++<-]>+.".into(),
         };
@@ -205,6 +287,7 @@ mod tests {
         let input = STANDARD.encode(include_bytes!("../../../tests/fixtures/sample.png"));
         let invocation = Invocation {
             operation: "image.pixels.read".into(),
+            parameters: parameters("image.pixels.read").unwrap(),
             operation_version: 1,
             input,
         };
@@ -251,6 +334,7 @@ mod tests {
     fn rejects_uninstalled_versions_and_unbounded_inputs() {
         let mut invocation = Invocation {
             operation: "cipher.rot13".into(),
+            parameters: parameters("cipher.rot13").unwrap(),
             operation_version: 2,
             input: "hello".into(),
         };
@@ -261,5 +345,52 @@ mod tests {
         invocation.input.clear();
         invocation.operation = "shell".into();
         assert_eq!(validate(&invocation), Err("unsupported_operation"));
+    }
+}
+
+#[cfg(test)]
+mod configuration_tests {
+    use super::*;
+    #[test]
+    fn saved_coordinates_are_executed_by_core_and_invalid_coordinates_are_rejected_before_admission()
+     {
+        let data = include_bytes!("../../../tests/fixtures/sample.png");
+        let mut invocation = Invocation {
+            operation: "image.pixels.read".into(),
+            operation_version: 1,
+            input: STANDARD.encode(data),
+            parameters: json!({"x":1,"y":0,"expand_palette":false}),
+        };
+        let expected = cube_core::image::Image::decode(data)
+            .unwrap()
+            .pixel(1, 0)
+            .unwrap();
+        assert_ne!(
+            expected,
+            cube_core::image::Image::decode(data)
+                .unwrap()
+                .pixel(0, 0)
+                .unwrap()
+        );
+        assert_eq!(
+            execute(invocation.clone()).unwrap(),
+            json!({"bytes":expected})
+        );
+        invocation.parameters["x"] = json!(u32::MAX);
+        assert_eq!(validate(&invocation), Err("invalid_parameters"));
+    }
+    #[test]
+    fn saved_brainfuck_limits_are_effective_and_cannot_raise_native_caps() {
+        let mut invocation = Invocation {
+            operation: "esolang.brainfuck.execute".into(),
+            operation_version: 2,
+            input: "++.".into(),
+            parameters: parameters("esolang.brainfuck.execute").unwrap(),
+        };
+        invocation.parameters["max_instructions"] = json!(1);
+        assert_eq!(execute(invocation.clone()), Err("operation_failed"));
+        invocation.parameters["max_instructions"] = json!(1000000);
+        invocation.parameters["max_output_bytes"] = json!(16385);
+        assert_eq!(validate(&invocation), Err("input_limit"));
     }
 }

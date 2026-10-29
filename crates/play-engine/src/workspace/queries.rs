@@ -79,29 +79,25 @@ pub async fn pipelines(
     connection: &mut SqliteConnection,
     workspace: &str,
 ) -> Result<Vec<Pipeline>> {
-    let rows = sqlx::query("SELECT p.id,p.title,p.current_revision,r.definition FROM pipelines p JOIN pipeline_revisions r ON (p.workspace_id,p.id,p.current_revision)=(r.workspace_id,r.pipeline_id,r.revision) WHERE p.workspace_id=? ORDER BY p.id")
-        .bind(workspace).fetch_all(connection).await.map_err(storage::failure)?;
-    rows.into_iter()
-        .map(|row| {
-            let definition: serde_json::Value =
-                serde_json::from_str(row.get::<&str, _>("definition"))
-                    .map_err(|_| "corrupt_store")?;
-            Ok(Pipeline {
-                id: row.get("id"),
-                title: row.get("title"),
-                revision: row.get("current_revision"),
-                input: "source".into(),
-                initial_operation: definition["nodes"][0]["operation"]
-                    .as_str()
-                    .ok_or("corrupt_store")?
-                    .into(),
-                operation_version: definition["nodes"][0]["operation_version"]
-                    .as_u64()
-                    .and_then(|v| u32::try_from(v).ok())
-                    .ok_or("corrupt_store")?,
-            })
-        })
-        .collect()
+    let rows =
+        sqlx::query("SELECT id,current_revision FROM pipelines WHERE workspace_id=? ORDER BY id")
+            .bind(workspace)
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(storage::failure)?;
+    let mut pipelines = Vec::new();
+    for row in rows {
+        pipelines.push(
+            super::pipelines::read(
+                connection,
+                workspace,
+                row.get("id"),
+                row.get("current_revision"),
+            )
+            .await?,
+        );
+    }
+    Ok(pipelines)
 }
 
 pub async fn view(store: &mut Owned) -> Result<View> {
@@ -273,25 +269,21 @@ pub async fn exploration(
     if reasoning_count != 1 {
         return Err("corrupt_store");
     }
-    let definitions = pipelines(connection, &workspace).await?;
-    let trail_rows = sqlx::query("SELECT t.id,t.title,t.hypothesis,t.source_id,t.source_revision,t.pipeline_id,t.pipeline_revision,NOT EXISTS(SELECT 1 FROM blocks b WHERE b.workspace_id=t.workspace_id AND b.exploration_id=t.exploration_id AND b.stage_id=t.stage_id AND b.archived_revision IS NULL AND (b.asset_id=t.source_id OR b.caption_id=t.source_id)) AS archived FROM trails t WHERE t.workspace_id=? AND t.exploration_id=? AND t.stage_id=? ORDER BY t.rowid")
+    let trail_rows = sqlx::query("SELECT t.id,t.title,t.revision,t.hypothesis,t.source_id,t.source_revision,t.pipeline_id,t.pipeline_revision,NOT EXISTS(SELECT 1 FROM blocks b WHERE b.workspace_id=t.workspace_id AND b.exploration_id=t.exploration_id AND b.stage_id=t.stage_id AND b.archived_revision IS NULL AND (b.asset_id=t.source_id OR b.caption_id=t.source_id)) AS archived FROM trails t WHERE t.workspace_id=? AND t.exploration_id=? AND t.stage_id=? ORDER BY t.rowid")
         .bind(&workspace).bind(&exploration).bind(&selected).fetch_all(&mut *connection).await.map_err(storage::failure)?;
     let mut trails = Vec::new();
     for row in trail_rows {
         let pipeline_id: Option<String> = row.get("pipeline_id");
-        let pipeline = pipeline_id
-            .as_ref()
-            .and_then(|id| {
-                definitions.iter().find(|pipeline| {
-                    pipeline.id == *id
-                        && pipeline.revision == row.get::<i64, _>("pipeline_revision")
-                })
-            })
-            .cloned();
-        if pipeline_id.is_some() && pipeline.is_none() {
-            return Err("corrupt_store");
-        }
+        let pipeline = if let Some(id) = &pipeline_id {
+            Some(
+                super::pipelines::read(connection, &workspace, id, row.get("pipeline_revision"))
+                    .await?,
+            )
+        } else {
+            None
+        };
         trails.push(Trail {
+            revision: row.get("revision"),
             archived: row.get("archived"),
             id: row.get("id"),
             workspace_id: workspace.clone(),

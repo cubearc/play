@@ -19,6 +19,7 @@ export class Engine {
   private buffer = Buffer.alloc(0);
   private nextId = 0;
   private active: number | undefined;
+  private operations: Operation[] = [];
   private closed = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -64,6 +65,7 @@ export class Engine {
       ) {
         throw new Error("binary_mismatch");
       }
+      engine.operations = await engine.catalog();
       return engine;
     } catch (error) {
       await engine.close();
@@ -73,9 +75,18 @@ export class Engine {
 
   run(invocation: Invocation): Promise<RunResult> {
     if (this.active !== undefined) return Promise.reject(new Error("busy"));
+    const operation = this.operations.find(
+      (entry) =>
+        entry.operation === invocation.operation &&
+        entry.operation_version === invocation.operation_version,
+    );
+    if (!operation) return Promise.reject(new Error("unsupported_operation"));
     const id = this.nextId + 1;
     this.active = id;
-    return this.request({ type: "invoke", invocation })
+    return this.request({
+      type: "invoke",
+      invocation: { ...invocation, parameters: operation.parameters },
+    })
       .then((reply) => {
         if (reply.type !== "finished") throw new Error("invalid_response");
         return reply as unknown as RunResult;

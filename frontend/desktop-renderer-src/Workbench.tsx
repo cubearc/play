@@ -3,6 +3,7 @@ import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIc
 import VscodeSplitLayout from "@vscode-elements/react-elements/dist/components/VscodeSplitLayout.js";
 import VscodeToolbarButton from "@vscode-elements/react-elements/dist/components/VscodeToolbarButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PipelineView } from "../desktop/workspace-contract";
 import {
   type AssetBlockView,
   type Context,
@@ -16,7 +17,9 @@ import { CommandPalette, type WorkbenchCommand } from "./CommandPalette";
 import { ContentDialog, type DialogKind } from "./ContentDialog";
 import { Explorer } from "./Explorer";
 import { Notebook } from "./Notebook";
+import { PipelineEditor, type PipelineMode } from "./PipelineEditor";
 import { TextAssetEditor } from "./TextAssetEditor";
+import { TrailEditor } from "./TrailEditor";
 import { useExecutions } from "./useExecutions";
 import { useWorkspace } from "./useWorkspace";
 import { WorkspaceWelcome } from "./WorkspaceWelcome";
@@ -37,6 +40,18 @@ export function Workbench() {
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [editing, setEditing] = useState<TextEdit | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [editingTrail, setEditingTrail] = useState<TrailView | null>(null);
+  const [editingPipeline, setEditingPipeline] = useState<{
+    trail: TrailView;
+    mode: PipelineMode;
+    pipeline: PipelineView | null;
+  } | null>(null);
+  const closeConfiguration = () => {
+    setEditingTrail(null);
+    setEditingPipeline(null);
+    setEditorDirty(false);
+    state.clearError();
+  };
   useEffect(() => {
     void window.play
       .dirty(state.hasUnsavedNotes || editorDirty)
@@ -150,7 +165,7 @@ export function Workbench() {
         event.repeat
       )
         return;
-      if (dialog || editing) return;
+      if (dialog || editing || editingTrail || editingPipeline) return;
       const key = event.key.toLowerCase();
       if (key === "b" && !event.shiftKey) {
         event.preventDefault();
@@ -401,6 +416,23 @@ export function Workbench() {
                 <AssetCanvas
                   key={activeTrail.id}
                   trail={activeTrail}
+                  editTrail={() => {
+                    state.clearError();
+                    setEditingTrail(activeTrail);
+                  }}
+                  editPipeline={(mode) => {
+                    state.clearError();
+                    setEditingPipeline({
+                      trail: activeTrail,
+                      mode,
+                      pipeline:
+                        mode === "revise"
+                          ? (workspace?.pipelines.find(
+                              (p) => p.id === activeTrail.pipelineId,
+                            ) ?? activeTrail.pipeline)
+                          : activeTrail.pipeline,
+                    });
+                  }}
                   executions={executions}
                   openSourceRun={openSourceRun}
                 />
@@ -463,6 +495,36 @@ export function Workbench() {
                 : "Local"}
         </span>
       </footer>
+      {editingTrail && workspace ? (
+        <TrailEditor
+          trail={editingTrail}
+          pipelines={workspace.pipelines}
+          error={state.error}
+          onClose={closeConfiguration}
+          onDirty={setEditorDirty}
+          onSave={(hypothesis, pipeline, key) =>
+            state.saveTrail(editingTrail, hypothesis, pipeline, key)
+          }
+        />
+      ) : null}
+      {editingPipeline ? (
+        <PipelineEditor
+          mode={editingPipeline.mode}
+          pipeline={editingPipeline.pipeline}
+          operations={executions.operationsFor(editingPipeline.trail)}
+          error={state.error}
+          onClose={closeConfiguration}
+          onDirty={setEditorDirty}
+          onSave={(draft) =>
+            state.savePipeline(
+              editingPipeline.trail,
+              editingPipeline.mode,
+              editingPipeline.pipeline,
+              draft,
+            )
+          }
+        />
+      ) : null}
       {dialog ? (
         <ContentDialog
           kind={dialog}

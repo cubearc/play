@@ -86,7 +86,7 @@ pub(super) async fn revise_text(
     if updated.rows_affected() != 1 {
         return Err("state_conflict");
     }
-    sqlx::query("UPDATE trails SET source_revision=? WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND source_id=? AND source_revision=?")
+    sqlx::query("UPDATE trails SET source_revision=?,revision=revision+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND source_id=? AND source_revision=?")
         .bind(next).bind(workspace).bind(exploration).bind(stage).bind(&asset).bind(expected)
         .execute(connection).await.map_err(storage::failure)?;
     Ok(json!({"assetId":asset,"revision":next}))

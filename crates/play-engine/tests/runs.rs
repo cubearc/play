@@ -148,12 +148,24 @@ fn retention_is_explicit_and_a_dead_owner_recovers_only_unfinished_runs() {
     );
 }
 #[test]
-fn alternate_operation_freezes_a_reusable_definition_and_real_bytes_contract() {
+fn explicitly_saved_pipeline_freezes_a_reusable_definition_and_real_bytes_contract() {
     let tmp = tempfile::tempdir().unwrap();
     let mut manager = Manager::new(tmp.path().join("private")).unwrap();
     let (mut request, _) = setup(&mut manager);
     request.operation = "esolang.brainfuck.execute".into();
     request.operation_version = 2;
+    let mut parameters =
+        serde_json::to_value(cube_core::esolang::brainfuck::Limits::default()).unwrap();
+    parameters["max_output_bytes"] = json!(16384);
+    let pipeline = command(
+        &mut manager,
+        json!({"kind":"create_pipeline","workspace_id":request.context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","operation":request.operation,"operation_version":2,"parameters":parameters}),
+    );
+    command(
+        &mut manager,
+        json!({"kind":"save_trail","context":request.context,"key":Uuid::new_v4(),"trail_id":request.trail_id,"expected_revision":1,"hypothesis":"Read the program output","pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
+    );
+    request.pipeline_id = serde_json::from_value(pipeline["pipelineId"].clone()).unwrap();
     let prepared = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&prepared.identity).unwrap();
     let run = manager
@@ -162,7 +174,7 @@ fn alternate_operation_freezes_a_reusable_definition_and_real_bytes_contract() {
             json!({"status":"completed","output":{"bytes":[65,0,255]}}),
         )
         .unwrap();
-    assert_ne!(run["pipelineId"], request.pipeline_id.to_string());
+    assert_eq!(run["pipelineId"], request.pipeline_id.to_string());
     assert_eq!(run["plan"]["contract"]["inputs"][0]["name"], "source");
     assert_eq!(run["plan"]["inputs"]["input"]["literal"], json!([]));
     assert_eq!(run["result"]["outputs"]["output"]["base64"], "QQD/");

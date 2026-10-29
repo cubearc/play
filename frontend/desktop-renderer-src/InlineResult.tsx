@@ -92,6 +92,13 @@ export function InlineResult({
               {trail.source.revision}; run again to use it.
             </p>
           ) : null}
+          {run.pipelineId !== trail.pipeline?.id ||
+          run.pipelineRevision !== trail.pipeline.revision ? (
+            <p className="input-revision" role="note">
+              Earlier Pipeline · r{run.pipelineRevision}. This result preserves
+              its accepted configuration.
+            </p>
+          ) : null}
           <details
             open={expanded}
             onToggle={(event) => setExpanded(event.currentTarget.open)}

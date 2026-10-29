@@ -6,6 +6,7 @@ mod model;
 mod mutations;
 mod notes;
 mod order;
+mod pipelines;
 mod queries;
 mod results;
 mod run_plan;
@@ -216,6 +217,24 @@ impl Manager {
                     .block_on(runs::list(store, &context, trail_id, before))
             }
             Command::RunDetail { context, run_id } => self.run_detail(&context, run_id),
+            Command::GetPipeline {
+                workspace_id,
+                pipeline_id,
+                revision,
+            } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                if store.identity.workspace_id != workspace_id {
+                    return Err("workspace_mismatch");
+                }
+                self.runtime
+                    .block_on(pipelines::read(
+                        store.connection()?,
+                        &workspace_id.to_string(),
+                        &pipeline_id.to_string(),
+                        revision,
+                    ))
+                    .and_then(to_value)
+            }
             Command::ReadImage {
                 context,
                 asset_id,

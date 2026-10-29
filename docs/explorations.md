@@ -31,12 +31,41 @@ canvas that produced them.
 
 Opening the caption creates its own canvas tab inside the same Exploration. [Open full size](assets/desktop/caption-canvas.png).
 
-A Trail holds investigation context and input bindings. A Pipeline is the
-Workspace-owned reusable operation definition. The current source preview
-creates/reuses single-node definitions from Core's native adapters. Different
-Explorations can bind their own text to the same definition without sharing notes
-or Run evidence. Selecting another operation freezes a separate definition for
-the accepted Run.
+## Save a hypothesis
+
+Choose **Edit Trail** in a text, caption or image canvas. Write a hypothesis and
+choose **Save Trail**. The hypothesis belongs to that Trail and survives restart;
+another Exploration keeps its own reasoning and progress.
+
+![Trail editor with a private hypothesis and a saved Pipeline pinned to revision 1.](assets/desktop/trail-editor.png)
+
+Choose a saved revision and keep this Trail's hypothesis. [Open full size](assets/desktop/trail-editor.png).
+
+## Save and reuse a Pipeline
+
+Choose **New Pipeline** to name a reusable single-node definition. Select an
+operation by its Core name, review its parameters and choose **Create Pipeline**.
+The Trail selects the saved revision. Choose **Run cell** to execute it against
+this Trail's bound Asset.
+
+**Edit Pipeline** opens the current head for editing. **Save revision** freezes a
+new configuration and selects it only for the current Trail. An identical
+configuration keeps the same revision. Other Trails stay pinned to their chosen
+revisions; previous Runs keep their evidence and results.
+
+![Trail canvas after selecting Pipeline revision 2, with the preceding ROT13 Run preserved.](assets/desktop/pipeline-revision.png)
+
+The working revision and historical Run keep separate configurations. [Open full size](assets/desktop/pipeline-revision.png).
+
+To reuse a definition in another Exploration, open its Asset canvas, choose
+**Edit Trail**, then choose **Saved Pipeline** and **Pipeline revision**. Keep a
+separate hypothesis and save. Each Trail supplies its own Asset and history.
+
+Choose **Fork Pipeline** to create an independently versioned alternative from
+the selected revision. The fork records its source; edits to either definition
+do not change the other. Use **Edit Pipeline** after the fork to change its
+operation or parameters. [Pipeline reference](reference/desktop-pipelines.md)
+describes exact commands, revisions and limits.
 
 ## Follow an edited Asset
 
@@ -51,11 +80,11 @@ Run is accepted for the saved content.
 Choose **Run cell** to create a PipelineRun, rather than replacing an earlier
 execution. [Notebook controls](notebook.md) explain retention and saved reasoning.
 Closing a canvas does not cancel its active Run while the app is alive; quitting
-the app ends the private engine session. Canvas tabs and operation-selection
-drafts remain in memory, while accepted Runs are stored. [Saved state](persistence.md)
+the app ends the private engine session. Canvas tabs remain in memory. Saved hypotheses, Pipeline selections and accepted
+Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General Pipeline editing, node connections, branching, joins, output reuse and
+Multi-node Pipeline editing, node connections, branching, joins, output reuse and
 parallel execution are not available in this source preview. Their implementation
 status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 Use [native Run reference](reference/desktop-runs.md) for implemented execution

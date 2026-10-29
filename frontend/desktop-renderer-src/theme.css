@@ -43,3 +43,10 @@
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
 }
+
+.trail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}

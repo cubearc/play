@@ -12,8 +12,12 @@ export function AssetCanvas({
   trail,
   executions,
   openSourceRun,
+  editTrail,
+  editPipeline,
 }: {
   trail: TrailView;
+  editTrail: () => void;
+  editPipeline: (mode: "create" | "revise" | "fork") => void;
   executions: Executions;
   openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
@@ -26,20 +30,58 @@ export function AssetCanvas({
       <header className="document-heading">
         <div className="eyebrow">Trail · Asset exploration</div>
         <h1>{trail.title}</h1>
-        <p>{trail.hypothesis}</p>
+        <p>{trail.hypothesis || "Add a hypothesis to guide this Trail."}</p>
+        {image || text ? (
+          <div className="trail-actions">
+            <VscodeButton
+              secondary
+              disabled={trail.archived}
+              onClick={editTrail}
+            >
+              Edit Trail
+            </VscodeButton>
+            <VscodeButton
+              secondary
+              disabled={trail.archived}
+              onClick={() => editPipeline("create")}
+            >
+              New Pipeline
+            </VscodeButton>
+            {trail.pipeline ? (
+              <>
+                <VscodeButton
+                  secondary
+                  disabled={trail.archived}
+                  onClick={() => editPipeline("revise")}
+                >
+                  Edit Pipeline
+                </VscodeButton>
+                <VscodeButton
+                  secondary
+                  disabled={trail.archived}
+                  onClick={() => editPipeline("fork")}
+                >
+                  Fork Pipeline
+                </VscodeButton>
+              </>
+            ) : null}
+          </div>
+        ) : null}
         <div className="context-chips">
           <span>
             <VscodeIcon name="link" /> {trail.source.title} @ r
             {trail.source.revision}
           </span>
           <span>
-            {image
-              ? "Image inspection"
-              : text
-                ? `Pipeline · ${trail.pipeline?.title} · r${trail.pipeline?.revision}`
-                : page
-                  ? "Page source · inert"
-                  : "File inspection"}
+            {trail.pipeline
+              ? `Pipeline · ${trail.pipeline.title} · r${trail.pipeline.revision}`
+              : image
+                ? "Image inspection"
+                : text
+                  ? "No Pipeline selected"
+                  : page
+                    ? "Page source · inert"
+                    : "File inspection"}
           </span>
         </div>
       </header>

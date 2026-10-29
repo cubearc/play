@@ -1,7 +1,5 @@
 import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import VscodeCheckbox from "@vscode-elements/react-elements/dist/components/VscodeCheckbox.js";
-import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
-import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import { useRef } from "react";
 import type { TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
@@ -15,7 +13,6 @@ export function OperationCell({
   executions: Executions;
 }) {
   const pipeline = trail.pipeline;
-  const selector = useRef<HTMLElementTagNameMap["vscode-single-select"]>(null);
   const keep = useRef<HTMLElementTagNameMap["vscode-checkbox"]>(null);
   const operation = executions.operationFor(trail);
   const history = executions.history[trail.id];
@@ -31,23 +28,9 @@ export function OperationCell({
           <span>Pipeline · {pipeline?.title}</span>
         </div>
         <div className="cell-controls">
-          <VscodeSingleSelect
-            ref={selector}
-            label="Operation"
-            title={operation?.operation}
-            value={operation?.operation ?? ""}
-            disabled={running || trail.archived}
-            onChange={() =>
-              !trail.archived &&
-              executions.selectOperation(trail, selector.current?.value ?? "")
-            }
-          >
-            {executions.operationsFor(trail).map((entry) => (
-              <VscodeOption key={entry.operation} value={entry.operation}>
-                {entry.name}
-              </VscodeOption>
-            ))}
-          </VscodeSingleSelect>
+          <strong className="operation-name" title={operation?.operation}>
+            {operation?.name ?? "Unavailable operation"}
+          </strong>
           <VscodeButton
             icon="play"
             disabled={!operation || executions.busy || trail.archived}
@@ -92,14 +75,9 @@ export function OperationCell({
         </p>
         {operation && trail.source.content.kind === "image" ? (
           <p className="binding">
-            Fixed parameters:{" "}
-            <code>{JSON.stringify(operation.parameters)}</code>
+            Saved parameters:{" "}
+            <code>{JSON.stringify(pipeline?.parameters)}</code>
           </p>
-        ) : null}
-        {operation && operation.operation !== pipeline?.initialOperation ? (
-          <small>
-            Selected operation will be frozen in this Run’s Pipeline definition
-          </small>
         ) : null}
       </div>
       <InlineResult trail={trail} executions={executions} />

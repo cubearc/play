@@ -124,3 +124,11 @@ short caption explaining the visible state and a link to the full-size PNG. Upda
 affected captures with visible UI changes. The portal copies these assets from
 the pinned product revision; review their rendered desktop/mobile layout and
 verify the published image bytes alongside the page.
+
+Pipeline authoring tests cover explicit creation/revision/fork, stable node IDs,
+independent Trail hypotheses, pinned reuse across Explorations, stale edits,
+parameter/version/type/ownership rejection and complete Run evidence. A real
+schema-8 store and signed Core Run fixture prove schema-9 upgrades preserve
+historical evidence. Worker tests exercise saved pixel coordinates and Brainfuck
+limits. The real Electron journey edits hypotheses and definitions, reuses a
+chosen older revision, checks accessibility and preserves the preceding result.

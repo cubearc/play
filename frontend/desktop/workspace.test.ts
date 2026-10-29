@@ -11,9 +11,11 @@ import { fileURLToPath } from "node:url";
 import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
 import {
+  type Context,
   contextOf,
   type ExplorationView,
   type RunDetail,
+  type TrailView,
   type WorkspaceView,
 } from "./workspace-contract.ts";
 
@@ -96,7 +98,7 @@ test("native image adapter pins authorized image input and preserves exact Core 
         key: randomUUID(),
         operation: "cipher.rot13",
       }),
-      /invalid_asset_type/,
+      /pipeline_mismatch/,
     );
     const run = await finished(engine, context, await engine.startRun(request));
     if (process.platform !== "darwin") {
@@ -203,12 +205,18 @@ test("a real retained byte Run becomes an exact file result with immutable attem
       (operation) => operation.operation === "esolang.brainfuck.execute",
     );
     assert.ok(operation);
+    const selected = await saveOperation(
+      engine,
+      context,
+      trail,
+      operation.operation,
+    );
     const request = {
       context,
       key: randomUUID(),
       trail_id: trail.id,
-      pipeline_id: trail.pipeline.id,
-      pipeline_revision: trail.pipeline.revision,
+      pipeline_id: selected.id,
+      pipeline_revision: selected.revision,
       source_asset_id: trail.source.id,
       source_revision: trail.source.revision,
       operation: operation.operation,
@@ -604,12 +612,18 @@ async function runFixture(engine: Engine, text: string) {
   })) as ExplorationView;
   const trail = exploration.trails[0];
   assert.ok(trail?.pipeline);
+  const selected = await saveOperation(
+    engine,
+    context,
+    trail,
+    "esolang.brainfuck.execute",
+  );
   return {
     context,
     key: randomUUID(),
     trail_id: trail.id,
-    pipeline_id: trail.pipeline.id,
-    pipeline_revision: trail.pipeline.revision,
+    pipeline_id: selected.id,
+    pipeline_revision: selected.revision,
     source_asset_id: trail.source.id,
     source_revision: trail.source.revision,
     operation: "esolang.brainfuck.execute",
@@ -712,12 +726,22 @@ test("archive keeps admitted native work supervised and refuses new work until r
     assert.deepEqual(restored.stage.blocks, before.stage.blocks);
     assert.equal(restored.trails[0]?.archived, false);
     if (worker) {
+      const trail = restored.trails[0];
+      assert.ok(trail);
+      const selected = await saveOperation(
+        engine,
+        request.context,
+        trail,
+        "cipher.rot13",
+      );
       const completed = await finished(
         engine,
         request.context,
         await engine.startRun({
           ...request,
           key: randomUUID(),
+          pipeline_id: selected.id,
+          pipeline_revision: selected.revision,
           operation: "cipher.rot13",
           operation_version: 1,
         }),
@@ -920,12 +944,28 @@ test("editing an input during a real worker Run preserves its plan and rejects s
       engine.startRun({ ...request, key: randomUUID() }),
       /state_conflict/,
     );
+    const updated = (await engine.workspace({
+      kind: "open_exploration",
+      workspace_id: request.context.workspace_id,
+      exploration_id: request.context.exploration_id,
+      stage_id: request.context.stage_id,
+    })) as ExplorationView;
+    const trail = updated.trails[0];
+    assert.ok(trail);
+    const selected = await saveOperation(
+      engine,
+      request.context,
+      trail,
+      "cipher.rot13",
+    );
     const completed = await finished(
       engine,
       request.context,
       await engine.startRun({
         ...request,
         key: randomUUID(),
+        pipeline_id: selected.id,
+        pipeline_revision: selected.revision,
         source_revision: 2,
         operation: "cipher.rot13",
         operation_version: 1,
@@ -948,3 +988,32 @@ test("editing an input during a real worker Run preserves its plan and rejects s
     await rm(temporary, { recursive: true, force: true });
   }
 });
+
+async function saveOperation(
+  engine: Engine,
+  context: Context,
+  trail: TrailView,
+  id: string,
+) {
+  const operation = (await engine.catalog()).find((o) => o.operation === id);
+  assert.ok(operation);
+  const pipeline = (await engine.workspace({
+    kind: "create_pipeline",
+    workspace_id: context.workspace_id,
+    key: randomUUID(),
+    title: operation.name,
+    operation: id,
+    operation_version: operation.operation_version,
+    parameters: operation.parameters,
+  })) as { pipelineId: string; revision: number };
+  await engine.workspace({
+    kind: "save_trail",
+    context,
+    key: randomUUID(),
+    trail_id: trail.id,
+    expected_revision: trail.revision,
+    hypothesis: trail.hypothesis,
+    pipeline: { id: pipeline.pipelineId, revision: pipeline.revision },
+  });
+  return { id: pipeline.pipelineId, revision: pipeline.revision };
+}

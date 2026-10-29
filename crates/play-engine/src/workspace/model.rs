@@ -32,6 +32,43 @@ pub enum BlockSource {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    CreatePipeline {
+        workspace_id: Uuid,
+        key: Uuid,
+        title: String,
+        operation: String,
+        operation_version: u32,
+        parameters: serde_json::Value,
+    },
+    RevisePipeline {
+        workspace_id: Uuid,
+        key: Uuid,
+        pipeline_id: Uuid,
+        expected_revision: i64,
+        operation: String,
+        operation_version: u32,
+        parameters: serde_json::Value,
+    },
+    ForkPipeline {
+        workspace_id: Uuid,
+        key: Uuid,
+        pipeline_id: Uuid,
+        revision: i64,
+        title: String,
+    },
+    GetPipeline {
+        workspace_id: Uuid,
+        pipeline_id: Uuid,
+        revision: i64,
+    },
+    SaveTrail {
+        context: Context,
+        key: Uuid,
+        trail_id: Uuid,
+        expected_revision: i64,
+        hypothesis: String,
+        pipeline: Option<PipelineRef>,
+    },
     AddPage {
         context: Context,
         key: Uuid,
@@ -159,7 +196,11 @@ pub enum Command {
 impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
-            Self::CreateExploration { key, .. }
+            Self::CreatePipeline { key, .. }
+            | Self::RevisePipeline { key, .. }
+            | Self::ForkPipeline { key, .. }
+            | Self::SaveTrail { key, .. }
+            | Self::CreateExploration { key, .. }
             | Self::AddAnnotation { key, .. }
             | Self::AddPage { key, .. }
             | Self::PinRunOutput { key, .. }
@@ -312,9 +353,27 @@ pub struct NoteOrigin {
     pub title: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PipelineRef {
+    pub id: Uuid,
+    pub revision: i64,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineOrigin {
+    pub pipeline_id: String,
+    pub revision: i64,
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pipeline {
+    pub node_id: String,
+    pub input_type: String,
+    pub parameters: serde_json::Value,
+    pub revisions: Vec<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<PipelineOrigin>,
     pub id: String,
     pub title: String,
     pub revision: i64,
@@ -326,6 +385,7 @@ pub struct Pipeline {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Trail {
+    pub revision: i64,
     pub id: String,
     pub workspace_id: String,
     pub exploration_id: String,

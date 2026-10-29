@@ -46,7 +46,7 @@ pub fn snapshot(root: &Path, workspace: Uuid, target: u32) {
             "INSERT INTO asset_revisions SELECT * FROM original.asset_revisions",
             "INSERT INTO pipelines SELECT * FROM original.pipelines",
             "INSERT INTO pipeline_revisions SELECT * FROM original.pipeline_revisions",
-            "INSERT INTO trails SELECT * FROM original.trails",
+            "INSERT INTO trails(workspace_id,exploration_id,stage_id,id,title,hypothesis,source_id,source_revision,pipeline_id,pipeline_revision) SELECT workspace_id,exploration_id,stage_id,id,title,hypothesis,source_id,source_revision,pipeline_id,pipeline_revision FROM original.trails",
             "INSERT INTO view_state SELECT * FROM original.view_state",
             "INSERT INTO exploration_view_state SELECT * FROM original.exploration_view_state",
             "INSERT INTO receipts SELECT * FROM original.receipts",

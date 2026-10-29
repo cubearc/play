@@ -1,5 +1,5 @@
 {
-  "protocol": 11,
+  "protocol": 12,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -10,7 +10,7 @@
   "vm_growth_bytes": 134217728,
   "output_bytes": 16384,
   "storage_generation": 2,
-  "schema_version": 8,
+  "schema_version": 9,
   "workspace_limit": 16,
   "exploration_limit": 32,
   "stage_limit": 16,
@@ -26,5 +26,9 @@
   "workspace_run_limit": 128,
   "exploration_run_limit": 64,
   "run_page_limit": 8,
-  "run_reserve_bytes": 131072
+  "run_reserve_bytes": 131072,
+  "pipeline_limit": 32,
+  "pipeline_revision_limit": 32,
+  "pipeline_parameter_bytes": 2048,
+  "hypothesis_bytes": 2048
 }

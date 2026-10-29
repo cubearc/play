@@ -24,7 +24,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     let context = &request.context;
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
-    let row=sqlx::query("SELECT source_id,source_revision,pipeline_id,pipeline_revision FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
+    let row=sqlx::query("SELECT source_id,source_revision,pipeline_id,pipeline_revision,revision,hypothesis FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
   .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(request.trail_id.to_string()).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
     if row.get::<Option<String>, _>("pipeline_id").as_deref()
         != Some(request.pipeline_id.to_string().as_str())
@@ -32,15 +32,17 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     {
         return Err("state_conflict");
     }
-    let definition:String=sqlx::query_scalar("SELECT definition FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND revision=?")
-  .bind(&workspace).bind(request.pipeline_id.to_string()).bind(request.pipeline_revision).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
-    let mut definition: Value = serde_json::from_str(&definition).map_err(|_| "corrupt_store")?;
-    if definition["formatVersion"] != 1
-        || definition["nodes"]
-            .as_array()
-            .is_none_or(|nodes| nodes.len() != 1)
+    let definition = super::pipelines::definition_value(
+        connection,
+        &workspace,
+        &request.pipeline_id.to_string(),
+        request.pipeline_revision,
+    )
+    .await?;
+    if definition["nodes"][0]["operation"] != request.operation
+        || definition["nodes"][0]["operation_version"] != request.operation_version
     {
-        return Err("unsupported_pipeline");
+        return Err("pipeline_mismatch");
     }
     let asset_id: String = row.get("source_id");
     let asset_revision: i64 = row.get("source_revision");
@@ -66,6 +68,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         _ => return Err("invalid_asset_type"),
     };
     let invocation = Invocation {
+        parameters: definition["nodes"][0]["parameters"].clone(),
         operation: request.operation.clone(),
         operation_version: request.operation_version,
         input: text,
@@ -83,52 +86,15 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     contract
         .validate_inputs(&crate::worker::named_inputs(&invocation)?)
         .map_err(|_| "contract_mismatch")?;
-    let parameters = crate::worker::parameters(&invocation.operation)?;
+    let parameters = invocation.parameters.clone();
     contract
         .validate_parameters(&parameters)
         .map_err(|_| "contract_mismatch")?;
     let name = descriptor
         .metadata()
         .map_or(descriptor.command, |metadata| metadata.canonical_name);
-    let pipeline_id = if definition["nodes"][0]["operation"] == invocation.operation
-        && definition["nodes"][0]["operation_version"] == invocation.operation_version
-    {
-        request.pipeline_id.to_string()
-    } else {
-        // A selected operation is frozen as a separate reusable definition. Other Trails keep their selected revision.
-        let existing:Option<(String,String)>=sqlx::query_as("SELECT pipeline_id,definition FROM pipeline_revisions WHERE workspace_id=? AND revision=1 AND json_extract(definition,'$.nodes[0].operation')=? AND json_extract(definition,'$.nodes[0].operation_version')=? ORDER BY rowid LIMIT 1")
-   .bind(&workspace).bind(&invocation.operation).bind(invocation.operation_version).fetch_optional(&mut *connection).await.map_err(storage::failure)?;
-        if let Some((id, stored)) = existing {
-            definition = serde_json::from_str(&stored).map_err(|_| "corrupt_store")?;
-            id
-        } else {
-            let id = Uuid::new_v4().to_string();
-            definition["inputs"][0]["semanticType"] = json!(semantic_type);
-            definition["nodes"][0]["id"] = json!(Uuid::new_v4());
-            definition["nodes"][0]["operation"] = json!(invocation.operation);
-            definition["nodes"][0]["operation_version"] = json!(invocation.operation_version);
-            sqlx::query("INSERT INTO pipelines VALUES(?,?,?,1)")
-                .bind(&workspace)
-                .bind(&id)
-                .bind(name)
-                .execute(&mut *connection)
-                .await
-                .map_err(storage::failure)?;
-            sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,1,?)")
-                .bind(&workspace)
-                .bind(&id)
-                .bind(definition.to_string())
-                .execute(&mut *connection)
-                .await
-                .map_err(storage::failure)?;
-            id
-        }
-    };
-    let pipeline_revision = if pipeline_id == request.pipeline_id.to_string() {
-        request.pipeline_revision
-    } else {
-        1
-    };
+    let pipeline_id = request.pipeline_id.to_string();
+    let pipeline_revision = request.pipeline_revision;
     let node_id = Uuid::parse_str(
         definition["nodes"][0]["id"]
             .as_str()
@@ -146,7 +112,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     if invocation.operation == "esolang.brainfuck.execute" {
         inputs["input"] = json!({"literal":[]});
     }
-    let value = json!({"formatVersion":1,"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[node_id],"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":1,"contract":contract,"contractDigest":cube_core::hashing::sha256(serde_json::to_string(&contract).map_err(|_| "invalid_state")?.as_bytes()),"operation":{"operation":invocation.operation,"operationVersion":invocation.operation_version,"name":name},"inputs":inputs,"parameters":parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let value = json!({"formatVersion":1,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[node_id],"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":1,"contract":contract,"contractDigest":cube_core::hashing::sha256(serde_json::to_string(&contract).map_err(|_| "invalid_state")?.as_bytes()),"operation":{"operation":invocation.operation,"operationVersion":invocation.operation_version,"name":name},"inputs":inputs,"parameters":parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }

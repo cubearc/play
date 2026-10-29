@@ -4,6 +4,9 @@ import type {
   Context,
   ExplorationView,
   NoteView,
+  PipelineRef,
+  PipelineView,
+  TrailView,
   WorkspaceList,
   WorkspaceRequest,
   WorkspaceView,
@@ -13,8 +16,19 @@ import {
   contextOf,
   reasoningOf,
 } from "../desktop/workspace-contract";
+import type { PipelineDraft, PipelineMode } from "./PipelineEditor";
 
 const messages: Record<string, string> = {
+  pipeline_binding_conflict:
+    "The Pipeline was saved, but this Trail changed. Cancel this editor, reopen the Trail and choose the saved definition through Edit Trail.",
+  invalid_parameters:
+    "These parameters do not match the operation contract or its supported limits.",
+  invalid_asset_type:
+    "This Pipeline requires a different type of source asset. Choose a compatible revision.",
+  pipeline_mismatch:
+    "The requested operation differs from the selected Pipeline revision. Save and select a revision before running it.",
+  unsupported_pipeline:
+    "This historical Pipeline definition is evidence only. Choose a current saved revision.",
   result_read_only:
     "Saved results preserve their original output. Duplicate this block to edit an alternative.",
   result_not_available:
@@ -39,7 +53,7 @@ const messages: Record<string, string> = {
     "The saved content changed. Your draft was kept; cancel and reopen the editor to review the latest revision.",
   storage_quota:
     "A notebook or workspace storage limit was reached. Existing content was preserved.",
-  input_limit: "This content exceeds the supported text limit.",
+  input_limit: "This content or configuration exceeds a supported limit.",
   image_limit: "Choose a PNG image no larger than 128 KiB.",
   file_limit: "Choose a file no larger than 128 KiB.",
   invalid_file: "Choose a regular file that can be read.",
@@ -607,7 +621,104 @@ export function useWorkspace() {
       });
       await refresh(context);
     });
+  const saveTrail = async (
+    trail: TrailView,
+    hypothesis: string,
+    pipeline: PipelineRef | null,
+    key: string,
+  ) =>
+    execute(async () => {
+      const current = epoch.current;
+      await window.play.workspace({
+        kind: "save_trail",
+        context: {
+          workspace_id: trail.workspaceId,
+          exploration_id: trail.explorationId,
+          stage_id: trail.stageId,
+        },
+        key,
+        trail_id: trail.id,
+        expected_revision: trail.revision,
+        hypothesis,
+        pipeline,
+      });
+      await refreshSummary(trail.workspaceId);
+      if (
+        epoch.current === current &&
+        workspaceRef.current?.id === trail.workspaceId
+      )
+        await load(trail.workspaceId, trail.explorationId, trail.stageId);
+    });
+  const savePipeline = async (
+    trail: TrailView,
+    mode: PipelineMode,
+    pipeline: PipelineView | null,
+    draft: PipelineDraft,
+  ) =>
+    execute(async () => {
+      const current = epoch.current;
+      const configuration = {
+        workspace_id: trail.workspaceId,
+        key: draft.key,
+        operation: draft.operation,
+        operation_version: draft.operationVersion,
+        parameters: draft.parameters,
+      };
+      const result =
+        mode === "create"
+          ? await window.play.workspace({
+              kind: "create_pipeline",
+              ...configuration,
+              title: draft.title,
+            })
+          : mode === "fork" && pipeline
+            ? await window.play.workspace({
+                kind: "fork_pipeline",
+                workspace_id: trail.workspaceId,
+                key: draft.key,
+                pipeline_id: pipeline.id,
+                revision: pipeline.revision,
+                title: draft.title,
+              })
+            : mode === "revise" && pipeline
+              ? await window.play.workspace({
+                  kind: "revise_pipeline",
+                  ...configuration,
+                  pipeline_id: pipeline.id,
+                  expected_revision: pipeline.revision,
+                })
+              : null;
+      if (!result) throw new Error("invalid_command");
+      await refreshSummary(trail.workspaceId);
+      try {
+        await window.play.workspace({
+          kind: "save_trail",
+          context: {
+            workspace_id: trail.workspaceId,
+            exploration_id: trail.explorationId,
+            stage_id: trail.stageId,
+          },
+          key: draft.bindingKey,
+          trail_id: trail.id,
+          expected_revision: trail.revision,
+          hypothesis: trail.hypothesis,
+          pipeline: { id: result.pipelineId, revision: result.revision },
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("state_conflict"))
+          throw new Error("pipeline_binding_conflict");
+        throw error;
+      }
+
+      if (
+        epoch.current === current &&
+        workspaceRef.current?.id === trail.workspaceId
+      )
+        await load(trail.workspaceId, trail.explorationId, trail.stageId);
+    });
   return {
+    saveTrail,
+    savePipeline,
     list,
     workspace,
     exploration,

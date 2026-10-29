@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **8**, SQLite application ID
+The native store uses generation **2**, schema version **9**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql` and `notebook.sql`.
-Recognized native schemas 1–7 upgrade to schema 8 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql` and `pipelines.sql`.
+Recognized native schemas 1–8 upgrade to schema 9 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -88,7 +88,10 @@ duplicate records; changed payloads receive `idempotency_conflict`.
 
 Text Assets create a reusable, single-node ROT13 Pipeline definition using the
 actual Core descriptor/version. Trails bind their own source Asset revision.
-Changing the operation selector is a draft for the next Run. Accepted executions
+[Pipeline edits](desktop-pipelines.md) append complete immutable definitions;
+Trail configuration pins a selected revision and saves a private hypothesis.
+Native schema upgrades append complete working revisions while preserving
+historical definitions and accepted evidence. Accepted executions
 freeze their chosen definition, resolved inputs and Core contract; see
 [native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
 and interruption recovery. Candidates, Solutions, submissions and official
@@ -164,7 +167,7 @@ multiple roots for that selection. Guards preserve the origin, prevent further
 root content revisions and exclude simultaneous copy/Run origins. Existing
 `asset_origins` still records the immediate parent of an independent copy.
 
-Protocol 11 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
+Protocol 12 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
 and `title`; `kind: run_output` has `runId`, `attemptId`, `nodeId`, `trailId`,
 `port`, `semanticType`, `operationName` and the engine `sequence`. There is no
 untagged-origin fallback. Run-origin fields derive from immutable stored evidence,
@@ -207,7 +210,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **11**, with no older
+change that order. The coordinated app/engine wire protocol is **12**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -228,8 +231,8 @@ caption limits remain in force. A failure, including a caption quota rejection
 after preparing the image, rolls back the entire copy and receipt.
 
 The fresh Trail reuses the source Asset's first working Trail Pipeline binding;
-it starts with an empty hypothesis and no Runs. The operation selector remains a
-draft for a later explicit Run. Accepted execution history, private retained
+it starts at revision 1 with an empty hypothesis and no Runs. Its saved Pipeline
+selection can be changed independently through Edit Trail. Accepted execution history, private retained
 outputs and reasoning are never cloned or run implicitly. Source IDs/revisions,
 Trails, Pipelines and Runs are not rewritten. Copies use distinct bounded UTF-8
 titles with numbered suffixes when needed.
@@ -362,7 +365,7 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | One imported PNG | 131072 bytes (128 KiB) |
 | One imported file | 131072 bytes (128 KiB) |
 | File preview source prefix | 256 bytes (512 hexadecimal characters for binary content) |
-| Asset, Note and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
+| Asset, Note, Trail hypothesis and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
 | Runs per Exploration / Workspace | 64 / 128 |
 | Pending Run output reservation | 131072 bytes (128 KiB) |
 | SQLite database | 16777216 bytes (16 MiB), 4096 pages |

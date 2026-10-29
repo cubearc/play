@@ -188,3 +188,11 @@ conclusions; local success does not establish hosted CI success. Replace obsolet
 jobs only with reviewed native equivalents. Full graph/CLI/Cloud, signed native
 packages, updates and per-OS worker/PTY evidence still gate
 [final acceptance](https://github.com/cubearc/play/issues/57).
+
+Pipeline authoring tests cover explicit creation/revision/fork, stable node IDs,
+independent Trail hypotheses, pinned reuse across Explorations, stale edits,
+parameter/version/type/ownership rejection and complete Run evidence. A real
+schema-8 store and signed Core Run fixture prove schema-9 upgrades preserve
+historical evidence. Worker tests exercise saved pixel coordinates and Brainfuck
+limits. The real Electron journey edits hypotheses and definitions, reuses a
+chosen older revision, checks accessibility and preserves the preceding result.

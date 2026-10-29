@@ -308,3 +308,47 @@ test("the workspace bridge accepts closed scoped intents without path or generic
     }),
   );
 });
+
+test("Pipeline intents freeze required bounded configuration and cannot carry privileged paths or implicit bindings", () => {
+  const pipeline = {
+    kind: "create_pipeline",
+    workspace_id: owner.workspace_id,
+    key: randomUUID(),
+    title: "Decode clue",
+    operation: "cipher.rot13",
+    operation_version: 1,
+    parameters: {},
+  };
+  assert.deepEqual(request(pipeline), pipeline);
+  for (const value of [
+    { ...pipeline, path: "/private" },
+    { ...pipeline, parameters: null },
+    { ...pipeline, operation_version: 4294967296 },
+    { ...pipeline, parameters: { text: "é".repeat(1024) } },
+  ])
+    assert.throws(() => request(value));
+  const trail = {
+    kind: "save_trail",
+    context: owner,
+    key: randomUUID(),
+    trail_id: randomUUID(),
+    expected_revision: 1,
+    hypothesis: "Own hypothesis",
+    pipeline: { id: randomUUID(), revision: 2 },
+  };
+  assert.deepEqual(request(trail), trail);
+  assert.throws(
+    () =>
+      request({
+        ...trail,
+        pipeline: { ...trail.pipeline, assetId: randomUUID() },
+      }),
+    /invalid_command/,
+  );
+  assert.throws(
+    () => request({ ...trail, hypothesis: "é".repeat(1025) }),
+    /input_limit/,
+  );
+  const { parameters: _parameters, ...missing } = pipeline;
+  assert.throws(() => request(missing), /invalid_command/);
+});

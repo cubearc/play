@@ -170,7 +170,7 @@ fn image_run_uses_the_exact_image_revision_and_rejects_text_operations() {
         m.prepare_run(&serde_json::from_value(wrong).unwrap())
             .err()
             .unwrap(),
-        "invalid_asset_type"
+        "pipeline_mismatch"
     );
 }
 

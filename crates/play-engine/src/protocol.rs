@@ -4,6 +4,10 @@ use std::io::{BufRead, Read, Write};
 
 #[derive(Deserialize)]
 pub struct Contract {
+    pub pipeline_limit: usize,
+    pub pipeline_revision_limit: usize,
+    pub pipeline_parameter_bytes: usize,
+    pub hypothesis_bytes: usize,
     pub protocol: u32,
     pub engine: String,
     pub frame_bytes: usize,
@@ -91,6 +95,7 @@ impl Command {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Invocation {
+    pub parameters: serde_json::Value,
     pub operation: String,
     pub operation_version: u32,
     pub input: String,

@@ -52,8 +52,27 @@ fn complete(
     } else {
         "cipher.rot13"
     };
+    let selected = if operation == "esolang.brainfuck.execute" {
+        let mut parameters =
+            serde_json::to_value(cube_core::esolang::brainfuck::Limits::default()).unwrap();
+        parameters["max_output_bytes"] = json!(16384);
+        let pipeline = command(
+            manager,
+            json!({"kind":"create_pipeline","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Brainfuck","operation":operation,"operation_version":2,"parameters":parameters}),
+        );
+        command(
+            manager,
+            json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":trail["hypothesis"],"pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
+        );
+        let mut selected = trail.clone();
+        selected["pipeline"]["id"] = pipeline["pipelineId"].clone();
+        selected["pipeline"]["revision"] = json!(1);
+        selected
+    } else {
+        trail.clone()
+    };
     let prepared = manager
-        .prepare_run(&request(context, trail, operation, retain))
+        .prepare_run(&request(context, &selected, operation, retain))
         .unwrap();
     manager.start_attempt(&prepared.identity).unwrap();
     manager
