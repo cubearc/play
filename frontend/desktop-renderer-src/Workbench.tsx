@@ -352,6 +352,7 @@ export function Workbench() {
                   openTrail={openTrail}
                   editText={editText}
                   reorderBlocks={state.reorderBlocks}
+                  duplicateBlock={state.duplicateBlock}
                 />
               )}
             </>

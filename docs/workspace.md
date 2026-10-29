@@ -42,6 +42,9 @@ Use **Edit text** for a text Block or **Edit caption** for an image's existing
 caption. [Notebook editing](notebook.md#edit-text-and-captions) covers saving,
 revision conflicts, keyboard controls and results from an earlier input. A caption
 edit keeps the same figure and does not change the imported PNG.
+To try a variation, [duplicate the Block](notebook.md#duplicate-a-clue) first.
+The image and caption get independent Asset identities while preserving their
+exact source revisions; editing the copied caption leaves the original alone.
 
 ## Limits and recovery
 

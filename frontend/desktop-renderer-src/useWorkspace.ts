@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  AssetBlockView,
   Context,
   ExplorationView,
   WorkspaceList,
+  WorkspaceRequest,
   WorkspaceView,
 } from "../desktop/workspace-contract";
 import { contextOf, reasoningOf } from "../desktop/workspace-contract";
 
 const messages: Record<string, string> = {
+  copy_conflict:
+    "Saved block changed or the notebook was reorganized. The latest content is shown and your reasoning draft was kept. Review it, then duplicate again.",
   order_conflict:
     "Notebook order changed. The latest order is shown and your draft was kept. Try the move again.",
   unsupported_store:
@@ -52,6 +56,9 @@ export function useWorkspace() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const actionBusy = useRef(false);
+  const copyIntents = useRef(
+    new Map<string, Extract<WorkspaceRequest, { kind: "duplicate_block" }>>(),
+  );
   const epoch = useRef(0);
   const live = useRef(true);
   const workspaceRef = useRef(workspace);
@@ -283,6 +290,61 @@ export function useWorkspace() {
       }
       await reloadCurrent(context);
     });
+  const duplicateBlock = async (
+    context: Context,
+    revision: number,
+    block: AssetBlockView,
+  ): Promise<string | null> => {
+    const slot = `${context.workspace_id}/${context.exploration_id}/${context.stage_id}/${block.id}`;
+    const intent: Extract<WorkspaceRequest, { kind: "duplicate_block" }> =
+      copyIntents.current.get(slot) ?? {
+        kind: "duplicate_block",
+        context,
+        key: crypto.randomUUID(),
+        block_id: block.id,
+        expected_revision: revision,
+        source: {
+          asset: { asset_id: block.asset.id, revision: block.asset.revision },
+          caption: block.caption
+            ? { asset_id: block.caption.id, revision: block.caption.revision }
+            : null,
+        },
+      };
+    let copied: string | null = null;
+    const accepted = await execute(async () => {
+      copyIntents.current.set(slot, intent);
+      try {
+        const result = await window.play.workspace(intent);
+        await reloadCurrent(context);
+        copyIntents.current.delete(slot);
+        copied = result.blockId;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          [
+            "input_limit",
+            "storage_quota",
+            "not_found",
+            "invalid_block_type",
+            "invalid_image",
+            "corrupt_store",
+            "workspace_mismatch",
+          ].some((code) => error.message.includes(code))
+        )
+          copyIntents.current.delete(slot);
+        if (
+          error instanceof Error &&
+          error.message.includes("state_conflict")
+        ) {
+          copyIntents.current.delete(slot);
+          await reloadCurrent(context);
+          throw new Error("copy_conflict");
+        }
+        throw error;
+      }
+    });
+    return accepted ? copied : null;
+  };
   const reviseText = (
     context: Context,
     blockId: string,
@@ -396,6 +458,7 @@ export function useWorkspace() {
     importImage,
     reviseText,
     reorderBlocks,
+    duplicateBlock,
     hasUnsavedNotes: Object.keys(drafts).length > 0,
     editNote,
     saveNote,

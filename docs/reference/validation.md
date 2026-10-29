@@ -31,6 +31,10 @@ new revisions. Native IPC also edits an input while a real worker runs, then
 rejects stale dispatch. These checks preserve source bytes and reject
 cross-Exploration access. A controlled native chooser fixture is not a Cloud mock
 or a general file-browser implementation.
+Ordering and duplication journeys verify completed keyboard focus, concurrent
+revision conflicts, independent copied Assets and Runs, pinned source labels,
+image/caption grouping and restart. Storage tests upgrade native schemas 1/2,
+preserve immutable lineage and roll back a full copy if caption storage fails.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not

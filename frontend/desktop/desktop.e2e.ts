@@ -13,6 +13,233 @@ import {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("duplicated Blocks preserve independent content and source lineage after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-duplicate-"));
+  const importedSource = await readFile(fixture);
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Copied clues");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Clue variants");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Svefg.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const cell = (title: string) =>
+      notebook(page).getByRole("article", {
+        name: `${title} block`,
+        exact: true,
+      });
+    if (process.platform === "darwin") {
+      await cell("Clue")
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(cell("Clue")).toContainText("output: First.");
+    }
+    await page
+      .getByLabel("Stage note", { exact: true })
+      .fill("Try a second clue without changing the first.");
+    await cell("Clue")
+      .getByRole("button", { name: "Duplicate Clue", exact: true })
+      .click();
+    await expect(cell("Clue (copy)")).toBeFocused();
+    await expect(cell("Clue (copy)")).toContainText("Copied from Clue · r1");
+    await expect(
+      cell("Clue (copy)").getByRole("region", { name: "Cell result" }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "Try a second clue without changing the first.",
+    );
+    await expect(
+      cell("Reasoning").getByRole("button", { name: /Duplicate/ }),
+    ).toHaveCount(0);
+    const edit = async (title: string, caption: boolean, text: string) => {
+      await cell(title)
+        .getByRole("button", {
+          name: caption ? "Edit caption" : "Edit text",
+          exact: true,
+        })
+        .click();
+      const editor = page.getByRole("dialog", {
+        name: caption ? "Edit caption" : "Edit text",
+        exact: true,
+      });
+      await editor
+        .getByRole("textbox", {
+          name: caption ? "Caption" : "Text",
+          exact: true,
+        })
+        .fill(text);
+      await editor
+        .getByRole("button", { name: "Save changes", exact: true })
+        .click();
+      await expect(editor).toBeHidden();
+    };
+    await edit("Clue (copy)", false, "Frpbaq.");
+    await expect(cell("Clue")).toContainText("Svefg.");
+    if (process.platform === "darwin") {
+      await cell("Clue (copy)").focus();
+      await page.keyboard.press("ControlOrMeta+Enter");
+      await expect(cell("Clue (copy)")).toContainText("output: Second.");
+      await expect(cell("Clue")).toContainText("output: First.");
+    }
+    const view = await current(page);
+    const source = view.exploration.stage.blocks[0];
+    assert.ok(source?.kind === "asset");
+    const context = {
+      workspace_id: view.workspace.id,
+      exploration_id: view.exploration.id,
+      stage_id: view.exploration.stage.id,
+    };
+    await page.evaluate(
+      async ({ context, id, asset }) => {
+        await window.play.workspace({
+          kind: "revise_text",
+          context,
+          key: crypto.randomUUID(),
+          block_id: id,
+          asset_id: asset,
+          expected_revision: 1,
+          text: "Gur svefg.",
+        });
+      },
+      { context, id: source.id, asset: source.asset.id },
+    );
+    await cell("Clue")
+      .getByRole("button", { name: "Duplicate Clue", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText("Saved block changed");
+    assert.equal((await current(page)).exploration.stage.blocks.length, 3);
+    await cell("Clue")
+      .getByRole("button", { name: "Duplicate Clue", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(cell("Clue (copy 2)")).toBeFocused();
+    await expect(cell("Clue (copy 2)")).toContainText("Copied from Clue · r2");
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, fixture);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Gur xrl.");
+    await dialog
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    await cell("sample.png")
+      .getByRole("button", { name: "Duplicate sample.png", exact: true })
+      .click();
+    await expect(cell("sample.png (copy)")).toBeFocused();
+    await expect(
+      cell("sample.png (copy)").getByRole("img", {
+        name: "sample.png (copy)",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(cell("sample.png (copy)").getByRole("figure")).toContainText(
+      "Gur xrl.",
+    );
+    await edit("sample.png (copy)", true, "Gur frpbaq.");
+    await expect(cell("sample.png").getByRole("figure")).toContainText(
+      "Gur xrl.",
+    );
+    if (process.platform === "darwin") {
+      await cell("sample.png (copy)")
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(cell("sample.png (copy)")).toContainText(
+        "output: The second.",
+      );
+    }
+    await cell("sample.png (copy)")
+      .getByRole("button", {
+        name: "Explore Image caption (copy)",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Trail canvas", exact: true }),
+    ).toContainText("Gur frpbaq.");
+    if (process.platform === "darwin")
+      await expect(
+        page.getByRole("region", { name: "Trail canvas", exact: true }),
+      ).toContainText("output: The second.");
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Save reasoning", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Note save status" }),
+    ).toHaveText("Saved");
+    await capture(application, "native-duplicated-blocks");
+    for (const number of [3, 4]) {
+      await cell("Clue")
+        .getByRole("button", { name: "Duplicate Clue", exact: true })
+        .click();
+      await expect(cell(`Clue (copy ${number})`)).toBeFocused();
+    }
+    await expect(
+      cell("Clue").getByRole("button", { name: "Duplicate Clue", exact: true }),
+    ).toBeDisabled();
+    const saved = (await current(page)).exploration.stage.blocks;
+    assert.equal(saved.length, 8);
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual((await current(page)).exploration.stage.blocks, saved);
+    assert.deepEqual(await readFile(fixture), importedSource);
+    await expect(cell("Clue (copy)")).toContainText("Copied from Clue · r1");
+    if (process.platform === "darwin") {
+      await expect(cell("Clue (copy)")).toContainText("output: Second.");
+      await expect(cell("sample.png (copy)")).toContainText(
+        "output: The second.",
+      );
+    }
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 const main = fileURLToPath(new URL("main.js", import.meta.url));
 const fixture = fileURLToPath(
   new URL("../../tests/fixtures/sample.png", import.meta.url),

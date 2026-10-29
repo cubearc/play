@@ -44,8 +44,9 @@ pub fn pending(directory: &Path, id: Uuid) -> Result<Option<Pending>> {
     if value.product != "cubearc.play.workspace.upgrade"
         || value.workspace_id != id
         || value.generation != storage::GENERATION
-        || value.from_schema != 1
-        || value.to_schema != storage::SCHEMA_VERSION
+        || value.from_schema < 1
+        || value.from_schema >= value.to_schema
+        || value.to_schema > storage::SCHEMA_VERSION
     {
         return Err("unsupported_store");
     }
@@ -71,12 +72,17 @@ pub fn clean(directory: &Path, id: Uuid) -> Result<()> {
     Ok(())
 }
 
-pub async fn publish(directory: &Path, id: Uuid, schemas: &Schemas) -> Result<()> {
+pub async fn publish(
+    directory: &Path,
+    id: Uuid,
+    from_schema: u32,
+    schemas: &Schemas,
+) -> Result<()> {
     let pending = Pending {
         product: "cubearc.play.workspace.upgrade".into(),
         workspace_id: id,
         generation: storage::GENERATION,
-        from_schema: 1,
+        from_schema,
         to_schema: storage::SCHEMA_VERSION,
         temporary: Uuid::new_v4(),
     };

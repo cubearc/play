@@ -84,6 +84,35 @@ Block. [Open full size](assets/desktop/ordered-notebook.png).
 New content is placed before reasoning when reasoning is last. If you have moved
 reasoning elsewhere, new content is appended without moving the existing Blocks.
 
+## Duplicate a clue
+
+Choose the copy icon in a text or image Block's heading. Tab to
+**Duplicate First clue** (or the Block's title) and press Enter to use the
+keyboard. The saved content is copied immediately after the source, and focus
+follows it. An image and its caption stay together.
+
+The copy has a distinct title, such as **First clue (copy)** or
+**First clue (copy 2)**. **Copied from First clue · r1** identifies its original
+input revision. Use **Edit text** or **Edit caption** on the copy, then choose
+**Run cell** to investigate an alternative. The original content and Runs stay
+intact. Copies start without Runs; duplicating a Block never runs an operation.
+
+![Original clue and an independently edited copy with separate ROT13 results and the preserved source revision.](assets/desktop/duplicated-blocks.png)
+
+Two clue variants in the macOS source preview. The copy keeps its origin while
+using its own saved input. [Open full size](assets/desktop/duplicated-blocks.png).
+
+Copies keep their own Assets and Trails, so editing either version does not edit
+the other. Their content starts at r1 even when copied from a later revision.
+The source label stays pinned to that original revision. Saved results and
+reasoning are not copied into the new Trail.
+
+If the source or notebook changed first, Play shows the latest content and keeps
+your reasoning draft. Review it, then duplicate again. Unsaved text in an editor
+must be saved or cancelled before copying. Copies count toward the Stage's eight
+Blocks and retained storage limit; the button is disabled when the Stage is full.
+**Reasoning** remains one Note Block per Stage and has no duplicate action.
+
 ## Save reasoning
 
 Write in **Stage note**, then choose **Save reasoning** or Cmd/Ctrl+S. Wait for
@@ -103,5 +132,5 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 
 Windows/Linux worker execution is refused by the current native policy, even
 though the UI has keyboard bindings. [Installation](installation.md) states the
-platform scope. Image replacement, Block duplication/removal and
+platform scope. Image replacement, Block removal and
 result export are not available in this preview.

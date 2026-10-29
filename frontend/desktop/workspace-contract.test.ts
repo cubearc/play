@@ -15,6 +15,36 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("duplication accepts closed exact source snapshots without path or partial caption authority", () => {
+  const intent = {
+    kind: "duplicate_block",
+    context: owner,
+    key: randomUUID(),
+    block_id: randomUUID(),
+    expected_revision: 1,
+    source: { asset: { asset_id: randomUUID(), revision: 2 }, caption: null },
+  };
+  assert.deepEqual(request(intent), intent);
+  const caption = { asset_id: randomUUID(), revision: 1 };
+  const parsed = request({ ...intent, source: { ...intent.source, caption } });
+  assert.ok(parsed.kind === "duplicate_block");
+  assert.deepEqual(parsed.source, { ...intent.source, caption });
+  for (const source of [
+    null,
+    [],
+    {},
+    { asset: intent.source.asset },
+    { ...intent.source, path: "/private" },
+    { ...intent.source, asset: { asset_id: "../source", revision: 1 } },
+    { ...intent.source, asset: { ...intent.source.asset, revision: 0 } },
+    { ...intent.source, caption: { asset_id: randomUUID() } },
+    { ...intent.source, caption: { ...caption, revision: Infinity } },
+    { ...intent.source, caption: { ...caption, path: "/private" } },
+  ])
+    assert.throws(() => request({ ...intent, source }));
+  assert.throws(() => request({ ...intent, path: "/private" }));
+  assert.throws(() => request({ ...intent, expected_revision: 0 }));
+});
 test("Block ordering accepts only a bounded complete-order intent with unique UUIDs", () => {
   const order = {
     kind: "reorder_blocks",

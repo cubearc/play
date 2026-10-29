@@ -182,7 +182,7 @@ fn native_baseline_fixture(root: &std::path::Path, workspace: Uuid) {
     runtime.block_on(async {
   let mut db=SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(root.join(workspace.to_string()).join("workspace.sqlite3")).foreign_keys(false)).await.unwrap();
   // Reconstruct the exact previously delivered native baseline, retaining its real domain records.
-  sqlx::raw_sql("BEGIN; DROP TABLE run_inputs; DROP TABLE node_attempts; DROP TABLE pipeline_runs; DROP TABLE workspace_meta;").execute(&mut db).await.unwrap();
+  sqlx::raw_sql("BEGIN; DROP TABLE asset_origins; DROP TABLE run_inputs; DROP TABLE node_attempts; DROP TABLE pipeline_runs; DROP TABLE workspace_meta;").execute(&mut db).await.unwrap();
   let baseline=include_str!("../src/workspace/schema.sql");let start=baseline.find("CREATE TABLE workspace_meta").unwrap();let end=baseline[start..].find(';').unwrap()+start+1;
   sqlx::raw_sql(&baseline[start..end]).execute(&mut db).await.unwrap();
   sqlx::query("INSERT INTO workspace_meta VALUES(?,2,1)").bind(workspace.to_string()).execute(&mut db).await.unwrap();
@@ -230,7 +230,10 @@ fn recognized_native_baseline_upgrades_atomically_without_reassigning_content() 
             .join("workspace.sqlite3"),
     )
     .unwrap();
-    assert_eq!(u32::from_be_bytes(bytes[60..64].try_into().unwrap()), 2);
+    assert_eq!(
+        u32::from_be_bytes(bytes[60..64].try_into().unwrap()),
+        play_engine::protocol::contract().schema_version
+    );
 }
 
 #[test]

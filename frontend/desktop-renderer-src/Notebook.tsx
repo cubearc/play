@@ -2,6 +2,7 @@ import VscodeButton from "@vscode-elements/react-elements/dist/components/Vscode
 import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIcon.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useEffect, useRef, useState } from "react";
+import contract from "../../desktop/protocol.json" with { type: "json" };
 import type {
   AssetBlockView,
   AssetView,
@@ -65,6 +66,7 @@ export function Notebook({
   busy,
   editText,
   reorderBlocks,
+  duplicateBlock,
 }: {
   exploration: ExplorationView;
   executions: Executions;
@@ -83,6 +85,11 @@ export function Notebook({
     revision: number,
     ids: string[],
   ) => Promise<boolean>;
+  duplicateBlock: (
+    context: Context,
+    revision: number,
+    block: AssetBlockView,
+  ) => Promise<string | null>;
 }) {
   const cells = useRef(new Map<string, HTMLElement>());
   const [moved, setMoved] = useState<{
@@ -114,6 +121,19 @@ export function Notebook({
       (entry) => entry.source.id === asset.id,
     );
     if (trail) openTrail(trail);
+  };
+  const duplicate = async (block: AssetBlockView) => {
+    const id = await duplicateBlock(
+      contextOf(exploration),
+      exploration.stage.revision,
+      block,
+    );
+    if (id)
+      setMoved({
+        stageId: exploration.stage.id,
+        blockId: id,
+        message: `Copied ${block.asset.title}. The copy was inserted after its source.`,
+      });
   };
   return (
     <section className="notebook scroll-surface" aria-label="Stage notebook">
@@ -238,6 +258,30 @@ export function Notebook({
                   </VscodeButton>
                 ) : null}
                 <div className="block-order-controls">
+                  {block.kind === "asset" ? (
+                    <VscodeButton
+                      secondary
+                      iconOnly
+                      icon="copy"
+                      aria-label={`Duplicate ${title}`}
+                      title={
+                        exploration.stage.blocks.length >= contract.block_limit
+                          ? "Stage limit reached"
+                          : "Duplicate this saved block"
+                      }
+                      disabled={
+                        busy ||
+                        exploration.stage.blocks.length >= contract.block_limit
+                      }
+                      aria-disabled={
+                        busy ||
+                        exploration.stage.blocks.length >= contract.block_limit
+                          ? "true"
+                          : "false"
+                      }
+                      onClick={() => void duplicate(block)}
+                    />
+                  ) : null}
                   <VscodeButton
                     secondary
                     iconOnly

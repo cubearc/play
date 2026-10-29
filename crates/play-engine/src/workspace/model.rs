@@ -10,8 +10,29 @@ pub struct Context {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssetRevision {
+    pub asset_id: Uuid,
+    pub revision: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockSource {
+    pub asset: AssetRevision,
+    pub caption: Option<AssetRevision>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    DuplicateBlock {
+        context: Context,
+        key: Uuid,
+        block_id: Uuid,
+        expected_revision: i64,
+        source: BlockSource,
+    },
     List,
     View {
         workspace_id: Uuid,
@@ -97,6 +118,7 @@ impl Command {
             | Self::SaveNote { key, .. }
             | Self::ReviseText { key, .. }
             | Self::ReorderBlocks { key, .. }
+            | Self::DuplicateBlock { key, .. }
             | Self::AddText { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
@@ -137,6 +159,16 @@ pub struct Asset {
     pub revision: i64,
     pub title: String,
     pub content: Content,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Box<AssetOrigin>>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetOrigin {
+    pub asset_id: String,
+    pub revision: i64,
+    pub title: String,
 }
 
 #[derive(Serialize)]

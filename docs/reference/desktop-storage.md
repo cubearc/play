@@ -40,10 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **2**, SQLite application ID
+The native store uses generation **2**, schema version **3**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
-accepted generation evolves through `runs.sql`. Recognized native schema 1
-upgrades to schema 2 under its owner lock, preserving content and IDs. The engine
+accepted generation evolves through `runs.sql` and `copies.sql`. Recognized native
+schemas 1 and 2 upgrade to schema 3 under the owner lock, preserving content,
+IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
 `upgrade.json` marker identifies that unpublished copy; a new owner discards
@@ -114,8 +115,47 @@ sequence, independently for every Stage and Exploration.
 Stage revisions track structural membership and order. Adding text or an image
 also advances this revision; editing content or saving reasoning uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
-end. No new schema is required: all Block positions live in native schema 2.
-The coordinated app/engine wire protocol is **5**, with no older DTO fallback.
+end. Block positions remain in the existing native table; schema 3 adds immutable
+copy provenance. The coordinated app/engine wire protocol is **6**, with no older
+DTO fallback.
+
+## Block copies and provenance
+
+The closed `duplicate_block` intent carries `context`, `key`, `block_id`,
+`expected_revision` and `source`. `expected_revision` is the Stage's structural
+revision. `source` contains `asset: { asset_id, revision }` and a matching
+`caption` reference or `null`. Both source references must match the selected
+Block's saved bindings. Concurrent content edits are conflicts even when the
+Stage order did not change. Missing/foreign Blocks fail; Note Blocks return
+`invalid_block_type`.
+
+One transaction checks the Block and retained byte ceilings, copies the selected
+content into new Asset UUIDs at revision 1, records their exact source revisions,
+creates a fresh Trail for each Asset, inserts the complete Block after its source
+and advances the Stage revision. Image bytes are verified and decoded by Core;
+caption limits remain in force. A failure, including a caption quota rejection
+after preparing the image, rolls back the entire copy and receipt.
+
+The fresh Trail reuses the source Asset's first working Trail Pipeline binding;
+it starts with an empty hypothesis and no Runs. The operation selector remains a
+draft for a later explicit Run. Accepted execution history, private retained
+outputs and reasoning are never cloned or run implicitly. Source IDs/revisions,
+Trails, Pipelines and Runs are not rewritten. Copies use distinct bounded UTF-8
+titles with numbered suffixes when needed.
+
+`asset_origins` stores the copied Asset ID, source Asset ID and source revision
+under the same Workspace/Exploration foreign keys. Update/delete triggers make
+that relationship immutable. Asset views expose optional
+`origin: { assetId, revision, title }`; originals omit it. Editing a copy appends
+its own revision while retaining this origin. Copying a copy records the immediate
+source revision, preserving the lineage chain.
+
+Matching mutation-key retries return the original accepted Block, even after
+later edits. Changed payloads with that key fail. The renderer retains an
+unacknowledged intent so retrying a transport failure cannot silently create a
+second copy; confirmed conflicts reload the current notebook and preserve Note
+drafts. Copies count as separate content for all storage/Block ceilings. The
+single reasoning Block has no copy action in this preview.
 
 ## Text and caption revisions
 

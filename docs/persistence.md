@@ -16,6 +16,8 @@ drafts and open canvas tabs are not persisted. Save reasoning and wait for
 **Saved** before switching. Save text/caption editors with **Save changes**; their
 revisions persist under the original Asset IDs. Unsaved drafts do not survive a
 crash. Editing never rewrites an earlier Run's input revision or result.
+Duplicated Blocks reopen with their own content, Assets, Trails and saved Runs.
+Their source revision labels remain pinned even after the original is edited.
 
 
 ![Reopened notebook with two Explorations and an earlier retained Run selected in the expanded history.](assets/desktop/run-history.png)

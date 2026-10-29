@@ -48,6 +48,10 @@ checks stale-order recovery with a preserved draft, and verifies focused-cell
 execution and immutable earlier Run evidence. Its chooser fixture selects a real PNG through the
 trusted import handler. It does not establish arbitrary graph execution or Cloud
 participation. Screenshots are written under `frontend/playwright-report/`.
+The duplication journey checks independent text/caption edits and Runs, source
+revision conflicts, keyboard copy, grouped images, quota state and restart.
+Native tests also preserve copy provenance across schema 2 upgrades and refuse
+lineage changes; engine tests cover atomic rollback after a caption quota failure.
 
 ## Source boundaries
 

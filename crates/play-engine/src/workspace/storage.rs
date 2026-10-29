@@ -12,8 +12,9 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
+pub const COPY_SCHEMA: &str = include_str!("copies.sql");
 pub type Schemas = Vec<Vec<(String, String, String)>>;
 pub const SCHEMA: &str = include_str!("schema.sql");
 
@@ -236,10 +237,12 @@ pub async fn expected_schema() -> Result<Schemas> {
         .await
         .map_err(failure)?;
     let baseline = schema_rows(&mut connection).await?;
+    migrate_to(&mut connection, 2).await?;
+    let runs = schema_rows(&mut connection).await?;
     migrate(&mut connection).await?;
     let current = schema_rows(&mut connection).await?;
     connection.close().await.map_err(failure)?;
-    Ok(vec![baseline, current])
+    Ok(vec![baseline, runs, current])
 }
 
 pub async fn inspect(path: &Path, id: Uuid, expected: &Schemas) -> Result<u32> {
@@ -320,7 +323,7 @@ impl Owned {
         }
         if version < SCHEMA_VERSION {
             connection.close().await.map_err(failure)?;
-            super::upgrade::publish(&directory, id, expected).await?;
+            super::upgrade::publish(&directory, id, version, expected).await?;
             connection =
                 SqliteConnection::connect_with(&options(&directory.join("workspace.sqlite3")))
                     .await
@@ -356,16 +359,31 @@ impl Owned {
 }
 
 pub async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
+    migrate_to(connection, SCHEMA_VERSION).await
+}
+
+async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()> {
+    let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(failure)?;
+    if version < 1 || version > i64::from(target) || target > SCHEMA_VERSION {
+        return Err("unsupported_store");
+    }
     sqlx::query("PRAGMA foreign_keys=OFF")
         .execute(&mut *connection)
         .await
         .map_err(failure)?;
     let result = async {
         let mut transaction = connection.begin().await.map_err(failure)?;
-        sqlx::raw_sql(RUN_SCHEMA)
-            .execute(&mut *transaction)
-            .await
-            .map_err(failure)?;
+        for (next, schema) in [(2, RUN_SCHEMA), (3, COPY_SCHEMA)] {
+            if version < i64::from(next) && next <= target {
+                sqlx::raw_sql(schema)
+                    .execute(&mut *transaction)
+                    .await
+                    .map_err(failure)?;
+            }
+        }
         sqlx::query("PRAGMA foreign_key_check")
             .fetch_optional(&mut *transaction)
             .await

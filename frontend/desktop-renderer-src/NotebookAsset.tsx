@@ -17,6 +17,12 @@ export function NotebookAsset({
 }) {
   return (
     <figure className="notebook-figure">
+      {block.asset.origin ? (
+        <p className="copy-origin">
+          Copied from {block.asset.origin.title} · r
+          {block.asset.origin.revision}
+        </p>
+      ) : null}
       <button
         className={`asset-content ${block.asset.content.kind}`}
         type="button"
@@ -47,6 +53,9 @@ export function NotebookAsset({
           </button>
           <span className="caption-meta">
             Caption · r{block.caption.revision}
+            {block.caption.origin
+              ? ` · Copied from r${block.caption.origin.revision}`
+              : ""}
           </span>
         </figcaption>
       ) : null}

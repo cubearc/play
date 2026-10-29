@@ -16,6 +16,15 @@ export interface AssetView {
   revision: number;
   title: string;
   content: { kind: "image" } | { kind: "text"; text: string };
+  origin?: { assetId: string; revision: number; title: string };
+}
+export interface AssetRevisionRef {
+  asset_id: string;
+  revision: number;
+}
+export interface BlockSource {
+  asset: AssetRevisionRef;
+  caption: AssetRevisionRef | null;
 }
 export interface TextAssetView extends AssetView {
   content: { kind: "text"; text: string };
@@ -87,6 +96,14 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "duplicate_block";
+      context: Context;
+      key: string;
+      block_id: string;
+      expected_revision: number;
+      source: BlockSource;
+    }
   | {
       kind: "reorder_blocks";
       context: Context;
@@ -255,6 +272,7 @@ export interface Responses {
   add_text: { blockId: string };
   revise_text: { assetId: string; revision: number };
   reorder_blocks: { stageId: string; revision: number };
+  duplicate_block: { blockId: string; stageId: string; revision: number };
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -304,6 +322,13 @@ export function request(value: unknown): WorkspaceRequest {
       "text",
     ],
     reorder_blocks: ["context", "key", "expected_revision", "block_ids"],
+    duplicate_block: [
+      "context",
+      "key",
+      "block_id",
+      "expected_revision",
+      "source",
+    ],
   };
   if (typeof kind !== "string" || !Object.hasOwn(fields, kind))
     throw new Error("invalid_command");
@@ -313,7 +338,12 @@ export function request(value: unknown): WorkspaceRequest {
   for (const field of expected) {
     const value = record[field];
     if (field === "context") context(value);
-    else if (field === "block_ids") {
+    else if (field === "source") {
+      const source = object(value);
+      keys(source, ["asset", "caption"]);
+      assetRevision(source.asset);
+      if (source.caption !== null) assetRevision(source.caption);
+    } else if (field === "block_ids") {
       if (!Array.isArray(value) || value.length > limits.block_limit)
         throw new Error("input_limit");
       if (
@@ -347,6 +377,12 @@ export function request(value: unknown): WorkspaceRequest {
     else if (!id(value)) throw new Error("invalid_command");
   }
   return record as unknown as WorkspaceRequest;
+}
+function assetRevision(value: unknown) {
+  const reference = object(value);
+  keys(reference, ["asset_id", "revision"]);
+  if (!id(reference.asset_id) || !revision(reference.revision))
+    throw new Error("invalid_command");
 }
 export function imageImport(value: unknown): ImageImport {
   const record = object(value);

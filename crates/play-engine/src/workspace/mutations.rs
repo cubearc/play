@@ -1,5 +1,5 @@
 use super::{
-    assets,
+    assets, copies,
     model::{Command, Context},
     order, queries,
     storage::{self, Owned},
@@ -18,7 +18,7 @@ pub fn title(value: &str) -> Result<&str> {
     Ok(value)
 }
 
-async fn count(
+pub(super) async fn count(
     connection: &mut SqliteConnection,
     sql: &'static str,
     workspace: &str,
@@ -185,7 +185,7 @@ async fn pipeline(connection: &mut SqliteConnection, workspace: &str) -> Result<
     Ok(id)
 }
 
-async fn asset(
+pub(super) async fn store_asset(
     connection: &mut SqliteConnection,
     context: &Context,
     name: &str,
@@ -213,6 +213,19 @@ async fn asset(
         .execute(&mut *connection)
         .await
         .map_err(storage::failure)?;
+    Ok(id)
+}
+
+async fn asset(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    name: &str,
+    kind: &str,
+    data: &[u8],
+) -> Result<String> {
+    let id = store_asset(connection, context, name, kind, data).await?;
+    let workspace = context.workspace_id.to_string();
+    let exploration = context.exploration_id.to_string();
     let pipeline_id = if kind == "text" {
         Some(pipeline(connection, &workspace).await?)
     } else {
@@ -420,6 +433,16 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         } => {
             queries::context(connection, owner, context).await?;
             order::reorder(connection, context, *expected_revision, block_ids).await?
+        }
+        Command::DuplicateBlock {
+            context,
+            block_id,
+            expected_revision,
+            source,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            copies::duplicate(connection, context, *block_id, *expected_revision, source).await?
         }
         _ => return Err("invalid_command"),
     };

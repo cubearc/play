@@ -155,6 +155,72 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       engine.workspace({ ...order, key: randomUUID() }),
       /state_conflict/,
     );
+    const sourceBlock = afterOrder.stage.blocks.find(
+      (block) => block.kind === "asset",
+    );
+    assert.ok(sourceBlock?.kind === "asset");
+    const copyIntent = {
+      kind: "duplicate_block",
+      context,
+      key: randomUUID(),
+      block_id: sourceBlock.id,
+      expected_revision: afterOrder.stage.revision,
+      source: {
+        asset: { asset_id: asset.id, revision: asset.revision },
+        caption: null,
+      },
+    };
+    const copyResult = (await engine.workspace(copyIntent)) as {
+      blockId: string;
+    };
+    assert.deepEqual(await engine.workspace(copyIntent), copyResult);
+    const afterCopy = (await engine.workspace(open)) as ExplorationView;
+    const copied = afterCopy.stage.blocks.find(
+      (block) => block.id === copyResult.blockId,
+    );
+    assert.ok(copied?.kind === "asset");
+    assert.notEqual(copied.asset.id, asset.id);
+    assert.deepEqual(copied.asset.origin, {
+      assetId: asset.id,
+      revision: asset.revision,
+      title: asset.title,
+    });
+    const copiedTrail = afterCopy.trails.find(
+      (trail) => trail.source.id === copied.asset.id,
+    );
+    assert.ok(copiedTrail?.pipeline);
+    assert.deepEqual(
+      (
+        (await engine.workspace({
+          kind: "list_runs",
+          context,
+          trail_id: copiedTrail.id,
+          before: null,
+        })) as { runs: unknown[] }
+      ).runs,
+      [],
+    );
+    let copiedRun: RunDetail | null = null;
+    if (worker) {
+      copiedRun = await finished(
+        engine,
+        context,
+        await engine.startRun({
+          ...invocation,
+          key: randomUUID(),
+          trail_id: copiedTrail.id,
+          pipeline_id: copiedTrail.pipeline.id,
+          pipeline_revision: copiedTrail.pipeline.revision,
+          source_asset_id: copied.asset.id,
+          source_revision: 1,
+        }),
+      );
+      assert.equal(copiedRun.status, "completed");
+      assert.deepEqual(copiedRun.result?.outputs, { output: "The key." });
+      const input = copiedRun.plan.inputs.input;
+      assert.ok(input && "assetId" in input);
+      assert.equal(input.assetId, copied.asset.id);
+    }
     await engine.close();
     engine = await Engine.connect(binary, worker, root);
     const listing = (await engine.workspace({ kind: "list" })) as {
@@ -163,7 +229,7 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
     assert.equal(listing.lastWorkspaceId, workspace.id);
     await engine.workspace({ kind: "open", workspace_id: workspace.id });
     const restored = (await engine.workspace(open)) as ExplorationView;
-    assert.deepEqual(restored.stage.blocks, afterOrder.stage.blocks);
+    assert.deepEqual(restored.stage.blocks, afterCopy.stage.blocks);
     assert.equal(
       restored.stage.blocks.find((block) => block.kind === "asset")?.asset.id,
       asset.id,
@@ -176,6 +242,15 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
           run_id: saved.id,
         }),
         saved,
+      );
+    if (copiedRun)
+      assert.deepEqual(
+        await engine.workspace({
+          kind: "run_detail",
+          context,
+          run_id: copiedRun.id,
+        }),
+        copiedRun,
       );
   } finally {
     await engine.close();

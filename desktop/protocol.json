@@ -1,5 +1,5 @@
 {
-  "protocol": 5,
+  "protocol": 6,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -10,7 +10,7 @@
   "vm_growth_bytes": 134217728,
   "output_bytes": 16384,
   "storage_generation": 2,
-  "schema_version": 2,
+  "schema_version": 3,
   "workspace_limit": 16,
   "exploration_limit": 32,
   "stage_limit": 16,

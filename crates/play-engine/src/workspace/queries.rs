@@ -37,7 +37,7 @@ pub async fn asset(
     revision: i64,
 ) -> Result<Asset> {
     let row = sqlx::query("SELECT a.title,a.kind,r.data,r.digest FROM assets a JOIN asset_revisions r ON (a.workspace_id,a.exploration_id,a.id)=(r.workspace_id,r.exploration_id,r.asset_id) WHERE a.workspace_id=? AND a.exploration_id=? AND a.id=? AND r.revision=?")
-        .bind(workspace).bind(exploration).bind(id).bind(revision).fetch_optional(connection).await.map_err(storage::failure)?.ok_or("not_found")?;
+        .bind(workspace).bind(exploration).bind(id).bind(revision).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
     let data: Vec<u8> = row.get("data");
     if cube_core::hashing::sha256(&data) != row.get::<String, _>("digest") {
         return Err("corrupt_store");
@@ -53,12 +53,16 @@ pub async fn asset(
         "image" if data.len() <= crate::protocol::contract().image_bytes => Content::Image,
         _ => return Err("corrupt_store"),
     };
+    let origin = sqlx::query("SELECT o.source_asset_id,o.source_revision,a.title FROM asset_origins o JOIN assets a ON (o.workspace_id,o.exploration_id,o.source_asset_id)=(a.workspace_id,a.exploration_id,a.id) WHERE o.workspace_id=? AND o.exploration_id=? AND o.asset_id=?")
+        .bind(workspace).bind(exploration).bind(id).fetch_optional(connection).await.map_err(storage::failure)?
+        .map(|row| Box::new(AssetOrigin {asset_id:row.get(0),revision:row.get(1),title:row.get(2)}));
     Ok(Asset {
         id: id.into(),
         exploration_id: exploration.into(),
         revision,
         title: row.get("title"),
         content,
+        origin,
     })
 }
 
