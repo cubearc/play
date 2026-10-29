@@ -1,5 +1,6 @@
 # Add text, image and file Assets
 
+<a id="add-text-and-image-assets"></a>
 <a id="browse-and-inspect-local-files"></a>
 <a id="import-explicitly"></a>
 
