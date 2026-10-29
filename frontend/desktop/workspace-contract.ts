@@ -114,7 +114,7 @@ export interface PipelineRef {
   revision: number;
 }
 export type GraphSource =
-  | { kind: "input"; name: "source" }
+  | { kind: "input"; name: string }
   | { kind: "output"; nodeId: string; port: string }
   | { kind: "literal"; value: unknown };
 export interface GraphNode {
@@ -126,8 +126,8 @@ export interface GraphNode {
   inputs: Record<string, GraphSource>;
 }
 export interface PipelineDefinition {
-  formatVersion: 3;
-  inputs: [{ name: "source"; semanticType: string }];
+  formatVersion: 4;
+  inputs: { name: string; semanticType: string }[];
   nodes: GraphNode[];
   output: string;
 }
@@ -150,6 +150,7 @@ export interface TrailView {
   title: string;
   hypothesis: string;
   source: AssetView;
+  bindings: Record<string, AssetView>;
   pipelineId: string | null;
   pipeline: PipelineView | null;
 }
@@ -215,6 +216,7 @@ export type WorkspaceRequest =
       expected_revision: number;
       hypothesis: string;
       pipeline: PipelineRef | null;
+      bindings: Record<string, AssetRevisionRef>;
     }
   | {
       kind: "add_page";
@@ -331,6 +333,8 @@ export interface AssetRead {
   revision: number;
 }
 export interface RunRequest {
+  trail_revision: number;
+  target_node_id: string;
   context: Context;
   key: string;
   trail_id: string;
@@ -382,7 +386,12 @@ export interface RunDetail extends RunSummary {
     reusedOutputs: unknown[];
     inputs: Record<
       string,
-      | { assetId: string; revision: number; semanticType: string }
+      | {
+          assetId: string;
+          revision: number;
+          semanticType: string;
+          used?: boolean;
+        }
       | { literal: unknown }
     >;
     parameters: unknown;
@@ -487,6 +496,7 @@ export function request(value: unknown): WorkspaceRequest {
       "expected_revision",
       "hypothesis",
       "pipeline",
+      "bindings",
     ],
     add_annotation: ["context", "key", "title", "text"],
     add_page: ["context", "key", "title", "text"],
@@ -554,6 +564,15 @@ export function request(value: unknown): WorkspaceRequest {
         keys(p, ["id", "revision"]);
         if (!id(p.id) || !revision(p.revision))
           throw new Error("invalid_command");
+      }
+    } else if (field === "bindings") {
+      const bindings = object(value);
+      if (Object.keys(bindings).length >= limits.pipeline_input_limit)
+        throw new Error("input_limit");
+      for (const [name, ref] of Object.entries(bindings)) {
+        if (!/^[a-z][a-z0-9_]{0,31}$/.test(name) || name === "source")
+          throw new Error("invalid_command");
+        assetRevision(ref);
       }
     } else if (field === "definition") {
       graphDefinition(value);
@@ -662,6 +681,8 @@ export function runRequest(value: unknown): RunRequest {
     "trail_id",
     "pipeline_id",
     "pipeline_revision",
+    "trail_revision",
+    "target_node_id",
     "source_asset_id",
     "source_revision",
     "operation",
@@ -672,6 +693,8 @@ export function runRequest(value: unknown): RunRequest {
   if (
     !id(record.key) ||
     !id(record.trail_id) ||
+    !revision(record.trail_revision) ||
+    !id(record.target_node_id) ||
     !id(record.pipeline_id) ||
     !revision(record.pipeline_revision) ||
     !id(record.source_asset_id) ||
@@ -705,22 +728,30 @@ export function graphDefinition(value: unknown): PipelineDefinition {
   if (!bytes(JSON.stringify(d), limits.pipeline_definition_bytes))
     throw new Error("input_limit");
   if (
-    d.formatVersion !== 3 ||
+    d.formatVersion !== 4 ||
     !id(d.output) ||
     !Array.isArray(d.inputs) ||
-    d.inputs.length !== 1 ||
+    d.inputs.length < 1 ||
+    d.inputs.length > limits.pipeline_input_limit ||
     !Array.isArray(d.nodes) ||
     d.nodes.length < 1 ||
     d.nodes.length > limits.pipeline_node_limit
   )
     throw new Error("invalid_command");
-  const input = object(d.inputs[0]);
-  keys(input, ["name", "semanticType"]);
-  if (
-    input.name !== "source" ||
-    !["text", "image.samples"].includes(String(input.semanticType))
-  )
-    throw new Error("invalid_command");
+  const names = new Set<string>();
+  for (const [index, item] of d.inputs.entries()) {
+    const input = object(item);
+    keys(input, ["name", "semanticType"]);
+    if (
+      typeof input.name !== "string" ||
+      !/^[a-z][a-z0-9_]{0,31}$/.test(input.name) ||
+      (index === 0 && input.name !== "source") ||
+      names.has(input.name) ||
+      !["text", "image.samples"].includes(String(input.semanticType))
+    )
+      throw new Error("invalid_command");
+    names.add(input.name);
+  }
   for (const item of d.nodes) {
     const n = object(item);
     keys(n, [
@@ -760,7 +791,8 @@ export function graphDefinition(value: unknown): PipelineDefinition {
       const source = object(v);
       if (source.kind === "input") {
         keys(source, ["kind", "name"]);
-        if (source.name !== "source") throw new Error("invalid_command");
+        if (typeof source.name !== "string" || !names.has(source.name))
+          throw new Error("invalid_command");
       } else if (source.kind === "output") {
         keys(source, ["kind", "nodeId", "port"]);
         if (!id(source.nodeId) || !bytes(source.port, 64) || !source.port)

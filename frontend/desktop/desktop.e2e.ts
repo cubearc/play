@@ -21,6 +21,273 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("named assets keep figures grouped and share a graph without sharing bindings or Run targets", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-inputs-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Image and caption study");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "First interpretation");
+    const addFigure = async (caption: string) => {
+      await application.evaluate(({ dialog }, path) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [path],
+        });
+      }, fixture);
+      await notebook(page)
+        .getByRole("button", { name: "Add image", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: "Add image with caption",
+        exact: true,
+      });
+      await dialog
+        .getByRole("textbox", { name: "Caption", exact: true })
+        .fill(caption);
+      await dialog
+        .getByRole("button", { name: "Choose PNG", exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+      await notebook(page)
+        .getByRole("button", { name: "Explore sample.png", exact: true })
+        .click();
+    };
+    await addFigure("Gur xrl.");
+    let canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "New Pipeline",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Image and caption");
+    await editor
+      .getByRole("textbox", { name: "Input name", exact: true })
+      .fill("caption");
+    await editor
+      .getByRole("button", { name: "Add input", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toHaveAttribute("disabled", "");
+    await editor
+      .getByRole("combobox", { name: "Asset for caption", exact: true })
+      .click();
+    await editor
+      .getByRole("option")
+      .filter({ hasText: /caption.*r1/i })
+      .click();
+    await editor.getByRole("button", { name: "Add node", exact: true }).click();
+    await editor
+      .getByRole("combobox", { name: "Operation", exact: true })
+      .click();
+    await editor.getByRole("option", { name: "ROT13", exact: true }).click();
+    await expect(
+      editor.getByRole("combobox", { name: "input · text", exact: true }),
+    ).toContainText("caption · text");
+    await capture(application, "native-pipeline-inputs-editor");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const first = await current(page);
+    const t = first.exploration.trails.find(
+      (t) => t.source.content.kind === "image",
+    );
+    assert.ok(t?.pipeline);
+    const run = async (target: "default" | "image", expected: string) => {
+      if (target === "image") {
+        await canvas.getByRole("button", { name: /Node 1:/ }).click();
+        await canvas
+          .getByRole("button", { name: "Run node", exact: true })
+          .click();
+      } else
+        await canvas
+          .getByRole("button", { name: "Run cell", exact: true })
+          .click();
+      await expect(
+        canvas.getByRole("region", { name: "Cell result" }),
+      ).toContainText(
+        process.platform === "darwin" ? expected : "Execution rejected",
+      );
+    };
+    await run("default", "output: The key.");
+    await run("image", "FFAy");
+    await canvas
+      .getByRole("region", { name: "Bound Pipeline inputs" })
+      .evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await capture(application, "native-pipeline-inputs-canvas", false);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    const runs = await page.evaluate(
+      async ({ workspaceId, explorationId, stageId, id }) =>
+        window.play.workspace({
+          kind: "list_runs",
+          context: {
+            workspace_id: workspaceId,
+            exploration_id: explorationId,
+            stage_id: stageId,
+          },
+          trail_id: id,
+          before: null,
+        }),
+      t,
+    );
+    assert.equal(runs.runs.length, 2);
+    assert.equal(runs.runs[0]?.operation.operation, "image.pixels.read");
+    assert.equal(runs.runs[1]?.operation.operation, "cipher.rot13");
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    const figure = notebook(page).getByRole("article", {
+      name: "sample.png block",
+      exact: true,
+    });
+    await expect(figure).toContainText("Gur xrl.");
+    await expect(figure.locator("img")).toHaveCount(1);
+    await figure
+      .getByRole("button", { name: "Edit caption", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit caption", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Frpbaq pyhr.");
+    await editor
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await figure
+      .getByRole("button", { name: "Explore sample.png", exact: true })
+      .click();
+    await run("default", "output: The key.");
+    await expect(canvas.getByText(/Earlier input ·/)).toHaveCount(0);
+    await canvas
+      .getByRole("button", { name: "Edit Trail", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Trail", exact: true });
+    await editor
+      .getByRole("combobox", { name: "Asset for caption", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("option").filter({ hasText: /pinned; current r2/ }),
+    ).toBeVisible();
+    await capture(application, "native-pipeline-inputs-binding");
+    await editor
+      .getByRole("option", { name: "Image caption · r2", exact: true })
+      .click();
+    await editor
+      .getByRole("button", { name: "Save Trail", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await run("default", "output: Second clue.");
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Input name", exact: true })
+      .fill("hint");
+    await editor
+      .getByRole("button", { name: "Add input", exact: true })
+      .click();
+    await editor
+      .getByRole("combobox", { name: "Asset for hint", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "Image caption · r2", exact: true })
+      .click();
+    await editor
+      .getByRole("button", { name: "Save revision", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await create(page, "Exploration", "Second interpretation");
+    await addFigure("Nabgure pyhr.");
+    await canvas
+      .getByRole("button", { name: "Edit Trail", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Trail", exact: true });
+    await editor
+      .getByRole("combobox", { name: "Saved Pipeline", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "Image and caption", exact: true })
+      .click();
+    await editor
+      .getByRole("combobox", { name: "Pipeline revision", exact: true })
+      .click();
+    await editor
+      .getByRole("option", { name: "Revision 1", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("combobox", { name: "Asset for hint", exact: true }),
+    ).toHaveCount(0);
+
+    await editor
+      .getByRole("combobox", { name: "Asset for caption", exact: true })
+      .click();
+    await editor
+      .getByRole("option")
+      .filter({ hasText: /caption.*r1/i })
+      .click();
+    await editor
+      .getByRole("textbox", { name: "Hypothesis", exact: true })
+      .fill("A separate reading of the same graph");
+    await editor
+      .getByRole("button", { name: "Save Trail", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await run("default", "output: Another clue.");
+    const second = await current(page);
+    const st = second.exploration.trails.find(
+      (t) => t.source.content.kind === "image",
+    );
+    assert.ok(st?.pipeline);
+    assert.equal(st.pipeline.id, t.pipeline.id);
+    assert.equal(st.pipeline.revision, t.pipeline.revision);
+    assert.notEqual(st.bindings.caption?.id, t.bindings.caption?.id);
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual((await current(page)).exploration, second.exploration);
+    await notebook(page)
+      .getByRole("button", { name: "Explore sample.png", exact: true })
+      .click();
+    canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin" ? "Another clue." : "Execution rejected",
+    );
+  } finally {
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({
+        response: 1,
+        checkboxChecked: false,
+      });
+    });
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("typed graph editing executes dependent nodes and preserves their evidence after restart", {
   timeout: 90000,
 }, async () => {
@@ -1873,14 +2140,19 @@ async function saveNote(page: Page, text: string) {
       .getByRole("status", { name: "Note save status" }),
   ).toHaveText("Saved");
 }
-async function capture(application: ElectronApplication, name: string) {
+async function capture(
+  application: ElectronApplication,
+  name: string,
+  resetScroll = true,
+) {
   await mkdir("playwright-report", { recursive: true });
   const page = await application.firstWindow();
-  await page.locator(".scroll-surface").evaluateAll((elements) =>
-    elements.forEach((element) => {
-      element.scrollTop = 0;
-    }),
-  );
+  if (resetScroll)
+    await page.locator(".scroll-surface").evaluateAll((elements) =>
+      elements.forEach((element) => {
+        element.scrollTop = 0;
+      }),
+    );
   await page.evaluate(async () => {
     await document.fonts.ready;
     await new Promise<void>((resolve) =>
@@ -2209,6 +2481,8 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
             context,
             key: crypto.randomUUID(),
             trail_id: trailId,
+            trail_revision: 1,
+            target_node_id: crypto.randomUUID(),
             pipeline_id: pipelineId,
             pipeline_revision: 1,
             source_asset_id: crypto.randomUUID(),

@@ -87,13 +87,18 @@ function Literal({
 }
 export function initialInputs(
   operation: Operation,
-  inputType: string,
+  slots: PipelineDefinition["inputs"],
 ): GraphNode["inputs"] {
   return Object.fromEntries(
     operation.contract.inputs.map((p) => [
       p.name,
-      p.semantic_type === inputType
-        ? { kind: "input", name: "source" }
+      slots.some((s) => s.semanticType === p.semantic_type)
+        ? {
+            kind: "input",
+            name:
+              slots.find((s) => s.semanticType === p.semantic_type)?.name ??
+              "source",
+          }
         : {
             kind: "literal",
             value: p.semantic_type === "bytes.array" ? [] : "",
@@ -122,16 +127,16 @@ export function GraphInputs({
         const value =
           source?.kind === "output"
             ? `${source.nodeId}:${source.port}`
-            : (source?.kind ?? "literal");
+            : source?.kind === "input"
+              ? `input:${source.name}`
+              : "literal";
         const choices = [
-          ...(port.semantic_type === definition.inputs[0].semanticType
-            ? [
-                {
-                  value: "input",
-                  label: `Source asset · ${port.semantic_type}`,
-                },
-              ]
-            : []),
+          ...definition.inputs
+            .filter((s) => s.semanticType === port.semantic_type)
+            .map((s) => ({
+              value: `input:${s.name}`,
+              label: `${s.name} · ${s.semanticType}`,
+            })),
           ...(port.semantic_type !== "image.samples"
             ? [{ value: "literal", label: `Literal · ${port.semantic_type}` }]
             : []),
@@ -161,7 +166,8 @@ export function GraphInputs({
               disabled={disabled}
               options={choices}
               onChange={(v) => {
-                if (v === "input") update({ kind: "input", name: "source" });
+                if (v.startsWith("input:"))
+                  update({ kind: "input", name: v.slice(6) });
                 else if (v === "literal")
                   update({
                     kind: "literal",

@@ -64,7 +64,7 @@ fn every_block_including_reasoning_reorders_and_reopens_without_rewriting_eviden
     let blocks = before["stage"]["blocks"].as_array().unwrap();
     assert_eq!(blocks[2]["kind"], "note");
     let trail = &before["trails"][0];
-    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     let prepared = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&prepared.identity).unwrap();
     let original = manager

@@ -2,31 +2,33 @@
 
 Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
-The executor plans the selected output node and its ancestors in a typed graph,
+The executor plans the explicitly selected target node and its ancestors in a typed graph,
 using native ROT13, Brainfuck or image pixel-reading adapters. One sandboxed worker
-executes the plan sequentially. Extra Asset slots, explicit byte-representation
+executes the plan sequentially. Explicit byte-representation
 conversions, parallelism, executor output reuse and contextual CLI execution are
 separate deliveries.
 
 ## Accepted invocation
 
 The trusted desktop sends a closed `start_run` intent with Workspace,
-Exploration, Stage, Trail, selected Pipeline revision and expected source Asset
-ID/revision, operation/version,
+Exploration, Stage, Trail ID/revision, selected Pipeline ID/revision, explicit
+`target_node_id`, expected source Asset ID/revision and target operation/version,
 intent UUID and explicit output-retention choice. Rust verifies every owner,
-resolves the Trail's exact Asset revision and validates inputs/parameters against
+resolves the Trail's exact named Asset revisions and validates inputs/parameters against
 the actual Core contract before admitting work. Unsupported native enforcement,
 missing adapters, version mismatches and busy capacity reject before admission.
-A changed Trail source or Pipeline returns `state_conflict` before creating a Run;
+A changed Trail revision, source or Pipeline returns `state_conflict` before creating a Run;
 the engine never silently resolves a different revision than the caller selected.
-An archived source returns `block_archived` before a new Run is created. Archive
+An archived source or additional bound Asset returns `block_archived` before a new Run is created. Archive
 state is resolved in the engine, independently of disabled UI controls.
 
 An accepted Run pins:
 
 - Its engine-generated UUID, owning context, caller and intent digest.
-- The immutable Pipeline definition/revision, selected output and ordered ancestor set.
-- The named source Asset revision and explicit literals/connections. Brainfuck's
+- The full immutable Pipeline definition/revision, actual target and ordered ancestor set.
+- Every named Asset revision, a `used` flag and explicit literals/connections. Only
+  consumed inputs cross the private worker pipe; unused references remain in the
+  saved plan and `run_inputs` for provenance. Brainfuck's
   input stream is a literal byte array, empty by default. Image reads
   bind `image.samples` from the exact authorized PNG revision, with the coordinates
   and palette-expansion choice frozen in the selected definition.
@@ -36,13 +38,20 @@ An accepted Run pins:
 [Save and select a Pipeline revision](../explorations.md#save-and-reuse-a-pipeline)
 before executing another configuration. A Run never creates or substitutes a
 Pipeline implicitly. A requested operation/version that differs from the selected
-definition returns `pipeline_mismatch`. Reusing a definition is configuration
+target returns `pipeline_mismatch`. Reusing a definition is configuration
 reuse: outputs execute again and are never presented as reused attempts.
 
 The intent UUID identifies one accepted action. A matching retry returns the
 original Run in its recorded state, including after restart. Changing its payload
 returns `idempotency_conflict`. Choosing Run again after acknowledgement uses a
 new intent and preserves the preceding evidence.
+
+**Run cell** uses the saved default output. In a multi-node canvas, selecting a
+node and choosing **Run node** executes that node's ancestor closure without
+saving another Pipeline revision. Both actions use the same admission and
+retention rules. Aggregate consumed text is bounded at 8192 UTF-8 bytes and raw
+PNG data at 131072 bytes across all named inputs; extra slots do not increase
+worker CPU, wall-time, memory or output budgets.
 
 ## State and recovery
 

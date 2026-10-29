@@ -32,7 +32,7 @@ export function AssetCanvas({
         <div className="eyebrow">Trail · Asset exploration</div>
         <h1>{trail.title}</h1>
         <p>{trail.hypothesis || "Add a hypothesis to guide this Trail."}</p>
-        {image || text ? (
+        {image || text || page ? (
           <div className="trail-actions">
             <VscodeButton
               secondary
@@ -153,6 +153,38 @@ export function AssetCanvas({
           </div>
         </article>
 
+        {Object.entries(trail.bindings).length ? (
+          <section className="bound-inputs" aria-label="Bound Pipeline inputs">
+            <h2>Trail inputs</h2>
+            {Object.entries(trail.bindings).map(([name, asset]) => (
+              <article
+                key={name}
+                className="canvas-node"
+                aria-label={`Bound input ${name}`}
+              >
+                <div className="node-heading">
+                  <strong>{name}</strong>
+                  <span>
+                    {asset.title} · pinned r{asset.revision}
+                  </span>
+                </div>
+                {asset.content.kind === "image" ? (
+                  <AssetImage
+                    asset={asset}
+                    context={{
+                      workspace_id: trail.workspaceId,
+                      exploration_id: trail.explorationId,
+                      stage_id: trail.stageId,
+                    }}
+                  />
+                ) : asset.content.kind === "text" ||
+                  asset.content.kind === "page" ? (
+                  <pre>{asset.content.text}</pre>
+                ) : null}
+              </article>
+            ))}
+          </section>
+        ) : null}
         {trail.pipelineId ? (
           <>
             <div className="canvas-connection">
@@ -163,6 +195,16 @@ export function AssetCanvas({
               <PipelineGraph
                 definition={trail.pipeline.definition}
                 operations={executions.operations}
+                busy={executions.busy || trail.archived}
+                onRun={(id) => {
+                  const node = trail.pipeline?.definition.nodes.find(
+                    (n) => n.id === id,
+                  );
+                  const operation = executions.operations.find(
+                    (o) => o.operation === node?.operation,
+                  );
+                  if (operation) void executions.run(trail, operation, id);
+                }}
               />
             ) : null}
             <article

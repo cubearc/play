@@ -24,7 +24,7 @@ fn node(id: Uuid, source: Value, x: u32) -> Value {
 fn graph() -> Value {
     let a = Uuid::new_v4();
     let b = Uuid::new_v4();
-    json!({"formatVersion":3,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[node(a,json!({"kind":"input","name":"source"}),80),node(b,json!({"kind":"output","nodeId":a,"port":"output"}),400)],"output":b})
+    json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[node(a,json!({"kind":"input","name":"source"}),80),node(b,json!({"kind":"output","nodeId":a,"port":"output"}),400)],"output":b})
 }
 fn create(m: &mut Manager, c: &Context, g: &Value) -> Value {
     call(
@@ -129,7 +129,12 @@ fn selected_output_executes_ancestors_once_with_real_core_outputs_and_no_unrelat
     let result = play_engine::worker::execute_pipeline(
         play_engine::worker::PipelineInvocation {
             definition: g.clone(),
-            input: "Gur xrl.".into(),
+            inputs: std::collections::BTreeMap::from([(
+                "source".into(),
+                play_engine::worker::InputValue::Text {
+                    text: "Gur xrl.".into(),
+                },
+            )]),
         },
         |v| {
             events.push(v);
@@ -159,15 +164,20 @@ fn execute(m: &mut Manager, c: &Context, g: &Value, retain: bool) -> Value {
     let t = &view["trails"][0];
     call(
         m,
-        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Decode twice","pipeline":{"id":p["pipelineId"],"revision":1}}),
+        json!({"kind":"save_trail","bindings":{},"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Decode twice","pipeline":{"id":p["pipelineId"],"revision":1}}),
     );
+    let view = call(
+        m,
+        json!({"kind":"open_exploration","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"stage_id":c.stage_id}),
+    );
+    let t = &view["trails"][0];
     let output = g["nodes"]
         .as_array()
         .unwrap()
         .iter()
         .find(|n| n["id"] == g["output"])
         .unwrap();
-    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"pipeline_id":p["pipelineId"],"pipeline_revision":1,"source_asset_id":t["source"]["id"],"source_revision":1,"operation":output["operation"],"operation_version":output["operationVersion"],"retain_output":retain})).unwrap();
+    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"target_node_id":t["pipeline"]["outputNodeId"],"pipeline_id":p["pipelineId"],"pipeline_revision":1,"source_asset_id":t["source"]["id"],"source_revision":1,"operation":output["operation"],"operation_version":output["operationVersion"],"retain_output":retain})).unwrap();
     let prepared = m.prepare_run(&request).unwrap();
     let id = prepared.identity.clone();
     let outcome = play_engine::worker::execute_pipeline(prepared.invocation, |event| {
@@ -256,7 +266,7 @@ fn byte_representations_are_never_silently_coerced_at_a_join() {
     let program = Uuid::new_v4();
     let join = Uuid::new_v4();
     let image = STANDARD.encode(include_bytes!("../../../tests/fixtures/sample.png"));
-    let d = json!({"formatVersion":3,"inputs":[{"name":"source","semanticType":"image.samples"}],"nodes":[{"id":pixel,"operation":"image.pixels.read","operationVersion":1,"parameters":{"x":0,"y":0,"expand_palette":false},"position":{"x":0,"y":0},"inputs":{"input":{"kind":"input","name":"source"}}},node(program,json!({"kind":"literal","value":",."}),300),{"id":join,"operation":"esolang.brainfuck.execute","operationVersion":2,"parameters":{"max_instructions":1000000,"max_output_bytes":16384,"max_memory_bytes":8388608},"position":{"x":600,"y":0},"inputs":{"source":{"kind":"output","nodeId":program,"port":"output"},"input":{"kind":"output","nodeId":pixel,"port":"output"}}}],"output":join});
+    let d = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"image.samples"}],"nodes":[{"id":pixel,"operation":"image.pixels.read","operationVersion":1,"parameters":{"x":0,"y":0,"expand_palette":false},"position":{"x":0,"y":0},"inputs":{"input":{"kind":"input","name":"source"}}},node(program,json!({"kind":"literal","value":",."}),300),{"id":join,"operation":"esolang.brainfuck.execute","operationVersion":2,"parameters":{"max_instructions":1000000,"max_output_bytes":16384,"max_memory_bytes":8388608},"position":{"x":600,"y":0},"inputs":{"source":{"kind":"output","nodeId":program,"port":"output"},"input":{"kind":"output","nodeId":pixel,"port":"output"}}}],"output":join});
     assert!(
         matches!(
             play_engine::graph::Definition::parse(d),
@@ -319,8 +329,8 @@ fn actual_schema_nine_upgrade_preserves_the_finished_run_and_advances_working_gr
     );
     assert_eq!(view["stage"], f["view"]["stage"]);
     for t in view["trails"].as_array().unwrap() {
-        assert_eq!(t["pipeline"]["definition"]["formatVersion"], 3);
-        assert_eq!(t["pipeline"]["revision"], 2);
+        assert_eq!(t["pipeline"]["definition"]["formatVersion"], 4);
+        assert_eq!(t["pipeline"]["revision"], 3);
     }
 }
 #[test]
@@ -330,7 +340,12 @@ fn output_budget_measures_raw_bytes_once_across_the_whole_run() {
     let exact = play_engine::worker::execute_pipeline(
         play_engine::worker::PipelineInvocation {
             definition: d.clone(),
-            input: input.clone(),
+            inputs: std::collections::BTreeMap::from([(
+                "source".into(),
+                play_engine::worker::InputValue::Text {
+                    text: input.clone(),
+                },
+            )]),
         },
         |_| Ok(()),
     );
@@ -352,7 +367,10 @@ fn output_budget_measures_raw_bytes_once_across_the_whole_run() {
         play_engine::worker::execute_pipeline(
             play_engine::worker::PipelineInvocation {
                 definition: d,
-                input
+                inputs: std::collections::BTreeMap::from([(
+                    "source".into(),
+                    play_engine::worker::InputValue::Text { text: input }
+                )])
             },
             |v| {
                 events.push(v);

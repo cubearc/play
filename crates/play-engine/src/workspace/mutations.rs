@@ -376,6 +376,7 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
             expected_revision,
             hypothesis,
             pipeline,
+            bindings,
             ..
         } => {
             queries::context(connection, owner, context).await?;
@@ -386,6 +387,7 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
                 *expected_revision,
                 hypothesis,
                 pipeline.as_ref(),
+                bindings,
             )
             .await?
         }

@@ -12,12 +12,13 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 10;
+pub const SCHEMA_VERSION: u32 = 11;
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
 pub const COPY_SCHEMA: &str = include_str!("copies.sql");
 pub const ARCHIVE_SCHEMA: &str = include_str!("archive.sql");
 pub const FILE_SCHEMA: &str = include_str!("files.sql");
 pub const RESULT_SCHEMA: &str = include_str!("results.sql");
+pub const INPUT_SCHEMA: &str = include_str!("inputs.sql");
 pub const GRAPH_SCHEMA: &str = include_str!("graphs.sql");
 pub const PIPELINE_SCHEMA: &str = include_str!("pipelines.sql");
 pub const NOTEBOOK_SCHEMA: &str = include_str!("notebook.sql");
@@ -393,12 +394,16 @@ async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()
             (8, NOTEBOOK_SCHEMA),
             (9, PIPELINE_SCHEMA),
             (10, GRAPH_SCHEMA),
+            (11, INPUT_SCHEMA),
         ] {
             if version < i64::from(next) && next <= target {
                 sqlx::raw_sql(schema)
                     .execute(&mut *transaction)
                     .await
                     .map_err(failure)?;
+                if next == 11 {
+                    super::bindings::upgrade(&mut transaction).await?;
+                }
                 if next == 10 {
                     super::pipelines::upgrade_graphs(&mut transaction).await?;
                 }

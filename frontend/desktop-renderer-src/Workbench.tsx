@@ -500,17 +500,32 @@ export function Workbench() {
         <TrailEditor
           trail={editingTrail}
           pipelines={workspace.pipelines}
+          assets={
+            exploration?.stage.blocks.flatMap((b) =>
+              b.kind === "asset"
+                ? [b.asset, ...(b.caption ? [b.caption] : [])]
+                : [],
+            ) ?? []
+          }
           error={state.error}
           onClose={closeConfiguration}
           onDirty={setEditorDirty}
-          onSave={(hypothesis, pipeline, key) =>
-            state.saveTrail(editingTrail, hypothesis, pipeline, key)
+          onSave={(hypothesis, pipeline, key, bindings) =>
+            state.saveTrail(editingTrail, hypothesis, pipeline, key, bindings)
           }
         />
       ) : null}
       {editingPipeline ? (
         <PipelineEditor
           mode={editingPipeline.mode}
+          trail={editingPipeline.trail}
+          assets={
+            exploration?.stage.blocks.flatMap((b) =>
+              b.kind === "asset"
+                ? [b.asset, ...(b.caption ? [b.caption] : [])]
+                : [],
+            ) ?? []
+          }
           pipeline={editingPipeline.pipeline}
           operations={executions.operations}
           inputType={

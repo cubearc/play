@@ -1,4 +1,5 @@
 mod assets;
+mod bindings;
 mod blocks;
 mod copies;
 mod files;

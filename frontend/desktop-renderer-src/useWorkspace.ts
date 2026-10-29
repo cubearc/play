@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  AssetRevisionRef,
   BlockView,
   Context,
   ExplorationView,
@@ -19,6 +20,8 @@ import {
 import type { PipelineDraft, PipelineMode } from "./PipelineEditor";
 
 const messages: Record<string, string> = {
+  invalid_binding:
+    "Choose an asset revision from this Stage for every named input.",
   pipeline_cycle:
     "This connection creates a cycle. Disconnect a dependency before saving the Pipeline.",
   invalid_connection:
@@ -634,6 +637,7 @@ export function useWorkspace() {
     hypothesis: string,
     pipeline: PipelineRef | null,
     key: string,
+    bindings: Record<string, AssetRevisionRef>,
   ) =>
     execute(async () => {
       const current = epoch.current;
@@ -649,6 +653,7 @@ export function useWorkspace() {
         expected_revision: trail.revision,
         hypothesis,
         pipeline,
+        bindings,
       });
       await refreshSummary(trail.workspaceId);
       if (
@@ -704,6 +709,7 @@ export function useWorkspace() {
             exploration_id: trail.explorationId,
             stage_id: trail.stageId,
           },
+          bindings: draft.bindings,
           key: draft.bindingKey,
           trail_id: trail.id,
           expected_revision: trail.revision,

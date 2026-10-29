@@ -1,12 +1,16 @@
 use super::{
-    blocks,
+    bindings, blocks,
     model::{Content, RunRequest},
     queries, storage,
 };
-use crate::{Result, worker::PipelineInvocation};
+use crate::{
+    Result,
+    worker::{InputValue, PipelineInvocation},
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use sqlx::{Row, SqliteConnection};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub struct Plan {
@@ -15,9 +19,7 @@ pub struct Plan {
     pub pipeline_id: String,
     pub pipeline_revision: i64,
     pub node_id: Uuid,
-    pub asset_id: String,
-    pub asset_revision: i64,
-    pub input_port: String,
+    pub inputs: BTreeMap<String, super::model::AssetRevision>,
 }
 
 pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> Result<Plan> {
@@ -26,6 +28,9 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     let exploration = context.exploration_id.to_string();
     let row=sqlx::query("SELECT source_id,source_revision,pipeline_id,pipeline_revision,revision,hypothesis FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
   .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(request.trail_id.to_string()).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
+    if row.get::<i64, _>("revision") != request.trail_revision {
+        return Err("state_conflict");
+    }
     if row.get::<Option<String>, _>("pipeline_id").as_deref()
         != Some(request.pipeline_id.to_string().as_str())
         || row.get::<Option<i64>, _>("pipeline_revision") != Some(request.pipeline_revision)
@@ -40,7 +45,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
     )
     .await?;
     let graph = crate::graph::Definition::parse(definition.clone())?;
-    let target = graph.node(graph.output)?;
+    let target = graph.node(request.target_node_id)?;
     if target.operation != request.operation
         || target.operation_version != request.operation_version
     {
@@ -61,34 +66,75 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         asset_revision,
     )
     .await?;
-    let (text, semantic_type) = match asset.content {
-        Content::Text { text } if graph.inputs[0].semantic_type == "text" => (text, "text"),
-        Content::Image if graph.inputs[0].semantic_type == "image.samples" => {
-            let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset_id).bind(asset_revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
-            (STANDARD.encode(bytes), "image.samples")
-        }
-        _ => return Err("invalid_asset_type"),
-    };
-    let schedule = graph.schedule()?;
+    let mut assets = bindings::read(
+        connection,
+        &workspace,
+        &exploration,
+        &request.trail_id.to_string(),
+    )
+    .await?;
+    assets.insert("source".into(), asset);
+    if assets.len() != graph.inputs.len() {
+        return Err("invalid_binding");
+    }
     let mut selected = graph.clone();
+    selected.output = request.target_node_id;
+    let schedule = selected.schedule()?;
     selected.nodes.retain(|n| schedule.contains(&n.id));
+    let required = selected.required_inputs();
+    let mut input_data = BTreeMap::new();
+    let mut refs = BTreeMap::new();
+    let mut inputs = serde_json::Map::new();
+    for slot in &graph.inputs {
+        let asset = assets.get(&slot.name).ok_or("invalid_binding")?;
+        blocks::source_active(connection, context, &asset.id).await?;
+        let kind = bindings::semantic_type(asset)?;
+        if kind != slot.semantic_type {
+            return Err("invalid_asset_type");
+        }
+        let used = required.contains(slot.name.as_str());
+        inputs.insert(
+            slot.name.clone(),
+            json!({"assetId":asset.id,"revision":asset.revision,"semanticType":kind,"used":used}),
+        );
+        refs.insert(
+            slot.name.clone(),
+            super::model::AssetRevision {
+                asset_id: Uuid::parse_str(&asset.id).map_err(|_| "corrupt_store")?,
+                revision: asset.revision,
+            },
+        );
+        if used {
+            let data = match &asset.content {
+                Content::Text { text } | Content::Page { text } => {
+                    InputValue::Text { text: text.clone() }
+                }
+                Content::Image => {
+                    let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset.id).bind(asset.revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
+                    InputValue::Image {
+                        png: STANDARD.encode(bytes),
+                    }
+                }
+                _ => return Err("invalid_asset_type"),
+            };
+            input_data.insert(slot.name.clone(), data);
+        }
+    }
     let invocation = PipelineInvocation {
         definition: selected,
-        input: text,
+        inputs: input_data,
     };
     crate::worker::validate_pipeline(&invocation)?;
     let contract = target.contract()?;
     let pipeline_id = request.pipeline_id.to_string();
     let pipeline_revision = request.pipeline_revision;
     let node_id = *schedule.first().ok_or("invalid_pipeline")?;
-    let input_port = "source".to_owned();
-    let inputs = json!({"source":{"assetId":asset_id,"revision":asset_revision,"semanticType":semantic_type}});
     let nodes = schedule
         .iter()
         .map(|id| node_plan(graph.node(*id)?))
         .collect::<Result<Vec<_>>>()?;
     let target_plan = node_plan(target)?;
-    let value = json!({"formatVersion":2,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[graph.output],"executionOrder":schedule,"nodes":nodes,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":2,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let value = json!({"formatVersion":2,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":2,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }
@@ -98,9 +144,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         pipeline_id,
         pipeline_revision,
         node_id,
-        asset_id,
-        asset_revision,
-        input_port,
+        inputs: refs,
     })
 }
 

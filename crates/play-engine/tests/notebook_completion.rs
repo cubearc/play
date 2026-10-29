@@ -136,11 +136,16 @@ fn image_run_uses_the_exact_image_revision_and_rejects_text_operations() {
         trail["pipeline"].is_object(),
         "images need a typed executable binding"
     );
-    let request = json!({"context":c,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipelineId"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"image.pixels.read","operation_version":1,"retain_output":true});
+    let request = json!({"context":c,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipelineId"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"image.pixels.read","operation_version":1,"retain_output":true});
     let prepared = m
         .prepare_run(&serde_json::from_value(request.clone()).unwrap())
         .unwrap();
-    assert_eq!(prepared.invocation.input, STANDARD.encode(data));
+    assert_eq!(
+        serde_json::to_value(&prepared.invocation.inputs).unwrap()["source"]["png"]
+            .as_str()
+            .unwrap(),
+        STANDARD.encode(data)
+    );
     let record = m.run_detail(&c, prepared.identity.id).unwrap();
     assert_eq!(
         record["plan"]["inputs"]["source"]["semanticType"],

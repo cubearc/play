@@ -5,24 +5,37 @@ import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation } from "../desktop/contract";
 import type {
+  AssetView,
   GraphNode,
   PipelineDefinition,
   PipelineView,
+  TrailView,
 } from "../desktop/workspace-contract";
+import {
+  type Bindings,
+  BindingsEditor,
+  bindingRefs,
+  completeBindings,
+  selectedBindings,
+} from "./BindingsEditor";
 import { GraphInputs, initialInputs, Select } from "./GraphInputs";
 import { PipelineGraph } from "./PipelineGraph";
+import { PipelineInputs } from "./PipelineInputs";
 export type PipelineMode = "create" | "revise" | "fork";
 export interface PipelineDraft {
   title: string;
   definition: PipelineDefinition;
   key: string;
   bindingKey: string;
+  bindings: Bindings;
 }
 export function PipelineEditor({
   mode,
   pipeline,
   operations,
   inputType,
+  trail,
+  assets,
   error,
   onSave,
   onClose,
@@ -32,6 +45,8 @@ export function PipelineEditor({
   pipeline: PipelineView | null;
   operations: Operation[];
   inputType: string;
+  trail: TrailView;
+  assets: AssetView[];
   error: string;
   onSave: (draft: PipelineDraft) => Promise<boolean>;
   onClose: () => void;
@@ -53,7 +68,7 @@ export function PipelineEditor({
     if (!op) throw new Error("catalog_unavailable");
     const id = crypto.randomUUID();
     return {
-      formatVersion: 3,
+      formatVersion: 4,
       inputs: [{ name: "source", semanticType: inputType }],
       nodes: [
         {
@@ -61,13 +76,17 @@ export function PipelineEditor({
           operation: op.operation,
           operationVersion: op.operation_version,
           parameters: op.parameters,
-          inputs: initialInputs(op, inputType),
+          inputs: initialInputs(op, [
+            { name: "source", semanticType: inputType },
+          ]),
           position: { x: 40, y: 60 },
         },
       ],
       output: id,
     };
   });
+  const [bindings, setBindings] = useState<Bindings>(() => bindingRefs(trail));
+  const initialBindings = useRef(JSON.stringify(bindings));
   const initial = useRef(JSON.stringify(definition));
   const [selected, setSelected] = useState(definition.output);
   const [saving, setSaving] = useState(false);
@@ -84,6 +103,7 @@ export function PipelineEditor({
   }, []);
   const changed =
     JSON.stringify(definition) !== initial.current ||
+    JSON.stringify(bindings) !== initialBindings.current ||
     mode !== "revise" ||
     invalid;
   useEffect(() => onDirty(changed), [changed, onDirty]);
@@ -111,6 +131,7 @@ export function PipelineEditor({
   const readonly = saving || mode === "fork";
   const valid =
     !invalid &&
+    completeBindings(definition.inputs, bindings) &&
     title.trim() &&
     new TextEncoder().encode(title).byteLength <= 120 &&
     new TextEncoder().encode(JSON.stringify(definition)).byteLength <=
@@ -125,6 +146,7 @@ export function PipelineEditor({
           definition,
           key: key.current,
           bindingKey: bindingKey.current,
+          bindings: selectedBindings(definition.inputs, bindings),
         })
       )
         onClose();
@@ -176,6 +198,22 @@ export function PipelineEditor({
         dragging or using the arrow keys. Runs execute the output’s dependencies
         in Rust.
       </p>
+      <PipelineInputs
+        definition={definition}
+        disabled={readonly}
+        onChange={change}
+      />
+      <BindingsEditor
+        inputs={definition.inputs}
+        assets={assets}
+        pinned={trail.bindings}
+        bindings={bindings}
+        disabled={saving}
+        onChange={(next) => {
+          bindingKey.current = crypto.randomUUID();
+          setBindings(next);
+        }}
+      />
       <div className="graph-editor-layout">
         <div>
           <PipelineGraph
@@ -210,7 +248,7 @@ export function PipelineEditor({
                   (i) => i.semantic_type === p.semantic_type,
                 ),
               );
-              const inputs = initialInputs(op, inputType);
+              const inputs = initialInputs(op, definition.inputs);
               const consumer = op.contract.inputs.find(
                 (p) => p.semantic_type === port?.semantic_type,
               );
@@ -267,7 +305,7 @@ export function PipelineEditor({
                   operation: id,
                   operationVersion: op.operation_version,
                   parameters: op.parameters,
-                  inputs: initialInputs(op, inputType),
+                  inputs: initialInputs(op, definition.inputs),
                 });
                 setParameters(JSON.stringify(op.parameters, null, 2));
               }}

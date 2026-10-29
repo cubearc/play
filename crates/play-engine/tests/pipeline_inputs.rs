@@ -1,0 +1,488 @@
+use play_engine::workspace::{Context, Manager, RunRequest};
+use serde_json::{Value, json};
+use uuid::Uuid;
+fn call(m: &mut Manager, v: Value) -> Value {
+    m.handle(serde_json::from_value(v).unwrap()).unwrap()
+}
+fn context(m: &mut Manager, workspace: Option<Uuid>, title: &str) -> Context {
+    let w = workspace.unwrap_or_else(|| {
+        serde_json::from_value(
+            call(
+                m,
+                json!({"kind":"create","key":Uuid::new_v4(),"title":"Asset pipelines"}),
+            )["id"]
+                .clone(),
+        )
+        .unwrap()
+    });
+    let e = call(
+        m,
+        json!({"kind":"create_exploration","workspace_id":w,"key":Uuid::new_v4(),"title":title}),
+    );
+    serde_json::from_value(
+        json!({"workspace_id":w,"exploration_id":e["explorationId"],"stage_id":e["stageId"]}),
+    )
+    .unwrap()
+}
+fn view(m: &mut Manager, c: &Context) -> Value {
+    call(
+        m,
+        json!({"kind":"open_exploration","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"stage_id":c.stage_id}),
+    )
+}
+fn image(m: &mut Manager, c: &Context, caption: &str) -> Value {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    call(
+        m,
+        json!({"kind":"add_image","context":c,"key":Uuid::new_v4(),"title":"Puzzle image","caption":caption,"png":STANDARD.encode(include_bytes!("../../../tests/fixtures/sample.png"))}),
+    );
+    view(m, c)
+}
+fn definition() -> Value {
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"image.samples"},{"name":"caption","semanticType":"text"}],"nodes":[{"id":a,"operation":"image.pixels.read","operationVersion":1,"parameters":{"x":0,"y":0,"expand_palette":false},"position":{"x":80,"y":80},"inputs":{"input":{"kind":"input","name":"source"}}},{"id":b,"operation":"cipher.rot13","operationVersion":1,"parameters":{},"position":{"x":400,"y":80},"inputs":{"input":{"kind":"input","name":"caption"}}}],"output":b})
+}
+fn pipeline(m: &mut Manager, c: &Context, d: &Value) -> Value {
+    call(
+        m,
+        json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Image and caption","definition":d}),
+    )
+}
+fn figure(v: &Value) -> &Value {
+    v["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["kind"] == "asset" && b["asset"]["content"]["kind"] == "image")
+        .unwrap()
+}
+fn trail<'a>(v: &'a Value, asset: &Value) -> &'a Value {
+    v["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["id"] == asset["id"])
+        .unwrap()
+}
+fn bind(m: &mut Manager, c: &Context, v: &Value, p: &Value, h: &str) -> Value {
+    let f = figure(v);
+    let t = trail(v, &f["asset"]);
+    call(
+        m,
+        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":h,"pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":{"caption":{"asset_id":f["caption"]["id"],"revision":f["caption"]["revision"]}}}),
+    );
+    view(m, c)
+}
+fn request(c: &Context, t: &Value, target: &Value) -> RunRequest {
+    serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"pipeline_id":t["pipeline"]["id"],"pipeline_revision":t["pipeline"]["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"target_node_id":target["id"],"operation":target["operation"],"operation_version":target["operationVersion"],"retain_output":true})).unwrap()
+}
+fn execute(m: &mut Manager, r: &RunRequest) -> Value {
+    let p = m.prepare_run(r).unwrap();
+    let id = p.identity.clone();
+    let output = play_engine::worker::execute_pipeline(p.invocation, |event| {
+        let mut n = id.clone();
+        n.node_id = serde_json::from_value(event["nodeId"].clone()).unwrap();
+        if event["type"] == "node_started" {
+            m.start_attempt(&n)
+        } else {
+            m.finish_attempt(&n, event)
+        }
+    })
+    .unwrap();
+    m.finish_run(&id, json!({"status":"completed","output":output}))
+        .unwrap()
+}
+#[test]
+fn two_explorations_bind_the_same_graph_to_distinct_image_caption_revisions_and_targets() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("private");
+    let mut m = Manager::new(root.clone()).unwrap();
+    let a = context(&mut m, None, "A");
+    let av = image(&mut m, &a, "Gur xrl.");
+    let b = context(&mut m, Some(a.workspace_id), "B");
+    let bv = image(&mut m, &b, "Frpbaq pyhr.");
+    let d = definition();
+    let p = pipeline(&mut m, &a, &d);
+    let av = bind(&mut m, &a, &av, &p, "Follow the image");
+    let bv = bind(&mut m, &b, &bv, &p, "Follow the caption");
+    let at = trail(&av, &figure(&av)["asset"]);
+    let bt = trail(&bv, &figure(&bv)["asset"]);
+    assert_eq!(at["pipeline"], bt["pipeline"]);
+    assert_ne!(at["hypothesis"], bt["hypothesis"]);
+    assert_ne!(
+        at["bindings"]["caption"]["id"],
+        bt["bindings"]["caption"]["id"]
+    );
+    assert!(!d.to_string().contains(at["source"]["id"].as_str().unwrap()));
+    let ar = execute(&mut m, &request(&a, at, &d["nodes"][1]));
+    let br = execute(&mut m, &request(&b, bt, &d["nodes"][1]));
+    let pixels = execute(&mut m, &request(&a, at, &d["nodes"][0]));
+    assert_eq!(ar["result"]["outputs"]["output"], "The key.");
+    assert_eq!(br["result"]["outputs"]["output"], "Second clue.");
+    assert_eq!(pixels["result"]["outputs"]["output"]["base64"], "FFAy");
+    assert_eq!(ar["plan"]["inputs"]["source"]["used"], false);
+    assert_eq!(ar["plan"]["inputs"]["caption"]["used"], true);
+    assert_eq!(pixels["plan"]["inputs"]["caption"]["used"], false);
+    assert_eq!(ar["plan"]["pipeline"]["definition"], d);
+    assert_eq!(ar["attempts"].as_array().unwrap().len(), 1);
+    drop(m);
+    let mut m = Manager::new(root).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":a.workspace_id}));
+    assert_eq!(
+        m.run_detail(&a, serde_json::from_value(ar["id"].clone()).unwrap())
+            .unwrap(),
+        ar
+    );
+    assert_eq!(
+        m.run_detail(&b, serde_json::from_value(br["id"].clone()).unwrap())
+            .unwrap(),
+        br
+    );
+}
+fn save(c: &Context, t: &Value, p: &Value, bindings: Value) -> Value {
+    json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Inspect both inputs","pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":bindings})
+}
+fn ref_of(asset: &Value) -> Value {
+    json!({"asset_id":asset["id"],"revision":asset["revision"]})
+}
+fn duplicate(m: &mut Manager, c: &Context, v: &Value) -> Value {
+    let f = figure(v);
+    call(
+        m,
+        json!({"kind":"duplicate_block","context":c,"key":Uuid::new_v4(),"block_id":f["id"],"expected_revision":v["stage"]["revision"],"source":{"kind":"asset","asset":ref_of(&f["asset"]),"caption":ref_of(&f["caption"])}}),
+    );
+    view(m, c)
+}
+#[test]
+fn pinning_rebinding_and_copying_keep_exact_revision_identity() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Pinned caption");
+    let v = image(&mut m, &c, "Gur xrl.");
+    let d = definition();
+    let p = pipeline(&mut m, &c, &d);
+    let v = bind(&mut m, &c, &v, &p, "Keep original");
+    let t = trail(&v, &figure(&v)["asset"]);
+    let old_request = request(&c, t, &d["nodes"][1]);
+    let old = execute(&mut m, &old_request);
+    let copied = duplicate(&mut m, &c, &v);
+    let copied_figure = copied["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["asset"]["origin"]["assetId"] == figure(&v)["asset"]["id"])
+        .unwrap();
+    let ct = trail(&copied, &copied_figure["asset"]);
+    assert_eq!(
+        ct["bindings"]["caption"]["id"],
+        copied_figure["caption"]["id"]
+    );
+    assert_eq!(ct["bindings"]["caption"]["revision"], 1);
+    let f = figure(&v);
+    call(
+        &mut m,
+        json!({"kind":"revise_text","context":c,"key":Uuid::new_v4(),"block_id":f["id"],"asset_id":f["caption"]["id"],"expected_revision":1,"text":"Frpbaq pyhr."}),
+    );
+    let edited = view(&mut m, &c);
+    let t = trail(&edited, &f["asset"]);
+    assert_eq!(t["bindings"]["caption"]["revision"], 1);
+    assert_eq!(
+        execute(&mut m, &request(&c, t, &d["nodes"][1]))["result"]["outputs"]["output"],
+        "The key."
+    );
+    let copied_old = duplicate(&mut m, &c, &edited);
+    let ct = copied_old["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .rev()
+        .find(|t| t["source"]["content"]["kind"] == "image")
+        .unwrap();
+    assert_eq!(ct["bindings"]["caption"]["id"], f["caption"]["id"]);
+    assert_eq!(
+        ct["bindings"]["caption"]["revision"], 1,
+        "copying r2 must not replace a pin to r1"
+    );
+    let stale = request(&c, t, &d["nodes"][1]);
+    let latest = figure(&edited);
+    call(
+        &mut m,
+        save(&c, t, &p, json!({"caption":ref_of(&latest["caption"])})),
+    );
+    assert_eq!(m.prepare_run(&stale).err(), Some("state_conflict"));
+    assert_eq!(m.existing_run(&old_request).unwrap().unwrap(), old);
+    let bound = view(&mut m, &c);
+    let t = trail(&bound, &f["asset"]);
+    assert_eq!(
+        execute(&mut m, &request(&c, t, &d["nodes"][1]))["result"]["outputs"]["output"],
+        "Second clue."
+    );
+}
+#[test]
+fn scoped_bindings_and_targets_are_validated_before_any_run_is_queued() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let a = context(&mut m, None, "A");
+    let av = image(&mut m, &a, "Gur xrl.");
+    let b = context(&mut m, Some(a.workspace_id), "B");
+    let bv = image(&mut m, &b, "Secret");
+    let d = definition();
+    let p = pipeline(&mut m, &a, &d);
+    let f = figure(&av);
+    let t = trail(&av, &f["asset"]);
+    for bindings in [
+        json!({}),
+        json!({"caption":ref_of(&figure(&bv)["caption"])}),
+        json!({"caption":ref_of(&f["asset"])}),
+        json!({"caption":{"asset_id":f["caption"]["id"],"revision":9}}),
+        json!({"source":ref_of(&f["asset"]),"caption":ref_of(&f["caption"])}),
+    ] {
+        assert!(
+            m.handle(serde_json::from_value(save(&a, t, &p, bindings)).unwrap())
+                .is_err()
+        );
+        assert_eq!(view(&mut m, &a), av);
+    }
+    let bound = bind(&mut m, &a, &av, &p, "Valid");
+    let t = trail(&bound, &f["asset"]);
+    let mut r = request(&a, t, &d["nodes"][1]);
+    r.target_node_id = Uuid::new_v4();
+    assert_eq!(m.prepare_run(&r).err(), Some("invalid_connection"));
+    let mut r = request(&a, t, &d["nodes"][1]);
+    r.operation = "image.pixels.read".into();
+    assert_eq!(m.prepare_run(&r).err(), Some("pipeline_mismatch"));
+    let accepted = m.prepare_run(&request(&a, t, &d["nodes"][1])).unwrap();
+    assert_eq!(
+        accepted
+            .invocation
+            .inputs
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec!["caption"],
+        "unconsumed image bytes must not cross the worker boundary"
+    );
+}
+
+#[test]
+fn actual_schema_ten_upgrade_preserves_the_finished_run_and_advances_working_graphs() {
+    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
+    use std::fs;
+    let f: Value = serde_json::from_str(include_str!("fixtures/native-inputs-v10.json")).unwrap();
+    let c: Context = serde_json::from_value(f["context"].clone()).unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("private");
+    drop(Manager::new(root.clone()).unwrap());
+    let directory = root.join(c.workspace_id.to_string());
+    fs::create_dir(&directory).unwrap();
+    fs::write(directory.join("workspace.json"), f["identity"].to_string()).unwrap();
+    fs::write(directory.join("owner.lock"), []).unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let mut db = SqliteConnection::connect_with(
+            &SqliteConnectOptions::new()
+                .filename(directory.join("workspace.sqlite3"))
+                .create_if_missing(true)
+                .foreign_keys(false),
+        )
+        .await
+        .unwrap();
+        sqlx::raw_sql(include_str!("fixtures/native-inputs-v10.sql"))
+            .execute(&mut db)
+            .await
+            .unwrap();
+        db.close().await.unwrap();
+    });
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+        for file in ["workspace.json", "owner.lock", "workspace.sqlite3"] {
+            fs::set_permissions(directory.join(file), fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
+    let mut m = Manager::new(root).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(
+        m.run_detail(&c, serde_json::from_value(f["run"]["id"].clone()).unwrap())
+            .unwrap(),
+        f["run"]
+    );
+    let view = call(
+        &mut m,
+        json!({"kind":"open_exploration","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"stage_id":c.stage_id}),
+    );
+    assert_eq!(view["stage"], f["view"]["stage"]);
+    for t in view["trails"].as_array().unwrap() {
+        assert_eq!(t["pipeline"]["definition"]["formatVersion"], 4);
+        assert_eq!(t["pipeline"]["revision"], 2);
+        assert_eq!(t["bindings"], json!({}));
+    }
+}
+#[test]
+fn named_inputs_enforce_closed_contracts_and_aggregate_worker_budgets() {
+    use play_engine::{
+        graph::Definition,
+        worker::{InputValue, PipelineInvocation, validate_pipeline},
+    };
+    use std::collections::BTreeMap;
+    let base = definition();
+    for invalid in [
+        json!([]),
+        json!([{"name":"source","semanticType":"image.samples"},{"name":"source","semanticType":"text"}]),
+        json!([{"name":"source","semanticType":"image.samples"},{"name":"Caption","semanticType":"text"}]),
+        json!([{"name":"source","semanticType":"image.samples"},{"name":"caption","semanticType":"bytes"}]),
+        json!([{"name":"source","semanticType":"image.samples"},{"name":"caption","semanticType":"text"},{"name":"a","semanticType":"text"},{"name":"b","semanticType":"text"},{"name":"c","semanticType":"text"}]),
+    ] {
+        let mut d = base.clone();
+        d["inputs"] = invalid;
+        assert!(Definition::parse(d).is_err());
+    }
+    let mut d = base.clone();
+    d["inputs"][0]["semanticType"] = json!("text");
+    d["nodes"][0] = d["nodes"][1].clone();
+    d["nodes"][0]["id"] = json!(Uuid::new_v4());
+    d["nodes"][0]["inputs"]["input"]["name"] = json!("source");
+    let d = Definition::parse(d).unwrap();
+    let mut invocation = PipelineInvocation {
+        definition: d,
+        inputs: BTreeMap::from([
+            (
+                "source".into(),
+                InputValue::Text {
+                    text: "a".repeat(4096),
+                },
+            ),
+            (
+                "caption".into(),
+                InputValue::Text {
+                    text: "b".repeat(4096),
+                },
+            ),
+        ]),
+    };
+    assert_eq!(validate_pipeline(&invocation), Ok(()));
+    invocation.inputs.insert(
+        "caption".into(),
+        InputValue::Text {
+            text: "b".repeat(4097),
+        },
+    );
+    assert_eq!(validate_pipeline(&invocation), Err("input_limit"));
+    invocation.inputs.remove("caption");
+    assert_eq!(validate_pipeline(&invocation), Err("invalid_binding"));
+    invocation
+        .inputs
+        .insert("caption".into(), InputValue::Image { png: String::new() });
+    assert_eq!(validate_pipeline(&invocation), Err("contract_mismatch"));
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let mut d = base.clone();
+    d["inputs"][1]["semanticType"] = json!("image.samples");
+    d["nodes"][1] = d["nodes"][0].clone();
+    d["nodes"][1]["id"] = d["output"].clone();
+    d["nodes"][1]["inputs"]["input"]["name"] = json!("caption");
+    let mut bytes = include_bytes!("../../../tests/fixtures/sample.png").to_vec();
+    bytes.resize(65536, 0);
+    let mut i = PipelineInvocation {
+        definition: Definition::parse(d).unwrap(),
+        inputs: BTreeMap::from([
+            (
+                "source".into(),
+                InputValue::Image {
+                    png: STANDARD.encode(&bytes),
+                },
+            ),
+            (
+                "caption".into(),
+                InputValue::Image {
+                    png: STANDARD.encode(&bytes),
+                },
+            ),
+        ]),
+    };
+    assert_eq!(validate_pipeline(&i), Ok(()));
+    bytes.push(0);
+    i.inputs.insert(
+        "caption".into(),
+        InputValue::Image {
+            png: STANDARD.encode(&bytes),
+        },
+    );
+    assert_eq!(validate_pipeline(&i), Err("input_limit"));
+}
+#[test]
+fn page_inputs_are_stage_scoped_and_archival_blocks_only_new_admissions() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Page clue");
+    image(&mut m, &c, "Figure caption");
+    let d = definition();
+    let p = pipeline(&mut m, &c, &d);
+    call(
+        &mut m,
+        json!({"kind":"add_page","context":c,"key":Uuid::new_v4(),"title":"Page source","text":"Gur xrl."}),
+    );
+    let v = view(&mut m, &c);
+    let page = v["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["asset"]["content"]["kind"] == "page")
+        .unwrap();
+    let t = trail(&v, &figure(&v)["asset"]);
+    call(
+        &mut m,
+        save(&c, t, &p, json!({"caption":ref_of(&page["asset"])})),
+    );
+    let bound = view(&mut m, &c);
+    let t = trail(&bound, &figure(&bound)["asset"]);
+    let r = request(&c, t, &d["nodes"][1]);
+    let admitted = m.prepare_run(&r).unwrap();
+    let lifecycle = json!({"kind":"archive_block","context":c,"key":Uuid::new_v4(),"block_id":page["id"],"expected_revision":bound["stage"]["revision"],"source":{"kind":"asset","asset":ref_of(&page["asset"]),"caption":null}});
+    call(&mut m, lifecycle.clone());
+    let mut fresh = r.clone();
+    fresh.key = Uuid::new_v4();
+    assert_eq!(m.prepare_run(&fresh).err(), Some("block_archived"));
+    let id = admitted.identity.clone();
+    let output = play_engine::worker::execute_pipeline(admitted.invocation, |event| {
+        let mut n = id.clone();
+        n.node_id = serde_json::from_value(event["nodeId"].clone()).unwrap();
+        if event["type"] == "node_started" {
+            m.start_attempt(&n)
+        } else {
+            m.finish_attempt(&n, event)
+        }
+    })
+    .unwrap();
+    let completed = m
+        .finish_run(&id, json!({"status":"completed","output":output}))
+        .unwrap();
+    assert_eq!(completed["result"]["outputs"]["output"], "The key.");
+    assert_eq!(m.existing_run(&r).unwrap().unwrap(), completed);
+    let archived = view(&mut m, &c);
+    let mut restore = lifecycle;
+    restore["kind"] = json!("restore_block");
+    restore["key"] = json!(Uuid::new_v4());
+    restore["expected_revision"] = archived["stage"]["revision"].clone();
+    call(&mut m, restore);
+    assert_eq!(
+        execute(&mut m, &fresh)["result"]["outputs"]["output"],
+        "The key."
+    );
+    let stage = call(
+        &mut m,
+        json!({"kind":"create_stage","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"key":Uuid::new_v4(),"title":"Another Stage"}),
+    );
+    let mut other = c.clone();
+    other.stage_id = serde_json::from_value(stage["stageId"].clone()).unwrap();
+    let other_view = image(&mut m, &other, "Foreign Stage");
+    let other_ref = ref_of(&figure(&other_view)["caption"]);
+    assert!(
+        m.handle(serde_json::from_value(save(&c, t, &p, json!({"caption":other_ref}))).unwrap())
+            .is_err()
+    );
+}

@@ -122,7 +122,7 @@ pub(super) async fn duplicate(
         return Err("invalid_block_type");
     };
     let primary = fork_asset(connection, context, asset).await?;
-    let caption = if let Some(source) = caption {
+    let copied_caption = if let Some(source) = caption {
         Some(fork_asset(connection, context, source).await?)
     } else {
         None
@@ -130,8 +130,13 @@ pub(super) async fn duplicate(
     order::make_space(connection, context, position).await?;
     let block = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,asset_id,asset_revision,caption_id,caption_revision) VALUES(?,?,?,?,?,'asset',?,1,?,?)")
-        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(primary).bind(&caption).bind(caption.as_ref().map(|_|1i64))
+        .bind(workspace).bind(exploration).bind(stage).bind(&block).bind(position).bind(&primary).bind(&copied_caption).bind(copied_caption.as_ref().map(|_|1i64))
         .execute(&mut *connection).await.map_err(storage::failure)?;
+    let mut copies = vec![(asset, primary.as_str())];
+    if let (Some(original), Some(copied)) = (caption, copied_caption.as_deref()) {
+        copies.push((original, copied));
+    }
+    super::bindings::copy_for(connection, context, &copies).await?;
     let revision = order::advance(connection, context, expected).await?;
     Ok(json!({"blockId":block,"stageId":context.stage_id,"revision":revision}))
 }

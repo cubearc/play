@@ -30,7 +30,7 @@ pub async fn read(c: &mut SqliteConnection, w: &str, id: &str, rev: i64) -> Resu
         .fetch_one(&mut *c)
         .await
         .map_err(storage::failure)?;
-    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=3 ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
+    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=4 ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
     let origin=sqlx::query("SELECT source_pipeline_id,source_revision FROM pipeline_origins WHERE workspace_id=? AND pipeline_id=?").bind(w).bind(id).fetch_optional(c).await.map_err(storage::failure)?.map(|r|PipelineOrigin{pipeline_id:r.get(0),revision:r.get(1)});
     let node = d.node(d.output)?;
     Ok(Pipeline {
@@ -106,7 +106,7 @@ pub async fn revise(
     {
         return Ok(json!({"pipelineId":id,"revision":head}));
     }
-    let count:i64=sqlx::query_scalar("SELECT count(*) FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=3").bind(w).bind(id).fetch_one(&mut *c).await.map_err(storage::failure)?;
+    let count:i64=sqlx::query_scalar("SELECT count(*) FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=4").bind(w).bind(id).fetch_one(&mut *c).await.map_err(storage::failure)?;
     if count >= crate::protocol::contract().pipeline_revision_limit as i64 {
         return Err("storage_quota");
     }
@@ -194,6 +194,7 @@ pub async fn save_trail(
     expected: i64,
     hypothesis: &str,
     pipeline: Option<&PipelineRef>,
+    bindings: &std::collections::BTreeMap<String, super::model::AssetRevision>,
 ) -> Result<Value> {
     if hypothesis.len() > crate::protocol::contract().hypothesis_bytes {
         return Err("input_limit");
@@ -205,13 +206,14 @@ pub async fn save_trail(
         return Err("state_conflict");
     }
     super::blocks::source_active(c, ctx, row.get("source_id")).await?;
+    super::bindings::validate(c, ctx, pipeline, bindings).await?;
     if let Some(p) = pipeline {
         let d = read(c, &w, &p.id.to_string(), p.revision).await?;
         let source =
             super::queries::asset(c, &w, &e, row.get("source_id"), row.get("source_revision"))
                 .await?;
         let input = match source.content {
-            super::model::Content::Text { .. } => "text",
+            super::model::Content::Text { .. } | super::model::Content::Page { .. } => "text",
             super::model::Content::Image => "image.samples",
             _ => return Err("invalid_asset_type"),
         };
@@ -219,6 +221,7 @@ pub async fn save_trail(
             return Err("invalid_asset_type");
         }
     }
+    super::bindings::replace(c, ctx, trail, bindings).await?;
     let previous: String = row.get("hypothesis");
     mutations::bytes(c, &w, &e, hypothesis.len().saturating_sub(previous.len())).await?;
     sqlx::query("UPDATE trails SET hypothesis=?,pipeline_id=?,pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND revision=?").bind(hypothesis).bind(pipeline.map(|p|p.id.to_string())).bind(pipeline.map(|p|p.revision)).bind(w).bind(e).bind(ctx.stage_id.to_string()).bind(trail.to_string()).bind(expected).execute(c).await.map_err(storage::failure)?;
@@ -230,7 +233,7 @@ pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
     for row in rows {
         let raw: Value =
             serde_json::from_str(row.get("definition")).map_err(|_| "corrupt_store")?;
-        if matches!(raw["formatVersion"].as_u64(), Some(2 | 3)) {
+        if matches!(raw["formatVersion"].as_u64(), Some(2..=4)) {
             continue;
         }
         if raw["formatVersion"] != 1 || raw["nodes"].as_array().is_none_or(|n| n.len() != 1) {
@@ -279,12 +282,13 @@ pub async fn upgrade_graphs(c: &mut SqliteConnection) -> Result<()> {
     for r in rows {
         let raw: Value = serde_json::from_str(r.get("definition")).map_err(|_| "corrupt_store")?;
         let n = &raw["nodes"][0];
-        let d = Definition::single(
+        let mut d = Definition::single(
             serde_json::from_value(n["id"].clone()).map_err(|_| "corrupt_store")?,
             n["operation"].as_str().ok_or("corrupt_store")?,
             serde_json::from_value(n["operation_version"].clone()).map_err(|_| "corrupt_store")?,
             n["parameters"].clone(),
         )?;
+        d.format_version = 3;
         let w: String = r.get("workspace_id");
         let id: String = r.get("pipeline_id");
         let rev: i64 = r.get("revision");

@@ -132,3 +132,10 @@ schema-8 store and signed Core Run fixture prove schema-9 upgrades preserve
 historical evidence. Worker tests exercise saved pixel coordinates and Brainfuck
 limits. The real Electron journey edits hypotheses and definitions, reuses a
 chosen older revision, checks accessibility and preserves the preceding result.
+
+Named-input tests retain an actual schema-10 signed Run while upgrading to schema
+11. The complete Electron journey declares and binds image/caption inputs, runs
+different targets from one graph revision, preserves a pinned caption during
+editing, explicitly rebinds it and reuses the graph in another Exploration. It
+captures `native-pipeline-inputs-editor`, `native-pipeline-inputs-canvas` and
+`native-pipeline-inputs-binding` for the guide.

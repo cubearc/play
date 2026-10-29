@@ -237,7 +237,7 @@ fn schema_four_upgrade_preserves_archived_text_lineage_and_runs_before_import() 
     let initial = view(&mut manager, &context);
     let block = &initial["stage"]["blocks"][0];
     let trail = &initial["trails"][0];
-    let request=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":block["asset"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let request=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":block["asset"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     let run = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&run.identity).unwrap();
     let completed = manager

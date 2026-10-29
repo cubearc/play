@@ -101,9 +101,14 @@ fn two_explorations_reopen_independent_notebooks_and_immutable_notes() {
     );
     let saved = open(&mut manager, &workspace, a_id);
     let asset = &saved["stage"]["blocks"][0]["asset"];
-    let mut request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":saved["trails"][0]["id"],"pipeline_id":saved["trails"][0]["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":saved["trails"][0]["source"]["id"],"source_revision":saved["trails"][0]["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let mut request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":saved["trails"][0]["id"],"trail_revision":saved["trails"][0]["revision"],"target_node_id":saved["trails"][0]["pipeline"]["outputNodeId"],"pipeline_id":saved["trails"][0]["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":saved["trails"][0]["source"]["id"],"source_revision":saved["trails"][0]["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     let prepared = manager.prepare_run(&request).unwrap();
-    assert_eq!(prepared.invocation.input, "Gur xrl vf va gur cvkryf.");
+    assert_eq!(
+        serde_json::to_value(&prepared.invocation.inputs).unwrap()["source"]["text"]
+            .as_str()
+            .unwrap(),
+        "Gur xrl vf va gur cvkryf."
+    );
     manager
         .finish_run(
             &prepared.identity,

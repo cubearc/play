@@ -30,7 +30,7 @@ fn setup(manager: &mut Manager) -> (RunRequest, Value) {
         json!({"kind":"open_exploration","workspace_id":workspace["id"],"exploration_id":created["explorationId"],"stage_id":created["stageId"]}),
     );
     let trail = &view["trails"][0];
-    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     (request, view)
 }
 #[test]
@@ -41,7 +41,7 @@ fn a_run_pins_owned_inputs_contract_and_named_outputs_then_reopens_immutable_evi
     let (request, view) = setup(&mut manager);
     let prepared = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&prepared.identity).unwrap();
-    let completed=manager.finish_run(&prepared.identity,json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&prepared.invocation.input)}})).unwrap();
+    let completed=manager.finish_run(&prepared.identity,json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(serde_json::to_value(&prepared.invocation.inputs).unwrap()["source"]["text"].as_str().unwrap())}})).unwrap();
     assert_eq!(completed["result"]["outputs"]["output"], "The key.");
     assert_eq!(
         completed["plan"]["pipeline"]["id"],
@@ -164,9 +164,22 @@ fn explicitly_saved_pipeline_freezes_a_reusable_definition_and_real_bytes_contra
     );
     command(
         &mut manager,
-        json!({"kind":"save_trail","context":request.context,"key":Uuid::new_v4(),"trail_id":request.trail_id,"expected_revision":1,"hypothesis":"Read the program output","pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
+        json!({"kind":"save_trail","bindings":{},"context":request.context,"key":Uuid::new_v4(),"trail_id":request.trail_id,"expected_revision":1,"hypothesis":"Read the program output","pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
     );
     request.pipeline_id = serde_json::from_value(pipeline["pipelineId"].clone()).unwrap();
+    let selected = command(
+        &mut manager,
+        json!({"kind":"open_exploration","workspace_id":request.context.workspace_id,"exploration_id":request.context.exploration_id,"stage_id":request.context.stage_id}),
+    );
+    let trail = selected["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == request.trail_id.to_string())
+        .unwrap();
+    request.trail_revision = trail["revision"].as_i64().unwrap();
+    request.target_node_id =
+        serde_json::from_value(trail["pipeline"]["outputNodeId"].clone()).unwrap();
     let prepared = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&prepared.identity).unwrap();
     let run = manager

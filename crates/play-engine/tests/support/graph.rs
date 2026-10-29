@@ -16,5 +16,5 @@ pub fn configuration(
     if operation == "image.pixels.read" {
         inputs = json!({"input":{"kind":"input","name":"source"}});
     }
-    json!({"formatVersion":3,"inputs":[{"name":"source","semanticType":if operation=="image.pixels.read" {"image.samples"}else{"text"}}],"nodes":[{"id":id,"operation":operation,"operationVersion":version,"parameters":parameters,"inputs":inputs,"position":{"x":80,"y":120}}],"output":id})
+    json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":if operation=="image.pixels.read" {"image.samples"}else{"text"}}],"nodes":[{"id":id,"operation":operation,"operationVersion":version,"parameters":parameters,"inputs":inputs,"position":{"x":80,"y":120}}],"output":id})
 }

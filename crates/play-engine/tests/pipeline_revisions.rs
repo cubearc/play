@@ -49,15 +49,19 @@ fn create(m: &mut Manager, c: &Context) -> Value {
 fn save(m: &mut Manager, c: &Context, t: &Value, p: &Value, h: &str) -> Value {
     call(
         m,
-        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":h,"pipeline":{"id":p["pipelineId"],"revision":p["revision"]}}),
+        json!({"kind":"save_trail","bindings":{},"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":h,"pipeline":{"id":p["pipelineId"],"revision":p["revision"]}}),
     )
 }
 fn run(m: &mut Manager, c: &Context, t: &Value) -> Value {
     let p = &t["pipeline"];
-    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":p["outputOperation"],"operation_version":p["operationVersion"],"retain_output":true})).unwrap();
+    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"target_node_id":t["pipeline"]["outputNodeId"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":p["outputOperation"],"operation_version":p["operationVersion"],"retain_output":true})).unwrap();
     let prepared = m.prepare_run(&request).unwrap();
     m.start_attempt(&prepared.identity).unwrap();
-    let text = cube_core::ciphers::rot13(&prepared.invocation.input);
+    let text = cube_core::ciphers::rot13(
+        serde_json::to_value(&prepared.invocation.inputs).unwrap()["source"]["text"]
+            .as_str()
+            .unwrap(),
+    );
     m.finish_run(
         &prepared.identity,
         json!({"status":"completed","output":{"text":text}}),
@@ -162,7 +166,7 @@ fn pipeline_forks_pin_the_exact_source_and_invalid_edits_change_nothing() {
         assert_eq!(view(&mut m, &c), before);
     }
     save(&mut m, &c, &t, &p, "First saved hypothesis");
-    let stale = json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Overwrite","pipeline":{"id":p["pipelineId"],"revision":1}});
+    let stale = json!({"kind":"save_trail","bindings":{},"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Overwrite","pipeline":{"id":p["pipelineId"],"revision":1}});
     assert_eq!(
         m.handle(serde_json::from_value(stale).unwrap())
             .unwrap_err(),
@@ -233,9 +237,9 @@ fn previous_native_store_keeps_actual_run_evidence_during_pipeline_upgrade() {
     let upgraded = view(&mut m, &c);
     assert_eq!(upgraded["stage"], fixture["view"]["stage"]);
     for t in upgraded["trails"].as_array().unwrap() {
-        assert_eq!(t["pipeline"]["revision"], 3);
-        assert_eq!(t["revision"], 3);
-        assert_eq!(t["pipeline"]["revisions"], json!([3]));
+        assert_eq!(t["pipeline"]["revision"], 4);
+        assert_eq!(t["revision"], 4);
+        assert_eq!(t["pipeline"]["revisions"], json!([4]));
         let old = fixture["view"]["trails"]
             .as_array()
             .unwrap()
@@ -253,7 +257,7 @@ fn previous_native_store_keeps_actual_run_evidence_during_pipeline_upgrade() {
         .unwrap();
     let next = run(&mut m, &c, t);
     assert_eq!(next["result"]["outputs"]["output"], "The key.");
-    assert_eq!(next["plan"]["pipeline"]["definition"]["formatVersion"], 3);
+    assert_eq!(next["plan"]["pipeline"]["definition"]["formatVersion"], 4);
     drop(m);
     let mut m = Manager::new(root).unwrap();
     call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
@@ -293,26 +297,26 @@ fn saved_definitions_are_typed_bounded_scoped_and_never_implicitly_replaced_by_r
         &mut m,
         json!({"kind":"create_pipeline","workspace_id":c.workspace_id,"key":Uuid::new_v4(),"title":"Image pipeline","definition":configuration("image.pixels.read",1,json!({"x":1,"y":0,"expand_palette":false}))}),
     );
-    let command = json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Wrong type","pipeline":{"id":image["pipelineId"],"revision":1}});
+    let command = json!({"kind":"save_trail","bindings":{},"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Wrong type","pipeline":{"id":image["pipelineId"],"revision":1}});
     assert_eq!(
         m.handle(serde_json::from_value(command).unwrap())
             .unwrap_err(),
         "invalid_asset_type"
     );
-    let command = json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"x".repeat(2049),"pipeline":null});
+    let command = json!({"kind":"save_trail","bindings":{},"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"x".repeat(2049),"pipeline":null});
     assert_eq!(
         m.handle(serde_json::from_value(command).unwrap())
             .unwrap_err(),
         "input_limit"
     );
     let p = &t["pipeline"];
-    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":"esolang.brainfuck.execute","operation_version":2,"retain_output":true})).unwrap();
+    let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"target_node_id":t["pipeline"]["outputNodeId"],"pipeline_id":p["id"],"pipeline_revision":p["revision"],"source_asset_id":t["source"]["id"],"source_revision":t["source"]["revision"],"operation":"esolang.brainfuck.execute","operation_version":2,"retain_output":true})).unwrap();
     assert_eq!(m.prepare_run(&request).err().unwrap(), "pipeline_mismatch");
     assert_eq!(view(&mut m, &c)["trails"], before["trails"]);
     let accepted = create(&mut m, &c);
     let mut wrong = c.clone();
     wrong.exploration_id = Uuid::new_v4();
-    let command = json!({"kind":"save_trail","context":wrong,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Wrong context","pipeline":{"id":accepted["pipelineId"],"revision":1}});
+    let command = json!({"kind":"save_trail","bindings":{},"context":wrong,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Wrong context","pipeline":{"id":accepted["pipelineId"],"revision":1}});
     assert_eq!(
         m.handle(serde_json::from_value(command).unwrap())
             .unwrap_err(),

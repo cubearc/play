@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **10**, SQLite application ID
+The native store uses generation **2**, schema version **11**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql` and `graphs.sql`.
-Recognized native schemas 1–9 upgrade to schema 10 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql` and `inputs.sql`.
+Recognized native schemas 1–10 upgrade to schema 11 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -87,7 +87,11 @@ UUID to its payload digest and committed response. Matching retries do not creat
 duplicate records; changed payloads receive `idempotency_conflict`.
 
 Text Assets create a reusable, single-node ROT13 Pipeline definition using the
-actual Core descriptor/version. Trails bind their own source Asset revision.
+actual Core descriptor/version. Trails bind their own source Asset revision and a complete map of additional
+named inputs. `trail_input_bindings` stores exact revision references with scoped
+foreign keys and an active same-Stage admission trigger. Schema 11 appends
+format-4 working definitions, leaving historical definitions and finished Runs
+unchanged.
 [Pipeline edits](desktop-pipelines.md) append complete immutable definitions;
 Trail configuration pins a selected revision and saves a private hypothesis.
 Native schema upgrades append complete working revisions while preserving
@@ -167,7 +171,7 @@ multiple roots for that selection. Guards preserve the origin, prevent further
 root content revisions and exclude simultaneous copy/Run origins. Existing
 `asset_origins` still records the immediate parent of an independent copy.
 
-Protocol 12 exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
+The protocol exposes a tagged Asset origin: `kind: asset` has `assetId`, `revision`
 and `title`; `kind: run_output` has `runId`, `attemptId`, `nodeId`, `trailId`,
 `port`, `semanticType`, `operationName` and the engine `sequence`. There is no
 untagged-origin fallback. Run-origin fields derive from immutable stored evidence,
@@ -210,7 +214,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **12**, with no older
+change that order. The coordinated app/engine wire protocol is **14**, with no older
 DTO fallback.
 
 ## Block copies and provenance

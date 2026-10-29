@@ -213,3 +213,13 @@ budget. The existing engine wall deadline and worker CPU/VM limits remain in for
 The helper exits when its supervisor dies. The helper fabricates no output and is absent from production
 worker selection; actual Core outputs, typed conformance and real Electron Runs
 continue to use the normal worker.
+
+## Named Pipeline inputs
+
+The input suite preserves an actual schema-10 store and signed Core Run during
+schema-11 migration. It checks two Explorations sharing one graph, distinct pinned
+image/caption bindings, explicit Run targets, minimal worker input data, aggregate
+text/PNG limits, scoped Pages, archive/restore, stale Trail revisions and exact
+copy remapping. The Electron journey authors the graph and bindings through VS
+Code Elements, runs both branches, edits/rebinds a caption, reuses the definition
+in another Exploration, checks accessibility and reopens the private profile.

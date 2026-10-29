@@ -30,9 +30,7 @@ export function InlineResult({
   const history = executions.history[trail.id];
   if (!history) return null;
   const run = history.detail?.id === history.selected ? history.detail : null;
-  const input = run
-    ? Object.values(run.plan.inputs).find((value) => "assetId" in value)
-    : null;
+  const input = run ? (run.plan.inputs.source ?? run.plan.inputs.input) : null;
   const earlier =
     input &&
     "assetId" in input &&
@@ -127,7 +125,7 @@ export function InlineResult({
                     <code>
                       {port} ←{" "}
                       {"assetId" in input
-                        ? `${input.assetId} @ r${input.revision}`
+                        ? `${input.assetId} @ r${input.revision}${input.used === false ? " (not consumed)" : ""}`
                         : JSON.stringify(input.literal)}
                     </code>
                   </div>

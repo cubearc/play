@@ -5,14 +5,24 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type {
+  AssetView,
   PipelineRef,
   PipelineView,
   TrailView,
 } from "../desktop/workspace-contract";
 
+import {
+  type Bindings,
+  BindingsEditor,
+  bindingRefs,
+  completeBindings,
+  selectedBindings,
+} from "./BindingsEditor";
+
 export function TrailEditor({
   trail,
   pipelines,
+  assets,
   error,
   onSave,
   onClose,
@@ -20,11 +30,13 @@ export function TrailEditor({
 }: {
   trail: TrailView;
   pipelines: PipelineView[];
+  assets: AssetView[];
   error: string;
   onSave: (
     hypothesis: string,
     pipeline: PipelineRef | null,
     key: string,
+    bindings: Bindings,
   ) => Promise<boolean>;
   onClose: () => void;
   onDirty: (dirty: boolean) => void;
@@ -40,6 +52,41 @@ export function TrailEditor({
   const [selected, setSelected] = useState(trail.pipeline?.id ?? "");
   const [revision, setRevision] = useState(trail.pipeline?.revision ?? 1);
   const [saving, setSaving] = useState(false);
+  const [bindings, setBindings] = useState<Bindings>(() => bindingRefs(trail));
+  const [loaded, setLoaded] = useState<PipelineView | null>(trail.pipeline);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    let live = true;
+    setLoadError("");
+    if (!selected) {
+      setLoaded(null);
+      return;
+    }
+    void window.play
+      .workspace({
+        kind: "get_pipeline",
+        workspace_id: trail.workspaceId,
+        pipeline_id: selected,
+        revision,
+      })
+      .then((p) => {
+        if (live) setLoaded(p);
+      })
+      .catch(() => {
+        if (live)
+          setLoadError(
+            "This revision could not be loaded. Reopen the editor to try again.",
+          );
+      });
+    return () => {
+      live = false;
+    };
+  }, [selected, revision, trail.workspaceId]);
+  const ready =
+    !selected ||
+    (loaded?.id === selected && loaded.revision === revision && !loadError);
+  const slots = selected && ready && loaded ? loaded.definition.inputs : [];
+  const valid = ready && completeBindings(slots, bindings);
   const key = useRef(crypto.randomUUID());
   const input =
     trail.source.content.kind === "image" ? "image.samples" : "text";
@@ -49,6 +96,7 @@ export function TrailEditor({
   const pipeline = choices.find((p) => p.id === selected);
   const length = new TextEncoder().encode(hypothesis).byteLength;
   const dirty =
+    JSON.stringify(bindings) !== JSON.stringify(bindingRefs(trail)) ||
     hypothesis !== trail.hypothesis ||
     selected !== (trail.pipeline?.id ?? "") ||
     revision !== (trail.pipeline?.revision ?? 1);
@@ -61,7 +109,7 @@ export function TrailEditor({
     key.current = crypto.randomUUID();
   };
   const save = async () => {
-    if (saving || length > limits.hypothesis_bytes) return;
+    if (saving || !valid || length > limits.hypothesis_bytes) return;
     setSaving(true);
     try {
       if (
@@ -69,6 +117,7 @@ export function TrailEditor({
           hypothesis,
           pipeline ? { id: pipeline.id, revision } : null,
           key.current,
+          selectedBindings(slots, bindings),
         )
       )
         onClose();
@@ -151,6 +200,24 @@ export function TrailEditor({
           </VscodeSingleSelect>
         </>
       ) : null}
+      {loadError ? (
+        <p role="alert">{loadError}</p>
+      ) : !ready ? (
+        <p role="status">Loading Pipeline revision…</p>
+      ) : null}
+      {ready ? (
+        <BindingsEditor
+          inputs={slots}
+          assets={assets}
+          pinned={trail.bindings}
+          bindings={bindings}
+          disabled={saving}
+          onChange={(next) => {
+            change();
+            setBindings(next);
+          }}
+        />
+      ) : null}
       <p>
         The selected revision stays pinned. Other Trails and accepted Runs keep
         their own inputs and evidence.
@@ -161,7 +228,7 @@ export function TrailEditor({
         </VscodeButton>
         <VscodeButton
           icon="save"
-          disabled={saving || length > limits.hypothesis_bytes}
+          disabled={saving || !valid || length > limits.hypothesis_bytes}
           onClick={() => void save()}
         >
           Save Trail

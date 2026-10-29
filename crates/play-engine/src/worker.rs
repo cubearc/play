@@ -409,7 +409,7 @@ mod configuration_tests {
 #[serde(deny_unknown_fields)]
 pub struct PipelineInvocation {
     pub definition: crate::graph::Definition,
-    pub input: String,
+    pub inputs: std::collections::BTreeMap<String, InputValue>,
 }
 #[derive(serde::Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -418,21 +418,76 @@ pub enum Task {
     Pipeline { invocation: PipelineInvocation },
 }
 
+#[derive(Clone, Debug, serde::Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum InputValue {
+    Text { text: String },
+    Image { png: String },
+}
+impl InputValue {
+    fn canonical(&self) -> Result<Value> {
+        match self {
+            Self::Text { text } => Ok(json!(text)),
+            Self::Image { png } => Ok(json!(
+                cube_core::operations::contracts::values::Image::from(&image(png)?)
+            )),
+        }
+    }
+}
+fn image_input<'a>(
+    invocation: &'a PipelineInvocation,
+    node: &crate::graph::Node,
+) -> Result<&'a str> {
+    let Some(crate::graph::Source::Input { name }) = node.inputs.get("input") else {
+        return Err("invalid_connection");
+    };
+    match invocation.inputs.get(name) {
+        Some(InputValue::Image { png }) => Ok(png),
+        _ => Err("contract_mismatch"),
+    }
+}
 pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
     invocation.definition.validate()?;
-    match invocation.definition.inputs[0].semantic_type.as_str() {
-        "text" if invocation.input.len() <= protocol::contract().input_bytes => (),
-        "image.samples" => {
-            image(&invocation.input)?;
+    let required = invocation.definition.required_inputs();
+    if invocation
+        .inputs
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != required
+    {
+        return Err("invalid_binding");
+    }
+    let mut text_bytes = 0usize;
+    let mut image_bytes = 0usize;
+    for (name, value) in &invocation.inputs {
+        let kind = &invocation.definition.input(name)?.semantic_type;
+        match value {
+            InputValue::Text { text } if kind == "text" => {
+                text_bytes = text_bytes.checked_add(text.len()).ok_or("input_limit")?;
+            }
+            InputValue::Image { png } if kind == "image.samples" => {
+                if png.len() > protocol::contract().image_bytes.div_ceil(3) * 4 {
+                    return Err("input_limit");
+                }
+                let data = STANDARD.decode(png).map_err(|_| "invalid_image")?;
+                image_bytes = image_bytes.checked_add(data.len()).ok_or("input_limit")?;
+                image(png)?;
+            }
+            _ => return Err("contract_mismatch"),
         }
-        _ => return Err("input_limit"),
+    }
+    if text_bytes > protocol::contract().input_bytes
+        || image_bytes > protocol::contract().image_bytes
+    {
+        return Err("input_limit");
     }
     for n in &invocation.definition.nodes {
         if n.operation == "image.pixels.read" {
             validate(&Invocation {
                 operation: n.operation.clone(),
                 operation_version: n.operation_version,
-                input: invocation.input.clone(),
+                input: image_input(invocation, n)?.into(),
                 parameters: n.parameters.clone(),
             })?;
         }
@@ -446,13 +501,6 @@ pub fn execute_pipeline(
     use crate::graph::Source;
     use std::collections::BTreeMap;
     validate_pipeline(&invocation)?;
-    let source = if invocation.definition.inputs[0].semantic_type == "image.samples" {
-        json!(cube_core::operations::contracts::values::Image::from(
-            &image(&invocation.input)?
-        ))
-    } else {
-        json!(invocation.input)
-    };
     let mut outputs: BTreeMap<uuid::Uuid, Value> = BTreeMap::new();
     let mut used = 0usize;
     let mut final_output = Value::Null;
@@ -462,7 +510,11 @@ pub fn execute_pipeline(
         let mut values = serde_json::Map::new();
         for (port, binding) in &node.inputs {
             let value = match binding {
-                Source::Input { .. } => source.clone(),
+                Source::Input { name } => invocation
+                    .inputs
+                    .get(name)
+                    .ok_or("invalid_binding")?
+                    .canonical()?,
                 Source::Literal { value } => value.clone(),
                 Source::Output { node_id, port } => outputs
                     .get(node_id)
@@ -482,7 +534,7 @@ pub fn execute_pipeline(
             .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
             .ok_or("contract_mismatch")?;
         let input = if primary.semantic_type == "image.samples" {
-            invocation.input.as_str()
+            image_input(&invocation, node)?
         } else {
             values[&primary.name].as_str().ok_or("contract_mismatch")?
         };

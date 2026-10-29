@@ -37,7 +37,7 @@ fn edit(context: &Context, block: &Value, asset: &Value, text: &str) -> Value {
     json!({"kind":"revise_text","context":context,"key":Uuid::new_v4(),"block_id":block["id"],"asset_id":asset["id"],"expected_revision":asset["revision"],"text":text})
 }
 fn run_request(context: &Context, trail: &Value) -> RunRequest {
-    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap()
+    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap()
 }
 #[test]
 fn editing_text_preserves_accepted_input_and_reopens_new_content_with_old_evidence() {
@@ -69,8 +69,13 @@ fn editing_text_preserves_accepted_input_and_reopens_new_content_with_old_eviden
         after["trails"][0]["pipeline"],
         before["trails"][0]["pipeline"]
     );
-    assert_eq!(accepted.invocation.input, "Gur xrl.");
-    let old = manager.finish_run(&accepted.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&accepted.invocation.input)}})).unwrap();
+    assert_eq!(
+        serde_json::to_value(&accepted.invocation.inputs).unwrap()["source"]["text"]
+            .as_str()
+            .unwrap(),
+        "Gur xrl."
+    );
+    let old = manager.finish_run(&accepted.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(serde_json::to_value(&accepted.invocation.inputs).unwrap()["source"]["text"].as_str().unwrap())}})).unwrap();
     assert_eq!(old["plan"]["inputs"]["source"]["revision"], 1);
     assert_eq!(old["result"]["outputs"]["output"], "The key.");
     assert_eq!(manager.existing_run(&request).unwrap().unwrap(), old);
@@ -85,9 +90,14 @@ fn editing_text_preserves_accepted_input_and_reopens_new_content_with_old_eviden
     );
     let next = run_request(&context, &after["trails"][0]);
     let current = manager.prepare_run(&next).unwrap();
-    assert_eq!(current.invocation.input, "Frpbaq pyhr.");
+    assert_eq!(
+        serde_json::to_value(&current.invocation.inputs).unwrap()["source"]["text"]
+            .as_str()
+            .unwrap(),
+        "Frpbaq pyhr."
+    );
     manager.start_attempt(&current.identity).unwrap();
-    let new = manager.finish_run(&current.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&current.invocation.input)}})).unwrap();
+    let new = manager.finish_run(&current.identity, json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(serde_json::to_value(&current.invocation.inputs).unwrap()["source"]["text"].as_str().unwrap())}})).unwrap();
     assert_eq!(new["result"]["outputs"]["output"], "Second clue.");
     assert_eq!(new["plan"]["inputs"]["source"]["revision"], 2);
     let mut different = mutation;

@@ -283,6 +283,8 @@ pub async fn exploration(
             None
         };
         trails.push(Trail {
+            bindings: super::bindings::read(connection, &workspace, &exploration, row.get("id"))
+                .await?,
             revision: row.get("revision"),
             archived: row.get("archived"),
             id: row.get("id"),

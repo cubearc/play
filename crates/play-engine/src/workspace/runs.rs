@@ -96,16 +96,18 @@ pub async fn prepare(store: &mut Owned, request: &RunRequest) -> Result<Prepared
     };
     sqlx::query("INSERT INTO pipeline_runs(workspace_id,exploration_id,stage_id,id,trail_id,pipeline_id,pipeline_revision,intent_key,intent_digest,caller,status,created_ms,retain_output,plan,reservation) VALUES(?,?,?,?,?,?,?,?,?,'desktop','queued',?,?,?,zeroblob(?))")
   .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(identity.id.to_string()).bind(request.trail_id.to_string()).bind(plan.pipeline_id).bind(plan.pipeline_revision).bind(request.key.to_string()).bind(digest(request)?).bind(now()?).bind(request.retain_output).bind(plan.value.to_string()).bind(protocol::contract().run_reserve_bytes as i64).execute(&mut *tx).await.map_err(storage::failure)?;
-    sqlx::query("INSERT INTO run_inputs VALUES(?,?,?,?,?,?)")
-        .bind(&workspace)
-        .bind(&exploration)
-        .bind(identity.id.to_string())
-        .bind(plan.input_port)
-        .bind(plan.asset_id)
-        .bind(plan.asset_revision)
-        .execute(&mut *tx)
-        .await
-        .map_err(storage::failure)?;
+    for (slot, asset) in plan.inputs {
+        sqlx::query("INSERT INTO run_inputs VALUES(?,?,?,?,?,?)")
+            .bind(&workspace)
+            .bind(&exploration)
+            .bind(identity.id.to_string())
+            .bind(slot)
+            .bind(asset.asset_id.to_string())
+            .bind(asset.revision)
+            .execute(&mut *tx)
+            .await
+            .map_err(storage::failure)?;
+    }
     tx.commit().await.map_err(storage::failure)?;
     Ok(PreparedRun {
         identity,

@@ -57,7 +57,7 @@ fn text_copy_forks_current_content_with_lineage_independent_edits_and_no_invente
     let before = open(&mut manager, &context);
     let source = &before["stage"]["blocks"][0];
     let trail = &before["trails"][0];
-    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":2,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+    let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":2,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
     let running = manager.prepare_run(&request).unwrap();
     manager.start_attempt(&running.identity).unwrap();
     let intent = copy(&context, &before, 0);
@@ -107,7 +107,7 @@ fn text_copy_forks_current_content_with_lineage_independent_edits_and_no_invente
         edited["stage"]["blocks"][1]["asset"]["origin"],
         copied["asset"]["origin"]
     );
-    let old_run=manager.finish_run(&running.identity,json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(&running.invocation.input)}})).unwrap();
+    let old_run=manager.finish_run(&running.identity,json!({"status":"completed","output":{"text":cube_core::ciphers::rot13(serde_json::to_value(&running.invocation.inputs).unwrap()["source"]["text"].as_str().unwrap())}})).unwrap();
     assert_eq!(old_run["result"]["outputs"]["output"], "First.");
     assert_eq!(
         old_run["plan"]["inputs"]["source"]["assetId"],
@@ -308,7 +308,7 @@ fn native_schema_two_and_interrupted_copies_upgrade_without_reassigning_evidence
         let mut manager = Manager::new(root.clone()).unwrap();
         let (context, before) = setup(&mut manager, false);
         let trail = &before["trails"][0];
-        let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
+        let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
         let prepared = manager.prepare_run(&request).unwrap();
         manager.start_attempt(&prepared.identity).unwrap();
         let run = manager

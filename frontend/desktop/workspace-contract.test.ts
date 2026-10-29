@@ -233,6 +233,8 @@ test("the workspace bridge accepts closed scoped intents without path or generic
   assert.throws(() => request({ ...edit, text: `${edit.text}x` }));
   assert.throws(() => request({ ...edit, expected_revision: 0 }));
   const run = {
+    trail_revision: 1,
+    target_node_id: randomUUID(),
     context: owner,
     key: randomUUID(),
     trail_id: randomUUID(),
@@ -357,6 +359,7 @@ test("Pipeline intents freeze required bounded configuration and cannot carry pr
     assert.throws(() => request(value));
   const trail = {
     kind: "save_trail",
+    bindings: {},
     context: owner,
     key: randomUUID(),
     trail_id: randomUUID(),
@@ -379,4 +382,86 @@ test("Pipeline intents freeze required bounded configuration and cannot carry pr
   );
   const { definition: _definition, ...missing } = pipeline;
   assert.throws(() => request(missing), /invalid_command/);
+});
+test("named input bindings and explicit targets use a closed bounded IPC contract", () => {
+  const definition = singleGraph({
+    operation: "cipher.rot13",
+    operation_version: 1,
+    parameters: {},
+    input_type: "text",
+    contract: {
+      inputs: [{ name: "input", semantic_type: "text", schema: {} }],
+      outputs: [],
+      parameters: {},
+    },
+  });
+  definition.inputs.push({ name: "caption", semanticType: "text" });
+  const node = definition.nodes[0];
+  assert.ok(node);
+  node.inputs.input = { kind: "input", name: "caption" };
+  const create = {
+    kind: "create_pipeline",
+    workspace_id: owner.workspace_id,
+    key: randomUUID(),
+    title: "Bound input",
+    definition,
+  };
+  assert.deepEqual(request(create), create);
+  for (const inputs of [
+    [],
+    [...definition.inputs, { name: "caption", semanticType: "text" }],
+    [
+      { name: "source", semanticType: "text" },
+      { name: "Caption", semanticType: "text" },
+    ],
+    Array.from({ length: 5 }, (_, i) => ({
+      name: i ? `slot${i}` : "source",
+      semanticType: "text",
+    })),
+  ])
+    assert.throws(() =>
+      request({ ...create, definition: { ...definition, inputs } }),
+    );
+  const trail = {
+    kind: "save_trail",
+    context: owner,
+    key: randomUUID(),
+    trail_id: randomUUID(),
+    expected_revision: 1,
+    hypothesis: "",
+    pipeline: { id: randomUUID(), revision: 1 },
+    bindings: { caption: { asset_id: randomUUID(), revision: 1 } },
+  };
+  assert.deepEqual(request(trail), trail);
+  for (const bindings of [
+    { source: trail.bindings.caption },
+    { caption: { ...trail.bindings.caption, path: "/private" } },
+    { caption: { ...trail.bindings.caption, revision: 0 } },
+    Object.fromEntries(
+      ["a", "b", "c", "d"].map((s) => [s, trail.bindings.caption]),
+    ),
+  ])
+    assert.throws(() => request({ ...trail, bindings }));
+  const run = {
+    context: owner,
+    key: randomUUID(),
+    trail_id: trail.trail_id,
+    trail_revision: 1,
+    target_node_id: node.id,
+    pipeline_id: trail.pipeline.id,
+    pipeline_revision: 1,
+    source_asset_id: randomUUID(),
+    source_revision: 1,
+    operation: "cipher.rot13",
+    operation_version: 1,
+    retain_output: true,
+  };
+  assert.deepEqual(runRequest(run), run);
+  for (const value of [
+    { ...run, trail_revision: undefined },
+    { ...run, trail_revision: 0 },
+    { ...run, target_node_id: undefined },
+    { ...run, target_node_id: "/private" },
+  ])
+    assert.throws(() => runRequest(value));
 });

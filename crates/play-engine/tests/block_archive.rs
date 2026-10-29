@@ -42,7 +42,7 @@ fn lifecycle(context: &Context, view: &Value, block: &Value, archived: bool) -> 
     json!({"kind":if archived{"archive_block"}else{"restore_block"},"context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":view["stage"]["revision"],"source":source(block)})
 }
 fn request(context: &Context, trail: &Value) -> RunRequest {
-    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap()
+    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap()
 }
 #[test]
 fn archive_preserves_admitted_execution_and_lineage_then_restores_original_identities() {
@@ -147,7 +147,8 @@ fn archive_preserves_admitted_execution_and_lineage_then_restores_original_ident
     assert_eq!(restored["archived"], false);
     new.key = Uuid::new_v4();
     assert_eq!(
-        manager.prepare_run(&new).unwrap().invocation.input,
+        serde_json::to_value(manager.prepare_run(&new).unwrap().invocation.inputs).unwrap()["source"]
+            ["text"],
         "Gur xrl."
     );
     assert_eq!(

@@ -33,7 +33,7 @@ Opening the caption creates its own canvas tab inside the same Exploration. [Ope
 
 ## Save a hypothesis
 
-Choose **Edit Trail** in a text, caption or image canvas. Write a hypothesis and
+Choose **Edit Trail** in a text, caption, Page or image canvas. Write a hypothesis and
 choose **Save Trail**. The hypothesis belongs to that Trail and survives restart;
 another Exploration keeps its own reasoning and progress.
 
@@ -95,6 +95,35 @@ do not change the other. Use **Edit Pipeline** after the fork to change its
 operation or parameters. [Pipeline reference](reference/desktop-pipelines.md)
 describes exact commands, revisions and limits.
 
+## Use an image and its caption in one Pipeline
+
+Keep the image and caption together in their notebook figure. Open the image's
+canvas, choose **New Pipeline**, name it, and add a text input named `caption`.
+Under **Trail inputs**, select the figure's caption Asset. Add a second node and
+choose **ROT13**; its text input can now use `caption`. Save the Pipeline.
+
+![Pipeline editor connecting ROT13 to the caption input and showing its pinned Asset revision.](assets/desktop/pipeline-inputs-editor.png)
+
+The reusable graph declares input names; the Trail supplies the Assets. [Open full size](assets/desktop/pipeline-inputs-editor.png).
+
+**Run cell** executes the default output. To inspect the image branch, select its
+pixel node and choose **Run node**. The Run records that target and only executes
+its dependencies. Both actions preserve the same Pipeline revision and show their
+results in the Trail's history.
+
+![Image Trail showing the pinned caption input and a selected image-pixel node in the reusable two-node graph.](assets/desktop/pipeline-inputs-canvas.png)
+
+Inspect and execute each branch from the canvas. [Open full size](assets/desktop/pipeline-inputs-canvas.png).
+
+Additional inputs stay pinned when their Assets are edited. **Edit Trail** shows
+the selected revision and offers the current revision explicitly. Selecting it
+and saving advances this Trail without changing earlier Runs. A second
+Exploration can choose the same saved Pipeline and bind its own caption.
+
+![Trail editor selecting the current caption revision while preserving the previously pinned revision as an explicit option.](assets/desktop/pipeline-inputs-binding.png)
+
+Rebind an input when you want to use the edited content. [Open full size](assets/desktop/pipeline-inputs-binding.png).
+
 ## Follow an edited Asset
 
 [Edit text or a caption](notebook.md#edit-text-and-captions) in its notebook to
@@ -112,8 +141,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-Multi-node Pipeline editing, node connections, branching, joins, output reuse and
-parallel execution are not available in this source preview. Their implementation
-status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
+Explicit conversions, broader composition, output reuse, parallel execution and
+contextual CLI attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 Use [native Run reference](reference/desktop-runs.md) for implemented execution
 semantics and [the domain contract](reference/desktop-domain.md) for full ownership.

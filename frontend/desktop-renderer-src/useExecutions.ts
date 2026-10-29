@@ -213,7 +213,7 @@ export function useExecutions(
     operations.filter(
       (operation) =>
         operation.input_type ===
-        (trail.source.content.kind === "text"
+        (["text", "page"].includes(trail.source.content.kind)
           ? "text"
           : trail.source.content.kind === "image"
             ? "image.samples"
@@ -224,11 +224,16 @@ export function useExecutions(
       (operation) => operation.operation === trail.pipeline?.outputOperation,
     );
   const run = useCallback(
-    async (trail: TrailView, operation: Operation) => {
+    async (
+      trail: TrailView,
+      operation: Operation,
+      targetNodeId = trail.pipeline?.outputNodeId,
+    ) => {
       if (
         active.current ||
         watching.current.size > 0 ||
         !trail.pipeline ||
+        !targetNodeId ||
         trail.archived
       )
         return;
@@ -239,6 +244,8 @@ export function useExecutions(
       const request: RunRequest =
         previous &&
         previous.operation === operation.operation &&
+        previous.trail_revision === trail.revision &&
+        previous.target_node_id === targetNodeId &&
         previous.pipeline_id === trail.pipeline.id &&
         previous.pipeline_revision === trail.pipeline.revision &&
         previous.source_asset_id === trail.source.id &&
@@ -249,6 +256,8 @@ export function useExecutions(
               context: contextFor(trail),
               key: crypto.randomUUID(),
               trail_id: trail.id,
+              trail_revision: trail.revision,
+              target_node_id: targetNodeId,
               pipeline_id: trail.pipeline.id,
               pipeline_revision: trail.pipeline.revision,
               source_asset_id: trail.source.id,

@@ -44,7 +44,7 @@ pub struct Node {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Definition {
     pub format_version: u32,
-    pub inputs: [Input; 1],
+    pub inputs: Vec<Input>,
     pub nodes: Vec<Node>,
     pub output: Uuid,
 }
@@ -66,6 +66,22 @@ impl Definition {
         d.validate()?;
         Ok(d)
     }
+    pub fn input(&self, name: &str) -> Result<&Input> {
+        self.inputs
+            .iter()
+            .find(|i| i.name == name)
+            .ok_or("invalid_connection")
+    }
+    pub fn required_inputs(&self) -> BTreeSet<&str> {
+        self.nodes
+            .iter()
+            .flat_map(|n| n.inputs.values())
+            .filter_map(|s| match s {
+                Source::Input { name } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
     pub fn node(&self, id: Uuid) -> Result<&Node> {
         self.nodes
             .iter()
@@ -73,13 +89,30 @@ impl Definition {
             .ok_or("invalid_connection")
     }
     pub fn validate(&self) -> Result<()> {
-        if self.format_version != 3
+        if self.format_version != 4
+            || self.inputs.is_empty()
+            || self.inputs.len() > crate::protocol::contract().pipeline_input_limit
             || self.inputs[0].name != "source"
             || !["text", "image.samples"].contains(&self.inputs[0].semantic_type.as_str())
             || self.nodes.is_empty()
             || self.nodes.len() > crate::protocol::contract().pipeline_node_limit
         {
             return Err("unsupported_pipeline");
+        }
+        let mut names = BTreeSet::new();
+        for input in &self.inputs {
+            let name = input.name.as_bytes();
+            if name.is_empty()
+                || name.len() > 32
+                || !name[0].is_ascii_lowercase()
+                || !name
+                    .iter()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
+                || !names.insert(&input.name)
+                || !["text", "image.samples"].contains(&input.semantic_type.as_str())
+            {
+                return Err("invalid_pipeline");
+            }
         }
         let mut ids = BTreeSet::new();
         for n in &self.nodes {
@@ -99,7 +132,7 @@ impl Definition {
                 let source = n.inputs.get(&port.name).ok_or("invalid_connection")?;
                 match source {
                     Source::Input { name } => {
-                        if name != "source" || self.inputs[0].semantic_type != port.semantic_type {
+                        if self.input(name)?.semantic_type != port.semantic_type {
                             return Err("contract_mismatch");
                         }
                     }
@@ -196,8 +229,8 @@ impl Definition {
             inputs.insert("input".into(), Source::Literal { value: json!([]) });
         }
         let d = Self {
-            format_version: 3,
-            inputs: [Input {
+            format_version: 4,
+            inputs: vec![Input {
                 name: "source".into(),
                 semantic_type: primary.semantic_type.clone(),
             }],

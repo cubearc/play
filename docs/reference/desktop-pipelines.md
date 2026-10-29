@@ -5,12 +5,12 @@ its hypothesis, exact source Asset binding and selected Pipeline revision inside
 one Exploration. [Explorations and Trails](../explorations.md#save-and-reuse-a-pipeline)
 shows the editing workflow.
 
-The editor supports a typed graph with one declared `source` input, up to eight
+The editor supports a typed graph with up to four named Asset inputs, up to eight
 nodes and one selected output node. Native ROT13, Brainfuck and image pixel reads
 use their installed Core names, versions, named ports and parameter contracts.
 Rust validates the whole graph and plans the chosen output's ancestor closure;
-one bounded worker executes those dependencies sequentially. Additional Asset
-slots, explicit representation conversions, parallelism, output caching and
+one bounded worker executes those dependencies sequentially. Explicit representation
+conversions, parallelism, output caching and
 contextual CLI attachment remain separate deliveries under
 [issue 42](https://github.com/cubearc/play/issues/42) and
 [issue 45](https://github.com/cubearc/play/issues/45).
@@ -26,7 +26,7 @@ All mutations carry an intent `key`. Workspace operations require
 | `revise_pipeline` | `pipeline_id`, `expected_revision`, `definition` | The same ID and a new revision, or the current revision for an identical definition. |
 | `fork_pipeline` | `pipeline_id`, `revision`, `title` | A distinct Pipeline at revision 1, with the exact source revision recorded. |
 | `get_pipeline` | `pipeline_id`, `revision` | That exact selectable definition, available revisions and optional fork origin. No mutation key. |
-| `save_trail` | `trail_id`, `expected_revision`, `hypothesis`, `pipeline` | `trailId` and the advanced Trail revision. |
+| `save_trail` | `trail_id`, `expected_revision`, `hypothesis`, `pipeline`, `bindings` | `trailId` and the advanced Trail revision. |
 
 A selected `pipeline` is `{ id, revision }` or explicit `null`. Revisions are
 positive integers. A stale Pipeline head or Trail revision returns
@@ -37,17 +37,36 @@ mutation retries idempotent. Reusing an intent with changed content returns
 The engine rejects foreign owners, missing revisions, incompatible Asset types,
 unsupported native adapters, wrong operation versions and invalid parameters
 before committing anything. Archived sources cannot change Trail configuration.
-Text/caption edits also advance the bound Trail revision, preventing an older
-configuration editor from overwriting a newer binding.
+Text/caption edits advance their primary Trail revision. Additional input bindings
+remain pinned until an explicit Trail edit selects another Asset revision.
+
+## Asset bindings
+
+`source` is the first input and always resolves to the Trail's primary Asset.
+Additional input names match `[a-z][a-z0-9_]{0,31}` and are unique. Each declares
+`text` or `image.samples`. Text and inert Page Assets can satisfy a text slot;
+images satisfy image slots. Notes and File Assets are not executable inputs.
+
+`save_trail.bindings` is a complete map of additional slot names to
+`{asset_id, revision}`. Every extra slot needs a reference. The reserved source
+cannot be overridden; a null Pipeline requires an empty map. The engine validates
+same-Exploration ownership, active same-Stage membership, exact stored revision
+and semantic type atomically with the Trail's expected revision. Asset IDs belong
+to this map, never the reusable definition.
+
+An older revision remains selectable while its Asset belongs to an active Block.
+Editing the current caption does not silently retarget a pinned extra input.
+Duplicating a figure remaps a binding to the copied Asset only when it names the
+exact revision being copied; older pins retain their original reference.
 
 ## Definitions and execution
 
-Definition format 3 contains `inputs: [{name: "source", semanticType}]`, a `nodes`
+Definition format 4 contains named `inputs: [{name, semanticType}]`, a `nodes`
 array and the selected `output` node UUID. Each node has a stable `id`,
 `operation`, `operationVersion`, complete `parameters`, a bounded `position`
 (`x`, `y`) and named `inputs`. A binding is exactly one of:
 
-- `{kind: "input", name: "source"}` for the Trail's Asset.
+- `{kind: "input", name}` for one declared Trail input.
 - `{kind: "output", nodeId, port}` for another node's named output.
 - `{kind: "literal", value}` for an explicit Core-compatible value.
 
@@ -72,8 +91,9 @@ explicitly as part of the Asset transaction. A changed head cannot change the
 default operation for a later Asset. Current revision reads resolve the selected
 revision rather than assuming every Trail uses the latest head.
 
-A Run requires the selected Pipeline ID/revision and source ID/revision. Its
-operation/version are preconditions, not a request to create another definition.
+A Run requires the Trail revision, selected Pipeline ID/revision, source ID/revision
+and explicit `target_node_id`. Its operation/version must match that target.
+Choosing a node does not change the definition's default output.
 A mismatch returns `pipeline_mismatch`. The saved plan freezes the Pipeline,
 parameters and Trail hypothesis/revision at admission. Earlier Runs remain
 unchanged when the working hypothesis, Pipeline or Asset changes.
@@ -89,7 +109,8 @@ The editor cannot raise worker CPU, time, memory or output ceilings.
 | Limit | Maximum |
 | --- | --- |
 | Pipelines per Workspace | 32 |
-| Selectable format-3 revisions per Pipeline | 32 |
+| Selectable format-4 revisions per Pipeline | 32 |
+| Named inputs | 4, including reserved `source` |
 | Nodes / serialized definition | 8 / 8192 UTF-8 bytes |
 | One literal | 2048 serialized UTF-8 bytes |
 | Canvas coordinates | Integers from 0 to 4096 |
@@ -101,8 +122,8 @@ Hypotheses count toward the 4 MiB Exploration payload ceiling. Definitions remai
 subject to SQLite's 16 MiB page ceiling. Reaching a limit rejects the mutation;
 finished evidence is never evicted to admit work.
 
-[Schema 10](desktop-storage.md#single-baseline-and-refusal) appends executable
+[Schema 11](desktop-storage.md#single-baseline-and-refusal) appends executable
 graph revisions for recognized earlier native definitions, preserving selected
-configurations, IDs, historical rows and accepted Run snapshots. Only format-3
+configurations, IDs, historical rows and accepted Run snapshots. Only format-4
 definitions are selectable/executable; historical formats remain immutable
 evidence. The command boundary accepts only complete `definition` payloads.

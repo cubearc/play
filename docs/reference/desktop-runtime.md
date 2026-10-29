@@ -124,7 +124,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **12** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **14** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -137,7 +137,10 @@ and read Run details. Internal image import/read and file import commands are Ma
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
 Stage responses expose one tagged active Block sequence, including reasoning,
-plus explicit archived records. Trail views expose their derived `archived` state.
+plus explicit archived records. Trail views expose their derived `archived` state
+and exact named Asset binding snapshots. Pipeline configuration uses complete
+format-4 definitions; `save_trail` supplies additional input references separately.
+Run admission requires the expected Trail revision and explicit target node.
 `reorder_blocks` pins the Stage revision and every Block UUID; see
 [Block ordering](desktop-storage.md#block-ordering) for conflict and identity rules.
 `duplicate_block` pins that structural revision plus the primary and optional

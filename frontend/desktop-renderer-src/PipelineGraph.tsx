@@ -1,3 +1,4 @@
+import VscodeButton from "@vscode-elements/react-elements/dist/components/VscodeButton.js";
 import { useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation } from "../desktop/contract";
@@ -8,10 +9,14 @@ export function PipelineGraph({
   selected,
   onSelect,
   onMove,
+  onRun,
+  busy = false,
 }: {
   definition: PipelineDefinition;
   operations: Operation[];
   selected?: string;
+  onRun?: (id: string) => void;
+  busy?: boolean;
   onSelect?: ((id: string) => void) | undefined;
   onMove?: ((id: string, x: number, y: number) => void) | undefined;
 }) {
@@ -158,6 +163,15 @@ export function PipelineGraph({
           <strong>
             {operations.find((o) => o.operation === detail.operation)?.name}
           </strong>
+          {onRun ? (
+            <VscodeButton
+              icon="play"
+              disabled={busy}
+              onClick={() => onRun(detail.id)}
+            >
+              Run node
+            </VscodeButton>
+          ) : null}
           <pre>
             {JSON.stringify(
               { inputs: detail.inputs, parameters: detail.parameters },

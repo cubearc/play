@@ -9,7 +9,7 @@ export function singleGraph(
 ): PipelineDefinition {
   const id = randomUUID();
   return {
-    formatVersion: 3,
+    formatVersion: 4,
     inputs: [{ name: "source", semanticType: operation.input_type }],
     nodes: [
       {

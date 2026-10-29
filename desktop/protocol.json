@@ -1,5 +1,5 @@
 {
-  "protocol": 13,
+  "protocol": 14,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -10,7 +10,7 @@
   "vm_growth_bytes": 134217728,
   "output_bytes": 16384,
   "storage_generation": 2,
-  "schema_version": 10,
+  "schema_version": 11,
   "workspace_limit": 16,
   "exploration_limit": 32,
   "stage_limit": 16,
@@ -34,5 +34,6 @@
   "pipeline_node_limit": 8,
   "pipeline_definition_bytes": 8192,
   "pipeline_literal_bytes": 2048,
-  "pipeline_canvas_limit": 4096
+  "pipeline_canvas_limit": 4096,
+  "pipeline_input_limit": 4
 }

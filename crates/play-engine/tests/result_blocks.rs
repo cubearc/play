@@ -41,7 +41,7 @@ fn request(context: &Context, trail: &Value, operation: &str, retain: bool) -> R
         .contract()
         .unwrap()
         .operation_version;
-    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":operation,"operation_version":version,"retain_output":retain})).unwrap()
+    serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":operation,"operation_version":version,"retain_output":retain})).unwrap()
 }
 fn complete(
     manager: &mut Manager,
@@ -65,12 +65,15 @@ fn complete(
         );
         command(
             manager,
-            json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":trail["hypothesis"],"pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
+            json!({"kind":"save_trail","bindings":{},"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":trail["hypothesis"],"pipeline":{"id":pipeline["pipelineId"],"revision":1}}),
         );
-        let mut selected = trail.clone();
-        selected["pipeline"]["id"] = pipeline["pipelineId"].clone();
-        selected["pipeline"]["revision"] = json!(1);
-        selected
+        view(manager, context)["trails"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == trail["id"])
+            .unwrap()
+            .clone()
     } else {
         trail.clone()
     };
@@ -131,7 +134,12 @@ fn result_blocks_preserve_exact_attempt_origin_and_reuse_text_without_editing_ev
     let next = manager
         .prepare_run(&request(&context, result_trail, "cipher.rot13", true))
         .unwrap();
-    assert_eq!(next.invocation.input, "The key.");
+    assert_eq!(
+        serde_json::to_value(&next.invocation.inputs).unwrap()["source"]["text"]
+            .as_str()
+            .unwrap(),
+        "The key."
+    );
     manager.start_attempt(&next.identity).unwrap();
     manager
         .finish_run(

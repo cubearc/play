@@ -94,6 +94,8 @@ test("native image adapter pins authorized image input and preserves exact Core 
       context,
       key: randomUUID(),
       trail_id: t.id,
+      trail_revision: t.revision,
+      target_node_id: t.pipeline.outputNodeId,
       pipeline_id: t.pipeline.id,
       pipeline_revision: 1,
       source_asset_id: t.source.id,
@@ -122,6 +124,7 @@ test("native image adapter pins authorized image input and preserves exact Core 
         assetId: t.source.id,
         revision: 1,
         semanticType: "image.samples",
+        used: true,
       },
     });
     const attempt = run.attempts[0];
@@ -225,6 +228,8 @@ test("a real retained byte Run becomes an exact file result with immutable attem
       context,
       key: randomUUID(),
       trail_id: trail.id,
+      trail_revision: selected.trailRevision,
+      target_node_id: selected.outputNodeId,
       pipeline_id: selected.id,
       pipeline_revision: selected.revision,
       source_asset_id: trail.source.id,
@@ -336,6 +341,8 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
       context,
       key: randomUUID(),
       trail_id: trail.id,
+      trail_revision: trail.revision,
+      target_node_id: trail.pipeline.outputNodeId,
       pipeline_id: trail.pipeline.id,
       pipeline_revision: trail.pipeline.revision,
       source_asset_id: trail.source.id,
@@ -468,6 +475,8 @@ test("private IPC resolves exact owned asset revisions and refuses unscoped mana
           ...invocation,
           key: randomUUID(),
           trail_id: copiedTrail.id,
+          trail_revision: copiedTrail.revision,
+          target_node_id: copiedTrail.pipeline.outputNodeId,
           pipeline_id: copiedTrail.pipeline.id,
           pipeline_revision: copiedTrail.pipeline.revision,
           source_asset_id: copied.asset.id,
@@ -632,6 +641,8 @@ async function runFixture(engine: Engine, text: string) {
     context,
     key: randomUUID(),
     trail_id: trail.id,
+    trail_revision: selected.trailRevision,
+    target_node_id: selected.outputNodeId,
     pipeline_id: selected.id,
     pipeline_revision: selected.revision,
     source_asset_id: trail.source.id,
@@ -748,6 +759,8 @@ test("archive keeps admitted native work supervised and refuses new work until r
         await engine.startRun({
           ...request,
           key: randomUUID(),
+          trail_revision: selected.trailRevision,
+          target_node_id: selected.outputNodeId,
           pipeline_id: selected.id,
           pipeline_revision: selected.revision,
           operation: "cipher.rot13",
@@ -1001,6 +1014,8 @@ test("editing an input during a real worker Run preserves its plan and rejects s
       await engine.startRun({
         ...request,
         key: randomUUID(),
+        trail_revision: selected.trailRevision,
+        target_node_id: selected.outputNodeId,
         pipeline_id: selected.id,
         pipeline_revision: selected.revision,
         source_revision: 2,
@@ -1041,8 +1056,9 @@ async function saveOperation(
     title: operation.name,
     definition: singleGraph(operation),
   })) as { pipelineId: string; revision: number };
-  await engine.workspace({
+  const saved = await engine.workspace({
     kind: "save_trail",
+    bindings: {},
     context,
     key: randomUUID(),
     trail_id: trail.id,
@@ -1050,7 +1066,18 @@ async function saveOperation(
     hypothesis: trail.hypothesis,
     pipeline: { id: pipeline.pipelineId, revision: pipeline.revision },
   });
-  return { id: pipeline.pipelineId, revision: pipeline.revision };
+  const current = (await engine.workspace({
+    kind: "get_pipeline",
+    workspace_id: context.workspace_id,
+    pipeline_id: pipeline.pipelineId,
+    revision: pipeline.revision,
+  })) as import("./workspace-contract.js").PipelineView;
+  return {
+    id: pipeline.pipelineId,
+    revision: pipeline.revision,
+    trailRevision: (saved as { revision: number }).revision,
+    outputNodeId: current.outputNodeId,
+  };
 }
 
 async function actualRunning(
