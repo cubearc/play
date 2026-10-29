@@ -1,5 +1,5 @@
 use super::{
-    assets, blocks, copies,
+    assets, blocks, copies, files,
     model::{Command, Context},
     order, queries,
     storage::{self, Owned},
@@ -256,10 +256,6 @@ async fn add(
     if text.len() > protocol::contract().text_bytes {
         return Err("input_limit");
     }
-    let workspace = context.workspace_id.to_string();
-    let exploration = context.exploration_id.to_string();
-    let stage = context.stage_id.to_string();
-    blocks::admit_new(connection, context).await?;
     let (kind, data) = if let Some(encoded) = encoded {
         if encoded.len() > protocol::contract().image_bytes.div_ceil(3) * 4 {
             return Err("input_limit");
@@ -275,15 +271,38 @@ async fn add(
     } else {
         ("text", text.as_bytes().to_vec())
     };
+    add_block(
+        connection,
+        context,
+        name,
+        kind,
+        &data,
+        (encoded.is_some() && !text.is_empty()).then_some(text),
+    )
+    .await
+}
+
+pub(super) async fn add_block(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    name: &str,
+    kind: &str,
+    data: &[u8],
+    caption: Option<&str>,
+) -> Result<Value> {
+    let workspace = context.workspace_id.to_string();
+    let exploration = context.exploration_id.to_string();
+    let stage = context.stage_id.to_string();
+    blocks::admit_new(connection, context).await?;
     bytes(
         connection,
         &workspace,
         &exploration,
-        data.len() + if encoded.is_some() { text.len() } else { 0 },
+        data.len() + caption.map_or(0, str::len),
     )
     .await?;
-    let primary = asset(connection, context, name, kind, &data).await?;
-    let caption = if encoded.is_some() && !text.is_empty() {
+    let primary = asset(connection, context, name, kind, data).await?;
+    let caption = if let Some(text) = caption {
         Some(
             asset(
                 connection,
@@ -387,6 +406,15 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         } => {
             queries::context(connection, owner, context).await?;
             add(connection, context, title, text, None).await?
+        }
+        Command::AddFile {
+            context,
+            title,
+            base64,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            files::add(connection, context, title, base64).await?
         }
         Command::AddImage {
             context,

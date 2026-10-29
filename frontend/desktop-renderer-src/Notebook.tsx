@@ -65,6 +65,7 @@ export function Notebook({
   noteSaving,
   addText,
   addImage,
+  addFile,
   busy,
   editText,
   reorderBlocks,
@@ -81,6 +82,7 @@ export function Notebook({
   saveNote: () => void;
   addText: () => void;
   addImage: () => void;
+  addFile: () => void;
   onNote: (value: string) => void;
   openTrail: (trail: TrailView) => void;
   reorderBlocks: (
@@ -232,6 +234,16 @@ export function Notebook({
           </VscodeButton>
           <VscodeButton
             secondary
+            icon="file-add"
+            disabled={busy || !canAdd}
+            aria-disabled={busy || !canAdd ? "true" : "false"}
+            title={canAdd ? undefined : limitMessage}
+            onClick={addFile}
+          >
+            Add file
+          </VscodeButton>
+          <VscodeButton
+            secondary
             icon="archive"
             disabled={!exploration.stage.archivedBlocks.length}
             aria-disabled={
@@ -309,7 +321,9 @@ export function Notebook({
                         ? "note"
                         : block.asset.content.kind === "image"
                           ? "file-media"
-                          : "symbol-string"
+                          : block.asset.content.kind === "text"
+                            ? "symbol-string"
+                            : "file"
                     }
                   />{" "}
                   {title}

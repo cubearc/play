@@ -5,6 +5,7 @@ import {
   assetRead,
   cancelRun,
   context,
+  fileImport,
   imageImport,
   request,
   runRequest,
@@ -15,6 +16,25 @@ const owner = {
   exploration_id: randomUUID(),
   stage_id: randomUUID(),
 };
+test("file import grants only a chooser intent, never a renderer path or bytes", () => {
+  const value = { context: owner, key: randomUUID() };
+  assert.deepEqual(fileImport(value), value);
+  for (const candidate of [
+    null,
+    {},
+    { ...value, path: "/private/secret" },
+    { ...value, base64: "AA==" },
+    { ...value, url: "https://example.com/" },
+    { ...value, key: "bad" },
+    { ...value, context: { ...owner, stage_id: "bad" } },
+  ])
+    assert.throws(() => fileImport(candidate), /invalid_command/);
+  assert.throws(
+    () =>
+      request({ kind: "add_file", ...value, title: "file", base64: "AA==" }),
+    /invalid_command/,
+  );
+});
 test("archive and restore require the exact closed Block snapshot and structural revision", () => {
   for (const kind of ["archive_block", "restore_block"]) {
     const intent = {

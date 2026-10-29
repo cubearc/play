@@ -4,7 +4,7 @@
 <a id="private-stage-candidates"></a>
 
 Create local Stages with **New Stage** inside an Exploration. Add your own
-[text or images](workspace.md) and [save reasoning](notebook.md); no Challenge
+[text, images or files](workspace.md) and [save reasoning](notebook.md); no Challenge
 manifest or online participation is required for this notebook workflow.
 
 The Electron preview does not import Challenge packages, clone a published

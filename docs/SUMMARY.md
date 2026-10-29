@@ -6,7 +6,7 @@
   - [Create and reopen Workspaces](launcher.md)
   - [Explorations and Trails](explorations.md)
   - [Stage notebook editing](notebook.md)
-  - [Text and image Assets](workspace.md)
+  - [Text, image and file Assets](workspace.md)
   - [Image inspection](visual-lab.md)
   - [Resume saved work](persistence.md)
   - [Candidates and Solutions](solutions.md)

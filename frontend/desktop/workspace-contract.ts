@@ -15,8 +15,14 @@ export interface AssetView {
   explorationId: string;
   revision: number;
   title: string;
-  content: { kind: "image" } | { kind: "text"; text: string };
+  content: { kind: "image" } | { kind: "text"; text: string } | FileContent;
   origin?: { assetId: string; revision: number; title: string };
+}
+export interface FileContent {
+  kind: "file";
+  byteLength: number;
+  sha256: string;
+  preview: { format: "utf8" | "hex"; text: string; truncated: boolean };
 }
 export interface AssetRevisionRef {
   asset_id: string;
@@ -185,6 +191,10 @@ export interface ImageImport {
   context: Context;
   key: string;
   caption: string;
+}
+export interface FileImport {
+  context: Context;
+  key: string;
 }
 export interface AssetRead {
   context: Context;
@@ -423,6 +433,13 @@ export function imageImport(value: unknown): ImageImport {
   if (!id(record.key) || !bytes(record.caption, limits.text_bytes))
     throw new Error("invalid_command");
   return record as unknown as ImageImport;
+}
+export function fileImport(value: unknown): FileImport {
+  const record = object(value);
+  keys(record, ["context", "key"]);
+  context(record.context);
+  if (!id(record.key)) throw new Error("invalid_command");
+  return record as unknown as FileImport;
 }
 export function assetRead(value: unknown): AssetRead {
   const record = object(value);

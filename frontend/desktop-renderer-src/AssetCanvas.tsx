@@ -3,6 +3,7 @@ import VscodeIcon from "@vscode-elements/react-elements/dist/components/VscodeIc
 import { useState } from "react";
 import type { TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
+import { FilePreview } from "./FilePreview";
 import { OperationCell } from "./OperationCell";
 import type { Executions } from "./useExecutions";
 
@@ -15,6 +16,7 @@ export function AssetCanvas({
 }) {
   const [zoom, setZoom] = useState(100);
   const image = trail.source.content.kind === "image";
+  const text = trail.source.content.kind === "text";
   return (
     <section className="asset-canvas scroll-surface" aria-label="Trail canvas">
       <header className="document-heading">
@@ -29,15 +31,17 @@ export function AssetCanvas({
           <span>
             {image
               ? "Image inspection"
-              : `Pipeline · ${trail.pipeline?.title} · r${trail.pipeline?.revision}`}
+              : text
+                ? `Pipeline · ${trail.pipeline?.title} · r${trail.pipeline?.revision}`
+                : "File inspection"}
           </span>
         </div>
       </header>
       {trail.archived ? (
         <p className="archive-notice" role="note">
           <VscodeIcon name="archive" /> Archived block · Content and Run history
-          are preserved. Restore it from the Stage notebook to edit or run
-          again. Accepted work can still finish or be cancelled.
+          are preserved. Restore it from the Stage notebook to return it to
+          active work. Accepted work can still finish or be cancelled.
         </p>
       ) : null}
       <div className="canvas-surface">
@@ -46,7 +50,9 @@ export function AssetCanvas({
           aria-label="Bound source asset"
         >
           <div className="node-heading">
-            <VscodeIcon name={image ? "file-media" : "symbol-string"} />
+            <VscodeIcon
+              name={image ? "file-media" : text ? "symbol-string" : "file"}
+            />
             <strong>{trail.source.title}</strong>
             <span className="badge">Source asset</span>
           </div>
@@ -63,6 +69,8 @@ export function AssetCanvas({
                 />
               </div>
             </div>
+          ) : trail.source.content.kind === "file" ? (
+            <FilePreview content={trail.source.content} details />
           ) : (
             <pre>{trail.source.content.text}</pre>
           )}
@@ -93,7 +101,7 @@ export function AssetCanvas({
               Zoom in
             </VscodeButton>
           </div>
-        ) : (
+        ) : text ? (
           <>
             <div className="canvas-connection">
               <span /> <code>text → {trail.pipeline?.input}</code>{" "}
@@ -106,12 +114,18 @@ export function AssetCanvas({
               <OperationCell trail={trail} executions={executions} />
             </article>
           </>
-        )}
+        ) : null}
       </div>
       {image ? (
         <p className="canvas-note">
           Image transformations are not available in this preview. You can
           inspect and zoom the source here.
+        </p>
+      ) : null}
+      {trail.source.content.kind === "file" ? (
+        <p className="canvas-note">
+          This is an inert preview of the imported bytes. File operations are
+          not available in this preview.
         </p>
       ) : null}
     </section>

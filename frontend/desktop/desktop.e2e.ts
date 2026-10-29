@@ -13,6 +13,153 @@ import {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("File Blocks import inert content and preserve scoped copies, order and archive after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-file-blocks-"));
+  const path = join(profile, "clue.html");
+  const text =
+    "<h1>Injected heading</h1><script>globalThis.fileExecuted=true</script>\nGur xrl.";
+  await writeFile(path, text);
+  const launch = () =>
+    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("File evidence");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Inert clues");
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, path);
+    const add = () =>
+      notebook(page).getByRole("button", { name: "Add file", exact: true });
+    await add().focus();
+    await page.keyboard.press("Enter");
+    const cell = () =>
+      notebook(page).getByRole("article", {
+        name: "clue.html block",
+        exact: true,
+      });
+    await expect(cell()).toContainText(text);
+    await expect(
+      cell().getByRole("button", { name: "Edit text", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      cell().getByRole("button", { name: "Run cell", exact: true }),
+    ).toHaveCount(0);
+    const initial = await current(page);
+    const original = initial.exploration.stage.blocks[0];
+    assert.ok(original?.kind === "asset");
+    await cell()
+      .getByRole("button", { name: "Explore clue.html", exact: true })
+      .click();
+    const canvas = () =>
+      page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(canvas()).toContainText("File inspection");
+    await expect(canvas().locator("pre")).toHaveText(text);
+    await expect(
+      canvas().getByRole("heading", { name: "Injected heading", exact: true }),
+    ).toHaveCount(0);
+    assert.equal(
+      await page.evaluate(() => Object.hasOwn(globalThis, "fileExecuted")),
+      false,
+    );
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect(
+      canvas().getByRole("button", { name: "Run cell", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await cell()
+      .getByRole("button", { name: "Duplicate clue.html", exact: true })
+      .click();
+    const copy = notebook(page).getByRole("article", {
+      name: "clue.html (copy) block",
+      exact: true,
+    });
+    await expect(copy).toBeFocused();
+    await expect(copy).toContainText("Copied from clue.html");
+    await cell()
+      .getByRole("button", { name: "Move clue.html down", exact: true })
+      .click();
+    await expect(cell()).toBeFocused();
+    await cell()
+      .getByRole("button", { name: "Archive clue.html", exact: true })
+      .click();
+    await expect(cell()).toHaveCount(0);
+    await notebook(page)
+      .getByRole("button", { name: "Archived blocks (1)", exact: true })
+      .click();
+    const archive = page.getByRole("region", {
+      name: "Archived blocks",
+      exact: true,
+    });
+    await archive
+      .getByRole("button", { name: "Open evidence clue.html", exact: true })
+      .click();
+    await expect(canvas()).toContainText("Archived block");
+    await expect(canvas().locator("pre")).toHaveText(text);
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Archived blocks (1)", exact: true })
+      .click();
+    await archive
+      .getByRole("button", { name: "Restore clue.html", exact: true })
+      .click();
+    await expect(cell()).toBeFocused();
+    const restored = await current(page);
+    assert.deepEqual(restored.exploration.stage.blocks[1], original);
+    const binaryPath = join(profile, "data.bin");
+    await writeFile(binaryPath, Buffer.from([0, 255, 1, 128]));
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, binaryPath);
+    await add().click();
+    const binaryCell = notebook(page).getByRole("article", {
+      name: "data.bin block",
+      exact: true,
+    });
+    await expect(binaryCell).toContainText("00ff0180");
+    const beforeCancel = await current(page);
+    await application.evaluate(({ dialog }) => {
+      dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+    });
+    await add().click();
+    await expect(add()).toBeEnabled();
+    assert.deepEqual(await current(page), beforeCancel);
+    await create(page, "Exploration", "Separate files");
+    await expect(notebook(page)).not.toContainText("clue.html");
+    await explorer(page)
+      .getByRole("button", { name: "Inert clues", exact: true })
+      .click();
+    await expect(cell()).toBeVisible();
+    const saved = await current(page);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(cell()).toBeVisible();
+    assert.deepEqual(await current(page), saved);
+    assert.deepEqual(await readFile(path), Buffer.from(text));
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("archived Blocks keep evidence and restore their original Assets after restart", {
   timeout: 90000,
 }, async () => {
@@ -611,32 +758,36 @@ async function checkAuthority(
   );
   const rogue = await rogueWindow;
   await rogue.waitForLoadState();
-  const denied = await rogue.evaluate(async (url) => {
-    const results = [];
-    for (const invoke of [
-      () => window.play.catalog(),
-      () => window.play.workspace({ kind: "list" }),
-    ]) {
-      try {
-        await invoke();
-        results.push(false);
-      } catch {
-        results.push(true);
+  const denied = await rogue.evaluate(
+    async ({ url, context }) => {
+      const results = [];
+      for (const invoke of [
+        () => window.play.catalog(),
+        () => window.play.workspace({ kind: "list" }),
+        () => window.play.importFile({ context, key: crypto.randomUUID() }),
+      ]) {
+        try {
+          await invoke();
+          results.push(false);
+        } catch {
+          results.push(true);
+        }
       }
-    }
-    results.push(
-      await new Promise<boolean>((resolve) => {
-        const image = new Image();
-        image.onload = () => resolve(false);
-        image.onerror = () => resolve(true);
-        image.src = url ?? "";
-      }),
-    );
-    return results;
-  }, imageUrl);
+      results.push(
+        await new Promise<boolean>((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(false);
+          image.onerror = () => resolve(true);
+          image.src = url ?? "";
+        }),
+      );
+      return results;
+    },
+    { url: imageUrl, context },
+  );
   assert.deepEqual(
     denied,
-    [true, true, true],
+    [true, true, true, true],
     "matching URLs cannot authorize another window or its image requests",
   );
   await rogue.close();

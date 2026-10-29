@@ -3,7 +3,7 @@
 The Rust engine owns each managed Workspace, its independent Explorations, local
 Stages, ordered content Blocks, Assets, Trails and reusable Pipeline definitions.
 The [first notebook](../getting-started.md) shows creation, reasoning and
-reopening; [Asset imports](../workspace.md) covers PNG selection. The
+reopening; [Asset imports](../workspace.md) covers PNG and file selection. The
 [domain contract](desktop-domain.md) defines the complete product model; this
 reference describes the implemented storage slice.
 
@@ -40,10 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **4**, SQLite application ID
+The native store uses generation **2**, schema version **5**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
-accepted generation evolves through `runs.sql`, `copies.sql` and `archive.sql`.
-Recognized native schemas 1, 2 and 3 upgrade to schema 4 under the owner lock, preserving content,
+accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql` and
+`files.sql`.
+Recognized native schemas 1, 2, 3 and 4 upgrade to schema 5 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -93,6 +94,32 @@ freeze their chosen definition, resolved inputs and Core contract; see
 and interruption recovery. Candidates, Solutions, submissions and official
 evaluation are separate deliveries.
 
+## File content and previews
+
+File Assets use `kind: file` independently of their extension. Main's native
+chooser copies at most 131072 bytes from one regular file through a bounded,
+read-only handle; special files are refused without a blocking stream read.
+Only the basename enters the domain title; the source path is not stored.
+The internal closed `add_file` command carries `context`, `key`, `title` and
+`base64`. Rust validates ownership, strict Base64, filename/title and decoded
+size, then atomically creates an immutable revision/digest, Block and inspection
+Trail. The existing active/retained/aggregate byte ceilings and receipts apply.
+Malformed data, missing ownership or quota rejection leaves no partial content.
+
+Views expose `content: { kind: file, byteLength, sha256, preview }`, without the
+full bytes. The engine verifies the stored digest before deriving `preview`:
+`{ format: utf8 | hex, text, truncated }`. Valid UTF-8 with no controls other
+than tab, CR and LF uses at most the first 256 bytes, shortened to a character
+boundary. Other content uses Core's hexadecimal encoder over at most 256 bytes.
+`truncated` refers to the exact original byte length; empty files are supported.
+Neither extensions nor apparent markup grant HTML, scripting or network behavior.
+
+File Trails have no executable Pipeline binding in this preview. Files are not
+coerced to text inputs or editable with `revise_text`. Their Blocks use the same
+ordering, independent copy/lineage and archive/restore lifecycle as other Assets;
+copies retain exact bytes, while archived views remain readable. Schema 5 widens
+the Asset-kind constraint while preserving existing references and triggers.
+
 ## Block ordering
 
 Stage views return one ordered active `blocks` sequence tagged with `kind: asset` or
@@ -112,7 +139,7 @@ responses for matching retries. The command never revises Assets, Notes, Trails,
 Pipelines or Runs. A failed move changes nothing. Reopening returns the saved
 sequence, independently for every Stage and Exploration.
 
-Stage revisions track structural membership and order. Adding text or an image
+Stage revisions track structural membership and order. Adding text, an image or a file
 also advances this revision; editing content or saving reasoning uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
@@ -203,7 +230,7 @@ hints; Rust enforces the limits and ownership independently.
 The closed `revise_text` intent carries `context`, `key`, `block_id`, `asset_id`,
 `expected_revision` and `text`. The engine resolves a text Asset actually bound
 to that Stage Block, checks its current and latest revision, validates UTF-8 byte
-limits and charges retained bytes before appending. Image Assets are not editable
+limits and charges retained bytes before appending. Image and File Assets are not editable
 through this intent. Another owner's IDs or an unrelated Block/Asset pair fail.
 
 One transaction appends immutable content/digest, advances the Block's matching
@@ -234,6 +261,8 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | Text Asset or image caption | 1024 bytes |
 | One reasoning revision | 2048 bytes |
 | One imported PNG | 131072 bytes (128 KiB) |
+| One imported file | 131072 bytes (128 KiB) |
+| File preview source prefix | 256 bytes (512 hexadecimal characters for binary content) |
 | Asset, reasoning and Run payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
 | Runs per Exploration / Workspace | 64 / 128 |
 | Pending Run output reservation | 131072 bytes (128 KiB) |

@@ -124,13 +124,16 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **7** uses a 262144-byte frame ceiling, including bounded Base64 PNG
+Protocol **8** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
-image-import bridge.
+image/file-import bridge. File chooser intents carry only `context` and `key`;
+Main validates the trusted sender, selects and reads one bounded regular file,
+then sends an internal `add_file` command. Renderer paths, URLs, raw file bytes
+and extra fields are refused. Preview text never becomes HTML or a resource URL.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
 add text, revise existing text/captions, reorder, duplicate, archive or restore Stage content Blocks,
 save reasoning, list scoped Run summaries
-and read Run details. Internal image import/read commands are Main-owned.
+and read Run details. Internal image import/read and file import commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
 Stage responses expose one tagged active Block sequence, including reasoning,

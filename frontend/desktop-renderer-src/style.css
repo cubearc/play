@@ -454,6 +454,39 @@ h1 {
   padding: 16px;
   background: #232323;
 }
+.asset-content.file {
+  padding: 16px;
+  color: inherit;
+}
+.file-preview {
+  min-width: 0;
+}
+.file-preview pre {
+  color: #ce9178;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px / 1.6 var(--vscode-editor-font-family);
+}
+.file-meta {
+  display: block;
+  color: #a6b3bf;
+  font-size: 11px;
+}
+.file-digest {
+  display: grid;
+  gap: 6px;
+  color: #a6b3bf;
+  font-size: 11px;
+}
+.file-digest code {
+  overflow-wrap: anywhere;
+}
+.source-node > .file-preview {
+  padding: 16px;
+}
+.asset-content.file .asset-open {
+  margin-top: 12px;
+}
 
 .notebook-figure {
   margin: 0;

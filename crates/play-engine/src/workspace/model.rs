@@ -102,6 +102,12 @@ pub enum Command {
         caption: String,
         png: String,
     },
+    AddFile {
+        context: Context,
+        key: Uuid,
+        title: String,
+        base64: String,
+    },
     ListRuns {
         context: Context,
         trail_id: Uuid,
@@ -136,6 +142,7 @@ impl Command {
             | Self::ArchiveBlock { key, .. }
             | Self::RestoreBlock { key, .. }
             | Self::AddText { key, .. }
+            | Self::AddFile { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
         }
@@ -161,10 +168,28 @@ pub struct Summary {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum Content {
-    Text { text: String },
+    Text {
+        text: String,
+    },
     Image,
+    File {
+        byte_length: usize,
+        sha256: String,
+        preview: FilePreview,
+    },
+}
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "format", rename_all = "snake_case")]
+pub enum FilePreview {
+    Utf8 { text: String, truncated: bool },
+    Hex { text: String, truncated: bool },
 }
 
 #[derive(Clone, Serialize)]
@@ -192,7 +217,7 @@ pub struct AssetOrigin {
 pub enum Block {
     Asset {
         #[serde(flatten)]
-        block: AssetBlock,
+        block: Box<AssetBlock>,
     },
     Note {
         id: String,

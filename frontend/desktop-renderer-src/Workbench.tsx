@@ -351,6 +351,7 @@ export function Workbench() {
                   saveNote={() => void state.saveNote()}
                   addText={() => setDialog("text")}
                   addImage={() => setDialog("image")}
+                  addFile={() => void state.importFile()}
                   openTrail={openTrail}
                   editText={editText}
                   reorderBlocks={state.reorderBlocks}

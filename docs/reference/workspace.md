@@ -8,4 +8,4 @@ Native PNG selection passes bounded content through the trusted process; Assets 
 
 - [Imports, ownership and limits](desktop-storage.md)
 - [Native file and worker boundary](desktop-runtime.md)
-- [Add text and images](../workspace.md)
+- [Add text, images and files](../workspace.md)

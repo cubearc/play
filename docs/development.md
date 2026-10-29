@@ -52,6 +52,13 @@ The duplication journey checks independent text/caption edits and Runs, source
 revision conflicts, keyboard copy, grouped images, quota state and restart.
 Native tests also preserve copy provenance across schema 2 upgrades and refuse
 lineage changes; engine tests cover atomic rollback after a caption quota failure.
+
+Use **Add file** to import a small text or binary fixture. Its Block opens an
+inert inspection canvas with a byte count, bounded preview and digest. The file
+journey exercises HTML as text, binary preview, chooser cancellation, independent
+copies, keyboard order, archive/restore, Exploration isolation and restart.
+Native checks also reject oversized/special files and renderer path authority;
+source file bytes remain unchanged.
 Archive journeys cover preserved history and drafts, keyboard restoration,
 image/caption grouping, active-slot reuse, retained limits and independent
 Explorations. Native tests archive an admitted worker without stopping its

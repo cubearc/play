@@ -3,6 +3,7 @@ import type { PlayBridge } from "./bridge.ts";
 import {
   assetRead,
   cancelRun,
+  fileImport,
   imageImport,
   request,
   runRequest,
@@ -15,6 +16,8 @@ if (process.isMainFrame) {
       ipcRenderer.invoke("play:workspace", request(value)),
     importImage: (value: unknown) =>
       ipcRenderer.invoke("play:import-image", imageImport(value)),
+    importFile: (value: unknown) =>
+      ipcRenderer.invoke("play:import-file", fileImport(value)),
     image: (value: unknown) =>
       ipcRenderer.invoke("play:image", assetRead(value)),
     startRun: (value: unknown) =>

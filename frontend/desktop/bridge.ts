@@ -2,6 +2,7 @@ import type { Operation } from "./contract.ts";
 import type {
   AssetRead,
   CancelRun,
+  FileImport,
   ImageImport,
   MutationResult,
   Responses,
@@ -16,6 +17,7 @@ export interface PlayBridge {
     value: Extract<WorkspaceRequest, { kind: K }>,
   ) => Promise<Responses[K]>;
   importImage: (value: ImageImport) => Promise<MutationResult | null>;
+  importFile: (value: FileImport) => Promise<MutationResult | null>;
   image: (value: AssetRead) => Promise<string>;
   startRun: (value: RunRequest) => Promise<RunDetail>;
   cancelRun: (value: CancelRun) => Promise<RunDetail>;

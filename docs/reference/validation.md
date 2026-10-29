@@ -38,6 +38,11 @@ preserve immutable lineage and roll back a full copy if caption storage fails.
 Archive checks preserve active worker supervision and history, refuse new
 execution and edits, restore original IDs, exercise capacity/isolation, and verify
 schema 3 upgrades plus database deletion/Note-state guards.
+File checks verify exact imported bytes, bounded UTF-8/hex/empty previews,
+regular-file admission, inert HTML, cancellation, exact chooser authority,
+independent copies, ordering, archive/restore, Exploration isolation and restart.
+Schema-4 fixtures preserve archived content, source lineage and completed Runs
+before accepting file imports. A second same-URL window cannot invoke the chooser.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not

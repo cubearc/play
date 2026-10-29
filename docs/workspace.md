@@ -1,4 +1,4 @@
-# Add text and image Assets
+# Add text, image and file Assets
 
 <a id="browse-and-inspect-local-files"></a>
 <a id="import-explicitly"></a>
@@ -46,10 +46,41 @@ To try a variation, [duplicate the Block](notebook.md#duplicate-a-clue) first.
 The image and caption get independent Asset identities while preserving their
 exact source revisions; editing the copied caption leaves the original alone.
 
+## Add a file
+
+Choose **Add file** and select your own regular file, up to 128 KiB. Play copies
+its exact bytes into the selected Exploration, leaving the source unchanged.
+Cancelling the chooser adds nothing. Only the filename is retained; importing
+does not grant access to the source folder or adjacent files.
+
+The Block shows the byte count and a short preview. Readable UTF-8 appears as
+text; binary or control-containing content appears as hexadecimal. A **Partial
+preview** label means more bytes were imported than are displayed. Click the
+file to open its Trail canvas and inspect the preview and SHA-256 digest.
+
+![Stage notebook with a grouped image and caption, followed by an imported file preview and saved reasoning.](assets/desktop/file-notebook.png)
+
+Files sit beside other notebook content and open their own canvas. [Open full size](assets/desktop/file-notebook.png).
+
+![File Trail canvas with an inert UTF-8 preview, complete byte count, SHA-256 digest and exact Asset revision.](assets/desktop/file-canvas.png)
+
+The canvas identifies the preserved file content. [Open full size](assets/desktop/file-canvas.png).
+
+HTML, scripts and links remain plain content; they never open a page, run a
+program or fetch remote content. File operations and editing are not available
+in this preview. Text imported as a file remains a File Asset and does not
+silently become a runnable text cell.
+
+Use the heading controls to [reorder](notebook.md#reorder-the-notebook),
+[duplicate](notebook.md#duplicate-a-clue), or
+[archive and restore](notebook.md#archive-and-restore-a-block) a file Block. A copy
+has its own Asset and Trail, with the exact source revision recorded. The
+original bytes, identities and order survive reopening.
+
 ## Limits and recovery
 
-The preview accepts PNG image imports and text, rather than arbitrary files,
-videos or executable pages. A Stage allows 8 active and 16 retained Blocks,
+The preview accepts text, PNG images and bounded inert files. Video playback and
+executable pages are not available. A Stage allows 8 active and 16 retained Blocks,
 including reasoning. [Archiving](notebook.md#archive-and-restore-a-block) frees
 an active slot while retaining content and evidence;
 historical revisions and retained Runs also consume the Exploration's budget.

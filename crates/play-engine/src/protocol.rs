@@ -24,6 +24,8 @@ pub struct Contract {
     pub text_bytes: usize,
     pub note_bytes: usize,
     pub image_bytes: usize,
+    pub file_bytes: usize,
+    pub file_preview_bytes: usize,
     pub store_bytes: usize,
     pub exploration_bytes: usize,
     pub workspace_run_limit: usize,

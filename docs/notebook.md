@@ -8,7 +8,7 @@ Each Exploration has its own local Stages. A Stage combines ordered content
 Blocks, cell results and saved reasoning. Choose **New Stage** in the Explorer
 to create another local part without importing a Challenge.
 
-Use [Add text or Add image](workspace.md) to add clues. An image caption stays in
+Use [Add text, Add image or Add file](workspace.md) to add clues. An image caption stays in
 the image's figure, with its own input Asset identity. Clicking an Asset opens a
 Trail canvas in the same Exploration; [Explorations and Trails](explorations.md)
 explains the relationship.
@@ -86,10 +86,12 @@ reasoning elsewhere, new content is appended without moving the existing Blocks.
 
 ## Duplicate a clue
 
-Choose the copy icon in a text or image Block's heading. Tab to
+Choose the copy icon in a text, image or file Block's heading. Tab to
 **Duplicate First clue** (or the Block's title) and press Enter to use the
 keyboard. The saved content is copied immediately after the source, and focus
 follows it. An image and its caption stay together.
+File copies preserve the exact bytes and have independent Asset and Trail IDs;
+they remain inert file previews.
 
 The copy has a distinct title, such as **First clue (copy)** or
 **First clue (copy 2)**. **Copied from First clue · r1** identifies its original
@@ -116,7 +118,7 @@ disabled when a Block ceiling is reached.
 
 ## Archive and restore a Block
 
-Choose the archive icon in a text or image Block's heading. The Block leaves the
+Choose the archive icon in a text, image or file Block's heading. The Block leaves the
 active notebook, while its Assets, source links, Trails and Run history stay in
 the Stage. Images and captions are archived together. Saved reasoning and any
 reasoning draft stay in place; the unique **Reasoning** Block cannot be archived.

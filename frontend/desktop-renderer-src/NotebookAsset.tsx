@@ -5,6 +5,7 @@ import type {
   Context,
 } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
+import { FilePreview } from "./FilePreview";
 
 export function NotebookAsset({
   block,
@@ -31,6 +32,8 @@ export function NotebookAsset({
       >
         {block.asset.content.kind === "image" ? (
           <AssetImage asset={block.asset} context={context} />
+        ) : block.asset.content.kind === "file" ? (
+          <FilePreview content={block.asset.content} />
         ) : (
           <code>{block.asset.content.text}</code>
         )}

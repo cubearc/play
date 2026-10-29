@@ -10,7 +10,7 @@ import {
   protocol,
   session,
 } from "electron";
-import { AssetGrants, importImage } from "./assets.ts";
+import { AssetGrants, importFile, importImage } from "./assets.ts";
 import { APP_URL, ownsFrame, resourceName } from "./authority.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
@@ -18,6 +18,7 @@ import {
   assetRead,
   cancelRun,
   type ExplorationView,
+  fileImport,
   imageImport,
   request,
   runRequest,
@@ -209,6 +210,11 @@ app
       const engine = authorize(event);
       if (!window) throw new Error("unauthorized_frame");
       return importImage(engine, window, imageImport(value));
+    });
+    ipcMain.handle("play:import-file", (event, value: unknown) => {
+      const engine = authorize(event);
+      if (!window) throw new Error("unauthorized_frame");
+      return importFile(engine, window, fileImport(value));
     });
     ipcMain.handle("play:image", (event, value: unknown) => {
       const engine = authorize(event);

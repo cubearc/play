@@ -12,10 +12,11 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
 pub const COPY_SCHEMA: &str = include_str!("copies.sql");
 pub const ARCHIVE_SCHEMA: &str = include_str!("archive.sql");
+pub const FILE_SCHEMA: &str = include_str!("files.sql");
 pub type Schemas = Vec<Vec<(String, String, String)>>;
 pub const SCHEMA: &str = include_str!("schema.sql");
 
@@ -377,7 +378,12 @@ async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()
         .map_err(failure)?;
     let result = async {
         let mut transaction = connection.begin().await.map_err(failure)?;
-        for (next, schema) in [(2, RUN_SCHEMA), (3, COPY_SCHEMA), (4, ARCHIVE_SCHEMA)] {
+        for (next, schema) in [
+            (2, RUN_SCHEMA),
+            (3, COPY_SCHEMA),
+            (4, ARCHIVE_SCHEMA),
+            (5, FILE_SCHEMA),
+        ] {
             if version < i64::from(next) && next <= target {
                 sqlx::raw_sql(schema)
                     .execute(&mut *transaction)

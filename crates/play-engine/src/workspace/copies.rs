@@ -57,12 +57,16 @@ async fn fork_asset(
     let title = available_title(connection, context, &original.title).await?;
     let (kind, data) = match original.content {
         Content::Text { text } => ("text", text.into_bytes()),
-        Content::Image => {
+        Content::Image | Content::File { .. } => {
             let data: Vec<u8> = sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?")
                 .bind(&workspace).bind(&exploration).bind(source.asset_id.to_string()).bind(source.revision)
                 .fetch_one(&mut *connection).await.map_err(storage::failure)?;
-            cube_core::image::Image::decode(&data).map_err(|_| "invalid_image")?;
-            ("image", data)
+            if matches!(original.content, Content::Image) {
+                cube_core::image::Image::decode(&data).map_err(|_| "invalid_image")?;
+                ("image", data)
+            } else {
+                ("file", data)
+            }
         }
     };
     mutations::bytes(connection, &workspace, &exploration, data.len()).await?;

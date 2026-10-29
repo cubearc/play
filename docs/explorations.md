@@ -19,10 +19,11 @@ and selected Stage remain separate when you switch or reopen the Workspace.
 
 ## Open an Asset canvas
 
-Click a text Asset, image or caption in a Stage notebook. Play opens a **Trail
+Click a text Asset, image, caption or file in a Stage notebook. Play opens a **Trail
 canvas** tab for that Asset in the same Exploration. A caption's canvas shows its
 exact bound Asset revision, selected reusable Pipeline and accepted Run history.
-The image's canvas supports inspection and zoom. Results stay with the cell or
+The image's canvas supports inspection and zoom. A file's canvas shows an inert
+text/hex preview, byte count and SHA-256 digest. Results stay with the cell or
 canvas that produced them.
 
 

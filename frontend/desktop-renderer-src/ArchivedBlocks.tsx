@@ -27,7 +27,7 @@ export function ArchivedBlocks({
       <h2>Archived blocks</h2>
       <p className="muted">
         Content, source links and Run history stay in this Stage. Restore a
-        block to edit or run it.
+        block to return it to the active notebook.
       </p>
       {items.map(({ block }) => (
         <article

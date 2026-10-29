@@ -31,6 +31,10 @@ const messages: Record<string, string> = {
     "The workspace storage limit was reached. Existing content was preserved.",
   input_limit: "This content exceeds the supported text limit.",
   image_limit: "Choose a PNG image no larger than 128 KiB.",
+  file_limit: "Choose a file no larger than 128 KiB.",
+  invalid_file: "Choose a regular file that can be read.",
+  invalid_title:
+    "Use a non-empty title or filename of at most 120 UTF-8 bytes.",
   invalid_image: "This file is not a supported bounded PNG image.",
   workspace_mismatch: "This request belongs to another workspace.",
   unsafe_store_permissions:
@@ -273,6 +277,14 @@ export function useWorkspace() {
         context.stage_id,
       );
   };
+  const importFile = (key: string = crypto.randomUUID()) =>
+    execute(async () => {
+      if (!exploration) return;
+      const context = contextOf(exploration);
+      const result = await window.play.importFile({ context, key });
+      if (!result) return false;
+      await refresh(context);
+    });
   const reorderBlocks = (
     context: Context,
     revision: number,
@@ -511,6 +523,7 @@ export function useWorkspace() {
     selectStage,
     addText,
     importImage,
+    importFile,
     reviseText,
     reorderBlocks,
     duplicateBlock,

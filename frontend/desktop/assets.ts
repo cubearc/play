@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { open } from "node:fs/promises";
 import { basename } from "node:path";
 import {
   type BrowserWindow,
@@ -9,7 +8,13 @@ import {
 } from "electron";
 import { contract } from "./contract.ts";
 import type { Engine } from "./engine.ts";
-import type { AssetRead, Context, ImageImport } from "./workspace-contract.ts";
+import { readImport } from "./imports.ts";
+import type {
+  AssetRead,
+  Context,
+  FileImport,
+  ImageImport,
+} from "./workspace-contract.ts";
 
 interface Grant {
   owner: WebContents;
@@ -103,33 +108,32 @@ export async function importImage(
   if (selection.canceled || selection.filePaths.length !== 1) return null;
   const path = selection.filePaths[0];
   if (!path) throw new Error("invalid_image");
-  const handle = await open(path, "r");
-  let bytes: Buffer;
-  try {
-    const metadata = await handle.stat();
-    if (!metadata.isFile() || metadata.size > contract.image_bytes)
-      throw new Error("image_limit");
-    const buffer = Buffer.alloc(contract.image_bytes + 1);
-    let count = 0;
-    while (count < buffer.length) {
-      const result = await handle.read(
-        buffer,
-        count,
-        buffer.length - count,
-        null,
-      );
-      if (!result.bytesRead) break;
-      count += result.bytesRead;
-    }
-    if (count > contract.image_bytes) throw new Error("image_limit");
-    bytes = buffer.subarray(0, count);
-  } finally {
-    await handle.close();
-  }
+  const bytes = await readImport(path, contract.image_bytes, "image_limit");
   return engine.workspace({
     kind: "add_image",
     ...value,
     title: basename(path),
     png: bytes.toString("base64"),
+  });
+}
+
+export async function importFile(
+  engine: Engine,
+  window: BrowserWindow,
+  value: FileImport,
+): Promise<unknown> {
+  const selection = await dialog.showOpenDialog(window, {
+    title: "Import a file",
+    properties: ["openFile"],
+  });
+  if (selection.canceled || selection.filePaths.length !== 1) return null;
+  const path = selection.filePaths[0];
+  if (!path) throw new Error("invalid_file");
+  const bytes = await readImport(path, contract.file_bytes, "file_limit");
+  return engine.workspace({
+    kind: "add_file",
+    ...value,
+    title: basename(path),
+    base64: bytes.toString("base64"),
   });
 }
