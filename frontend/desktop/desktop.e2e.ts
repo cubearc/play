@@ -177,9 +177,31 @@ test("complete notebook keeps Pages inert and runs the selected image through it
     await expect(
       canvas.getByRole("region", { name: "Cell result", exact: true }),
     ).toContainText("Base64 FFAy");
-    await expect(
-      canvas.getByRole("img", { name: "sample.png", exact: true }),
-    ).toBeInViewport({ ratio: 0.3 });
+    const visibleImage = canvas.getByRole("img", {
+      name: "sample.png",
+      exact: true,
+    });
+    await expect(visibleImage).toBeInViewport();
+    await expect
+      .poll(
+        async () => {
+          const image = await visibleImage.boundingBox();
+          const viewport = await canvas
+            .locator(".image-viewport")
+            .boundingBox();
+          return Boolean(
+            image &&
+              viewport &&
+              image.x >= viewport.x &&
+              image.x + image.width <= viewport.x + viewport.width,
+          );
+        },
+        {
+          message:
+            "The complete image width must be inside its own scroll viewport at 100% zoom",
+        },
+      )
+      .toBe(true);
     const imageAccessibility = await accessibility(page);
     assert.deepEqual(imageAccessibility.violations, []);
     await capture(application, "native-image-operation");
