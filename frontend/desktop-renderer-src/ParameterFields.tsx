@@ -1,8 +1,8 @@
-import VscodeCheckbox from "@vscode-elements/react-elements/dist/components/VscodeCheckbox.js";
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef } from "react";
 import type { Operation } from "../desktop/contract";
+import VscodeCheckbox from "./VscodeCheckbox";
 
 interface FieldSchema {
   type?: string;
@@ -69,7 +69,6 @@ function Field({
         ref={check}
         checked={Boolean(value)}
         disabled={disabled}
-        aria-disabled={disabled ? "true" : "false"}
         onChange={() => onChange(check.current?.checked ?? false)}
       >
         {label}

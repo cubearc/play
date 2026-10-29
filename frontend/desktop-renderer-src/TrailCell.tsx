@@ -1,9 +1,9 @@
-import VscodeCheckbox from "@vscode-elements/react-elements/dist/components/VscodeCheckbox.js";
 import { useRef } from "react";
 import type { TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
+import VscodeCheckbox from "./VscodeCheckbox";
 
 export function TrailCell({
   trail,

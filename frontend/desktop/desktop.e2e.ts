@@ -2289,6 +2289,15 @@ test("archived Blocks keep evidence and restore their original Assets after rest
     await dialog.getByRole("button", { name: "Add text", exact: true }).click();
     const cell = () =>
       notebook(page).getByRole("article", { name: "Clue block", exact: true });
+    const enabledRetention = cell().getByRole("checkbox", {
+      name: "Keep result in private history",
+      exact: true,
+    });
+    await enabledRetention.focus();
+    await page.keyboard.press("Space");
+    await expect(enabledRetention).not.toBeChecked();
+    await page.keyboard.press("Space");
+    await expect(enabledRetention).toBeChecked();
     if (process.platform === "darwin") {
       await cell()
         .getByRole("button", { name: "Run cell", exact: true })
@@ -2357,6 +2366,20 @@ test("archived Blocks keep evidence and restore their original Assets after rest
     await expect(
       canvas.getByRole("button", { name: "Run cell", exact: true }),
     ).toBeDisabled();
+    await expect(
+      canvas.getByRole("checkbox", {
+        name: "Keep result in private history",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    const retention = canvas.getByRole("checkbox", {
+      name: "Keep result in private history",
+      exact: true,
+    });
+    await retention.focus();
+    await page.keyboard.press("Space");
+    await expect(retention).toBeChecked();
+    assert.deepEqual((await accessibility(page)).violations, []);
     await page.keyboard.press("ControlOrMeta+Enter");
     assert.deepEqual((await history()).runs, saved);
     if (process.platform === "darwin")

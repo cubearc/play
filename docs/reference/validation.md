@@ -73,7 +73,9 @@ Structured-composition journeys connect real image dimensions and caption intege
 exercise field selection and explicit text conversion, reject invalid literals,
 missing fields, null-to-text and integer overflow, and preserve exact successful
 and failed Runs through restart. Keyboard/ARIA checks cover disabled controls,
-parameter fields and selectable file previews. These checks do not establish
+parameter fields and selectable file previews. Retention checks toggle enabled
+checkboxes by keyboard, then verify disabled state and an unchanged checked value
+when Space reaches an archived control. These checks do not establish
 complete WCAG conformance.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
