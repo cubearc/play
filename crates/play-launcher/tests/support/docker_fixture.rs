@@ -1,9 +1,19 @@
 //! Controlled Docker CLI protocol fixture; real Docker flows run in runtime_smoke.py.
 use serde_json::{Value, json};
-use std::{env, fs, io::Write, path::PathBuf};
+use std::{
+    env, fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 fn emit(value: &Value) {
     println!("{value}");
+}
+// Concurrent inspect/readiness polling must see a complete old or new snapshot.
+fn publish_state(path: &Path, data: &Value) {
+    let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
+    fs::write(&temporary, data.to_string()).unwrap();
+    fs::rename(temporary, path).unwrap();
 }
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -151,11 +161,7 @@ fn main() {
                 json!({"7331/tcp":[{"HostIp":service["ports"][0]["host_ip"],"HostPort":service["ports"][0]["published"]}]})
             };
             let data = json!({"Id":container_name,"Image":service["image"],"Config":{"Labels":labels,"User":service["user"],"Env":environment,"Entrypoint":if runner{json!(["/usr/local/bin/cube-runner"])}else{json!(["play-local"])}},"State":{"Running":true,"Health":{"Status":"healthy"}},"HostConfig":{"Privileged":false,"ReadonlyRootfs":true,"CapDrop":["ALL"],"CapAdd":[],"Devices":[],"PidMode":"","NetworkMode":if runner{"none".to_string()}else{format!("{project}_default")},"SecurityOpt":["no-new-privileges:true"],"Memory":if runner{536870912}else{268435456},"NanoCpus":1000000000,"PidsLimit":service["pids_limit"],"PortBindings":ports},"Mounts":mounts});
-            fs::write(
-                home.join(format!("{container_name}.json")),
-                data.to_string(),
-            )
-            .unwrap();
+            publish_state(&home.join(format!("{container_name}.json")), &data);
         }
         if mode == "cancel-after-start" {
             std::thread::sleep(std::time::Duration::from_secs(10));
@@ -194,7 +200,7 @@ fn main() {
             }
             "stop" => {
                 data["State"]["Running"] = json!(false);
-                fs::write(path, data.to_string()).unwrap();
+                publish_state(&path, &data);
             }
             "logs" => {
                 if mode == "cancel-existing-session" {
