@@ -500,10 +500,9 @@ test("numeric fields compose exact image facts and caption values with retained 
         const { detail } = await latestRun(page, "composition.png");
         return { status: detail.status, result: detail.result };
       })
-      .toMatchObject({ status: "completed" });
+      .toEqual({ status: "completed", result: original.detail.result });
     const cliRun = await latestRun(page, "composition.png");
     assert.notEqual(cliRun.detail.id, original.detail.id);
-    assert.deepEqual(cliRun.detail.result, original.detail.result);
     assert.deepEqual(cliRun.detail.plan.inputs, original.detail.plan.inputs);
     assert.deepEqual(
       cliRun.detail.plan.pipeline,

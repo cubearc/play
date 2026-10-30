@@ -302,6 +302,14 @@ See [Linux verification commands](../development.md#validate-linux-workers).
 
 Policy references: [Landlock](https://docs.kernel.org/userspace-api/landlock.html)
 and [seccomp filtering](https://docs.kernel.org/userspace-api/seccomp_filter.html).
+
+Run workers inherit no host environment. The supervisor supplies only a fixed
+allocator setting: `MallocMaxMagazines=1` on macOS and `MALLOC_ARENA_MAX=1` on Linux.
+These prevent allocator reservations from exhausting the same 128 MiB VM-growth
+allowance on small parallel graphs. They grant no additional memory or authority.
+See [Apple's magazine limit](https://github.com/apple-oss-distributions/libmalloc/blob/main/src/malloc.c)
+and [glibc's arena limit](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html).
+
 Electron preparation copies the engine executable into a distinct `play-worker`
 helper and records engine, CLI and worker digests. Startup verifies every required
 binary before launching the engine; missing or changed helpers refuse startup.
@@ -327,10 +335,11 @@ on another OS supplies no validation evidence for that platform.
 
 Native private stores live in per-user application data, outside authorized source
 roots. The engine has the SQLite/asset authority; workers receive minimum inputs
-and explicit output grants, with a cleared environment. Credentials belong in the
-OS credential facility and privileged broker, never in renderer state, worker
-environment, reusable definitions, command history or diagnostics. If protected
-credential storage is unavailable, reject persistent credential storage.
+and explicit output grants, with only the fixed allocator environment above.
+Credentials belong in the OS credential facility and privileged broker, never in
+renderer state, worker environment, reusable definitions, command history or
+diagnostics. If protected credential storage is unavailable, reject persistent
+credential storage.
 
 The following remote-view and callback requirements belong to the separate
 [Cloud client milestone](https://github.com/cubearc/play/milestone/4). They do not

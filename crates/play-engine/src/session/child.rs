@@ -27,9 +27,10 @@ impl Drop for Active {
 
 impl Active {
     pub(super) fn spawn(id: u32, worker: &Path, frame: &[u8]) -> Result<Self> {
-        let mut child = Process::new(worker)
+        let mut command = Process::new(worker);
+        crate::native::worker_environment(&mut command);
+        let mut child = command
             .arg("--worker")
-            .env_clear()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
