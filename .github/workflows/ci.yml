@@ -196,9 +196,11 @@ jobs:
       - run: npm run desktop:build --prefix frontend
       - run: npm run desktop:test --prefix frontend
       - run: npm run desktop:smoke --prefix frontend
-      - name: Preserve actual Electron screenshot
+      - name: Preserve native conformance and Electron screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-desktop-proof-${{ matrix.os }}
-          path: play/frontend/playwright-report/native-desktop.png
+          path: |
+            play/frontend/playwright-report/native-*.png
+            play/frontend/playwright-report/native-operation-conformance.json
           if-no-files-found: error

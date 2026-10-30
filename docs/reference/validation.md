@@ -79,7 +79,15 @@ when Space reaches an archived control. These checks do not establish
 complete WCAG conformance.
 
 Registry checks compare the native eligible set with Core registrations and execute
-all registered operations against their canonical known-answer vectors. A real
+all registered operations against their canonical known-answer vectors. The native
+IPC matrix discovers its cases without a separate operation list, imports image
+vectors as scoped Assets, executes every eligible registration in the real signed
+worker and verifies its reviewed contract digest and all named outputs after restart.
+Each case has an independent private store, so Workspace quotas do not limit matrix
+coverage. Only canonical parameter defaults adopt lower host defaults; the report
+records both configurations. It does not claim native execution for unregistered
+Core operations or unsupported platforms. CI retains `native-operation-conformance.json`
+for each tested macOS architecture. A real
 Electron journey uses generated traversal/optional controls, refuses an invalid
 array draft, connects the byte port through UTF-8 and ROT13, executes a separately
 registered text operation, retains both image-export ports and reopens exact Run
