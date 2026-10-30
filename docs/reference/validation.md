@@ -253,7 +253,9 @@ in another Exploration, checks accessibility and reopens the private profile.
 `cube-cli/tests/play_context.rs` exercises the real binary and strict private
 frames, including absent context, incompatible versions, duplicate keys, budgets,
 retargeting and capture refusal. `desktop/cli.test.ts` runs that bundled CLI
-against the real engine and checks Stage/Workspace isolation. The numeric Electron
+against the real engine and checks Stage/Workspace isolation. Its signed supervision
+fixture holds a real node-start boundary to verify CLI start/status/active cancel,
+caller conflicts and idempotent retry without fabricating an operation result. The numeric Electron
 journey runs the same saved graph through **Run cell** and **Run with Cube CLI**,
 compares inputs, definitions and actual outputs, reads/cancels the completed Run
 through the CLI, checks reflow and reopens both records after restart.

@@ -354,6 +354,33 @@ test("numeric fields compose exact image facts and caption values with retained 
         revision: cliRun.detail.pipelineRevision,
       },
     );
+    const assetReads = await page.evaluate(
+      async ({ context, inputs }) => {
+        const values = [];
+        for (const [name, input] of Object.entries(inputs)) {
+          if ("assetId" in input)
+            values.push({
+              name,
+              asset: await window.play.cli({
+                kind: "asset",
+                context,
+                asset_id: input.assetId,
+                revision: input.revision,
+              }),
+            });
+        }
+        return values;
+      },
+      { context: cliRun.context, inputs: cliRun.detail.plan.inputs },
+    );
+    assert.equal(
+      assetReads.find((v) => v.name === "source")?.asset.content.kind,
+      "image",
+    );
+    assert.deepEqual(
+      assetReads.find((v) => v.name === "caption")?.asset.content,
+      { kind: "text", text: "7" },
+    );
     assert.deepEqual(inspected.run, cliRun.detail);
     assert.deepEqual(inspected.cancelled, cliRun.detail);
     assert.deepEqual(

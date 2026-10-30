@@ -15,9 +15,15 @@ import type {
 
 const native = new URL("../desktop-native/", import.meta.url);
 const binary = (name: string) => fileURLToPath(new URL(name, native));
-test("real Cube CLI reads only its fixed Stage assets and saved Pipelines", async () => {
+test("real Cube CLI scopes reads and shares idempotent Run admission and cancellation", async () => {
   const root = await mkdtemp(join(tmpdir(), "play-cli-"));
-  const engine = await Engine.connect(binary("play-engine"), undefined, root);
+  const engine = await Engine.connect(
+    binary("play-engine"),
+    process.platform === "darwin"
+      ? binary("SupervisionProbe.app/Contents/MacOS/play-engine")
+      : undefined,
+    root,
+  );
   const cli = new Cli(binary("cube"), engine);
   try {
     const w = (await engine.workspace({
@@ -74,6 +80,61 @@ test("real Cube CLI reads only its fixed Stage assets and saved Pipelines", asyn
       /workspace_mismatch/,
     );
     assert.deepEqual(await cli.execute(intent), block.asset);
+    if (process.platform === "darwin") {
+      const trail = v.trails.find((t) => t.source.id === block.asset.id);
+      assert.ok(trail?.pipeline);
+      const request = {
+        context,
+        key: randomUUID(),
+        trail_id: trail.id,
+        trail_revision: trail.revision,
+        pipeline_id: trail.pipeline.id,
+        pipeline_revision: trail.pipeline.revision,
+        target_node_id: trail.pipeline.outputNodeId,
+        source_asset_id: trail.source.id,
+        source_revision: trail.source.revision,
+        operation: trail.pipeline.outputOperation,
+        operation_version: trail.pipeline.operationVersion,
+        retain_output: true,
+      };
+      const started = await cli.execute({ kind: "start", request });
+      assert.equal(started.caller, "cli");
+      assert.equal(
+        (await cli.execute({ kind: "start", request })).id,
+        started.id,
+      );
+      await assert.rejects(engine.startRun(request), /idempotency_conflict/);
+      let status = await cli.execute({
+        kind: "status",
+        context,
+        run_id: started.id,
+      });
+      const deadline = Date.now() + 1500;
+      while (status.status === "queued" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        status = await cli.execute({
+          kind: "status",
+          context,
+          run_id: started.id,
+        });
+      }
+      assert.equal(status.status, "running");
+      const cancelled = await cli.execute({
+        kind: "cancel",
+        context,
+        run_id: started.id,
+      });
+      assert.equal(cancelled.status, "cancelled");
+      assert.equal(cancelled.caller, "cli");
+      assert.deepEqual(
+        await cli.execute({ kind: "status", context, run_id: started.id }),
+        cancelled,
+      );
+      assert.deepEqual(
+        await cli.execute({ kind: "start", request }),
+        cancelled,
+      );
+    }
   } finally {
     await cli.close();
     await engine.close();
