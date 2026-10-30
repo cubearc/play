@@ -3985,9 +3985,27 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     await expect(
       dialog.getByRole("textbox", { name: "Text", exact: true }),
     ).toHaveValue("Another saved revision.");
+    // Filling the renderer is not an acknowledgement from Electron main.
+    // Observe the real dirty notification on every OS; isDocumentEdited is
+    // macOS-only. Keep the native call, rather than forging a dirty IPC message.
+    const dirtyState = await application.evaluateHandle(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("window_missing");
+      const state = { dirty: false };
+      const setEdited = window.setDocumentEdited.bind(window);
+      window.setDocumentEdited = (dirty) => {
+        setEdited(dirty);
+        state.dirty = dirty;
+      };
+      return state;
+    });
     await dialog
       .getByRole("textbox", { name: "Text", exact: true })
       .fill("Unsaved source draft.");
+    await expect
+      .poll(() => dirtyState.evaluate((state) => state.dirty))
+      .toBe(true);
+    await dirtyState.dispose();
     if (nativeWorkers) {
       if (process.platform === "darwin")
         await expect
