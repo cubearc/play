@@ -2,9 +2,10 @@
 
 Play's Electron source preview is a local investigation IDE. Start with
 [installation](installation.md) and [your first notebook](getting-started.md).
-macOS has an executable sandboxed worker proof; Windows/Linux workers refuse
-execution until their native policies are implemented. Signed release packages
-are not available through this source workflow.
+The Electron preview enables operations on macOS. Linux workers have a separate
+[native validation workflow](development.md#validate-linux-workers); Linux
+Electron/terminal integration and Windows worker enforcement remain incomplete.
+Signed release packages are not available through this source workflow.
 
 | Goal | Read |
 | --- | --- |
@@ -19,7 +20,8 @@ are not available through this source workflow.
 The executor discovers eligible operations from the Core registry and supports typed
 graphs with named Asset bindings and two concurrent independent branches per Run.
 The [Cube terminal](terminal.md) uses the same scoped Run coordinator.
-Cross-Run concurrency and complete native release delivery remain in the
+Two Runs can execute across Explorations with bounded queue admission. Complete
+native release delivery remains in the
 [local milestone](https://github.com/cubearc/play/milestone/3); Cloud participation
 belongs to the [independent Cloud project](https://github.com/cubearc/play-platform/issues/10).
 Catalog discovery alone does not make an operation executable in this preview.

@@ -21,9 +21,10 @@ and open an Asset in its own Trail canvas.
 
 ## Try the Electron preview
 
-The source preview executes operations on macOS. Windows/Linux worker execution,
-signed installers, the native terminal and Cloud integration are still being
-implemented. See [installation](docs/installation.md) for prerequisites and scope.
+The Electron source preview executes operations and opens the contextual terminal
+on macOS. Linux workers have a separate [native validation workflow](docs/development.md#validate-linux-workers);
+Linux Electron/terminal integration, Windows workers and signed installers remain
+incomplete. Cloud belongs to a separate milestone. See [installation](docs/installation.md).
 
 From a trusted Play checkout with Cube beside it:
 

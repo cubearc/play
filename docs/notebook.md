@@ -270,7 +270,8 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 | Run active text cell | Cmd+Enter | Ctrl+Enter |
 | Save editor or focused Note | Cmd+S | Ctrl+S |
 
-Windows/Linux worker execution is refused by the current native policy, even
-though the UI has keyboard bindings. [Installation](installation.md) states the
+The Electron preview on Windows/Linux refuses operation execution, even though
+the UI has keyboard bindings. Linux workers have a separate contributor proof.
+[Installation](installation.md) states the
 platform scope. Image replacement, permanent Block deletion and result export
 are not available in this preview.

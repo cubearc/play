@@ -23,8 +23,9 @@ only in memory.
 
 ## Platforms and permissions
 
-The source preview's operation execution is available on macOS. Windows/Linux
-workers reject execution until native enforcement is validated. See
+The Electron preview enables operation execution on macOS. Linux worker proof
+runs separately; Linux Electron integration and Windows enforcement remain
+incomplete. See
 [installation](installation.md) for the actual source workflow; the Electron path
 requires neither a browser session URL nor Docker/WSL setup.
 

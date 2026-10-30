@@ -39,8 +39,9 @@ revision when selected.
 
 Only installed compatible native adapters appear for each source. Image input is
 validated as `image.samples`; ROT13 and Brainfuck require text. The engine also
-rejects incompatible requests independently of the selector. Windows/Linux refuse
-worker execution until their native enforcement is validated.
+rejects incompatible requests independently of the selector. This Electron
+workflow currently executes on macOS; [Linux worker validation](development.md#validate-linux-workers)
+runs separately from the application preview.
 
 Click the caption to open its own text canvas. Its ROT13 or Brainfuck operation
 uses the caption Asset, not the image pixels. The caption still appears with the
