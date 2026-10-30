@@ -241,7 +241,7 @@ export function useWorkspace() {
         title,
       });
       const data = await window.play.workspace({
-        kind: "open",
+        kind: "view",
         workspace_id: current.id,
       });
       workspaceRef.current = data;
@@ -273,7 +273,7 @@ export function useWorkspace() {
   const refresh = async (context: Context) => {
     if (workspaceRef.current?.id !== context.workspace_id) return;
     const data = await window.play.workspace({
-      kind: "open",
+      kind: "view",
       workspace_id: context.workspace_id,
     });
     workspaceRef.current = data;

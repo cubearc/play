@@ -3337,25 +3337,8 @@ async function pipelineReflow(application: ElectronApplication, cell = false) {
   }
 }
 
-// Evidence reads may overlap the renderer's bounded post-Run summary refresh.
-async function afterSummaryRefresh<T>(read: () => Promise<T>): Promise<T> {
-  const deadline = Date.now() + 5000;
-  for (;;) {
-    try {
-      return await read();
-    } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !error.message.includes("Error: busy") ||
-        Date.now() >= deadline
-      )
-        throw error;
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-  }
-}
 async function latestRun(page: Page, sourceTitle: string) {
-  const state = await afterSummaryRefresh(() => current(page));
+  const state = await current(page);
   const trail = state.exploration.trails.find(
     (t) => t.source.title === sourceTitle,
   );
@@ -3365,35 +3348,31 @@ async function latestRun(page: Page, sourceTitle: string) {
     exploration_id: trail.explorationId,
     stage_id: trail.stageId,
   };
-  const detail = await afterSummaryRefresh(() =>
-    page.evaluate(
-      async ({ trailId, context }) => {
-        const history = await window.play.workspace({
-          kind: "list_runs",
-          context,
-          trail_id: trailId,
-          before: null,
-        });
-        const id = history.runs[0]?.id;
-        if (!id) throw new Error("run_missing");
-        return window.play.workspace({
-          kind: "run_detail",
-          context,
-          run_id: id,
-        });
-      },
-      { trailId: trail.id, context },
-    ),
+  const detail = await page.evaluate(
+    async ({ trailId, context }) => {
+      const history = await window.play.workspace({
+        kind: "list_runs",
+        context,
+        trail_id: trailId,
+        before: null,
+      });
+      const id = history.runs[0]?.id;
+      if (!id) throw new Error("run_missing");
+      return window.play.workspace({
+        kind: "run_detail",
+        context,
+        run_id: id,
+      });
+    },
+    { trailId: trail.id, context },
   );
   return { context, detail };
 }
 async function frozenRun(page: Page, context: Context, id: string) {
-  return afterSummaryRefresh(() =>
-    page.evaluate(
-      ({ context, id }) =>
-        window.play.workspace({ kind: "run_detail", context, run_id: id }),
-      { context, id },
-    ),
+  return page.evaluate(
+    ({ context, id }) =>
+      window.play.workspace({ kind: "run_detail", context, run_id: id }),
+    { context, id },
   );
 }
 
@@ -3402,7 +3381,7 @@ async function current(page: Page) {
     const list = await window.play.workspace({ kind: "list" });
     if (!list.lastWorkspaceId) throw new Error("workspace_missing");
     const workspace = await window.play.workspace({
-      kind: "open",
+      kind: "view",
       workspace_id: list.lastWorkspaceId,
     });
     if (!workspace.selectedExplorationId)

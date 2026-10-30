@@ -149,6 +149,9 @@ eligible Explorations. A busy Exploration retains its queued work without blocki
 other eligible work. The next Run starts after the previous owned worker has
 been reaped. Switching or creating a Workspace is refused while any Run is
 active or queued; switching Explorations within that Workspace is supported.
+Content refreshes and creating another Exploration read the existing Workspace
+view instead of reopening it, so these actions do not interrupt active Runs or
+close a contextual terminal.
 
 `queue_full` rejects a new intent before creating a Run or reserving storage.
 Wait for capacity or cancel work, then retry. A matching already accepted intent
