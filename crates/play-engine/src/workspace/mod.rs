@@ -259,6 +259,13 @@ impl Manager {
         self.runtime.block_on(cli::read(store, context, command))
     }
 
+    pub fn authorize_context(&mut self, context: &Context) -> Result<()> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        let owner = store.identity.workspace_id;
+        self.runtime
+            .block_on(queries::context(store.connection()?, owner, context))
+    }
+
     pub fn existing_run(&mut self, request: &RunRequest) -> Result<Option<Value>> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
         self.runtime

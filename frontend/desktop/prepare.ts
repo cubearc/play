@@ -19,10 +19,27 @@ function command(binary: string, args: string[]): void {
     throw new Error(`Desktop build failed: ${binary}`);
 }
 
-function bundle(name: string, binary: string, identifier: string): string {
+function bundle(
+  name: string,
+  binary: string,
+  identifier: string,
+  client?: string,
+): string {
   const app = join(output, `${name}.app`);
   mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
   cpSync(binary, join(app, "Contents/MacOS/play-engine"));
+  if (client) {
+    const target = join(app, "Contents/MacOS/cube");
+    cpSync(client, target);
+    command("/usr/bin/codesign", [
+      "--force",
+      "--sign",
+      "-",
+      "--entitlements",
+      join(root, "desktop/macos/terminal-client.entitlements.plist"),
+      target,
+    ]);
+  }
   const info = readFileSync(join(root, "desktop/macos/Info.plist"), "utf8");
   writeFileSync(
     join(app, "Contents/Info.plist"),
@@ -73,6 +90,23 @@ const manifest: Record<string, string> = {
   engine: digest(join(output, binary)),
 };
 if (process.platform === "darwin") {
+  manifest.terminal = digest(
+    bundle(
+      "Terminal",
+      join(root, "target/debug/play-engine"),
+      "com.cubearc.play.context-terminal",
+      join(output, cli),
+    ),
+  );
+  manifest.terminal_cli = digest(
+    join(output, "Terminal.app/Contents/MacOS/cube"),
+  );
+  bundle(
+    "TerminalProbe",
+    join(root, "target/debug/play-engine"),
+    "com.cubearc.play.terminal-probe",
+    join(root, "target/debug/examples/native-boundary-probe"),
+  );
   manifest.worker = digest(
     bundle(
       "Worker",

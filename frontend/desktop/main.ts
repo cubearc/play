@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
@@ -16,6 +17,7 @@ import { Cli } from "./cli.ts";
 import { cliIntent } from "./cli-contract.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
+import { terminalIntent } from "./terminal-contract.ts";
 import {
   assetRead,
   cancelRun,
@@ -41,6 +43,7 @@ if (!isAbsolute(profile)) throw new Error("invalid_profile");
 mkdirSync(profile, { recursive: true, mode: 0o700 });
 app.setPath("userData", profile);
 
+const styleNonce = randomBytes(24).toString("base64");
 const resources = new URL("../desktop-renderer/", import.meta.url);
 const native = new URL("../desktop-native/", import.meta.url);
 const enginePath = fileURLToPath(
@@ -160,11 +163,20 @@ app
           : name.endsWith(".css")
             ? "text/css"
             : "text/html";
-      return new Response(await readFile(new URL(name, resources)), {
+      const resource = await readFile(new URL(name, resources));
+      const content =
+        name === "index.html"
+          ? resource
+              .toString("utf8")
+              .replace(
+                "<head>",
+                `<head><meta name="play-style-nonce" content="${styleNonce}">`,
+              )
+          : resource;
+      return new Response(content, {
         headers: {
           "Content-Type": contentType,
-          "Content-Security-Policy":
-            "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'",
+          "Content-Security-Policy": `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; font-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'`,
           "X-Content-Type-Options": "nosniff",
           "Cache-Control": "no-store",
         },
@@ -175,6 +187,11 @@ app
       enginePath,
       workerPath,
       join(profile, "workspaces"),
+      process.platform === "darwin"
+        ? fileURLToPath(
+            new URL("Terminal.app/Contents/MacOS/play-engine", native),
+          )
+        : undefined,
     );
     cli = new Cli(
       fileURLToPath(
@@ -214,6 +231,9 @@ app
       if (!cli) throw new Error("cli_unavailable");
       return cli.execute(cliIntent(value));
     });
+    ipcMain.handle("play:terminal", (event, value: unknown) =>
+      authorize(event).terminal(terminalIntent(value)),
+    );
     ipcMain.handle("play:start-run", (event, value: unknown) =>
       authorize(event).startRun(runRequest(value)),
     );

@@ -16,7 +16,11 @@ export async function verifyNative(directory: URL): Promise<void> {
     ],
   ];
   if (process.platform === "darwin")
-    files.push(["worker", "Worker.app/Contents/MacOS/play-engine"]);
+    files.push(
+      ["worker", "Worker.app/Contents/MacOS/play-engine"],
+      ["terminal", "Terminal.app/Contents/MacOS/play-engine"],
+      ["terminal_cli", "Terminal.app/Contents/MacOS/cube"],
+    );
   for (const [key, name] of files) {
     const hash = createHash("sha256")
       .update(await readFile(new URL(name, directory)))
@@ -24,6 +28,15 @@ export async function verifyNative(directory: URL): Promise<void> {
     if (hash !== manifest[key]) throw new Error("binary_mismatch");
   }
   if (process.platform === "darwin") {
+    await promisify(execFile)(
+      "/usr/bin/codesign",
+      [
+        "--verify",
+        "--strict",
+        fileURLToPath(new URL("Terminal.app", directory)),
+      ],
+      { env: {}, timeout: 3000, maxBuffer: 65536 },
+    );
     await promisify(execFile)(
       "/usr/bin/codesign",
       ["--verify", "--strict", fileURLToPath(new URL("Worker.app", directory))],

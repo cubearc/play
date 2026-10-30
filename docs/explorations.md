@@ -282,6 +282,7 @@ reopening the Workspace.
 The same saved graph runs through either entry point. [Open full size](assets/desktop/context-cli.png).
 
 This action uses the real CLI through an attached private session. It does not
-open an interactive terminal. External terminal attachment and native PTYs are
+open an interactive terminal. Use the [Cube terminal](terminal.md) for a macOS
+PTY session. External terminal attachment is
 separate work; the [attached command reference](reference/desktop-runtime.md#attached-cube-cli-commands)
 describes the supported commands and limits.

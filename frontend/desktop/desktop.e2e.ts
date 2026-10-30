@@ -22,6 +22,163 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("native terminal keeps its context, runs selected evidence and fits the IDE", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-pty-ui-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    const errors: string[] = [];
+    let probingAccessibility = false;
+    page.on("console", (message) => {
+      if (message.type() === "error" && !probingAccessibility)
+        errors.push(message.text());
+    });
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Contextual terminal");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Follow the clue");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Cipher");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Uryyb");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const snapshot = await current(page);
+    const trail = snapshot.exploration.trails[0];
+    assert.ok(trail?.pipeline);
+    const context = {
+      workspace_id: snapshot.workspace.id,
+      exploration_id: snapshot.exploration.id,
+      stage_id: snapshot.exploration.stage.id,
+    };
+    const history = () =>
+      page.evaluate(
+        ({ context, trail_id }) =>
+          window.play.workspace({
+            kind: "list_runs",
+            context,
+            trail_id,
+            before: null,
+          }),
+        { context, trail_id: trail.id },
+      );
+    await notebook(page)
+      .getByRole("button", { name: "Explore Cipher", exact: true })
+      .click();
+    // The existing VSCode textarea resizer attempts a blocked data URL before
+    // this feature opens. Start the terminal-specific console check here.
+    errors.length = 0;
+    await page
+      .getByRole("button", { name: "Toggle Cube terminal", exact: true })
+      .click();
+    const panel = page.getByRole("region", {
+      name: "Cube terminal",
+      exact: true,
+    });
+    await expect(panel.getByRole("status")).toHaveText("Connected");
+    const input = panel.locator(".xterm-helper-textarea");
+    await input.pressSequentially("size");
+    await input.press("Enter");
+    await expect(panel.locator(".xterm-rows")).toContainText("columns");
+    await panel
+      .getByRole("button", { name: "Insert Asset", exact: true })
+      .click();
+    await input.press("Enter");
+    await expect(panel.locator(".xterm-rows")).toContainText('"text": "Uryyb"');
+    await panel
+      .getByRole("button", { name: "Insert selected Run", exact: true })
+      .click();
+    assert.equal(
+      (await history()).runs.length,
+      0,
+      "inserting a command must not execute it",
+    );
+    await input.press("Enter");
+    await expect
+      .poll(async () => (await history()).runs[0]?.status)
+      .toBe("completed");
+    const run = (await history()).runs[0];
+    assert.ok(run);
+    assert.equal(run.caller, "cli");
+    const detail = await frozenRun(page, context, run.id);
+    assert.match(JSON.stringify(detail.result?.outputs), /Hello/);
+    await expect(
+      page.getByRole("region", { name: "Trail canvas", exact: true }),
+    ).toContainText("Hello");
+    await input.pressSequentially(`run status ${run.id}`);
+    await input.press("Enter");
+    await expect(panel.locator(".xterm-rows")).toContainText("Hello");
+    await page
+      .getByRole("region", { name: "Cell result", exact: true })
+      .scrollIntoViewIfNeeded();
+    await capture(application, "native-context-terminal");
+    assert.deepEqual(errors, [], "before accessibility probe");
+    // axe inserts measurement styles; product CSP deliberately rejects them.
+    probingAccessibility = true;
+    assert.deepEqual((await accessibility(page)).violations, []);
+    probingAccessibility = false;
+    for (const settings of [
+      { width: 800, height: 540, zoom: 1 },
+      { width: 1280, height: 800, zoom: 2 },
+    ]) {
+      await application.evaluate(({ BrowserWindow }, s) => {
+        const w = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+        if (!w) throw new Error("window_missing");
+        w.setSize(s.width, s.height);
+        w.webContents.setZoomFactor(s.zoom);
+      }, settings);
+      await expect
+        .poll(() =>
+          panel.evaluate((element) => ({
+            shell: document.documentElement.scrollWidth > innerWidth,
+            panel: element.scrollWidth > element.clientWidth + 1,
+          })),
+        )
+        .toEqual({ shell: false, panel: false });
+      await expect(
+        panel.getByRole("button", { name: "Close terminal", exact: true }),
+      ).toBeInViewport();
+    }
+    await panel.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await expect(panel.getByRole("status")).toHaveText("Connected");
+    await panel
+      .getByRole("button", { name: "Close terminal", exact: true })
+      .click();
+    await expect(panel).toBeHidden();
+    assert.deepEqual(errors, []);
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual(await frozenRun(page, context, run.id), detail);
+    await expect(
+      page.getByRole("region", { name: "Cube terminal", exact: true }),
+    ).toBeHidden();
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("Core registrations drive spiral controls, named outputs and unrelated text execution", {
   timeout: 90000,
 }, async () => {

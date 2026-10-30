@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { PlayBridge } from "./bridge.ts";
 import { cliIntent } from "./cli-contract.ts";
+import { terminalIntent } from "./terminal-contract.ts";
 import {
   assetRead,
   cancelRun,
@@ -12,6 +13,8 @@ import {
 
 if (process.isMainFrame) {
   const bridge: PlayBridge = {
+    terminal: (value: unknown) =>
+      ipcRenderer.invoke("play:terminal", terminalIntent(value)),
     cli: (value: unknown) => ipcRenderer.invoke("play:cli", cliIntent(value)),
     catalog: () => ipcRenderer.invoke("play:catalog"),
     workspace: (value: unknown) =>

@@ -13,6 +13,9 @@ import type {
 } from "./workspace-contract.ts";
 
 export interface PlayBridge {
+  terminal: (
+    value: import("./terminal-contract.ts").TerminalIntent,
+  ) => Promise<import("./terminal-contract.ts").TerminalView>;
   cli: <K extends CliIntent["kind"]>(
     value: Extract<CliIntent, { kind: K }>,
   ) => Promise<CliResponses[K]>;

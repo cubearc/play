@@ -5,8 +5,9 @@
 <a id="terminal-resource-and-transport-boundaries"></a>
 
 The Electron preview supports attached contextual CLI commands through private
-pipes. It has no integrated PTY or external terminal attachment. The native
-contract distinguishes the implemented channel from the remaining terminal boundary.
+pipes and an interactive macOS PTY with a separate private control socket.
+External terminal discovery and Linux/Windows PTY enforcement remain separate
+work. The runtime contract records implemented limits and remaining boundaries.
 
 - [Native process and CLI contract](desktop-runtime.md)
-- [Current terminal availability](../terminal.md)
+- [Use the Cube terminal](../terminal.md)

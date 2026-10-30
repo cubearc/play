@@ -384,3 +384,52 @@ test("cancellation acknowledgement follows actual worker reaping", {
     lines.close();
   }
 });
+
+test("terminal exec inherits file, network, child and resource restrictions", {
+  skip: !mac,
+  timeout: 15000,
+}, async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "play-terminal-policy-"));
+  const secret = join(scratch, "private-source");
+  const server = createServer();
+  const helper = fileURLToPath(
+    new URL("TerminalProbe.app/Contents/MacOS/play-engine", directory),
+  );
+  const invoke = (args: string[]) =>
+    spawnSync(helper, ["--terminal-worker"], {
+      env: {},
+      input: `${JSON.stringify(args)}\n`,
+      encoding: "utf8",
+      timeout: 4000,
+    });
+  try {
+    await writeFile(secret, "unchanged");
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const access = invoke([secret, String(address.port)]);
+    assert.equal(access.status, 0, access.stderr);
+    assert.deepEqual(JSON.parse(access.stdout), {
+      read_denied: true,
+      write_denied: true,
+      network_denied: true,
+      spawn_denied: true,
+    });
+    assert.equal(await readFile(secret, "utf8"), "unchanged");
+    const memory = invoke(["memory"]);
+    assert.equal(memory.status, 0, memory.stderr);
+    assert.equal(memory.stdout.trim(), "true");
+    const cpu = invoke(["cpu"]);
+    assert.equal(cpu.error, undefined);
+    assert.ok(
+      cpu.signal === "SIGKILL" || cpu.signal === "SIGXCPU",
+      String(cpu.signal),
+    );
+    assert.equal(spawnSync("/usr/bin/true").status, 0);
+  } finally {
+    server.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});

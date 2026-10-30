@@ -51,6 +51,10 @@ pub fn contract() -> Contract {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    Terminal {
+        id: u32,
+        command: crate::terminal::Command,
+    },
     Hello {
         id: u32,
         protocol: u32,
@@ -95,6 +99,7 @@ pub enum Command {
 impl Command {
     pub fn id(&self) -> u32 {
         match self {
+            Self::Terminal { id, .. } => *id,
             Self::Hello { id, .. }
             | Self::Invoke { id, .. }
             | Self::Catalog { id }

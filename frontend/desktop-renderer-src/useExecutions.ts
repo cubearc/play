@@ -8,6 +8,8 @@ import type {
   TrailView,
 } from "../desktop/workspace-contract";
 
+import { runSelection } from "./runSelection";
+
 export interface History extends RunPage {
   selected: string | null;
   detail: RunDetail | null;
@@ -238,11 +240,13 @@ export function useExecutions(
         trail.archived
       )
         return;
+      const keep = retention[trail.id] ?? true;
+      const fresh = runSelection(trail, operation, keep, targetNodeId);
+      if (!fresh) return;
       active.current = true;
       setBusy(true);
       const pendingKey = `${trail.id}:${caller}`;
       const previous = pending.current[pendingKey];
-      const keep = retention[trail.id] ?? true;
       const request: RunRequest =
         previous &&
         previous.operation === operation.operation &&
@@ -254,20 +258,7 @@ export function useExecutions(
         previous.source_revision === trail.source.revision &&
         previous.retain_output === keep
           ? previous
-          : {
-              context: contextFor(trail),
-              key: crypto.randomUUID(),
-              trail_id: trail.id,
-              trail_revision: trail.revision,
-              target_node_id: targetNodeId,
-              pipeline_id: trail.pipeline.id,
-              pipeline_revision: trail.pipeline.revision,
-              source_asset_id: trail.source.id,
-              source_revision: trail.source.revision,
-              operation: operation.operation,
-              operation_version: operation.operation_version,
-              retain_output: keep,
-            };
+          : fresh;
       pending.current[pendingKey] = request;
       update(trail.id, (value) => ({ ...value, error: "" }));
       try {

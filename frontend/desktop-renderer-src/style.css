@@ -1113,3 +1113,44 @@ h1 {
     display: none;
   }
 }
+
+.context-terminal {
+  flex: 0 0 clamp(160px, 34vh, 280px);
+  min-height: 120px;
+  max-height: 55%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-panel-background);
+  border-top: 1px solid var(--separator-border);
+}
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.terminal-context {
+  flex: 1;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-surface {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 12px 8px;
+}
+.terminal-surface .xterm {
+  height: 100%;
+}
+.terminal-error {
+  margin: 0;
+  padding: 4px 12px;
+  color: var(--vscode-foreground);
+}

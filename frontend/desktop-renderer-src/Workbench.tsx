@@ -14,9 +14,11 @@ import {
 import { AssetCanvas } from "./AssetCanvas";
 import { CommandPalette, type WorkbenchCommand } from "./CommandPalette";
 import { ContentDialog, type DialogKind } from "./ContentDialog";
+import { ContextTerminal } from "./ContextTerminal";
 import { Explorer } from "./Explorer";
 import { Notebook } from "./Notebook";
 import { PipelineEditor, type PipelineMode } from "./PipelineEditor";
+import { runSelection } from "./runSelection";
 import { TextAssetEditor } from "./TextAssetEditor";
 import { TrailEditor } from "./TrailEditor";
 import { useExecutions } from "./useExecutions";
@@ -36,6 +38,8 @@ interface TextEdit {
 export function Workbench() {
   const state = useWorkspace();
   const { workspace, exploration } = state;
+  const [terminal, setTerminal] = useState(false);
+  const [terminalEpoch, setTerminalEpoch] = useState(0);
   const [welcome, setWelcome] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [editing, setEditing] = useState<TextEdit | null>(null);
@@ -160,6 +164,16 @@ export function Workbench() {
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.code === "Backquote" && !event.repeat) {
+        event.preventDefault();
+        setTerminal((value) => !value);
+        return;
+      }
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".context-terminal")
+      )
+        return;
       if (
         !(mac ? event.metaKey : event.ctrlKey) ||
         event.altKey ||
@@ -186,7 +200,17 @@ export function Workbench() {
     return () => window.removeEventListener("keydown", keydown);
   });
 
+  const terminalOperation = activeTrail
+    ? executions.operationFor(activeTrail)
+    : undefined;
   const commands: WorkbenchCommand[] = [
+    {
+      id: "terminal",
+      label: "Toggle Cube terminal",
+      shortcut: "Ctrl+`",
+      disabled: !exploration,
+      execute: () => setTerminal((value) => !value),
+    },
     {
       id: "run",
       label: "Run notebook cell",
@@ -231,6 +255,14 @@ export function Workbench() {
           <kbd>{mac ? "⇧⌘P" : "Ctrl+Shift+P"}</kbd>
         </button>
         <div className="title-actions">
+          <VscodeToolbarButton
+            icon="terminal"
+            label="Toggle Cube terminal"
+            aria-disabled={!exploration}
+            onClick={() => {
+              if (exploration) setTerminal((value) => !value);
+            }}
+          />
           <VscodeToolbarButton
             icon="layout-sidebar-left"
             label="Toggle Primary Side Bar"
@@ -475,6 +507,33 @@ export function Workbench() {
               )}
             </>
           )}
+          {terminal && exploration && !welcome ? (
+            <ContextTerminal
+              key={`${contextKey}:${terminalEpoch}`}
+              context={contextOf(exploration)}
+              selection={
+                activeTrail && terminalOperation
+                  ? runSelection(
+                      activeTrail,
+                      terminalOperation,
+                      executions.keepOutput(activeTrail),
+                    )
+                  : null
+              }
+              title={`${exploration.title} / ${exploration.stage.title}${activeTrail?.pipeline ? ` · ${activeTrail.title} · Pipeline r${activeTrail.pipeline.revision} · Asset r${activeTrail.source.revision}` : " · No Pipeline selected"}`}
+              assetCommand={
+                activeTrail
+                  ? `asset show ${activeTrail.source.id} --revision ${activeTrail.source.revision}`
+                  : null
+              }
+              onClose={() => setTerminal(false)}
+              onReconnect={() => setTerminalEpoch((value) => value + 1)}
+              onRun={(id) => {
+                const trail = exploration.trails.find((t) => t.id === id);
+                if (trail) void executions.load(trail);
+              }}
+            />
+          ) : null}
         </main>
       </VscodeSplitLayout>
       <footer className="statusbar">

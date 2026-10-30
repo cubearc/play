@@ -2,8 +2,17 @@
 use std::{env, fs, io::ErrorKind, net::TcpStream, process::Command};
 
 fn main() {
-    play_engine::native::restrict().expect("native policy required");
     let args = env::args().skip(1).collect::<Vec<_>>();
+    let args = if args == ["play", "session"] {
+        // This fixture was exec'd by the production terminal helper. Test the
+        // inherited policy without applying it a second time in this process.
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).unwrap();
+        serde_json::from_str::<Vec<String>>(&line).unwrap()
+    } else {
+        play_engine::native::restrict().expect("native policy required");
+        args
+    };
     match args.as_slice() {
         [mode] if mode == "cpu" => loop {
             std::hint::black_box(42);

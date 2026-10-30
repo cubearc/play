@@ -2,6 +2,7 @@ pub mod graph;
 pub mod native;
 pub mod protocol;
 pub mod session;
+pub mod terminal;
 pub mod worker;
 pub mod workspace;
 

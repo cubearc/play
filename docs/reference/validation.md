@@ -39,7 +39,8 @@ EOF and additional input must stop it without a result. A real engine `SIGKILL`
 test observes its child's PID disappear, keeps an unrelated process alive and
 reopens the Run as interrupted with no fabricated output. The fixture has no
 separate parent-death cleanup. Malformed/oversized task frames are also refused.
-These checks establish the single-worker boundary, not PTY or grandchild support.
+These checks establish the single-worker boundary. The PTY checks below cover
+the separate contextual CLI lifetime; grandchildren remain unsupported.
 
 Ordering and duplication journeys verify completed keyboard focus, concurrent
 revision conflicts, independent copied Assets and Runs, pinned source labels,
@@ -270,6 +271,25 @@ journey runs the same saved graph through **Run cell** and **Run with Cube CLI**
 compares inputs, definitions and actual outputs, reads/cancels the completed Run
 through the CLI, checks reflow and reopens both records after restart.
 
-These checks cover the attached control client, not external discovery, native
-PTY lifecycle or Windows/Linux worker enforcement. Unretired Runner/browser
+These checks cover the one-shot attached control client, not external discovery
+or Windows/Linux worker enforcement. Unretired Runner/browser
 checks and the exact Core operation conformance matrix remain required.
+
+
+## Contextual native terminal
+
+The signed real CLI test opens a Rust-owned PTY, reads an exact Asset, changes
+its actual terminal dimensions and executes two distinct Runs equal to desktop
+results. A held canonical node-start fixture verifies active cancellation. Tests
+stop renderer polling to observe lease expiry, kill the actual engine to check
+CLI exit, and keep an unrelated process alive. A separate signed probe traverses
+the production terminal exec path without reapplying restrictions; private file
+reads/writes, networking, children, excess VM and CPU loops remain denied.
+
+The Electron journey uses the terminal input and buttons, verifies explicit Enter
+before execution, real Hello evidence, inline Trail refresh, reconnect and close,
+800-pixel width and 200% zoom reflow, axe rules and persisted Runs after restart.
+It checks terminal console errors separately from axe's blocked measurement styles
+and the preexisting VSCode textarea resizer data-URL denial. The actual screen is
+included in the terminal guide. This is macOS development evidence, not a claim
+that every platform or the broader terminal milestone is complete.

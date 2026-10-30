@@ -21,8 +21,8 @@ The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper
 Linux and Windows negotiate the protocol and expose Core adapter descriptions,
 but reject execution with `native_policy_unavailable`. Neither has an
 unrestricted or container fallback. This is not a release-supported desktop
-distribution. The complete application and native terminal still require the
-remaining shell, storage, worker and packaging deliveries.
+distribution. The complete application still requires the remaining shell, storage, worker and
+packaging deliveries. The interactive native PTY below is a macOS development proof.
 
 Graph execution discovers the pure executors registered in Core. Descriptors
 supply operation names, typed ports, parameters and representations; Play has no
@@ -74,7 +74,7 @@ does not grant authority. Navigation does not preserve authorization.
 The renderer has sandboxing and context isolation enabled, Node integration and
 webviews disabled. The preload exposes `catalog()`, scoped `workspace(intent)`,
 `importImage(intent)`, `image(assetRef)`, `startRun(intent)`,
-`cancelRun(context, runId)` as one typed object, and `dirty(boolean)`. Closed request shapes and UTF-8
+`cancelRun(context, runId)` as one typed object, `terminal(intent)` and `dirty(boolean)`. Closed request shapes and UTF-8
 limits are checked in preload before forwarding across IPC; main and Rust check
 their own boundaries again. No raw `ipcRenderer`, arbitrary channel, path, Node,
 filesystem, database or shell API crosses the bridge.
@@ -85,7 +85,10 @@ The protocol handler never converts a request pathname into a filesystem path.
 Unknown names, hosts, methods, credentials, query parameters and fragments are
 rejected. Encoded traversal cannot expand the resource allowlist. A restrictive
 CSP denies network connections, frames, forms, inline scripts and object content;
-font loading is restricted to the same packaged origin.
+font loading is restricted to the same packaged origin. A per-app random style
+nonce authorizes only xterm style elements created synchronously while opening
+the trusted terminal. Other inline CSS remains blocked; no unsafe-inline or
+external stylesheet permission is added.
 Permissions, popups and renderer navigation are denied.
 
 Workspace asset reads must resolve an engine-authorized Asset revision to a
@@ -119,12 +122,13 @@ renderer cannot target another invocation by guessing an ID.
 | `workspace` | Closed `command` intent | `workspace` with scoped domain data. |
 | `cli_read` | Exact `context` and closed Asset/Pipeline `command` | `workspace` with scoped read data. |
 | `start_cli_run` | Closed Run `request` | `run` from the same coordinator with the CLI caller. |
+| `terminal` | Closed `open`, `read`, `write`, `resize` or `close` intent | `terminal` with session state, bounded Base64 output and optional Run/Trail refresh identities |
 | `start_run` | Closed Run `request` | `run` containing the accepted or idempotently recovered record. |
 | `cancel_run` | Exact `context`, `run_id` UUID | `run` after killing/reaping and recording cancellation, or the original terminal record. |
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **16** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **17** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -337,5 +341,56 @@ with the same caller and intent key to recover it from the coordinator.
 | Cancel Run | `run cancel ID` | Same coordinator cancellation; terminal records remain unchanged |
 
 These commands refuse missing attached context and never fall back to a launcher,
-filesystem search, shell or network service. External terminal discovery, native
-PTY interaction and arbitrary shell execution are not provided by this channel.
+filesystem search, shell or network service. External terminal discovery and
+arbitrary shell execution are not provided by this channel.
+
+
+## Interactive native PTY
+
+On macOS, the Rust engine opens the real PTY, owns its dimensions and launches the
+signed Terminal helper. The helper applies the native resource policy, then
+executes the bundled `cube play session` in the same PID. The CLI inherits App
+Sandbox and resource restrictions; it cannot read private/source files, connect
+to a loopback server or spawn children. The native probe tests these restrictions
+after the production exec boundary, including memory and CPU ceilings.
+
+Stdin and stderr use the PTY; stdout is an inherited private duplex Unix socket.
+Terminal text is presentation, never an engine command or captured evidence.
+The separate socket uses the same version-1 attached frames, with a fresh nonce
+and selected Run intent key after every acknowledged command. Workspace,
+Exploration, Stage and storage generation stay fixed. The engine compares a Run
+request with the exact frozen selection and delegates only Asset/Pipeline reads
+and Run start/status/cancel to its existing coordinator. No shell, database path,
+PID, environment token or arbitrary process API crosses the renderer bridge.
+
+`terminal.open` carries exact context, an explicit nullable Run selection, columns
+and rows. Subsequent commands carry context and the session UUID. The CLI parses
+ASCII command syntax; source content travels through typed Asset references.
+`selected` is an alias for starting the frozen Pipeline request. Each completed
+command receives a new intent key; repeated commands create separate Runs. A lost
+reply must be reconciled in Run history before submitting again.
+
+| Resource | Ceiling or policy |
+| --- | --- |
+| Concurrent sessions | One per engine |
+| Session lifetime | 300 seconds; renderer read/write/resize lease expires after 10 seconds |
+| Entered lines | 64, including help, blank and invalid commands |
+| Input | 1,024 UTF-8 bytes per write; 1,024 ASCII bytes per line; 65,536 aggregate bytes |
+| Output | 262,144 aggregate PTY bytes; eight queued 1,024-byte chunks with backpressure |
+| Human reply display | 16,384 UTF-8 bytes plus truncation notice |
+| Dimensions | 20–300 columns and 4–100 rows |
+| Private frames | Existing 262,144-byte strict JSON ceiling and bounded two-frame queue |
+| CLI resources | Existing helper CPU, VM-growth, descriptors, file-size and no-child limits |
+
+The panel polls bounded output; it neither stores scrollback nor schedules nodes.
+Only admitted Runs become evidence. Closing the terminal kills and reaps its CLI
+without canceling an already admitted Run. Cancellation uses the coordinator and
+waits for the operation worker to exit. Closing/switching Workspace drops the
+session. A lost renderer lease closes it within ten seconds. A CLI reader thread
+exits on control-channel EOF or failure even while waiting for terminal input;
+a real engine SIGKILL test verifies the CLI disappears and unrelated processes
+survive. Non-macOS hosts reject session creation with `native_policy_unavailable`.
+
+This proof does not establish external discovery, shell job control, grandchildren,
+Windows/Linux PTYs or signed distribution support. The [terminal guide](../terminal.md)
+owns the interactive workflow.

@@ -23,10 +23,16 @@ export class Engine {
   private closed = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
-  private constructor(binary: string, worker?: string, root?: string) {
+  private constructor(
+    binary: string,
+    worker?: string,
+    root?: string,
+    terminal?: string,
+  ) {
     const args = ["--ipc"];
     if (worker) args.push("--worker", worker);
     if (root) args.push("--data-root", root);
+    if (terminal) args.push("--terminal", terminal);
     this.child = spawn(binary, args, {
       env: {},
       stdio: "pipe",
@@ -47,8 +53,9 @@ export class Engine {
     binary: string,
     worker?: string,
     root?: string,
+    terminal?: string,
   ): Promise<Engine> {
-    const engine = new Engine(binary, worker, root);
+    const engine = new Engine(binary, worker, root, terminal);
     const nonce = randomBytes(16).toString("hex");
     try {
       const reply = await engine.request({
@@ -112,6 +119,15 @@ export class Engine {
     )
       throw new Error("invalid_response");
     return reply.data;
+  }
+
+  async terminal(
+    command: import("./terminal-contract.ts").TerminalIntent,
+  ): Promise<import("./terminal-contract.ts").TerminalView> {
+    const reply = await this.request({ type: "terminal", command });
+    if (reply.type !== "terminal" || !reply.data)
+      throw new Error("invalid_response");
+    return reply.data as import("./terminal-contract.ts").TerminalView;
   }
 
   async startRun(
@@ -206,6 +222,7 @@ export class Engine {
             "ready",
             "catalog",
             "workspace",
+            "terminal",
             "run",
             "finished",
             "cancelled",

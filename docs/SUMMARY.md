@@ -11,7 +11,7 @@
   - [Resume saved work](persistence.md)
   - [Candidates and Solutions](solutions.md)
   - [Challenges and local Stages](challenges.md)
-  - [Terminal availability](terminal.md)
+  - [Cube terminal](terminal.md)
   - [Native reference](lab-api.md)
     - [Domain contract](reference/desktop-domain.md)
     - [IPC and native execution](reference/desktop-runtime.md)

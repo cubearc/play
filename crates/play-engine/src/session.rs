@@ -201,11 +201,25 @@ fn dispatch(
     worker: Option<&Path>,
     active: &mut Option<Active>,
     store: &mut Option<crate::workspace::Manager>,
+    terminals: &mut crate::terminal::Manager,
+    terminal_path: Option<&Path>,
     output: &mut impl Write,
 ) -> Result<()> {
     let id = command.id();
     let cli = matches!(command, Command::StartCliRun { .. });
     match command {
+        Command::Terminal { command, .. } => {
+            let result = store
+                .as_mut()
+                .ok_or("workspace_unavailable")
+                .and_then(|store| terminals.handle(command, terminal_path, store));
+            match result {
+                Ok(data) => {
+                    protocol::write_frame(output, &json!({"type":"terminal","id":id,"data":data}))
+                }
+                Err(code) => reject(output, id, code),
+            }
+        }
         Command::Hello { .. } => reject(output, id, "already_negotiated"),
         Command::Catalog { .. } => protocol::write_frame(
             output,
@@ -315,6 +329,12 @@ fn dispatch(
             protocol::write_frame(output, &json!({"type":"run","id":id,"data":detail}))
         }
         Command::Workspace { command, .. } => {
+            if matches!(
+                command,
+                crate::workspace::Command::Open { .. } | crate::workspace::Command::Create { .. }
+            ) {
+                terminals.close();
+            }
             if active.is_some()
                 && matches!(
                     command,
@@ -355,13 +375,24 @@ fn dispatch(
     }
 }
 
-pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
+pub fn run(
+    worker: Option<PathBuf>,
+    root: Option<PathBuf>,
+    terminal: Option<PathBuf>,
+) -> Result<()> {
     if worker
         .as_ref()
         .is_some_and(|path| !path.is_absolute() || !path.is_file())
     {
         return Err("invalid_worker");
     }
+    if terminal
+        .as_ref()
+        .is_some_and(|path| !path.is_absolute() || !path.is_file())
+    {
+        return Err("invalid_terminal");
+    }
+    let mut terminals = crate::terminal::Manager::default();
     let mut store = root.map(crate::workspace::Manager::new).transpose()?;
     let receiver = receive();
     let mut output = io::stdout().lock();
@@ -393,6 +424,8 @@ pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
                         worker.as_deref(),
                         &mut active,
                         &mut store,
+                        &mut terminals,
+                        terminal.as_deref(),
                         &mut output,
                     )?;
                 }
@@ -410,6 +443,24 @@ pub fn run(worker: Option<PathBuf>, root: Option<PathBuf>) -> Result<()> {
             Err(code) => {
                 reject(&mut output, 0, code)?;
                 return Err(code);
+            }
+        }
+        if let Some(command) = terminals.poll()? {
+            // Only the closed scoped CLI variants can enter this route. Reuse
+            // the same admission, ownership, cancellation and persistence code.
+            let mut reply = Vec::new();
+            dispatch(
+                command,
+                worker.as_deref(),
+                &mut active,
+                &mut store,
+                &mut terminals,
+                terminal.as_deref(),
+                &mut reply,
+            )?;
+            let response = serde_json::from_slice(&reply).map_err(|_| "invalid_response")?;
+            if terminals.reply(response).is_err() {
+                terminals.close();
             }
         }
         if let Some(run) = &mut active {
