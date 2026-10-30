@@ -77,7 +77,7 @@ belong to the separate Cloud integration.
 ## Run a text cell
 
 Select **ROT13** or the Brainfuck adapter (`esolang brainfuck run`) and choose
-**Run cell** on macOS. The operation
+**Run cell** on macOS or Linux. The operation
 runs through Core in a supervised native worker. Progress, cancellation and the
 result appear beside that cell, with the same Run visible in its Trail canvas.
 There is no shared Output panel. The preview does not execute a multistep graph.
@@ -270,8 +270,9 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 | Run active text cell | Cmd+Enter | Ctrl+Enter |
 | Save editor or focused Note | Cmd+S | Ctrl+S |
 
-The Electron preview on Windows/Linux refuses operation execution, even though
-the UI has keyboard bindings. Linux workers have a separate contributor proof.
+The Electron preview runs operations on macOS and Linux with the required
+native enforcement. Windows refuses operation execution even though the UI has
+keyboard bindings. The interactive terminal remains macOS-only.
 [Installation](installation.md) states the
 platform scope. Image replacement, permanent Block deletion and result export
 are not available in this preview.

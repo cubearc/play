@@ -67,10 +67,10 @@ Run worker, sharing its CPU, VM, wall-time and output limits. Dependency-aware
 attempt admission and deterministic result collection preserve join evidence.
 The coordinator owns up to two Run workers and four queued tasks, rotating fairly
 between Explorations and admitting only one active worker per Exploration.
-Linux x64/ARM64 workers use Landlock and seccomp with the same Core executor and
-supervisor; a separate native-host suite validates their boundary. The Electron
-preview still enables workers only on macOS. Windows worker enforcement and Linux
-Electron integration remain incomplete; no unrestricted fallback is available.
+Linux x64/ARM64 Electron workers use Landlock and seccomp with the same Core
+executor and supervisor. Native-host checks validate their boundary; Electron
+journeys exercise actual dispatch and retained evidence. Windows worker enforcement
+remains incomplete; no unrestricted fallback is available.
 
 External CLI attachment, Linux/Windows PTYs,
 signed packages and verified updates remain incomplete. Local build digests and

@@ -2,9 +2,9 @@
 
 Play's Electron source preview is a local investigation IDE. Start with
 [installation](installation.md) and [your first notebook](getting-started.md).
-The Electron preview enables operations on macOS. Linux workers have a separate
-[native validation workflow](development.md#validate-linux-workers); Linux
-Electron/terminal integration and Windows worker enforcement remain incomplete.
+The Electron preview enables operations on macOS and Linux x64/ARM64. Linux
+requires [Landlock and seccomp](reference/desktop-runtime.md#linux-worker-boundary).
+The interactive terminal requires macOS; Linux PTYs and Windows workers remain incomplete.
 Signed release packages are not available through this source workflow.
 
 | Goal | Read |

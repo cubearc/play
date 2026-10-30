@@ -17,6 +17,7 @@ import { Cli } from "./cli.ts";
 import { cliIntent } from "./cli-contract.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
+import { nativeFiles } from "./native-files.ts";
 import { terminalIntent } from "./terminal-contract.ts";
 import {
   assetRead,
@@ -46,16 +47,11 @@ app.setPath("userData", profile);
 const styleNonce = randomBytes(24).toString("base64");
 const resources = new URL("../desktop-renderer/", import.meta.url);
 const native = new URL("../desktop-native/", import.meta.url);
-const enginePath = fileURLToPath(
-  new URL(
-    process.platform === "win32" ? "play-engine.exe" : "play-engine",
-    native,
-  ),
-);
-const workerPath =
-  process.platform === "darwin"
-    ? fileURLToPath(new URL("Worker.app/Contents/MacOS/play-engine", native))
-    : undefined;
+const files = nativeFiles();
+const enginePath = fileURLToPath(new URL(files.engine, native));
+const workerPath = files.worker
+  ? fileURLToPath(new URL(files.worker, native))
+  : undefined;
 let engine: Engine | undefined;
 let cli: Cli | undefined;
 let window: BrowserWindow | undefined;
@@ -187,18 +183,11 @@ app
       enginePath,
       workerPath,
       join(profile, "workspaces"),
-      process.platform === "darwin"
-        ? fileURLToPath(
-            new URL("Terminal.app/Contents/MacOS/play-engine", native),
-          )
+      files.terminal
+        ? fileURLToPath(new URL(files.terminal, native))
         : undefined,
     );
-    cli = new Cli(
-      fileURLToPath(
-        new URL(process.platform === "win32" ? "cube.exe" : "cube", native),
-      ),
-      engine,
-    );
+    cli = new Cli(fileURLToPath(new URL(files.cli, native)), engine);
     const authorize = (event: Electron.IpcMainInvokeEvent): Engine => {
       if (!window || !ownsFrame(event, window.webContents) || !engine) {
         throw new Error("unauthorized_frame");

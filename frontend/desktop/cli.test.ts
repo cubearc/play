@@ -21,7 +21,9 @@ test("real Cube CLI scopes reads and shares idempotent Run admission and cancell
     binary("play-engine"),
     process.platform === "darwin"
       ? binary("SupervisionProbe.app/Contents/MacOS/play-engine")
-      : undefined,
+      : process.platform === "linux"
+        ? binary("native-supervision-probe")
+        : undefined,
     root,
   );
   const cli = new Cli(binary("cube"), engine);
@@ -80,7 +82,7 @@ test("real Cube CLI scopes reads and shares idempotent Run admission and cancell
       /workspace_mismatch/,
     );
     assert.deepEqual(await cli.execute(intent), block.asset);
-    if (process.platform === "darwin") {
+    if (["darwin", "linux"].includes(process.platform)) {
       const trail = v.trails.find((t) => t.source.id === block.asset.id);
       assert.ok(trail?.pipeline);
       const request = {

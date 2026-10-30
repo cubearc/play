@@ -17,11 +17,10 @@ text Asset revisions for Core execution in a separate worker. Graph
 [PipelineRuns](desktop-runs.md) preserve accepted configuration, actual attempts
 and the chosen private output retention. Credential storage is not implemented.
 
-The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper.
-Linux x64/ARM64 has a separate native worker proof using Landlock and seccomp,
-with the same engine, Core registry and Run supervisor. The Electron source
-preview still enables workers only on macOS; its Linux/Windows path rejects
-execution with `native_policy_unavailable`. No path has an unrestricted or
+The Electron proof executes on macOS with a locally ad-hoc-signed App Sandbox
+helper and on Linux x64/ARM64 with mandatory Landlock and seccomp. Both use the
+same engine, Core registry and Run supervisor. The Windows path rejects execution
+with `native_policy_unavailable`. No path has an unrestricted or
 container fallback. This is not a release-supported desktop
 distribution. The complete application still requires the remaining shell, storage, worker and
 packaging deliveries. The interactive native PTY below is a macOS development proof.
@@ -303,8 +302,14 @@ See [Linux verification commands](../development.md#validate-linux-workers).
 
 Policy references: [Landlock](https://docs.kernel.org/userspace-api/landlock.html)
 and [seccomp filtering](https://docs.kernel.org/userspace-api/seccomp_filter.html).
-Linux PTYs, Electron helper preparation/integrity, distribution packaging and the
-remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
+Electron preparation copies the engine executable into a distinct `play-worker`
+helper and records engine, CLI and worker digests. Startup verifies every required
+binary before launching the engine; missing or changed helpers refuse startup.
+The worker receives only its restricted invocation mode and private pipes.
+Notebook/canvas execution and attached CLI commands share this worker path.
+The interactive Linux terminal reports unavailable and does not create a Run.
+
+Linux PTYs, distribution packaging and the remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
 
 The release target matrix is Windows x64, macOS x64/arm64 and Linux x64. Windows
 still needs a proved filesystem/network boundary as well as resource and process

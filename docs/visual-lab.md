@@ -13,7 +13,7 @@ The image opens in a separate canvas with zoom and its native operation controls
 
 ## Read the first pixel
 
-Open the image's canvas and choose **Run cell** on macOS. The native
+Open the image's canvas and choose **Run cell** on macOS or Linux. The native
 `image.pixels.read` adapter reads the pixel at top-left coordinates `x: 0`,
 `y: 0`, with palette expansion disabled. The canvas displays these saved
 parameters. Choose **Edit Pipeline** to change `x`, `y` or `expand_palette`, then
@@ -40,8 +40,8 @@ revision when selected.
 Only installed compatible native adapters appear for each source. Image input is
 validated as `image.samples`; ROT13 and Brainfuck require text. The engine also
 rejects incompatible requests independently of the selector. This Electron
-workflow currently executes on macOS; [Linux worker validation](development.md#validate-linux-workers)
-runs separately from the application preview.
+workflow executes on macOS and Linux with the required
+[native enforcement](reference/desktop-runtime.md#linux-worker-boundary).
 
 Click the caption to open its own text canvas. Its ROT13 or Brainfuck operation
 uses the caption Asset, not the image pixels. The caption still appears with the

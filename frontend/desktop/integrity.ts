@@ -3,25 +3,13 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { nativeFiles } from "./native-files.ts";
 
 export async function verifyNative(directory: URL): Promise<void> {
   const manifest = JSON.parse(
     await readFile(new URL("integrity.json", directory), "utf8"),
   ) as Record<string, string>;
-  const files: [string, string][] = [
-    ["cli", process.platform === "win32" ? "cube.exe" : "cube"],
-    [
-      "engine",
-      process.platform === "win32" ? "play-engine.exe" : "play-engine",
-    ],
-  ];
-  if (process.platform === "darwin")
-    files.push(
-      ["worker", "Worker.app/Contents/MacOS/play-engine"],
-      ["terminal", "Terminal.app/Contents/MacOS/play-engine"],
-      ["terminal_cli", "Terminal.app/Contents/MacOS/cube"],
-    );
-  for (const [key, name] of files) {
+  for (const [key, name] of Object.entries(nativeFiles())) {
     const hash = createHash("sha256")
       .update(await readFile(new URL(name, directory)))
       .digest("hex");

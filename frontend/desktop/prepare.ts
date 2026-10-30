@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeFiles } from "./native-files.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const output = join(root, "frontend/desktop-native");
@@ -24,7 +25,7 @@ function bundle(
   binary: string,
   identifier: string,
   client?: string,
-): string {
+): void {
   const app = join(output, `${name}.app`);
   mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
   cpSync(binary, join(app, "Contents/MacOS/play-engine"));
@@ -54,7 +55,6 @@ function bundle(
     app,
   ]);
   command("/usr/bin/codesign", ["--verify", "--strict", app]);
-  return join(app, "Contents/MacOS/play-engine");
 }
 
 command("cargo", [
@@ -66,6 +66,9 @@ command("cargo", [
   "native-boundary-probe",
   "--example",
   "native-supervision-probe",
+  ...(process.platform === "linux"
+    ? ["--example", "linux-boundary-probe"]
+    : []),
   "--bin",
   "play-engine",
 ]);
@@ -79,27 +82,15 @@ command("cargo", [
 ]);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
-const binary = process.platform === "win32" ? "play-engine.exe" : "play-engine";
-cpSync(join(root, "target/debug", binary), join(output, binary));
-const digest = (file: string) =>
-  createHash("sha256").update(readFileSync(file)).digest("hex");
-const cli = process.platform === "win32" ? "cube.exe" : "cube";
-cpSync(join(root, "../cube/target/debug", cli), join(output, cli));
-const manifest: Record<string, string> = {
-  cli: digest(join(output, cli)),
-  engine: digest(join(output, binary)),
-};
+const files = nativeFiles();
+cpSync(join(root, "target/debug", files.engine), join(output, files.engine));
+cpSync(join(root, "../cube/target/debug", files.cli), join(output, files.cli));
 if (process.platform === "darwin") {
-  manifest.terminal = digest(
-    bundle(
-      "Terminal",
-      join(root, "target/debug/play-engine"),
-      "com.cubearc.play.context-terminal",
-      join(output, cli),
-    ),
-  );
-  manifest.terminal_cli = digest(
-    join(output, "Terminal.app/Contents/MacOS/cube"),
+  bundle(
+    "Terminal",
+    join(root, "target/debug/play-engine"),
+    "com.cubearc.play.context-terminal",
+    join(output, files.cli),
   );
   bundle(
     "TerminalProbe",
@@ -107,12 +98,10 @@ if (process.platform === "darwin") {
     "com.cubearc.play.terminal-probe",
     join(root, "target/debug/examples/native-boundary-probe"),
   );
-  manifest.worker = digest(
-    bundle(
-      "Worker",
-      join(root, "target/debug/play-engine"),
-      "com.cubearc.play.boundary-worker",
-    ),
+  bundle(
+    "Worker",
+    join(root, "target/debug/play-engine"),
+    "com.cubearc.play.boundary-worker",
   );
   bundle(
     "SupervisionProbe",
@@ -125,4 +114,21 @@ if (process.platform === "darwin") {
     "com.cubearc.play.boundary-probe",
   );
 }
+if (process.platform === "linux" && files.worker) {
+  cpSync(join(output, files.engine), join(output, files.worker));
+  for (const name of [
+    "native-boundary-probe",
+    "native-supervision-probe",
+    "linux-boundary-probe",
+  ])
+    cpSync(join(root, "target/debug/examples", name), join(output, name));
+}
+const manifest = Object.fromEntries(
+  Object.entries(files).map(([key, name]) => [
+    key,
+    createHash("sha256")
+      .update(readFileSync(join(output, name)))
+      .digest("hex"),
+  ]),
+);
 writeFileSync(join(output, "integrity.json"), `${JSON.stringify(manifest)}\n`);

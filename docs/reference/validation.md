@@ -94,7 +94,7 @@ complete WCAG conformance.
 Registry checks compare the native eligible set with Core registrations and execute
 all registered operations against their canonical known-answer vectors. The native
 IPC matrix discovers its cases without a separate operation list, imports image
-vectors as scoped Assets, executes every eligible registration in the real signed
+vectors as scoped Assets, executes every eligible registration in the real isolated
 worker and verifies its reviewed contract digest and all named outputs after restart.
 Each case has an independent private store, so Workspace quotas do not limit matrix
 coverage. Only canonical parameter defaults adopt lower host defaults; the report
@@ -106,9 +106,15 @@ array draft, connects the byte port through UTF-8 and ROT13, executes a separate
 registered text operation, retains both image-export ports and reopens exact Run
 evidence. Core schemas and the full API conformance matrix remain independent checks.
 
-CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
-ad-hoc signed and sandboxed. Linux x64/ARM64 jobs separately execute the native worker boundary, Core matrix
-and workspace/supervisor suite using the commands in [development](../development.md#validate-linux-workers).
+CI runs the Electron proof on macOS ARM64/Intel and Ubuntu 24.04 x64/ARM64. The
+macOS worker is locally ad-hoc signed and sandboxed. Linux jobs retain the native
+worker boundary, Core matrix and workspace/supervisor checks, then exercise the
+actual notebook/canvas, attached CLI and retained evidence through Electron.
+The interactive terminal journey checks explicit unavailability on Linux.
+Playwright launches with Chromium sandboxing enabled; the Linux authority check
+verifies renderer seccomp and no-new-privileges through `/proc`. Integrity tests
+refuse altered/missing prepared binaries and a missing worker digest. See
+[Linux verification](../development.md#validate-linux-workers).
 Linux PTYs and Windows worker enforcement remain unproved; ordinary Rust/protocol
 tests do not establish those capabilities. None of
 these commands establishes publisher signing, notarization, signed updates or a
@@ -224,8 +230,8 @@ pinned sources with `--locked`, review rendered pages and verify the authorized
 public deployment's revisions and content.
 
 The current [CI workflow](../../.github/workflows/ci.yml) requires native Rust
-Linux/macOS/Windows, Rust quality/coverage, frontend/browser, Linux native workers, macOS Electron
-ARM64/Intel and Docker integration jobs. Record exact revisions and observed
+Linux/macOS/Windows, Rust quality/coverage, frontend/browser, Linux native workers
+and Electron x64/ARM64, macOS Electron ARM64/Intel and Docker integration jobs. Record exact revisions and observed
 conclusions; local success does not establish hosted CI success. Replace obsolete
 jobs only with reviewed native equivalents. Full local graph/CLI, signed native
 packages, updates and per-OS worker/PTY evidence still gate

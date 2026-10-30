@@ -28,13 +28,17 @@ declare global {
 }
 
 import type {} from "./bridge.ts";
+import { nativeFiles } from "./native-files.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
-test("native terminal keeps its context, runs selected evidence and fits the IDE", {
+const nativeWorkers = ["darwin", "linux"].includes(process.platform);
+
+test("native terminal connects on macOS and refuses unsupported platforms", {
   timeout: 90000,
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-pty-ui-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -100,6 +104,15 @@ test("native terminal keeps its context, runs selected evidence and fits the IDE
       name: "Cube terminal",
       exact: true,
     });
+    if (process.platform !== "darwin") {
+      await expect(panel.getByRole("status")).toHaveText("Unavailable");
+      await expect(panel.getByRole("alert")).toContainText("requires macOS");
+      await expect(
+        panel.getByRole("button", { name: "Insert selected Run", exact: true }),
+      ).toBeDisabled();
+      assert.equal((await history()).runs.length, 0);
+      return;
+    }
     await expect(panel.getByRole("status")).toHaveText("Connected");
     const input = panel.locator(".xterm-helper-textarea");
     await input.pressSequentially("size");
@@ -173,6 +186,7 @@ test("native terminal keeps its context, runs selected evidence and fits the IDE
     assert.deepEqual(errors, []);
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -192,6 +206,7 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-registry-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -312,12 +327,8 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin"
-        ? "output: The key!!"
-        : "Execution rejected",
-    );
-    if (process.platform !== "darwin") return;
+    ).toContainText(nativeWorkers ? "output: The key!!" : "Execution rejected");
+    if (!nativeWorkers) return;
     const original = await latestRun(page, "spiral.png");
     assert.equal(original.detail.result?.outputs?.output, "The key!!");
     assert.equal(original.detail.attempts.length, 5);
@@ -336,6 +347,7 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
     assert.deepEqual((await accessibility(page)).violations, []);
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -354,6 +366,7 @@ test("numeric fields compose exact image facts and caption values with retained 
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-numeric-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -457,9 +470,7 @@ test("numeric fields compose exact image facts and caption values with retained 
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: 8" : "Execution rejected",
-    );
+    ).toContainText(nativeWorkers ? "output: 8" : "Execution rejected");
     await page
       .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
       .click();
@@ -471,7 +482,7 @@ test("numeric fields compose exact image facts and caption values with retained 
       .getByRole("button", { name: "Toggle Primary Side Bar", exact: true })
       .click();
     assert.deepEqual((await accessibility(page)).violations, []);
-    if (process.platform !== "darwin") return;
+    if (!nativeWorkers) return;
     const original = await latestRun(page, "composition.png");
     assert.equal(original.detail.result?.outputs?.output, 8);
     assert.equal(original.detail.attempts.length, 5);
@@ -584,6 +595,7 @@ test("numeric fields compose exact image facts and caption values with retained 
     assert.equal(failed.detail.attempts.length, 4);
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -620,6 +632,7 @@ test("structured fields preserve JSON types, distinguish null and missing, and r
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-json-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -690,10 +703,8 @@ test("structured fields preserve JSON types, distinguish null and missing, and r
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: The key." : "Execution rejected",
-    );
-    if (process.platform !== "darwin") return;
+    ).toContainText(nativeWorkers ? "output: The key." : "Execution rejected");
+    if (!nativeWorkers) return;
     const original = await latestRun(page, "Structured clue");
     assert.equal(original.detail.attempts.length, 4);
     const revise = async (pointer: string) => {
@@ -746,6 +757,7 @@ test("structured fields preserve JSON types, distinguish null and missing, and r
     await capture(application, "native-structured-failure");
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -775,6 +787,7 @@ test("typed composition joins image/caption branches and keeps binary and failed
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-composition-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -861,10 +874,8 @@ test("typed composition joins image/caption branches and keeps binary and failed
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: The key." : "Execution rejected",
-    );
-    if (process.platform !== "darwin") return;
+    ).toContainText(nativeWorkers ? "output: The key." : "Execution rejected");
+    if (!nativeWorkers) return;
     await expect(
       canvas.getByRole("button", { name: "Run cell", exact: true }),
     ).not.toHaveAttribute("disabled", "");
@@ -978,6 +989,7 @@ test("typed composition joins image/caption branches and keeps binary and failed
     assert.equal(failed.attempts[2]?.status, "failed");
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -1024,6 +1036,7 @@ test("named assets keep figures grouped and share a graph without sharing bindin
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-inputs-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -1122,9 +1135,7 @@ test("named assets keep figures grouped and share a graph without sharing bindin
           .click();
       await expect(
         canvas.getByRole("region", { name: "Cell result" }),
-      ).toContainText(
-        process.platform === "darwin" ? expected : "Execution rejected",
-      );
+      ).toContainText(nativeWorkers ? expected : "Execution rejected");
     };
     await run("default", "output: The key.");
     await run("image", "FFAy");
@@ -1259,6 +1270,7 @@ test("named assets keep figures grouped and share a graph without sharing bindin
     assert.notEqual(st.bindings.caption?.id, t.bindings.caption?.id);
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -1271,9 +1283,7 @@ test("named assets keep figures grouped and share a graph without sharing bindin
     canvas = page.getByRole("region", { name: "Trail canvas", exact: true });
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "Another clue." : "Execution rejected",
-    );
+    ).toContainText(nativeWorkers ? "Another clue." : "Execution rejected");
   } finally {
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
@@ -1291,6 +1301,7 @@ test("typed graph editing executes dependent nodes and preserves their evidence 
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-native-graph-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -1356,10 +1367,8 @@ test("typed graph editing executes dependent nodes and preserves their evidence 
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result", exact: true }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: Gur xrl." : "Execution rejected",
-    );
-    if (process.platform === "darwin") {
+    ).toContainText(nativeWorkers ? "output: Gur xrl." : "Execution rejected");
+    if (nativeWorkers) {
       let evidence = await page.evaluate(async () => {
         const w = await window.play.workspace({ kind: "list" });
         if (!w.lastWorkspaceId) throw new Error("workspace_missing");
@@ -1426,6 +1435,7 @@ test("typed graph editing executes dependent nodes and preserves their evidence 
       const retained = evidence;
       await application.close();
       application = await electron.launch({
+        chromiumSandbox: true,
         args: [main, `--user-data-dir=${profile}`],
       });
       page = await application.firstWindow();
@@ -1462,6 +1472,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-pipeline-revisions-"));
   let application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -1526,9 +1537,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: The key." : "Execution rejected",
-    );
+    ).toContainText(nativeWorkers ? "output: The key." : "Execution rejected");
     const initial = await current(page);
     const first = initial.exploration.trails[0];
     assert.ok(first?.pipeline);
@@ -1571,9 +1580,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     );
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
-    ).toContainText(
-      process.platform === "darwin" ? "output: The key." : "Execution rejected",
-    );
+    ).toContainText(nativeWorkers ? "output: The key." : "Execution rejected");
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()
         .find((w) => w.isVisible())
@@ -1653,9 +1660,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
     ).toContainText(
-      process.platform === "darwin"
-        ? "output: Second clue."
-        : "Execution rejected",
+      nativeWorkers ? "output: Second clue." : "Execution rejected",
     );
     await canvas
       .getByRole("button", { name: "Edit Trail", exact: true })
@@ -1677,9 +1682,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
     ).toContainText(
-      process.platform === "darwin"
-        ? "output: Second clue."
-        : "Execution rejected",
+      nativeWorkers ? "output: Second clue." : "Execution rejected",
     );
     await explorer(page)
       .getByRole("button", { name: "First investigation", exact: true })
@@ -1692,6 +1695,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     assert.equal(restored.exploration.trails[0]?.pipeline?.id, fork.id);
     await application.close();
     application = await electron.launch({
+      chromiumSandbox: true,
       args: [main, `--user-data-dir=${profile}`],
     });
     page = await application.firstWindow();
@@ -1703,9 +1707,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await expect(
       notebook(page).getByRole("region", { name: "Cell result" }),
     ).toContainText(
-      process.platform === "darwin"
-        ? "output: Second clue."
-        : "Execution rejected",
+      nativeWorkers ? "output: Second clue." : "Execution rejected",
     );
     const unbound = await current(page);
     assert.equal(unbound.exploration.trails[0]?.pipeline, null);
@@ -1719,9 +1721,7 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await expect(
       reopened.getByRole("region", { name: "Cell result" }),
     ).toContainText(
-      process.platform === "darwin"
-        ? "output: Second clue."
-        : "Execution rejected",
+      nativeWorkers ? "output: Second clue." : "Execution rejected",
     );
     await expect(
       reopened.getByRole("button", { name: "Run cell", exact: true }),
@@ -1752,7 +1752,10 @@ test("complete notebook keeps Pages inert and runs the selected image through it
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-notebook-complete-"));
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2053,7 +2056,10 @@ test("annotation Blocks save independently, preserve drafts and restore their No
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-annotations-"));
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2270,7 +2276,10 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-result-blocks-"));
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2509,7 +2518,10 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
     "<h1>Injected heading</h1><script>globalThis.fileExecuted=true</script>\nGur xrl.";
   await writeFile(path, text);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2680,7 +2692,10 @@ test("archived Blocks keep evidence and restore their original Assets after rest
   const profile = await mkdtemp(join(tmpdir(), "play-archive-"));
   const imported = await readFile(fixture);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2717,7 +2732,7 @@ test("archived Blocks keep evidence and restore their original Assets after rest
     await expect(enabledRetention).not.toBeChecked();
     await page.keyboard.press("Space");
     await expect(enabledRetention).toBeChecked();
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell()
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -2801,8 +2816,7 @@ test("archived Blocks keep evidence and restore their original Assets after rest
     assert.deepEqual((await accessibility(page)).violations, []);
     await page.keyboard.press("ControlOrMeta+Enter");
     assert.deepEqual((await history()).runs, saved);
-    if (process.platform === "darwin")
-      await expect(canvas).toContainText("output: The key.");
+    if (nativeWorkers) await expect(canvas).toContainText("output: The key.");
     await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
     await openArchive();
     archive = page.getByRole("region", {
@@ -2818,7 +2832,7 @@ test("archived Blocks keep evidence and restore their original Assets after rest
     await page.keyboard.press("Enter");
     await expect(cell()).toBeFocused();
     assert.deepEqual((await current(page)).exploration.stage.blocks[0], source);
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell()
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -2940,7 +2954,10 @@ test("duplicated Blocks preserve independent content and source lineage after re
   const profile = await mkdtemp(join(tmpdir(), "play-duplicate-"));
   const importedSource = await readFile(fixture);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -2971,7 +2988,7 @@ test("duplicated Blocks preserve independent content and source lineage after re
         name: `${title} block`,
         exact: true,
       });
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell("Clue")
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -3018,7 +3035,7 @@ test("duplicated Blocks preserve independent content and source lineage after re
     };
     await edit("Clue (copy)", false, "Frpbaq.");
     await expect(cell("Clue")).toContainText("Svefg.");
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell("Clue (copy)").focus();
       await page.keyboard.press("ControlOrMeta+Enter");
       await expect(cell("Clue (copy)")).toContainText("output: Second.");
@@ -3093,7 +3110,7 @@ test("duplicated Blocks preserve independent content and source lineage after re
     await expect(cell("sample.png").getByRole("figure")).toContainText(
       "Gur xrl.",
     );
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell("sample.png (copy)")
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -3110,7 +3127,7 @@ test("duplicated Blocks preserve independent content and source lineage after re
     await expect(
       page.getByRole("region", { name: "Trail canvas", exact: true }),
     ).toContainText("Gur frpbaq.");
-    if (process.platform === "darwin")
+    if (nativeWorkers)
       await expect(
         page.getByRole("region", { name: "Trail canvas", exact: true }),
       ).toContainText("output: The second.");
@@ -3141,7 +3158,7 @@ test("duplicated Blocks preserve independent content and source lineage after re
     assert.deepEqual((await current(page)).exploration.stage.blocks, saved);
     assert.deepEqual(await readFile(fixture), importedSource);
     await expect(cell("Clue (copy)")).toContainText("Copied from Clue · r1");
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await expect(cell("Clue (copy)")).toContainText("output: Second.");
       await expect(cell("sample.png (copy)")).toContainText(
         "output: The second.",
@@ -3404,6 +3421,17 @@ async function checkAuthority(
   page: Page,
   context: Context,
 ) {
+  const renderer = await application.evaluate(({ app, BrowserWindow }) => ({
+    disabled: app.commandLine.hasSwitch("no-sandbox"),
+    pid: BrowserWindow.getAllWindows()[0]?.webContents.getOSProcessId(),
+  }));
+  assert.equal(renderer.disabled, false);
+  assert.ok(renderer.pid);
+  if (process.platform === "linux") {
+    const status = await readFile(`/proc/${renderer.pid}/status`, "utf8");
+    assert.match(status, /Seccomp:\s+2/);
+    assert.match(status, /NoNewPrivs:\s+1/);
+  }
   assert.equal(
     await page.evaluate(
       () => typeof (window as unknown as Record<string, unknown>).require,
@@ -3506,7 +3534,10 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
   const profile = await mkdtemp(join(tmpdir(), "play-electron-"));
   const sourceBefore = await readFile(fixture);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -3564,10 +3595,9 @@ test("native workspaces persist independent notebooks, owned assets and reasonin
     await imageBlock
       .getByRole("button", { name: "Run cell", exact: true })
       .click();
-    const result =
-      process.platform === "darwin"
-        ? "The key is in the pixels."
-        : "Execution rejected";
+    const result = nativeWorkers
+      ? "The key is in the pixels."
+      : "Execution rejected";
     await expect(
       imageBlock.getByRole("region", { name: "Cell result" }),
     ).toContainText(result);
@@ -3809,7 +3839,10 @@ test("native text and caption revisions preserve historical Runs and drafts acro
   const profile = await mkdtemp(join(tmpdir(), "play-edits-"));
   const sourceBefore = await readFile(fixture);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -3839,7 +3872,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
       name: "Clue block",
       exact: true,
     });
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await cell.getByRole("button", { name: "Run cell", exact: true }).click();
       await expect(
         cell.getByRole("region", { name: "Cell result" }),
@@ -3897,7 +3930,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     await expect(
       page.getByRole("status", { name: "Note save status" }),
     ).toHaveText("Saved");
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       const result = cell.getByRole("region", { name: "Cell result" });
       await expect(result).toContainText("Earlier input · r1");
       await expect(result).toContainText("The key.");
@@ -3955,16 +3988,17 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     await dialog
       .getByRole("textbox", { name: "Text", exact: true })
       .fill("Unsaved source draft.");
-    if (process.platform === "darwin") {
-      await expect
-        .poll(() =>
-          application.evaluate(({ BrowserWindow }) =>
-            BrowserWindow.getAllWindows().some((window) =>
-              window.isDocumentEdited(),
+    if (nativeWorkers) {
+      if (process.platform === "darwin")
+        await expect
+          .poll(() =>
+            application.evaluate(({ BrowserWindow }) =>
+              BrowserWindow.getAllWindows().some((window) =>
+                window.isDocumentEdited(),
+              ),
             ),
-          ),
-        )
-        .toBe(true);
+          )
+          .toBe(true);
       const prompt = await application.evaluate(
         ({ app, dialog }) =>
           new Promise<string>((resolve) => {
@@ -4013,7 +4047,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
       name: "sample.png block",
       exact: true,
     });
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await imageCell
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -4038,7 +4072,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     await expect(
       imageCell.getByRole("img", { name: "sample.png", exact: true }),
     ).toBeVisible();
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await expect(
         imageCell.getByRole("region", { name: "Cell result" }),
       ).toContainText("Earlier input · r1");
@@ -4068,7 +4102,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
     await expect(
       notebook(page).getByRole("figure").filter({ hasText: "Frpbaq pncgvba." }),
     ).toBeVisible();
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await expect(
         notebook(page).getByRole("article", {
           name: "sample.png block",
@@ -4100,7 +4134,10 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
   const profile = await mkdtemp(join(tmpdir(), "play-block-order-"));
   const sourceBefore = await readFile(fixture);
   const launch = () =>
-    electron.launch({ args: [main, `--user-data-dir=${profile}`] });
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
   let application = await launch();
   try {
     let page = await application.firstWindow();
@@ -4150,7 +4187,7 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
         exact: true,
       }),
     ).toBeDisabled();
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await firstCell()
         .getByRole("button", { name: "Run cell", exact: true })
         .click();
@@ -4328,7 +4365,7 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
     await expect(
       page.getByRole("status", { name: "Note save status" }),
     ).toHaveText("Saved");
-    if (process.platform === "darwin") {
+    if (nativeWorkers) {
       await secondCell().focus();
       await page.keyboard.press("ControlOrMeta+Enter");
       await expect(secondCell()).toContainText("output: Second.");
@@ -4398,7 +4435,7 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
     await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
       "Reasoning stays with this Block.",
     );
-    if (process.platform === "darwin")
+    if (nativeWorkers)
       await expect(firstCell()).toContainText("output: First.");
     assert.deepEqual(await readFile(fixture), sourceBefore);
   } finally {
@@ -4420,6 +4457,7 @@ test("archive frees an active slot while retained evidence and restore limits st
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-archive-slots-"));
   const application = await electron.launch({
+    chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
   try {
@@ -4562,10 +4600,10 @@ test("archive frees an active slot while retained evidence and restore limits st
 });
 
 test("native notebook queues another cell without disabling unrelated Trails", {
-  skip: process.platform !== "darwin",
+  skip: !nativeWorkers,
   timeout: 60000,
 }, async () => {
-  // Stage a task-owned application with the signed supervision helper. The
+  // Stage a task-owned application with the platform supervision helper. The
   // production app/worker, resource ceilings and integrity checks stay intact.
   const temporary = await mkdtemp(join(tmpdir(), "play-queue-ui-"));
   const staged = join(temporary, "frontend");
@@ -4579,25 +4617,32 @@ test("native notebook queues another cell without disabling unrelated Trails", {
   await mkdir(join(staged, "desktop-native"));
   for (const name of ["desktop-renderer", "node_modules"])
     await symlink(join(front, name), join(staged, name));
-  for (const name of ["play-engine", "cube", "Terminal.app"])
+  for (const name of process.platform === "darwin"
+    ? ["play-engine", "cube", "Terminal.app"]
+    : ["play-engine", "cube"])
     await symlink(
       join(front, "desktop-native", name),
       join(staged, "desktop-native", name),
     );
-  await cp(
-    join(front, "desktop-native/SupervisionProbe.app"),
-    join(staged, "desktop-native/Worker.app"),
-    { recursive: true },
-  );
+  const files = nativeFiles();
+  assert.ok(files.worker);
+  if (process.platform === "darwin") {
+    await cp(
+      join(front, "desktop-native/SupervisionProbe.app"),
+      join(staged, "desktop-native/Worker.app"),
+      { recursive: true },
+    );
+  } else {
+    await cp(
+      join(front, "desktop-native/native-supervision-probe"),
+      join(staged, "desktop-native", files.worker),
+    );
+  }
   const manifest = JSON.parse(
     await readFile(join(front, "desktop-native/integrity.json"), "utf8"),
   );
   manifest.worker = createHash("sha256")
-    .update(
-      await readFile(
-        join(staged, "desktop-native/Worker.app/Contents/MacOS/play-engine"),
-      ),
-    )
+    .update(await readFile(join(staged, "desktop-native", files.worker)))
     .digest("hex");
   await writeFile(
     join(staged, "desktop-native/integrity.json"),
@@ -4608,6 +4653,7 @@ test("native notebook queues another cell without disabling unrelated Trails", {
     JSON.stringify({ type: "module" }),
   );
   const application = await electron.launch({
+    chromiumSandbox: true,
     args: [
       join(staged, "desktop-dist/main.js"),
       `--user-data-dir=${join(staged, "profile")}`,

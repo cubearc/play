@@ -17,7 +17,7 @@ exist; they are not prerequisites for opening Electron. Replace each check only
 with validated native coverage when its implementation is retired.
 
 [CI](.github/workflows/ci.yml) uses an explicit public Cube revision and records
-native Rust, quality/coverage, frontend, macOS Electron and remaining Docker jobs.
+native Rust, quality/coverage, frontend, macOS/Linux Electron and remaining Docker jobs.
 Report exact revisions and observed local/hosted results separately. A workflow
 definition or local helper signature does not establish signed release support.
 Do not suppress warnings, skip supported operation IDs or lower coverage gates.
