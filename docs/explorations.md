@@ -224,6 +224,20 @@ revision without creating a second Asset or canvas identity. Earlier Runs stay
 bound to their original inputs; the result marks an earlier input until another
 Run is accepted for the saved content.
 
+## Work while another Run executes
+
+Run another cell or switch to a different Exploration to continue investigating.
+Each cell keeps its own queued/running state, result and Cancel control. Up to two
+Explorations execute concurrently; another Run in the same Exploration waits its
+turn. Cancelling a queued cell creates no execution attempt and leaves other
+cells active. When the queue is full, wait or cancel a Run before trying again.
+See [queue limits and recovery](reference/desktop-runs.md#concurrent-runs-and-queue).
+
+![Notebook with the first cell running and the second cell queued, each retaining its own state and cancellation.](assets/desktop/run-queue.png)
+
+The second cell waits within the same Exploration. Its Cancel control affects only
+that Run. [Open full size](assets/desktop/run-queue.png).
+
 ## Preserve evidence
 
 Choose **Run cell** to create a PipelineRun, rather than replacing an earlier
@@ -233,7 +247,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General structured-result promotion, concurrent Runs and external contextual CLI
+General structured-result promotion and external contextual CLI
 attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 ## Read an image in a spiral
 

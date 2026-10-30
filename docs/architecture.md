@@ -65,11 +65,13 @@ execution dispatcher. See [Pipeline execution capabilities](reference/desktop-pi
 Independent branches execute in groups of at most two within the same sandboxed
 Run worker, sharing its CPU, VM, wall-time and output limits. Dependency-aware
 attempt admission and deterministic result collection preserve join evidence.
+The coordinator owns up to two Run workers and four queued tasks, rotating fairly
+between Explorations and admitting only one active worker per Exploration.
 Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-Concurrent Runs, external CLI attachment, Linux/Windows PTYs,
+External CLI attachment, Linux/Windows PTYs,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

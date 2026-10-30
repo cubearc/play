@@ -11,7 +11,8 @@ from the Core registry, validates the whole graph and plans the chosen output's
 ancestor closure. One bounded worker executes up to two dependency-ready nodes concurrently, sharing
 the Run resource limits. See [parallel branches](desktop-runs.md#bounded-parallel-branches)
 for grouping, join and failure behavior.
-Concurrent Runs, output caching and external contextual CLI attachment remain separate deliveries.
+Runs share the [bounded Exploration queue](desktop-runs.md#concurrent-runs-and-queue).
+Output caching and external contextual CLI attachment remain separate deliveries.
 
 ## Execution capabilities
 

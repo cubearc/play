@@ -1,5 +1,5 @@
 {
-  "protocol": 18,
+  "protocol": 19,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -36,5 +36,9 @@
   "pipeline_literal_bytes": 2048,
   "pipeline_canvas_limit": 4096,
   "pipeline_input_limit": 4,
-  "parallel_nodes": 2
+  "parallel_nodes": 2,
+  "active_runs": 2,
+  "queued_runs": 4,
+  "queued_runs_per_exploration": 2,
+  "active_runs_per_exploration": 1
 }

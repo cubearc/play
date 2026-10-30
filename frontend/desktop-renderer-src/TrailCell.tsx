@@ -51,9 +51,11 @@ export function TrailCell({
           </strong>
           <VscodeButton
             icon="play"
-            disabled={!operation || executions.busy || trail.archived}
+            disabled={!operation || executions.isBusy(trail) || trail.archived}
             aria-disabled={
-              !operation || executions.busy || trail.archived ? "true" : "false"
+              !operation || executions.isBusy(trail) || trail.archived
+                ? "true"
+                : "false"
             }
             onClick={() => {
               if (operation && !trail.archived)
@@ -65,7 +67,7 @@ export function TrailCell({
           <VscodeButton
             secondary
             icon="terminal"
-            disabled={!operation || executions.busy || trail.archived}
+            disabled={!operation || executions.isBusy(trail) || trail.archived}
             onClick={() => {
               if (operation && !trail.archived)
                 void executions.run(

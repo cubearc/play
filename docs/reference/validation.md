@@ -39,7 +39,9 @@ EOF and additional input must stop it without a result. A real engine `SIGKILL`
 test observes its child's PID disappear, keeps an unrelated process alive and
 reopens the Run as interrupted with no fabricated output. The fixture has no
 separate parent-death cleanup. Malformed/oversized task frames are also refused.
-These checks establish the single-worker boundary. The PTY checks below cover
+The multi-Run fixture proves two workers coexist, a worker crash preserves its
+sibling, and owner death stops both while leaving an unrelated process alive.
+Recovery distinguishes active attempts from queued Runs without attempts. The PTY checks below cover
 the separate contextual CLI lifetime; grandchildren remain unsupported.
 
 Ordering and duplication journeys verify completed keyboard focus, concurrent
@@ -316,3 +318,22 @@ attempt, then uses the production signed worker to compute the joined ROT13 resu
 and reopen both histories. Existing EOF, deadline, engine-death and unrelated-process
 checks remain required. This establishes parallel branches inside one worker,
 not cross-Run queue fairness or native execution on Windows/Linux.
+
+
+## Concurrent Run admission
+
+Native IPC fills the two-worker/four-queued capacity across Explorations, refuses
+both per-Exploration and aggregate overflow, recovers accepted intents at capacity,
+rejects foreign cancellation and cancels queued work without inventing attempts.
+It verifies active cancellation, worker failure, owner death and graceful shutdown,
+then reopens immutable evidence and computes actual Core results in separate Runs.
+Pure queue tests check FIFO within an Exploration, round-robin fairness despite
+refills, blocked lanes and cancellation order.
+
+Renderer hook tests hold the IPC boundary to reproduce the former global Run lock
+and verify per-Trail duplicate suppression and queue-full recovery. The Electron
+queue journey uses a task-owned application copy with the existing signed
+supervision helper, original deadlines and unchanged integrity verification. It
+observes Running and Queued cells together, cancels the queued cell without
+stopping the first, and checks keyboard-accessible controls and axe-core rules.
+The normal application and installed worker are not replaced by this fixture.

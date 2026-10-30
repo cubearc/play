@@ -4,8 +4,9 @@ Running a text or image cell creates a durable, Exploration-owned PipelineRun. I
 result and exact input evidence reopen in the notebook and its Trail canvas.
 The executor plans the explicitly selected target node and its ancestors in a typed graph,
 using the [Core-registered executable capabilities](desktop-pipelines.md#execution-capabilities). One sandboxed worker executes up to two dependency-ready nodes concurrently.
-UI and contextual CLI Runs use this same coordinator. Concurrent Runs, fair admission
-between Explorations and executor output reuse remain separate deliveries.
+UI and contextual CLI Runs use this same coordinator. Up to two Explorations can
+run concurrently, with bounded fair admission. Executor output reuse remains a
+separate delivery.
 
 ## Accepted invocation
 
@@ -15,7 +16,7 @@ Exploration, Stage, Trail ID/revision, selected Pipeline ID/revision, explicit
 intent UUID and explicit output-retention choice. Rust verifies every owner,
 resolves the Trail's exact named Asset revisions and validates inputs/parameters against
 the actual Core contract before admitting work. Unsupported native enforcement,
-missing adapters, version mismatches and busy capacity reject before admission.
+missing adapters, version mismatches and a full Run queue reject before admission.
 A changed Trail revision, source or Pipeline returns `state_conflict` before creating a Run;
 the engine never silently resolves a different revision than the caller selected.
 An archived source or additional bound Asset returns `block_archived` before a new Run is created. Archive
@@ -98,7 +99,8 @@ code and SQLite guards enforce state transitions.
 
 Closing a canvas or application window leaves engine supervision active while
 the app remains alive. Explicit Quit closes its private session: the engine
-kills/reaps the active worker and saves `cancelled` with `session_closed` before
+kills/reaps all active workers and saves active and queued Runs as `cancelled`
+with `session_closed` before
 releasing SQLite ownership. A killed engine cannot report success; reopening its
 recognized store marks queued/running work `interrupted` with `owner_stopped`,
 without changing completed records. This recovery is not a complete release
@@ -123,9 +125,57 @@ The two threads share the existing one-second process CPU budget, 128 MiB VM-gro
 limit and two-second Run deadline. The aggregate raw output ceiling remains
 16384 bytes; concurrency does not multiply it. At most two node results are held
 for the current group before collection. Native execution is still proved only on
-macOS. There is still one active Run per engine; another Run receives `busy` rather
-than entering a cross-Run queue. The remaining admission/platform work is tracked
+macOS. Each concurrent Run has its own worker and budgets; the coordinator
+bounds their combined use as described below. Remaining platform work is tracked
 in [#46](https://github.com/cubearc/play/issues/46).
+
+## Concurrent Runs and queue
+
+Start another cell or switch Explorations while a Run is active. Its state and
+Cancel control stay beside the producing cell or canvas. An active or queued
+Trail disables its own Run controls to prevent duplicate clicks; it does not
+block other Trails. UI and contextual CLI requests share the same queue.
+
+| Admission limit per engine / active Workspace | Maximum |
+| --- | --- |
+| Active Run workers | 2 |
+| Active Run workers per Exploration | 1 |
+| Queued Runs | 4 |
+| Queued Runs per Exploration | 2 |
+| Concurrent nodes across both workers | 4 |
+
+The queue preserves FIFO order within each Exploration and rotates between
+eligible Explorations. A busy Exploration retains its queued work without blocking
+other eligible work. The next Run starts after the previous owned worker has
+been reaped. Switching or creating a Workspace is refused while any Run is
+active or queued; switching Explorations within that Workspace is supported.
+
+`queue_full` rejects a new intent before creating a Run or reserving storage.
+Wait for capacity or cancel work, then retry. A matching already accepted intent
+still returns its original Run even when the queue is full. A queued Run retains
+its frozen inputs and Pipeline; edits after acceptance do not replace its task.
+Queue waiting consumes no worker CPU or execution deadline. The two-second wall
+deadline starts at worker spawn, independently for each Run.
+
+Cancelling queued work removes only that Run, commits `cancelled` and creates
+no attempt. Cancelling or crashing an active worker preserves other Explorations'
+Runs. Quit reaps every owned worker and cancels all queued work before releasing
+storage. Abrupt owner loss stops each worker through its private owner pipe;
+reopening records active and queued Runs as interrupted without replaying them.
+
+Two active workers bound combined process CPU allowances to 2 seconds, additional
+VM allowances to 256 MiB and accepted raw outputs to 32768 bytes. The VM figure
+is growth above each worker's initial mappings, not aggregate RSS. Combined
+consumed input ceilings are 16384 text bytes and 262144 PNG bytes. Each worker
+retains its individual sandbox, descriptor and no-child-process policy; the
+coordinator does not apply host-wide or shared-user limits.
+
+Queued tasks are serialized private frames, at most 262144 bytes each: four
+queued frames occupy at most 1 MiB of payload. Active output transport is bounded
+at one 262144-byte framed stream per worker. These are payload ceilings, not
+claims about total engine heap usage. Accepted Runs also retain their existing
+SQLite plan and output reservations; the Workspace/Exploration storage quotas
+still apply. The contextual terminal has its own separately bounded process.
 
 ## Edited inputs
 

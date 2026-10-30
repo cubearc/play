@@ -600,12 +600,14 @@ test("another process cannot own a live workspace and a killed owner releases it
   }
 });
 
-async function runFixture(engine: Engine, text: string) {
-  const workspace = (await engine.workspace({
-    kind: "create",
-    key: randomUUID(),
-    title: "Lifecycle notebook",
-  })) as WorkspaceView;
+async function runFixture(engine: Engine, text: string, workspaceId?: string) {
+  const workspace = workspaceId
+    ? { id: workspaceId }
+    : ((await engine.workspace({
+        kind: "create",
+        key: randomUUID(),
+        title: "Lifecycle notebook",
+      })) as WorkspaceView);
   const created = (await engine.workspace({
     kind: "create_exploration",
     workspace_id: workspace.id,
@@ -864,7 +866,7 @@ test("durable Runs distinguish real worker failure, cancellation and graceful ap
   }
 });
 
-test("killing the real engine recovers a running node as interrupted without inventing output", {
+test("worker crash isolates sibling Runs and owner death recovers active and queued work", {
   skip: !worker,
   timeout: 15000,
 }, async () => {
@@ -872,6 +874,7 @@ test("killing the real engine recovers a running node as interrupted without inv
   const root = join(temporary, "private");
   const setup = await Engine.connect(binary, worker, root);
   const request = await runFixture(setup, "+[]");
+  const other = await runFixture(setup, "+[]", request.context.workspace_id);
   await setup.close();
   const owner = spawn(
     binary,
@@ -888,7 +891,7 @@ test("killing the real engine recovers a running node as interrupted without inv
     };
   }
   let recovered: Engine | undefined;
-  let ownedPid: number | undefined;
+  let ownedPids: number[] = [];
   const unrelated = spawn(
     process.execPath,
     ["-e", "setInterval(() => {}, 1000)"],
@@ -931,50 +934,105 @@ test("killing the real engine recovers a running node as interrupted without inv
           })
         ).data,
     );
-    const children = spawnSync("/bin/ps", ["-axo", "pid=,ppid="], {
-      encoding: "utf8",
-    });
-    assert.equal(children.status, 0, children.stderr);
-    const pids = children.stdout
-      .trim()
-      .split("\n")
-      .map((line) => line.trim().split(/\s+/).map(Number))
-      .filter((entry) => entry[1] === owner.pid)
-      .map((entry) => entry[0]);
-    assert.equal(pids.length, 1, "the held Run has one owned worker");
-    ownedPid = pids[0];
-    assert.ok(ownedPid && ownedPid > 0);
+    const children = () => {
+      const listing = spawnSync("/bin/ps", ["-axo", "pid=,ppid="], {
+        encoding: "utf8",
+      });
+      assert.equal(listing.status, 0, listing.stderr);
+      return listing.stdout
+        .trim()
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/).map(Number))
+        .filter((entry) => entry[1] === owner.pid)
+        .map((entry) => entry[0])
+        .filter((id): id is number => id !== undefined);
+    };
+    ownedPids = children();
+    assert.equal(ownedPids.length, 1);
+    const firstPid = ownedPids[0];
+    assert.ok(firstPid);
+    const second = (
+      await send({ type: "start_run", id: queryId++, request: other })
+    ).data;
+    const read = async (context: Context, id: string) =>
+      (
+        await send({
+          type: "workspace",
+          id: queryId++,
+          command: { kind: "run_detail", context, run_id: id },
+        })
+      ).data;
+    await actualRunning(() => read(other.context, second.id));
+    const pending = { ...request, key: randomUUID() };
+    const queued = (
+      await send({ type: "start_run", id: queryId++, request: pending })
+    ).data;
+    const waiting = (
+      await send({
+        type: "start_run",
+        id: queryId++,
+        request: { ...other, key: randomUUID() },
+      })
+    ).data;
+    assert.equal(queued.status, "queued");
+    assert.equal(waiting.status, "queued");
+    ownedPids = children();
+    assert.equal(
+      ownedPids.length,
+      2,
+      "two active Runs, queued work has no worker",
+    );
+    process.kill(firstPid, "SIGKILL");
+    await actualRunning(() => read(request.context, queued.id));
+    const crashed = await read(request.context, started.data.id);
+    assert.equal(crashed.status, "failed");
+    assert.equal(crashed.result?.code, "worker_failed");
+    assert.equal(crashed.attempts[0]?.status, "failed");
+    assert.equal((await read(other.context, second.id)).status, "running");
+    ownedPids = children();
+    assert.equal(ownedPids.length, 2);
+    assert.ok(!ownedPids.includes(firstPid));
     const exit = once(owner, "exit");
     owner.kill("SIGKILL");
     await exit;
-    const deadline = Date.now() + 1500;
-    while (Date.now() < deadline) {
-      try {
-        process.kill(ownedPid, 0);
-      } catch (error) {
-        assert.equal((error as NodeJS.ErrnoException).code, "ESRCH");
-        break;
+    for (const pid of ownedPids) {
+      const deadline = Date.now() + 1500;
+      while (Date.now() < deadline) {
+        try {
+          process.kill(pid, 0);
+        } catch (error) {
+          assert.equal((error as NodeJS.ErrnoException).code, "ESRCH");
+          break;
+        }
+        await delay(10);
       }
-      await delay(10);
+      assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
     }
-    assert.throws(() => process.kill(ownedPid as number, 0), { code: "ESRCH" });
-    ownedPid = undefined;
+    ownedPids = [];
     assert.doesNotThrow(() => process.kill(unrelated.pid as number, 0));
     recovered = await Engine.connect(binary, worker, root);
     await recovered.workspace({
       kind: "open",
       workspace_id: request.context.workspace_id,
     });
-    const run = (await recovered.workspace({
-      kind: "run_detail",
-      context: request.context,
-      run_id: started.data.id,
-    })) as RunDetail;
-    assert.equal(run.status, "interrupted");
-    assert.equal(run.attempts[0]?.status, "interrupted");
-    assert.equal(run.result?.code, "owner_stopped");
-    assert.equal(run.result?.outputs, undefined);
-    assert.equal((await recovered.startRun(request)).id, run.id);
+    for (const [context, id, attempts] of [
+      [request.context, queued.id, 1],
+      [other.context, second.id, 1],
+      [other.context, waiting.id, 0],
+    ] as const) {
+      const run = (await recovered.workspace({
+        kind: "run_detail",
+        context,
+        run_id: id,
+      })) as RunDetail;
+      assert.equal(run.status, "interrupted");
+      assert.equal(run.attempts.length, attempts);
+      if (attempts) assert.equal(run.attempts[0]?.status, "interrupted");
+      assert.equal(run.result?.code, "owner_stopped");
+      assert.equal(run.result?.outputs, undefined);
+    }
+    assert.deepEqual(await recovered.startRun(request), crashed);
+    assert.equal((await recovered.startRun(pending)).id, queued.id);
   } finally {
     if (owner.exitCode === null && owner.signalCode === null) {
       const exit = once(owner, "exit");
@@ -982,9 +1040,9 @@ test("killing the real engine recovers a running node as interrupted without inv
       await exit;
     }
     lines.close();
-    if (ownedPid) {
+    for (const pid of ownedPids) {
       try {
-        process.kill(ownedPid, "SIGKILL");
+        process.kill(pid, "SIGKILL");
       } catch {
         /* already reaped */
       }
@@ -1304,6 +1362,110 @@ test("parallel branches persist together, cancel together and retain a real join
       }),
       cancelled,
     );
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("bounded Run queue isolates Explorations, queued cancellation and shutdown", {
+  skip: !worker,
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-run-queue-"));
+  const root = join(temporary, "private");
+  let engine = await Engine.connect(binary, supervisionWorker, root);
+  try {
+    const a = await runFixture(engine, "++++++++[>++++++++<-]>+.");
+    const b = await runFixture(
+      engine,
+      "++++++++[>++++++++<-]>+.",
+      a.context.workspace_id,
+    );
+    const c = await runFixture(
+      engine,
+      "++++++++[>++++++++<-]>+.",
+      a.context.workspace_id,
+    );
+    const first = await actualRunning(() => engine.startRun(a));
+    const second = await actualRunning(() => engine.startCliRun(b));
+    assert.equal(second.caller, "cli");
+    await assert.rejects(engine.startRun(b), /idempotency_conflict/);
+    const pendingA = { ...a, key: randomUUID() };
+    const queuedA = await engine.startRun(pendingA);
+    const nextA = await engine.startRun({ ...a, key: randomUUID() });
+    await assert.rejects(
+      engine.startRun({ ...a, key: randomUUID() }),
+      /queue_full/,
+    );
+    const queuedB = await engine.startCliRun({ ...b, key: randomUUID() });
+    const nextB = await engine.startCliRun({ ...b, key: randomUUID() });
+    await assert.rejects(engine.startRun(c), /queue_full/);
+    for (const run of [queuedA, nextA, queuedB, nextB]) {
+      assert.equal(run.status, "queued");
+      assert.deepEqual(run.attempts, []);
+    }
+    assert.deepEqual(await engine.startRun(pendingA), queuedA);
+    await assert.rejects(
+      engine.cancelRun({ context: b.context, run_id: queuedA.id }),
+      /not_found/,
+    );
+    const cancelled = await engine.cancelRun({
+      context: a.context,
+      run_id: queuedA.id,
+    });
+    assert.equal(cancelled.status, "cancelled");
+    assert.deepEqual(cancelled.attempts, []);
+    const queuedC = await engine.startRun(c);
+    assert.equal(queuedC.status, "queued");
+    const stoppedA = await engine.cancelRun({
+      context: a.context,
+      run_id: first.id,
+    });
+    assert.equal(stoppedA.attempts[0]?.status, "cancelled");
+    const read = (context: Context, id: string) =>
+      engine.workspace({
+        kind: "run_detail",
+        context,
+        run_id: id,
+      }) as Promise<RunDetail>;
+    const untouched = await read(b.context, second.id);
+    assert.equal(untouched.status, "running");
+    assert.deepEqual(untouched.attempts, second.attempts);
+    await actualRunning(() => read(a.context, nextA.id));
+    await engine.cancelRun({ context: a.context, run_id: nextA.id });
+    await actualRunning(() => read(c.context, queuedC.id));
+    await engine.close();
+    engine = await Engine.connect(binary, worker, root);
+    await engine.workspace({
+      kind: "open",
+      workspace_id: a.context.workspace_id,
+    });
+    for (const [context, id, attempts] of [
+      [b.context, second.id, 1],
+      [c.context, queuedC.id, 1],
+      [b.context, queuedB.id, 0],
+      [b.context, nextB.id, 0],
+    ] as const) {
+      const restored = await read(context, id);
+      assert.equal(restored.status, "cancelled");
+      assert.equal(restored.result?.code, "session_closed");
+      assert.equal(restored.attempts.length, attempts);
+    }
+    assert.deepEqual(await read(a.context, cancelled.id), cancelled);
+    const real = await Promise.all(
+      [a, b].map(async (request) =>
+        finished(
+          engine,
+          request.context,
+          await engine.startRun({ ...request, key: randomUUID() }),
+        ),
+      ),
+    );
+    for (const run of real) {
+      assert.equal(run.status, "completed", JSON.stringify(run.result));
+      assert.deepEqual(run.result?.outputs, { output: { base64: "QQ==" } });
+    }
   } finally {
     await engine.close();
     await rm(temporary, { recursive: true, force: true });

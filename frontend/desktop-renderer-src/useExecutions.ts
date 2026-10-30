@@ -47,7 +47,7 @@ export function useExecutions(
   const [history, setHistory] = useState<Record<string, History>>({});
   const [busy, setBusy] = useState(false);
   const live = useRef(true);
-  const active = useRef(false);
+  const active = useRef(new Set<string>());
   const state = useRef(history);
   state.current = history;
   const epochs = useRef<Record<string, number>>({});
@@ -144,7 +144,8 @@ export function useExecutions(
         if (live.current && !activeStatus(detail.status))
           void refreshSummary(trail.workspaceId);
         watching.current.delete(initial.id);
-        if (live.current) setBusy(watching.current.size > 0);
+        if (live.current)
+          setBusy(active.current.size > 0 || watching.current.size > 0);
       }
     },
     [update, refreshSummary],
@@ -180,8 +181,9 @@ export function useExecutions(
           error: "",
         }));
         if (chosen) await show(trail, chosen);
-        const running = page.runs.find((run) => activeStatus(run.status));
-        if (running) {
+        for (const running of page.runs.filter((run) =>
+          activeStatus(run.status),
+        )) {
           const detail = await window.play.workspace({
             kind: "run_detail",
             context: contextFor(trail),
@@ -233,8 +235,8 @@ export function useExecutions(
       caller: "desktop" | "cli" = "desktop",
     ) => {
       if (
-        active.current ||
-        watching.current.size > 0 ||
+        active.current.has(trail.id) ||
+        state.current[trail.id]?.runs.some((run) => activeStatus(run.status)) ||
         !trail.pipeline ||
         !targetNodeId ||
         trail.archived
@@ -243,7 +245,7 @@ export function useExecutions(
       const keep = retention[trail.id] ?? true;
       const fresh = runSelection(trail, operation, keep, targetNodeId);
       if (!fresh) return;
-      active.current = true;
+      active.current.add(trail.id);
       setBusy(true);
       const pendingKey = `${trail.id}:${caller}`;
       const previous = pending.current[pendingKey];
@@ -277,24 +279,31 @@ export function useExecutions(
       } catch (error) {
         const conflict =
           error instanceof Error && error.message.includes("state_conflict");
-        if (conflict) delete pending.current[pendingKey];
+        const full =
+          error instanceof Error && error.message.includes("queue_full");
+        if (conflict || full) delete pending.current[pendingKey];
         update(trail.id, (value) => ({
           ...value,
-          error: conflict
-            ? "The input or Pipeline changed. Reopen this stage before starting another Run."
-            : "Run request was not confirmed. Retry to check the same intent; saved history is preserved.",
+          error: full
+            ? "The Run queue is full. Wait for a Run to finish or cancel one, then try again."
+            : conflict
+              ? "The input or Pipeline changed. Reopen this stage before starting another Run."
+              : "Run request was not confirmed. Retry to check the same intent; saved history is preserved.",
         }));
       } finally {
-        active.current = false;
-        if (live.current) setBusy(watching.current.size > 0);
+        active.current.delete(trail.id);
+        if (live.current)
+          setBusy(active.current.size > 0 || watching.current.size > 0);
       }
     },
     [retention, update, watch],
   );
   const cancel = async (trail: TrailView) => {
-    const run = state.current[trail.id]?.runs.find((run) =>
-      activeStatus(run.status),
-    );
+    const history = state.current[trail.id];
+    const run =
+      history?.runs.find(
+        (run) => run.id === history.selected && activeStatus(run.status),
+      ) ?? history?.runs.find((run) => activeStatus(run.status));
     if (!run) return;
     try {
       const detail = await window.play.cancelRun({
@@ -342,6 +351,10 @@ export function useExecutions(
     catalogError,
     history,
     busy,
+    isBusy: (trail: TrailView) =>
+      active.current.has(trail.id) ||
+      (history[trail.id]?.runs.some((run) => activeStatus(run.status)) ??
+        false),
     operationFor,
     operationsFor,
     run,

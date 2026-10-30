@@ -195,7 +195,7 @@ export function AssetCanvas({
               <PipelineGraph
                 definition={trail.pipeline.definition}
                 operations={executions.operations}
-                busy={executions.busy || trail.archived}
+                busy={executions.isBusy(trail) || trail.archived}
                 onRun={(id) => {
                   const node = trail.pipeline?.definition.nodes.find(
                     (n) => n.id === id,

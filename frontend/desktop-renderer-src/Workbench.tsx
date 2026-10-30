@@ -216,8 +216,8 @@ export function Workbench() {
       label: "Run notebook cell",
       shortcut: `${modifier}Enter`,
       disabled:
-        executions.busy ||
         !runnableTrail ||
+        executions.isBusy(runnableTrail) ||
         runnableTrail.archived ||
         !runnableTrail.pipelineId ||
         !executions.operationFor(runnableTrail),

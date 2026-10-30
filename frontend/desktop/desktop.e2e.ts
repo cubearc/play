@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -4550,5 +4558,124 @@ test("archive frees an active slot while retained evidence and restore limits st
       .catch(() => {});
     await application.close();
     await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("native notebook queues another cell without disabling unrelated Trails", {
+  skip: process.platform !== "darwin",
+  timeout: 60000,
+}, async () => {
+  // Stage a task-owned application with the signed supervision helper. The
+  // production app/worker, resource ceilings and integrity checks stay intact.
+  const temporary = await mkdtemp(join(tmpdir(), "play-queue-ui-"));
+  const staged = join(temporary, "frontend");
+  const front = fileURLToPath(new URL("../", import.meta.url));
+  await cp(join(front, "desktop-dist"), join(staged, "desktop-dist"), {
+    recursive: true,
+  });
+  await cp(join(front, "../desktop"), join(temporary, "desktop"), {
+    recursive: true,
+  });
+  await mkdir(join(staged, "desktop-native"));
+  for (const name of ["desktop-renderer", "node_modules"])
+    await symlink(join(front, name), join(staged, name));
+  for (const name of ["play-engine", "cube", "Terminal.app"])
+    await symlink(
+      join(front, "desktop-native", name),
+      join(staged, "desktop-native", name),
+    );
+  await cp(
+    join(front, "desktop-native/SupervisionProbe.app"),
+    join(staged, "desktop-native/Worker.app"),
+    { recursive: true },
+  );
+  const manifest = JSON.parse(
+    await readFile(join(front, "desktop-native/integrity.json"), "utf8"),
+  );
+  manifest.worker = createHash("sha256")
+    .update(
+      await readFile(
+        join(staged, "desktop-native/Worker.app/Contents/MacOS/play-engine"),
+      ),
+    )
+    .digest("hex");
+  await writeFile(
+    join(staged, "desktop-native/integrity.json"),
+    JSON.stringify(manifest),
+  );
+  await writeFile(
+    join(staged, "package.json"),
+    JSON.stringify({ type: "module" }),
+  );
+  const application = await electron.launch({
+    args: [
+      join(staged, "desktop-dist/main.js"),
+      `--user-data-dir=${join(staged, "profile")}`,
+    ],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Concurrent clues");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Independent paths");
+    for (const [title, text] of [
+      ["First clue", "Uryyb"],
+      ["Second clue", "Jbeyq"],
+    ]) {
+      await notebook(page)
+        .getByRole("button", { name: "Add text", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: "Add text block",
+        exact: true,
+      });
+      await dialog
+        .getByRole("textbox", { name: "Title", exact: true })
+        .fill(title ?? "");
+      await dialog
+        .getByRole("textbox", { name: "Text", exact: true })
+        .fill(text ?? "");
+      await dialog
+        .getByRole("button", { name: "Add text", exact: true })
+        .click();
+    }
+    const first = notebook(page).getByRole("article", {
+      name: "First clue block",
+      exact: true,
+    });
+    const second = notebook(page).getByRole("article", {
+      name: "Second clue block",
+      exact: true,
+    });
+    await first.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(first.getByRole("status")).toHaveText("Running…");
+    await expect(
+      second.getByRole("button", { name: "Run cell", exact: true }),
+    ).toBeEnabled();
+    await second.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(second.getByRole("status")).toHaveText("Queued…");
+    await expect(first.getByRole("status")).toHaveText("Running…");
+    await capture(application, "native-run-queue", false);
+    await second.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(second.getByRole("status")).toHaveText(
+      "Cancelled: user_cancelled",
+    );
+    await expect(first.getByRole("status")).toHaveText("Running…");
+    await first.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(first.getByRole("status")).toHaveText(
+      "Cancelled: user_cancelled",
+    );
+    await expect(
+      second.getByRole("button", { name: "Run cell", exact: true }),
+    ).toBeEnabled();
+    assert.equal((await accessibility(page)).violations.length, 0);
+  } finally {
+    await application.close();
+    await rm(temporary, { recursive: true, force: true });
   }
 });

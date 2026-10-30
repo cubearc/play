@@ -1,3 +1,8 @@
+mod child;
+mod queue;
+mod scheduler;
+use scheduler::Scheduler;
+
 use crate::{
     Result,
     protocol::{self, Command, Invocation},
@@ -6,112 +11,10 @@ use serde_json::{Value, json};
 use std::{
     io::{self, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, Command as Process, Stdio},
     sync::mpsc::{self, Receiver, RecvTimeoutError},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
-
-struct Active {
-    id: u32,
-    child: Child,
-    output: Receiver<Result<Value>>,
-    result: Option<Value>,
-    deadline: Instant,
-    durable: Option<crate::workspace::RunIdentity>,
-}
-
-impl Drop for Active {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-impl Active {
-    fn spawn(id: u32, worker: &Path, task: &crate::worker::Task) -> Result<Self> {
-        let mut child = Process::new(worker)
-            .arg("--worker")
-            .env_clear()
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| "worker_failed")?;
-        let stdout = child.stdout.take().ok_or("worker_failed")?;
-        let (sender, output) = mpsc::sync_channel(1);
-        let mut active = Self {
-            id,
-            child,
-            output,
-            result: None,
-            durable: None,
-            deadline: Instant::now() + Duration::from_millis(protocol::contract().run_ms),
-        };
-        thread::spawn(move || {
-            let mut reader = BufReader::new(stdout);
-            let mut total = 0usize;
-            loop {
-                let frame = match protocol::read_frame(&mut reader) {
-                    Ok(Some(frame)) => frame,
-                    Ok(None) => break,
-                    Err(code) => {
-                        let _ = sender.send(Err(code));
-                        break;
-                    }
-                };
-                total = total.saturating_add(frame.len());
-                if total > protocol::contract().frame_bytes {
-                    let _ = sender.send(Err("output_limit"));
-                    break;
-                }
-                let parsed = std::str::from_utf8(&frame)
-                    .map_err(|_| "worker_failed")
-                    .and_then(|s| cube_core::pipeline::json::parse(s).map_err(|_| "worker_failed"));
-                if sender.send(parsed).is_err() {
-                    break;
-                }
-            }
-        });
-        // Keep the sole write end until the worker exits. Engine death closes it
-        // in the kernel, including SIGKILL where Active::drop cannot run.
-        let input = active.child.stdin.as_mut().ok_or("worker_failed")?;
-        protocol::write_frame(input, task)?;
-        Ok(active)
-    }
-
-    fn poll(&mut self) -> Result<Option<Value>> {
-        if Instant::now() >= self.deadline {
-            return Err("deadline_exceeded");
-        }
-        if let Ok(result) = self.output.try_recv() {
-            let result = result?;
-            if matches!(
-                result["type"].as_str(),
-                Some("node_started" | "node_finished")
-            ) {
-                return Ok(Some(result));
-            }
-            self.result = Some(result);
-        }
-        if let Some(status) = self.child.try_wait().map_err(|_| "worker_failed")? {
-            if !status.success() {
-                return Err("worker_failed");
-            }
-            if let Some(mut result) = self.result.take() {
-                if !result.is_object()
-                    || !matches!(result["status"].as_str(), Some("completed" | "failed"))
-                {
-                    return Err("worker_failed");
-                }
-                result["type"] = json!("finished");
-                result["id"] = json!(self.id);
-                return Ok(Some(result));
-            }
-        }
-        Ok(None)
-    }
-}
 
 fn ready(command: Command) -> Result<(u32, Value)> {
     let Command::Hello {
@@ -171,7 +74,7 @@ fn launch(
     id: u32,
     invocation: Invocation,
     worker: Option<&Path>,
-    active: &mut Option<Active>,
+    active: &mut Scheduler,
     output: &mut impl Write,
 ) -> Result<()> {
     if let Err(code) = crate::worker::validate(&invocation) {
@@ -180,18 +83,11 @@ fn launch(
     let Some(worker) = worker.filter(|_| crate::native::available()) else {
         return reject(output, id, "native_policy_unavailable");
     };
-    if active.is_some() {
-        return reject(output, id, "busy");
-    }
-    match Active::spawn(id, worker, &crate::worker::Task::Probe { invocation }) {
-        Ok(run) => {
-            let worker_pid = run.child.id();
-            *active = Some(run);
-            protocol::write_frame(
-                output,
-                &json!({"type":"started", "id":id, "worker_pid":worker_pid}),
-            )
-        }
+    match active.probe(id, worker, invocation) {
+        Ok(worker_pid) => protocol::write_frame(
+            output,
+            &json!({"type":"started", "id":id, "worker_pid":worker_pid}),
+        ),
         Err(code) => reject(output, id, code),
     }
 }
@@ -199,7 +95,7 @@ fn launch(
 fn dispatch(
     command: Command,
     worker: Option<&Path>,
-    active: &mut Option<Active>,
+    active: &mut Scheduler,
     store: &mut Option<crate::workspace::Manager>,
     terminals: &mut crate::terminal::Manager,
     terminal_path: Option<&Path>,
@@ -252,8 +148,8 @@ fn dispatch(
             let Some(worker) = worker.filter(|_| crate::native::available()) else {
                 return reject(output, id, "native_policy_unavailable");
             };
-            if active.is_some() {
-                return reject(output, id, "busy");
+            if let Err(code) = active.capacity(request.context.exploration_id) {
+                return reject(output, id, code);
             }
             let prepared = match if cli {
                 manager.prepare_cli_run(&request)
@@ -263,27 +159,11 @@ fn dispatch(
                 Ok(value) => value,
                 Err(code) => return reject(output, id, code),
             };
-            let identity = prepared.identity;
-            match Active::spawn(
-                id,
-                worker,
-                &crate::worker::Task::Pipeline {
-                    invocation: prepared.invocation,
-                },
-            ) {
-                Ok(mut child) => {
-                    child.durable = Some(identity.clone());
-                    *active = Some(child);
-                }
-                Err(code) => {
-                    let data =
-                        manager.finish_run(&identity, json!({"status":"failed","code":code}))?;
-                    return protocol::write_frame(
-                        output,
-                        &json!({"type":"run","id":id,"data":data}),
-                    );
-                }
+            let identity = prepared.identity.clone();
+            if let Err(code) = active.enqueue(id, prepared) {
+                manager.finish_run(&identity, json!({"status":"failed","code":code}))?;
             }
+            active.dispatch(worker, manager)?;
             let data = manager.run_detail(&identity.context, identity.id)?;
             protocol::write_frame(output, &json!({"type":"run","id":id,"data":data}))
         }
@@ -312,14 +192,9 @@ fn dispatch(
                 Err(code) => return reject(output, id, code),
             };
             if matches!(detail["status"].as_str(), Some("queued" | "running")) {
-                let Some(identity) = active
-                    .as_ref()
-                    .and_then(|run| run.durable.clone())
-                    .filter(|run| run.id == run_id)
-                else {
+                let Some(identity) = active.cancel(run_id) else {
                     return reject(output, id, "not_running");
                 };
-                drop(active.take());
                 let data = manager.finish_run(
                     &identity,
                     json!({"status":"cancelled","code":"user_cancelled"}),
@@ -329,20 +204,15 @@ fn dispatch(
             protocol::write_frame(output, &json!({"type":"run","id":id,"data":detail}))
         }
         Command::Workspace { command, .. } => {
-            if matches!(
+            let switching = matches!(
                 command,
                 crate::workspace::Command::Open { .. } | crate::workspace::Command::Create { .. }
-            ) {
-                terminals.close();
-            }
-            if active.is_some()
-                && matches!(
-                    command,
-                    crate::workspace::Command::Open { .. }
-                        | crate::workspace::Command::Create { .. }
-                )
-            {
+            );
+            if switching && !active.is_empty() {
                 return reject(output, id, "busy");
+            }
+            if switching {
+                terminals.close();
             }
             match store
                 .as_mut()
@@ -359,10 +229,9 @@ fn dispatch(
             if store.is_some() {
                 return reject(output, id, "scoped_cancel_required");
             }
-            if active.as_ref().is_none_or(|run| run.id != run_id) {
+            if !active.cancel_probe(run_id) {
                 return reject(output, id, "not_running");
             }
-            drop(active.take()); // Kill and reap before announcing cancellation.
             protocol::write_frame(
                 output,
                 &json!({"type":"finished", "id":run_id, "status":"cancelled"}),
@@ -409,128 +278,61 @@ pub fn run(
         }
     };
     protocol::write_frame(&mut output, &response)?;
-    let mut active: Option<Active> = None;
-    loop {
-        // Commands get the first chance to cancel an in-flight worker.
-        match next(&receiver, Duration::from_millis(5)) {
-            Ok(Some(command)) => {
-                let id = command.id();
-                if id <= previous_id {
-                    reject(&mut output, id, "invalid_request_id")?;
-                } else {
-                    previous_id = id;
-                    dispatch(
-                        command,
-                        worker.as_deref(),
-                        &mut active,
-                        &mut store,
-                        &mut terminals,
-                        terminal.as_deref(),
-                        &mut output,
-                    )?;
-                }
-            }
-            Ok(None) => (),
-            Err("transport_closed") => {
-                finish_active(
-                    &mut active,
-                    &mut store,
-                    json!({"status":"cancelled","code":"session_closed"}),
-                    &mut output,
-                )?;
-                return Ok(());
-            }
-            Err(code) => {
-                reject(&mut output, 0, code)?;
-                return Err(code);
-            }
-        }
-        if let Some(command) = terminals.poll()? {
-            // Only the closed scoped CLI variants can enter this route. Reuse
-            // the same admission, ownership, cancellation and persistence code.
-            let mut reply = Vec::new();
-            dispatch(
-                command,
-                worker.as_deref(),
-                &mut active,
-                &mut store,
-                &mut terminals,
-                terminal.as_deref(),
-                &mut reply,
-            )?;
-            let response = serde_json::from_slice(&reply).map_err(|_| "invalid_response")?;
-            if terminals.reply(response).is_err() {
-                terminals.close();
-            }
-        }
-        if let Some(run) = &mut active {
-            match run.poll() {
-                Ok(Some(response)) => {
-                    if matches!(
-                        response["type"].as_str(),
-                        Some("node_started" | "node_finished")
-                    ) {
-                        if let Err(code) = progress(run, store.as_mut(), response) {
-                            finish_active(
-                                &mut active,
-                                &mut store,
-                                json!({"status":"failed","code":code}),
-                                &mut output,
-                            )?;
-                        }
+    let mut active = Scheduler::default();
+    let result = (|| {
+        loop {
+            // Commands get the first chance to cancel an in-flight worker.
+            match next(&receiver, Duration::from_millis(5)) {
+                Ok(Some(command)) => {
+                    let id = command.id();
+                    if id <= previous_id {
+                        reject(&mut output, id, "invalid_request_id")?;
                     } else {
-                        finish_active(&mut active, &mut store, response, &mut output)?;
+                        previous_id = id;
+                        dispatch(
+                            command,
+                            worker.as_deref(),
+                            &mut active,
+                            &mut store,
+                            &mut terminals,
+                            terminal.as_deref(),
+                            &mut output,
+                        )?;
                     }
                 }
                 Ok(None) => (),
-                Err(code) => finish_active(
+                Err("transport_closed") => return Ok(()),
+                Err(code) => {
+                    reject(&mut output, 0, code)?;
+                    return Err(code);
+                }
+            }
+            if let Some(command) = terminals.poll()? {
+                // Only the closed scoped CLI variants can enter this route. Reuse
+                // the same admission, ownership, cancellation and persistence code.
+                let mut reply = Vec::new();
+                dispatch(
+                    command,
+                    worker.as_deref(),
                     &mut active,
                     &mut store,
-                    json!({"status":"failed","code":code}),
-                    &mut output,
-                )?,
+                    &mut terminals,
+                    terminal.as_deref(),
+                    &mut reply,
+                )?;
+                let response = serde_json::from_slice(&reply).map_err(|_| "invalid_response")?;
+                if terminals.reply(response).is_err() {
+                    terminals.close();
+                }
+            }
+            active.poll(&mut store, &mut output)?;
+            if let (Some(worker), Some(store)) = (worker.as_deref(), store.as_mut()) {
+                active.dispatch(worker, store)?;
             }
         }
-    }
-}
-
-fn finish_active(
-    active: &mut Option<Active>,
-    store: &mut Option<crate::workspace::Manager>,
-    mut result: Value,
-    output: &mut impl Write,
-) -> Result<()> {
-    let Some(run) = active.take() else {
-        return Ok(());
-    };
-    let id = run.id;
-    let durable = run.durable.clone();
-    drop(run);
-    if let Some(identity) = durable {
-        let manager = store.as_mut().ok_or("workspace_closed")?;
-        if let Err(code) = manager.finish_run(&identity, result) {
-            manager.finish_run(&identity, json!({"status":"failed","code":code}))?;
-        }
-    } else {
-        result["type"] = json!("finished");
-        result["id"] = json!(id);
-        protocol::write_frame(output, &result)?;
-    }
-    Ok(())
-}
-
-fn progress(
-    run: &Active,
-    store: Option<&mut crate::workspace::Manager>,
-    event: Value,
-) -> Result<()> {
-    let mut identity = run.durable.clone().ok_or("worker_failed")?;
-    identity.node_id =
-        serde_json::from_value(event["nodeId"].clone()).map_err(|_| "worker_failed")?;
-    let manager = store.ok_or("workspace_closed")?;
-    match event["type"].as_str() {
-        Some("node_started") => manager.start_attempt(&identity),
-        Some("node_finished") => manager.finish_attempt(&identity, event),
-        _ => Err("worker_failed"),
-    }
+    })();
+    terminals.close();
+    let code = result.as_ref().err().copied().unwrap_or("session_closed");
+    let cleanup = active.shutdown(&mut store, code, &mut output);
+    result.and(cleanup)
 }
