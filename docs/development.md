@@ -30,7 +30,7 @@ opens it interactively. The macOS helpers use local ad-hoc signatures, without a
 publisher certificate or host policy changes.
 
 The Electron preview enables native execution on macOS and Linux x64/ARM64.
-Windows workers remain unavailable; the interactive PTY still requires macOS. A shell preview does
+Windows workers and PTYs remain unavailable. A shell preview does
 not establish release support. See [native execution](reference/desktop-runtime.md).
 
 ## Validate Linux workers
@@ -52,7 +52,7 @@ They require no Electron launch, container, root privilege or host policy change
 The test binaries are development fixtures; they are not application IPC actions.
 These commands validate the worker without launching Electron. Use `desktop:build`
 and `desktop:smoke` above for application dispatch and integrity verification; the
-interactive Linux terminal remains unavailable.
+interactive Linux terminal uses the canonical Cube CLI adapter in a restricted helper.
 The [runtime reference](reference/desktop-runtime.md#linux-worker-boundary) owns
 kernel requirements and exact limits.
 
@@ -61,7 +61,7 @@ kernel requirements and exact limits.
 Build the app with `npm run desktop:build --prefix frontend`, then run the same
 `desktop:test` and `desktop:smoke` commands used on macOS. The Linux smoke covers
 real operation results, image/caption composition, retained evidence, restart,
-queue controls and explicit PTY unavailability. It does not validate a Linux PTY.
+queue controls and the real contextual PTY, including resize, reconnect and retained Runs.
 
 On a disposable Ubuntu 24.04 CI host, install display libraries and configure the
 Chromium sandbox helper from the trusted, pinned Electron installation:
@@ -160,7 +160,7 @@ its replacement; running it is not part of trying the Electron app.
 
 ## Maintain guide screenshots
 
-Use real macOS Electron captures with disposable example data. The native smoke
+Use real macOS or Linux Electron captures with disposable example data. The native smoke
 writes PNGs to `frontend/playwright-report/`; capture additional guide states
 through the actual app. Keep sources and private profiles outside published
 images. Check that the full figure, operation and result are visible at a readable

@@ -16,12 +16,12 @@ Algorithms, operation metadata and input/output contracts belong to `cube-core`.
 | Typed preload | Closed application commands without Node, path or database authority |
 | Electron main | Trusted-frame validation, native file chooser, app lifecycle and exact engine startup |
 | Rust engine (`crates/play-engine`) | Ownership, private SQLite, revisions, admission and Run supervision |
-| Bundled Cube CLI | Attached commands and macOS contextual PTY; private control channel, no domain database |
+| Bundled Cube CLI | Attached commands and macOS/Linux contextual PTY; private control channel, no domain database |
 | Native worker | Bounded Core operation execution under the platform policy |
 
 The preview has one trusted window and one active managed Workspace. The full
 domain permits multiple independent Explorations in that Workspace. Multiwindow
-attachment and external contextual CLI discovery are not implemented. The macOS
+attachment and external contextual CLI discovery are not implemented. The native
 terminal uses a Rust-owned PTY and the same scoped Run coordinator.
 
 ## Domain and persistence
@@ -72,7 +72,7 @@ executor and supervisor. Native-host checks validate their boundary; Electron
 journeys exercise actual dispatch and retained evidence. Windows worker enforcement
 remains incomplete; no unrestricted fallback is available.
 
-External CLI attachment, Linux/Windows PTYs,
+External CLI attachment, Windows PTYs,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

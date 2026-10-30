@@ -124,9 +124,10 @@ impl Session {
             .set_write_timeout(Some(Duration::from_millis(100)))
             .map_err(|_| "terminal_unavailable")?;
         let mut reader = BufReader::new(control.try_clone().map_err(|_| "terminal_unavailable")?);
-        let child = Process::new(executable)
+        let mut process = Process::new(executable);
+        crate::native::worker_environment(&mut process);
+        let child = process
             .arg("--terminal-worker")
-            .env_clear()
             .stdin(Stdio::from(
                 slave.try_clone().map_err(|_| "terminal_unavailable")?,
             ))

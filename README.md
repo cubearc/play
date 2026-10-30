@@ -22,7 +22,7 @@ and open an Asset in its own Trail canvas.
 ## Try the Electron preview
 
 The Electron source preview executes operations on macOS and Linux x64/ARM64.
-The interactive contextual terminal requires macOS; Linux PTYs, Windows workers
+The contextual terminal supports macOS and Linux; Windows workers and PTYs
 and signed installers remain incomplete. Cloud belongs to a separate milestone. See [installation](docs/installation.md).
 
 From a trusted Play checkout with Cube beside it:

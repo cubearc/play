@@ -272,7 +272,7 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 
 The Electron preview runs operations on macOS and Linux with the required
 native enforcement. Windows refuses operation execution even though the UI has
-keyboard bindings. The interactive terminal remains macOS-only.
+keyboard bindings. The interactive terminal supports macOS and Linux.
 [Installation](installation.md) states the
 platform scope. Image replacement, permanent Block deletion and result export
 are not available in this preview.

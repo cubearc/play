@@ -6,7 +6,7 @@ Build the current desktop preview from trusted Cube and Play checkouts side by
 side. Operations run on macOS and Linux x64/ARM64. macOS uses a locally signed
 App Sandbox helper; Linux requires enabled Landlock ABI 3 and seccomp filtering.
 The Windows preview refuses execution with `native_policy_unavailable`. Missing
-enforcement has no fallback. The interactive terminal currently requires macOS.
+enforcement has no fallback. The interactive terminal uses the same supported native hosts.
 There is no release-supported signed installer or automatic updater yet.
 
 ## Prerequisites

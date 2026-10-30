@@ -114,7 +114,8 @@ if (process.platform === "darwin") {
     "com.cubearc.play.boundary-probe",
   );
 }
-if (process.platform === "linux" && files.worker) {
+if (process.platform === "linux" && files.worker && files.terminal) {
+  cpSync(join(output, files.engine), join(output, files.terminal));
   cpSync(join(output, files.engine), join(output, files.worker));
   for (const name of [
     "native-boundary-probe",

@@ -23,7 +23,7 @@ same engine, Core registry and Run supervisor. The Windows path rejects executio
 with `native_policy_unavailable`. No path has an unrestricted or
 container fallback. This is not a release-supported desktop
 distribution. The complete application still requires the remaining shell, storage, worker and
-packaging deliveries. The interactive native PTY below is a macOS development proof.
+packaging deliveries. The interactive native PTY below supports macOS and Linux development builds.
 
 Graph execution discovers the pure executors registered in Core. Descriptors
 supply operation names, typed ports, parameters and representations; Play has no
@@ -311,13 +311,14 @@ See [Apple's magazine limit](https://github.com/apple-oss-distributions/libmallo
 and [glibc's arena limit](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html).
 
 Electron preparation copies the engine executable into a distinct `play-worker`
-helper and records engine, CLI and worker digests. Startup verifies every required
+helper and adds a distinct `play-terminal` helper. It records every engine, CLI, worker
+and terminal digest. Startup verifies every required
 binary before launching the engine; missing or changed helpers refuse startup.
 The worker receives only its restricted invocation mode and private pipes.
 Notebook/canvas execution and attached CLI commands share this worker path.
-The interactive Linux terminal reports unavailable and does not create a Run.
+The interactive Linux terminal uses the same coordinator and scoped evidence.
 
-Linux PTYs, distribution packaging and the remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
+Distribution packaging and the remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
 
 The release target matrix is Windows x64, macOS x64/arm64 and Linux x64. Windows
 still needs a proved filesystem/network boundary as well as resource and process
@@ -413,6 +414,20 @@ Sandbox and resource restrictions; it cannot read private/source files, connect
 to a loopback server or spawn children. The native probe tests these restrictions
 after the production exec boundary, including memory and CPU ceilings.
 
+On Linux, the digest-verified `play-terminal` helper links the same pinned
+`cube-cli::play` library used by the Cube executable and calls its `Session`
+entry point. The helper installs Landlock and seccomp before the CLI reads any
+private context. No copied command parser, shell or post-isolation exec is used;
+no executable, shared-library directory or source-file grant is needed.
+
+The Linux terminal keeps the worker's CPU, VM-growth and descriptor ceilings.
+Its syscall policy additionally permits duplication of the inherited control
+socket, peer inspection and destination-free reads/writes. Only `TCGETS` and
+`TIOCGWINSZ` queries on stdin/stderr are allowed; resize remains parent-owned.
+Path lookups, socket creation, external connections, fork/exec and signalling
+other processes remain denied. Worker policies do not gain these terminal rights.
+The same fixed allocator environment is applied before starting either helper.
+
 Stdin and stderr use the PTY; stdout is an inherited private duplex Unix socket.
 Terminal text is presentation, never an engine command or captured evidence.
 The separate socket uses the same version-1 attached frames, with a fresh nonce
@@ -448,8 +463,8 @@ waits for the operation worker to exit. Closing/switching Workspace drops the
 session. A lost renderer lease closes it within ten seconds. A CLI reader thread
 exits on control-channel EOF or failure even while waiting for terminal input;
 a real engine SIGKILL test verifies the CLI disappears and unrelated processes
-survive. Non-macOS hosts reject session creation with `native_policy_unavailable`.
+survive. Unsupported hosts reject session creation with `native_policy_unavailable`.
 
 This proof does not establish external discovery, shell job control, grandchildren,
-Windows/Linux PTYs or signed distribution support. The [terminal guide](../terminal.md)
+Windows PTYs or signed distribution support. The [terminal guide](../terminal.md)
 owns the interactive workflow.

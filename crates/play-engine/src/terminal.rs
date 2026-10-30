@@ -6,8 +6,8 @@ use serde_json::Value;
 use std::path::Path;
 use uuid::Uuid;
 
-#[cfg(target_os = "macos")]
-mod macos;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod unix;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -42,8 +42,8 @@ pub enum Command {
 
 #[derive(Default)]
 pub struct Manager {
-    #[cfg(target_os = "macos")]
-    session: Option<macos::Session>,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    session: Option<unix::Session>,
 }
 impl Manager {
     pub fn handle(
@@ -52,7 +52,7 @@ impl Manager {
         executable: Option<&Path>,
         store: &mut crate::workspace::Manager,
     ) -> Result<Value> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             if let Command::Open {
                 context,
@@ -62,10 +62,10 @@ impl Manager {
             } = command
             {
                 store.authorize_context(&context)?;
-                if self.session.as_ref().is_some_and(macos::Session::is_open) {
+                if self.session.as_ref().is_some_and(unix::Session::is_open) {
                     return Err("terminal_busy");
                 }
-                let session = macos::Session::open(
+                let session = unix::Session::open(
                     executable.ok_or("native_policy_unavailable")?,
                     context,
                     selection,
@@ -79,14 +79,14 @@ impl Manager {
             }
             self.session.as_mut().ok_or("terminal_closed")?.view()
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
             let _ = (command, executable, store);
             Err("native_policy_unavailable")
         }
     }
     pub fn poll(&mut self) -> Result<Option<crate::protocol::Command>> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             if let Some(session) = &mut self.session {
                 return session.poll();
@@ -95,7 +95,7 @@ impl Manager {
         Ok(None)
     }
     pub fn reply(&mut self, response: Value) -> Result<()> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             if let Some(session) = &mut self.session {
                 return session.reply(response);
@@ -105,7 +105,7 @@ impl Manager {
         Err("terminal_closed")
     }
     pub fn close(&mut self) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             self.session.take();
         }
@@ -128,7 +128,14 @@ pub fn worker() -> Result<()> {
             .exec();
         Err("terminal_unavailable")
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        // Run the canonical Cube CLI adapter after isolation, without granting
+        // filesystem access to exec a second image or load its libraries.
+        crate::native::restrict_terminal()?;
+        cube_cli::play::run(&cube_cli::play::Command::Session).map_err(|_| "terminal_failed")
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     Err("native_policy_unavailable")
 }
 

@@ -10,10 +10,19 @@ fn main() {
         std::io::stdin().read_line(&mut line).unwrap();
         serde_json::from_str::<Vec<String>>(&line).unwrap()
     } else {
+        #[cfg(target_os = "linux")]
+        if args.first().is_some_and(|arg| arg == "terminal") {
+            play_engine::native::restrict_terminal().expect("native terminal policy required");
+            return probe(&args[1..]);
+        }
         play_engine::native::restrict().expect("native policy required");
         args
     };
-    match args.as_slice() {
+    probe(&args);
+}
+
+fn probe(args: &[String]) {
+    match args {
         [mode] if mode == "cpu" => loop {
             std::hint::black_box(42);
         },

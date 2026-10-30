@@ -8,8 +8,15 @@ use landlock::{
 use rustix::process::{Resource, Rlimit, setrlimit};
 
 pub(super) fn restrict() -> Result<()> {
+    apply(syscalls::filters(false)?)
+}
+
+pub(super) fn restrict_terminal() -> Result<()> {
+    apply(syscalls::filters(true)?)
+}
+
+fn apply(filters: [seccompiler::BpfProgram; 2]) -> Result<()> {
     // Prepare filters and measure runtime mappings while still single-threaded.
-    let filters = syscalls::filters()?;
     let memory = memory_limit()?;
     limits(memory)?;
     let status = Ruleset::default()

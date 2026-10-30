@@ -20,6 +20,7 @@ export function nativeFiles(): NativeFiles {
   } else if (process.platform === "linux") {
     // The same verified binary starts a separate, restricted worker process.
     files.worker = "play-worker";
+    files.terminal = "play-terminal";
   }
   return files;
 }

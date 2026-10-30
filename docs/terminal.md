@@ -6,8 +6,8 @@
 <a id="session-and-resource-boundaries"></a>
 <a id="working-directories"></a>
 
-The macOS Electron preview includes a native terminal running the bundled Cube
-CLI. It reads Stage Assets and runs a selected Pipeline through the same Rust
+The macOS and Linux Electron preview includes a native terminal using Cube
+CLI contextual commands. It reads Stage Assets and runs a selected Pipeline through the same Rust
 coordinator used by **Run cell**. Results remain beside their producing cell and
 in Run history.
 
@@ -67,7 +67,7 @@ replies show a truncation notice; inspect the saved Run in Play for retained dat
 The [runtime reference](reference/desktop-runtime.md#interactive-native-pty)
 contains exact limits and transport details.
 
-Native PTY execution currently requires macOS. Linux/Windows enforcement,
+Native PTY execution requires macOS or Linux with Landlock and seccomp. Windows enforcement,
 external terminal attachment and release packaging remain in
 [#48](https://github.com/cubearc/play/issues/48) and the platform tasks. The separate
 [Run with Cube CLI](explorations.md#run-a-cell-with-cube-cli) action remains available

@@ -4,7 +4,16 @@ fn main() {
     use rustix::process::{Pid, Resource, Signal, getrlimit, kill_process};
     use std::{env, fs, io::ErrorKind, net::UdpSocket, os::unix::net::UnixStream, thread};
 
-    let args: Vec<_> = env::args().skip(1).collect();
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    let terminal = args.first().is_some_and(|arg| arg == "terminal");
+    if terminal {
+        args.remove(0);
+    }
+    let restrict = if terminal {
+        play_engine::native::restrict_terminal
+    } else {
+        play_engine::native::restrict
+    };
     if args == ["unavailable"] || args == ["seccomp-unavailable"] {
         // Simulate a host refusing a mandatory policy syscall, without a
         // production bypass or fallback. The worker must refuse its entire policy.
@@ -27,7 +36,7 @@ fn main() {
         .try_into()
         .unwrap();
         seccompiler::apply_filter(&filter).unwrap();
-        assert_eq!(play_engine::native::restrict(), Err(expected));
+        assert_eq!(restrict(), Err(expected));
         println!("refused");
         return;
     }
@@ -36,8 +45,26 @@ fn main() {
     };
     let pid = Pid::from_raw(pid.parse().unwrap()).unwrap();
     let original = getrlimit(Resource::Nproc);
-    play_engine::native::restrict().unwrap();
+    restrict().unwrap();
     assert_eq!(getrlimit(Resource::Nproc), original);
+    // Even the terminal policy cannot change device state or query the socket
+    // as a terminal. Only inherited stdin/stderr read-only queries are granted.
+    assert_eq!(
+        rustix::termios::tcsetwinsize(
+            std::io::stdin(),
+            rustix::termios::Winsize {
+                ws_col: 80,
+                ws_row: 24,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            }
+        ),
+        Err(rustix::io::Errno::PERM)
+    );
+    assert_eq!(
+        rustix::termios::tcgetwinsize(std::io::stdout()),
+        Err(rustix::io::Errno::PERM)
+    );
     assert_eq!(getrlimit(Resource::Nofile).maximum, Some(32));
     assert_eq!(getrlimit(Resource::Core).maximum, Some(0));
     assert_eq!(getrlimit(Resource::Cpu).maximum, Some(1));
@@ -48,6 +75,11 @@ fn main() {
     );
     let path = path.clone();
     thread::spawn(move || {
+        use std::os::unix::process::CommandExt;
+        assert_eq!(
+            std::process::Command::new("/usr/bin/true").exec().kind(),
+            ErrorKind::PermissionDenied
+        );
         assert!(fs::metadata(&path).is_err_and(|e| e.kind() == ErrorKind::PermissionDenied));
         assert!(fs::read(&path).is_err_and(|e| e.kind() == ErrorKind::PermissionDenied));
         assert!(

@@ -110,12 +110,12 @@ CI runs the Electron proof on macOS ARM64/Intel and Ubuntu 24.04 x64/ARM64. The
 macOS worker is locally ad-hoc signed and sandboxed. Linux jobs retain the native
 worker boundary, Core matrix and workspace/supervisor checks, then exercise the
 actual notebook/canvas, attached CLI and retained evidence through Electron.
-The interactive terminal journey checks explicit unavailability on Linux.
+The interactive terminal journey executes on both platforms.
 Playwright launches with Chromium sandboxing enabled; the Linux authority check
 verifies renderer seccomp and no-new-privileges through `/proc`. Integrity tests
 refuse altered/missing prepared binaries and a missing worker digest. See
 [Linux verification](../development.md#validate-linux-workers).
-Linux PTYs and Windows worker enforcement remain unproved; ordinary Rust/protocol
+Windows worker and PTY enforcement remain unproved; ordinary Rust/protocol
 tests do not establish those capabilities. None of
 these commands establishes publisher signing, notarization, signed updates or a
 complete packaged Windows/macOS/Linux release.
@@ -295,21 +295,24 @@ checks and the exact Core operation conformance matrix remain required.
 
 ## Contextual native terminal
 
-The signed real CLI test opens a Rust-owned PTY, reads an exact Asset, changes
+The native CLI test opens a Rust-owned PTY, reads an exact Asset, changes
 its actual terminal dimensions and executes two distinct Runs equal to desktop
 results. A held canonical node-start fixture verifies active cancellation. Tests
 stop renderer polling to observe lease expiry, kill the actual engine to check
 CLI exit, and keep an unrelated process alive. A separate signed probe traverses
 the production terminal exec path without reapplying restrictions; private file
 reads/writes, networking, children, excess VM and CPU loops remain denied.
+Linux runs the same PTY/result/lifecycle tests and applies its actual terminal
+policy to adversarial probes, including inherited thread restrictions and
+mandatory-policy refusal. Integrity tests reject missing/changed terminal helpers.
 
 The Electron journey uses the terminal input and buttons, verifies explicit Enter
 before execution, real Hello evidence, inline Trail refresh, reconnect and close,
 800-pixel width and 200% zoom reflow, axe rules and persisted Runs after restart.
 It checks terminal console errors separately from axe's blocked measurement styles
 and the preexisting VSCode textarea resizer data-URL denial. The actual screen is
-included in the terminal guide. This is macOS development evidence, not a claim
-that every platform or the broader terminal milestone is complete.
+included in the terminal guide. These are macOS/Linux development checks, not a claim
+that Windows or the broader terminal milestone is complete.
 
 
 ## Parallel branches within a Run

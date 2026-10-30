@@ -638,6 +638,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cube-cli"
+version = "0.18.0"
+dependencies = [
+ "clap",
+ "cube-core",
+ "rustix",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "cube-core"
 version = "0.18.0"
 dependencies = [
@@ -2157,6 +2169,7 @@ name = "play-engine"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
+ "cube-cli",
  "cube-core",
  "landlock",
  "libc",

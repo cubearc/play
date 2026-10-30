@@ -48,6 +48,15 @@ pub fn restrict() -> Result<()> {
     Err("native_policy_unavailable")
 }
 
+/// Terminal-only inherited PTY/control descriptors; no filesystem grants.
+#[cfg(target_os = "linux")]
+pub fn restrict_terminal() -> Result<()> {
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    return linux::restrict_terminal();
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    Err("native_policy_unavailable")
+}
+
 #[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 mod tests {
     #[test]

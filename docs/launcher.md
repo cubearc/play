@@ -25,7 +25,7 @@ only in memory.
 
 The Electron preview enables operation execution on macOS and Linux x64/ARM64.
 Linux requires Landlock and seccomp; missing enforcement refuses execution.
-Linux PTYs and Windows workers remain incomplete. See
+Windows workers and PTYs remain incomplete. See
 [installation](installation.md) for the actual source workflow; the Electron path
 requires neither a browser session URL nor Docker/WSL setup.
 

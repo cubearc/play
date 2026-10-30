@@ -24,6 +24,7 @@ test("Linux startup verifies every prepared binary and refuses missing worker in
   try {
     const files = nativeFiles();
     assert.ok(files.worker);
+    assert.ok(files.terminal);
     const manifest = await readFile(new URL("integrity.json", source), "utf8");
     await writeFile(new URL("integrity.json", staged), manifest);
     for (const name of Object.values(files))
@@ -34,6 +35,17 @@ test("Linux startup verifies every prepared binary and refuses missing worker in
       await assert.rejects(verifyNative(staged), /binary_mismatch/);
       await cp(new URL(name, source), new URL(name, staged));
     }
+    const missingTerminal = JSON.parse(manifest);
+    delete missingTerminal.terminal;
+    await writeFile(
+      new URL("integrity.json", staged),
+      JSON.stringify(missingTerminal),
+    );
+    await assert.rejects(verifyNative(staged), /binary_mismatch/);
+    await writeFile(new URL("integrity.json", staged), manifest);
+    await rm(new URL(files.terminal, staged));
+    await assert.rejects(verifyNative(staged), /ENOENT/);
+    await cp(new URL(files.terminal, source), new URL(files.terminal, staged));
     const incomplete = JSON.parse(manifest);
     delete incomplete.worker;
     await writeFile(

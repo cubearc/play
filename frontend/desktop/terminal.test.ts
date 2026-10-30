@@ -9,6 +9,7 @@ import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { Engine } from "./engine.ts";
+import { nativeFiles } from "./native-files.ts";
 import { type TerminalIntent, terminalIntent } from "./terminal-contract.ts";
 import type {
   ExplorationView,
@@ -20,15 +21,15 @@ import type {
 const binary = (name: string) =>
   fileURLToPath(new URL(`../desktop-native/${name}`, import.meta.url));
 test("real contextual PTY resizes, resolves Assets and executes the same pinned Pipeline", {
-  skip: process.platform !== "darwin",
+  skip: !["darwin", "linux"].includes(process.platform),
   timeout: 20000,
 }, async () => {
   const root = await mkdtemp(join(tmpdir(), "play-pty-"));
   const engine = await Engine.connect(
     binary("play-engine"),
-    binary("Worker.app/Contents/MacOS/play-engine"),
+    binary(nativeFiles().worker ?? "unavailable"),
     root,
-    binary("Terminal.app/Contents/MacOS/play-engine"),
+    binary(nativeFiles().terminal ?? "unavailable"),
   );
   let transcript = "";
   let runId: string | null = null;
@@ -212,15 +213,19 @@ async function fixture(engine: Engine) {
 }
 
 test("terminal cancellation, lost renderer lease and killed owner reap only owned processes", {
-  skip: process.platform !== "darwin",
+  skip: !["darwin", "linux"].includes(process.platform),
   timeout: 25000,
 }, async () => {
   const root = await mkdtemp(join(tmpdir(), "play-pty-lifetime-"));
   const engine = await Engine.connect(
     binary("play-engine"),
-    binary("SupervisionProbe.app/Contents/MacOS/play-engine"),
+    binary(
+      process.platform === "darwin"
+        ? "SupervisionProbe.app/Contents/MacOS/play-engine"
+        : "native-supervision-probe",
+    ),
     root,
-    binary("Terminal.app/Contents/MacOS/play-engine"),
+    binary(nativeFiles().terminal ?? "unavailable"),
   );
   const unrelated = spawn(
     process.execPath,

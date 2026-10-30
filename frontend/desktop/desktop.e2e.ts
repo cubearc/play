@@ -33,7 +33,7 @@ import { type Context, reasoningOf } from "./workspace-contract.ts";
 
 const nativeWorkers = ["darwin", "linux"].includes(process.platform);
 
-test("native terminal connects on macOS and refuses unsupported platforms", {
+test("native terminal connects on supported platforms and refuses unavailable policies", {
   timeout: 90000,
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-pty-ui-"));
@@ -104,7 +104,7 @@ test("native terminal connects on macOS and refuses unsupported platforms", {
       name: "Cube terminal",
       exact: true,
     });
-    if (process.platform !== "darwin") {
+    if (!nativeWorkers) {
       await expect(panel.getByRole("status")).toHaveText("Unavailable");
       await expect(panel.getByRole("alert")).toContainText("requires macOS");
       await expect(
@@ -4619,7 +4619,7 @@ test("native notebook queues another cell without disabling unrelated Trails", {
     await symlink(join(front, name), join(staged, name));
   for (const name of process.platform === "darwin"
     ? ["play-engine", "cube", "Terminal.app"]
-    : ["play-engine", "cube"])
+    : ["play-engine", "cube", "play-terminal"])
     await symlink(
       join(front, "desktop-native", name),
       join(staged, "desktop-native", name),

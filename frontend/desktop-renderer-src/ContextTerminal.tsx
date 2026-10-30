@@ -190,7 +190,7 @@ export function ContextTerminal({
         if (alive) {
           setStatus("Unavailable");
           setError(
-            "A native terminal could not be opened. Close another session or reconnect. This preview requires macOS.",
+            "A native terminal could not be opened. Close another session or reconnect. This preview requires macOS or Linux with native isolation support.",
           );
         }
       });
