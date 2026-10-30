@@ -124,7 +124,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **15** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **16** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -209,6 +209,15 @@ active child. The supervisor enforces the run wall deadline. Main rejects pendin
 calls on transport failure/timeout, closes the pipe, then kills an unresponsive
 engine after a short shutdown grace. It never reports interrupted work as success.
 
+The worker receives one newline-terminated task through a private pipe. The
+engine keeps its write end open for the worker's lifetime. A worker thread watches
+that channel: EOF, a read failure or any additional byte exits the process with
+failure, including while the main thread is executing Core code. A failed watcher
+prevents execution. The kernel closes the engine's end after an abrupt exit such
+as `SIGKILL`; cleanup does not depend on an engine destructor or a parent-PID poll.
+The same bounded frame parser rejects oversized, unterminated and malformed tasks.
+This replaces the former EOF-terminated worker input; paired binaries must match.
+
 ## Lifecycle and recovery
 
 Closing a window revokes that frame; the application and engine keep supervising
@@ -242,7 +251,7 @@ capabilities on each supported OS and architecture before desktop release.
 | Memory | Core work budgets and a kernel limit on additional VM mappings after the runtime baseline. | Define and prove total/aggregate memory accounting; VM growth is not an RSS/physical-memory ceiling. |
 | Children | Worker-local `RLIMIT_NPROC=0`; an actual spawn is denied and the parent remains unaffected. | Owned process-tree tracking and termination for workers and real PTYs. |
 | Output/handles | Bounded wire reads/writes and descriptor/file-size limits. | Aggregate scratch, retained output, PTY stream and handle ceilings. |
-| Crash cleanup | Session EOF and explicit cancel kill/reap the single child. | Prove engine crash, app crash, grandchildren and PTY lifetime on the native OS. |
+| Crash cleanup | Cancel/session closure kills and reaps the worker; the worker exits on engine-pipe loss. A real engine `SIGKILL` test verifies that the owned PID disappears and the Run recovers as interrupted. | Prove app crash, grandchildren and PTY lifetime on the native OS. |
 
 macOS uses the supported App Sandbox entitlement on a signed helper bundle, not
 `sandbox-exec` or private Seatbelt initialization. Its initial runtime/shared-cache

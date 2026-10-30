@@ -6,9 +6,10 @@
 <a id="session-and-resource-boundaries"></a>
 <a id="working-directories"></a>
 
-The Electron preview has no integrated native terminal, PTY or contextual CLI
-attachment. Its text cells invoke real Core operations through the Rust engine;
-they are not shell commands. Use [the notebook](notebook.md) for current execution.
+Use [Run with Cube CLI](explorations.md#run-a-cell-with-cube-cli) to execute a saved
+Pipeline through the bundled CLI with the cell's exact context. The engine records
+the Run and its CLI caller, and results stay beside the cell. This attached command
+uses private pipes; the Electron preview has no interactive native terminal or PTY.
 
 The target native terminal will run the real Cube CLI with explicit Workspace,
 Exploration, Asset and Pipeline context, under the same owned execution boundary.

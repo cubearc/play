@@ -73,10 +73,10 @@ impl Active {
                 }
             }
         });
-        // Closing stdin is the worker's complete input boundary, including EOF.
-        let mut input = active.child.stdin.take().ok_or("worker_failed")?;
-        protocol::write_frame(&mut input, task)?;
-        drop(input);
+        // Keep the sole write end until the worker exits. Engine death closes it
+        // in the kernel, including SIGKILL where Active::drop cannot run.
+        let input = active.child.stdin.as_mut().ok_or("worker_failed")?;
+        protocol::write_frame(input, task)?;
         Ok(active)
     }
 

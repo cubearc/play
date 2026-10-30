@@ -10,6 +10,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
+import { singleGraph } from "./graph-fixture.ts";
 import { verifyNative } from "./integrity.ts";
 
 const directory = new URL("../desktop-native/", import.meta.url);
@@ -26,6 +27,122 @@ const probe = fileURLToPath(
   new URL("Probe.app/Contents/MacOS/play-engine", directory),
 );
 const mac = process.platform === "darwin";
+
+test("the production owner guard stops held native work on EOF or extra input", {
+  skip: !mac,
+  timeout: 10000,
+}, async () => {
+  const engine = await Engine.connect(binary);
+  const catalog = await engine.catalog();
+  await engine.close();
+  const rot13 = catalog.find(
+    (operation) => operation.operation === "cipher.rot13",
+  );
+  assert.ok(rot13);
+  const heldWorker = fileURLToPath(
+    new URL("SupervisionProbe.app/Contents/MacOS/play-engine", directory),
+  );
+  for (const disconnect of [true, false]) {
+    const child = spawn(heldWorker, ["--worker"], { env: {}, stdio: "pipe" });
+    const closed = once(child, "close");
+    const lines = createInterface({ input: child.stdout });
+    const output: string[] = [];
+    lines.on("line", (line) => output.push(line));
+    try {
+      const started = once(lines, "line", {
+        signal: AbortSignal.timeout(1500),
+      });
+      child.stdin.write(
+        `${JSON.stringify({
+          kind: "pipeline",
+          invocation: {
+            definition: singleGraph(rot13),
+            inputs: { source: { kind: "text", text: "Hello" } },
+          },
+        })}\n`,
+      );
+      assert.equal(
+        JSON.parse((await started)[0] as string).type,
+        "node_started",
+      );
+      const stopped = once(child, "close", {
+        signal: AbortSignal.timeout(1500),
+      });
+      if (disconnect) child.stdin.end();
+      else child.stdin.write("x");
+      assert.deepEqual(await stopped, [1, null]);
+      assert.equal(
+        output.length,
+        1,
+        "owner loss cannot fabricate a completed result",
+      );
+      assert.throws(() => process.kill(child.pid as number, 0), {
+        code: "ESRCH",
+      });
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      await closed;
+      lines.close();
+    }
+  }
+});
+
+test("the signed worker refuses malformed or multiple task frames", {
+  skip: !mac,
+}, () => {
+  for (const input of [
+    "{}",
+    "x".repeat(contract.frame_bytes),
+    '{"kind":"probe","kind":"pipeline"}\n',
+    `${JSON.stringify({ kind: "probe", invocation: { operation: "cipher.rot13", operation_version: 1, input: "Hello", parameters: {} } })}\n{}\n`,
+    Buffer.from([0xff, 10]),
+  ]) {
+    const result = spawnSync(worker, ["--worker"], {
+      env: {},
+      input,
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+  }
+});
+
+test("a signed worker completes one task while its owner keeps the lifetime pipe open", {
+  skip: !mac,
+  timeout: 5000,
+}, async () => {
+  const child = spawn(worker, ["--worker"], { env: {}, stdio: "pipe" });
+  const closed = once(child, "close");
+  const lines = createInterface({ input: child.stdout });
+  try {
+    const reply = once(lines, "line", { signal: AbortSignal.timeout(1500) });
+    child.stdin.write(
+      `${JSON.stringify({
+        kind: "probe",
+        invocation: {
+          operation: "cipher.rot13",
+          operation_version: 1,
+          input: "Hello",
+          parameters: {},
+        },
+      })}\n`,
+    );
+    assert.deepEqual(JSON.parse((await reply)[0] as string), {
+      status: "completed",
+      output: { text: "Uryyb" },
+    });
+    assert.deepEqual(await closed, [0, null]);
+    assert.equal(child.stdin.writableEnded, false);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill("SIGKILL");
+    await closed;
+    lines.close();
+  }
+});
 
 test("negotiates the real Rust binary and obtains Core names and versions", async () => {
   await verifyNative(directory);

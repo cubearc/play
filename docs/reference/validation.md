@@ -31,6 +31,16 @@ new revisions. Native IPC also edits an input while a real worker runs, then
 rejects stale dispatch. These checks preserve source bytes and reject
 cross-Exploration access. A controlled native chooser fixture is not a Cloud mock
 or a general file-browser implementation.
+
+Worker lifetime checks run the signed production worker with its input pipe still
+open and compare the actual ROT13 result. The signed supervision fixture uses the
+production task reader and owner guard while holding a canonical node-start event;
+EOF and additional input must stop it without a result. A real engine `SIGKILL`
+test observes its child's PID disappear, keeps an unrelated process alive and
+reopens the Run as interrupted with no fabricated output. The fixture has no
+separate parent-death cleanup. Malformed/oversized task frames are also refused.
+These checks establish the single-worker boundary, not PTY or grandchild support.
+
 Ordering and duplication journeys verify completed keyboard focus, concurrent
 revision conflicts, independent copied Assets and Runs, pinned source labels,
 image/caption grouping and restart. Storage tests upgrade native schemas 1/2,

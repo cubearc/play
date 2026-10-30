@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
@@ -883,6 +884,15 @@ test("killing the real engine recovers a running node as interrupted without inv
     };
   }
   let recovered: Engine | undefined;
+  let ownedPid: number | undefined;
+  const unrelated = spawn(
+    process.execPath,
+    ["-e", "setInterval(() => {}, 1000)"],
+    {
+      stdio: "ignore",
+    },
+  );
+  const unrelatedExit = once(unrelated, "exit");
   try {
     assert.equal(
       (
@@ -917,9 +927,35 @@ test("killing the real engine recovers a running node as interrupted without inv
           })
         ).data,
     );
+    const children = spawnSync("/bin/ps", ["-axo", "pid=,ppid="], {
+      encoding: "utf8",
+    });
+    assert.equal(children.status, 0, children.stderr);
+    const pids = children.stdout
+      .trim()
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/).map(Number))
+      .filter((entry) => entry[1] === owner.pid)
+      .map((entry) => entry[0]);
+    assert.equal(pids.length, 1, "the held Run has one owned worker");
+    ownedPid = pids[0];
+    assert.ok(ownedPid && ownedPid > 0);
     const exit = once(owner, "exit");
     owner.kill("SIGKILL");
     await exit;
+    const deadline = Date.now() + 1500;
+    while (Date.now() < deadline) {
+      try {
+        process.kill(ownedPid, 0);
+      } catch (error) {
+        assert.equal((error as NodeJS.ErrnoException).code, "ESRCH");
+        break;
+      }
+      await delay(10);
+    }
+    assert.throws(() => process.kill(ownedPid as number, 0), { code: "ESRCH" });
+    ownedPid = undefined;
+    assert.doesNotThrow(() => process.kill(unrelated.pid as number, 0));
     recovered = await Engine.connect(binary, worker, root);
     await recovered.workspace({
       kind: "open",
@@ -942,6 +978,15 @@ test("killing the real engine recovers a running node as interrupted without inv
       await exit;
     }
     lines.close();
+    if (ownedPid) {
+      try {
+        process.kill(ownedPid, "SIGKILL");
+      } catch {
+        /* already reaped */
+      }
+    }
+    unrelated.kill("SIGKILL");
+    await unrelatedExit;
     await recovered?.close();
     await rm(temporary, { recursive: true, force: true });
   }

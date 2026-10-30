@@ -7,7 +7,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use cube_core::operations::execution::{self as core, Budget, Effects, Representation};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::io::{self, Read};
+use std::io::{self, BufReader, Read};
 
 fn budget() -> Budget {
     Budget {
@@ -197,20 +197,34 @@ fn execute(invocation: Invocation) -> Result<Value> {
     raw_outputs(&invocation.operation, &named)
 }
 
-pub fn run() -> Result<()> {
-    crate::native::restrict()?;
-    let mut bytes = Vec::new();
-    io::stdin()
-        .take(protocol::contract().frame_bytes as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "invalid_frame")?;
-    if bytes.len() > protocol::contract().frame_bytes {
+/// Receive one bounded task and keep watching the private owner pipe. EOF,
+/// another byte or a read failure terminates the process, even during Core work.
+/// Call after applying the native policy; a failed watcher prevents execution.
+pub fn receive_task() -> Result<Task> {
+    let mut input = BufReader::new(io::stdin());
+    let bytes = protocol::read_frame(&mut input)?.ok_or("invalid_frame")?;
+    if !input.buffer().is_empty() {
         return Err("invalid_frame");
     }
     let value =
         cube_core::pipeline::json::parse(std::str::from_utf8(&bytes).map_err(|_| "invalid_frame")?)
             .map_err(|_| "invalid_frame")?;
     let task: Task = serde_json::from_value(value).map_err(|_| "invalid_command")?;
+    std::thread::Builder::new()
+        .name("worker-owner".into())
+        .spawn(move || {
+            let _ = input.read(&mut [0]);
+            // No destructors or stdout locks: the main thread may be inside an
+            // operation. There are no child processes under the native policy.
+            std::process::exit(1);
+        })
+        .map_err(|_| "owner_watch_unavailable")?;
+    Ok(task)
+}
+
+pub fn run() -> Result<()> {
+    crate::native::restrict()?;
+    let task = receive_task()?;
     let mut stdout = io::stdout().lock();
     let outcome = match task {
         Task::Probe { invocation } => execute(invocation),

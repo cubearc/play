@@ -4,7 +4,9 @@
 <a id="session-and-resource-boundaries"></a>
 <a id="terminal-resource-and-transport-boundaries"></a>
 
-The Electron preview has no integrated PTY or contextual CLI attachment. The native contract defines the required future boundary.
+The Electron preview supports attached contextual CLI commands through private
+pipes. It has no integrated PTY or external terminal attachment. The native
+contract distinguishes the implemented channel from the remaining terminal boundary.
 
 - [Native process and CLI contract](desktop-runtime.md)
 - [Current terminal availability](../terminal.md)

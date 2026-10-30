@@ -4,35 +4,21 @@
 fn main() -> play_engine::Result<()> {
     use play_engine::{native, protocol, worker};
     use serde_json::json;
-    use std::io::{self, Read};
+    use std::io;
 
     native::restrict()?;
-    let parent = rustix::process::getppid();
-    let mut bytes = Vec::new();
-    io::stdin()
-        .take(protocol::contract().frame_bytes as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "invalid_frame")?;
-    if bytes.len() > protocol::contract().frame_bytes {
-        return Err("invalid_frame");
-    }
-    let value =
-        cube_core::pipeline::json::parse(std::str::from_utf8(&bytes).map_err(|_| "invalid_frame")?)
-            .map_err(|_| "invalid_frame")?;
-    let worker::Task::Pipeline { invocation } =
-        serde_json::from_value(value).map_err(|_| "invalid_command")?
-    else {
+    let worker::Task::Pipeline { invocation } = worker::receive_task()? else {
         return Err("invalid_command");
     };
     let mut output = io::stdout().lock();
     let outcome = worker::execute_pipeline(invocation, |event| {
         protocol::write_frame(&mut output, &event)?;
         if event["type"] == "node_started" {
-            // The engine's unchanged wall deadline bounds the hold. Owner death also releases it.
-            while rustix::process::getppid() == parent {
-                std::thread::sleep(std::time::Duration::from_millis(2));
+            // Use the production lifetime guard, not a fixture-only PID check.
+            // The engine's unchanged wall deadline also bounds this hold.
+            loop {
+                std::thread::park();
             }
-            return Err("supervisor_stopped");
         }
         Ok(())
     });

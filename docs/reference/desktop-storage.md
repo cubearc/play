@@ -214,7 +214,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **15**, with no older
+change that order. The coordinated app/engine wire protocol is **16**, with no older
 DTO fallback.
 
 ## Block copies and provenance
