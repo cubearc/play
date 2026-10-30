@@ -24,6 +24,12 @@ in Run history.
 
 ![The native Cube terminal beside a Trail, showing a selected Pipeline Run and its contextual commands.](assets/desktop/context-terminal.png)
 
+![The native Cube terminal on Ubuntu 24.04 ARM64, showing a completed ROT13 Pipeline Run with Hello as its output.](assets/desktop/linux-terminal.png)
+
+The Linux terminal uses the same contextual commands and retained Run evidence.
+This capture comes from the actual Electron test with disposable example data.
+[Open the Linux capture full size](assets/desktop/linux-terminal.png).
+
 Each `selected` command creates a separate Run from the pinned selection. Moving
 to another Trail does not silently retarget the open terminal. Choose **Reconnect**
 to bind the current selection; changing Exploration or Stage opens a fresh session.
