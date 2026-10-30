@@ -23,6 +23,9 @@ export interface PlayBridge {
   workspace: <K extends WorkspaceRequest["kind"]>(
     value: Extract<WorkspaceRequest, { kind: K }>,
   ) => Promise<Responses[K]>;
+  importChallenge: (
+    value: import("./workspace-contract.ts").ChallengeImport,
+  ) => Promise<import("./workspace-contract.ts").ImportedChallenge | null>;
   importImage: (value: ImageImport) => Promise<MutationResult | null>;
   importFile: (value: FileImport) => Promise<MutationResult | null>;
   image: (value: AssetRead) => Promise<string>;

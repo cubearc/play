@@ -5,6 +5,7 @@ import { singleGraph } from "./graph-fixture.js";
 import {
   assetRead,
   cancelRun,
+  challengeImport,
   context,
   fileImport,
   imageImport,
@@ -464,4 +465,28 @@ test("named input bindings and explicit targets use a closed bounded IPC contrac
     { ...run, target_node_id: "/private" },
   ])
     assert.throws(() => runRequest(value));
+});
+
+test("Challenge import accepts only chooser intent, never renderer paths or package data", () => {
+  const value = { workspace_id: owner.workspace_id, key: randomUUID() };
+  assert.deepEqual(challengeImport(value), value);
+  for (const extra of [
+    { path: "/private/data" },
+    { package: "e30=" },
+    { url: "https://example.org" },
+    { execute: true },
+  ]) {
+    assert.throws(
+      () => challengeImport({ ...value, ...extra }),
+      /invalid_command/,
+    );
+  }
+  assert.throws(
+    () => challengeImport({ ...value, workspace_id: "bad" }),
+    /invalid_command/,
+  );
+  assert.throws(
+    () => request({ kind: "import_challenge", ...value, package: "e30=" }),
+    /invalid_command/,
+  );
 });

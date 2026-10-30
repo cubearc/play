@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 12;
+pub const SCHEMA_VERSION: u32 = 13;
 pub const CALLER_SCHEMA: &str = include_str!("callers.sql");
 pub const RUN_SCHEMA: &str = include_str!("runs.sql");
 pub const COPY_SCHEMA: &str = include_str!("copies.sql");
@@ -397,6 +397,7 @@ async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()
             (10, GRAPH_SCHEMA),
             (11, INPUT_SCHEMA),
             (12, CALLER_SCHEMA),
+            (13, include_str!("challenges.sql")),
         ] {
             if version < i64::from(next) && next <= target {
                 sqlx::raw_sql(schema)

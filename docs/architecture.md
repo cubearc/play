@@ -78,7 +78,8 @@ ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.
 
 The [local Electron milestone](https://github.com/cubearc/play/milestone/3)
-includes canonical local Challenge package import and private Candidates/Solutions.
+includes implemented [canonical local Challenge package import](challenges.md)
+and the pending private Candidates/Solutions workflow.
 Cloud is an [independent project](https://github.com/cubearc/play-platform/issues/10),
 with separate [service](https://github.com/cubearc/play-platform/milestone/1) and
 [desktop integration](https://github.com/cubearc/play/milestone/4) milestones.

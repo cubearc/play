@@ -20,6 +20,14 @@ import {
 import type { PipelineDraft, PipelineMode } from "./PipelineEditor";
 
 const messages: Record<string, string> = {
+  unsupported_package:
+    "Choose a supported Cube Play Challenge package. Older manifests cannot be imported.",
+  invalid_package:
+    "This Challenge package has invalid content or identities. No Exploration was imported.",
+  package_integrity:
+    "A file in this package does not match its recorded checksum. No Exploration was imported.",
+  package_limit:
+    "Choose a Challenge package up to 128 KiB, with at most 16 Stages and 7 content blocks per Stage.",
   invalid_binding:
     "Choose an asset revision from this Stage for every named input.",
   pipeline_cycle:
@@ -246,6 +254,19 @@ export function useWorkspace() {
       });
       workspaceRef.current = data;
       setWorkspace(data);
+      await load(current.id, created.explorationId, created.stageId);
+    });
+  const importChallenge = () =>
+    execute(async () => {
+      const current = workspaceRef.current;
+      if (!current) return;
+      const created = await window.play.importChallenge({
+        workspace_id: current.id,
+        key: crypto.randomUUID(),
+      });
+      if (!created || workspaceRef.current?.id !== current.id || !live.current)
+        return;
+      await refreshSummary(current.id);
       await load(current.id, created.explorationId, created.stageId);
     });
   const createStage = (title: string, key: string = crypto.randomUUID()) =>
@@ -741,6 +762,7 @@ export function useWorkspace() {
     refreshSummary,
     open,
     createExploration,
+    importChallenge,
     createStage,
     selectExploration,
     selectStage,

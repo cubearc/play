@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **12**, SQLite application ID
+The native store uses generation **2**, schema version **13**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql` and `callers.sql`.
-Recognized native schemas 1–11 upgrade to schema 12 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql` and `challenges.sql`.
+Recognized native schemas 1–12 upgrade to schema 13 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -380,3 +380,11 @@ An active schema upgrade can additionally hold one private database copy and its
 rollback journal (up to 16 MiB each), separate from the live database ceiling.
 These conservative development limits are explicit admission controls, not a
 release-wide aggregate disk or process memory guarantee.
+
+## Imported Challenge provenance
+
+Canonical [local packages](challenge-package.md) create independent notebook
+entities in one transaction. Schema 13 adds immutable `challenge_imports` records
+scoped to Workspace/Exploration, preserving the package identity, exact source
+digest, claimed remote origin and source-to-local Stage/Block mappings.
+The native upgrade preserves existing content, Run evidence and caller identity.

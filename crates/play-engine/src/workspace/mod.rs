@@ -1,6 +1,7 @@
 mod assets;
 mod bindings;
 mod blocks;
+mod challenges;
 mod cli;
 mod copies;
 mod files;

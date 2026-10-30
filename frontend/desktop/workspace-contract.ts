@@ -154,7 +154,23 @@ export interface TrailView {
   pipelineId: string | null;
   pipeline: PipelineView | null;
 }
+export interface ChallengeOrigin {
+  packageId: string;
+  revision: number;
+  sha256: string;
+  remote: {
+    service_id: string;
+    challenge_id: string;
+    edition_id: string;
+  } | null;
+  stages: {
+    sourceId: string;
+    stageId: string;
+    blocks: { sourceId: string; blockId: string }[];
+  }[];
+}
 export interface ExplorationView extends Summary {
+  origin?: ChallengeOrigin;
   workspaceId: string;
   stages: Summary[];
   stage: StageView;
@@ -318,6 +334,14 @@ export type WorkspaceRequest =
       title: string;
       text: string;
     };
+export interface ChallengeImport {
+  workspace_id: string;
+  key: string;
+}
+export interface ImportedChallenge {
+  explorationId: string;
+  stageId: string;
+}
 export interface ImageImport {
   context: Context;
   key: string;
@@ -665,6 +689,13 @@ function assetRevision(value: unknown) {
   keys(reference, ["asset_id", "revision"]);
   if (!id(reference.asset_id) || !revision(reference.revision))
     throw new Error("invalid_command");
+}
+export function challengeImport(value: unknown): ChallengeImport {
+  const record = object(value);
+  keys(record, ["workspace_id", "key"]);
+  if (!id(record.workspace_id) || !id(record.key))
+    throw new Error("invalid_command");
+  return record as unknown as ChallengeImport;
 }
 export function imageImport(value: unknown): ImageImport {
   const record = object(value);

@@ -13,6 +13,7 @@ import type {
 } from "../desktop/workspace-contract";
 import { blockTitle, contextOf } from "../desktop/workspace-contract";
 import { ArchivedBlocks } from "./ArchivedBlocks";
+import { ChallengeOrigin } from "./ChallengeOrigin";
 import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
 import { TrailCell } from "./TrailCell";
@@ -190,6 +191,7 @@ export function Notebook({
         {exploration.stage.introduction ? (
           <p>{exploration.stage.introduction}</p>
         ) : null}
+        <ChallengeOrigin origin={exploration.origin} />
         <div className="notebook-actions">
           <VscodeButton
             secondary

@@ -11,7 +11,12 @@ import {
   protocol,
   session,
 } from "electron";
-import { AssetGrants, importFile, importImage } from "./assets.ts";
+import {
+  AssetGrants,
+  importChallenge,
+  importFile,
+  importImage,
+} from "./assets.ts";
 import { APP_URL, ownsFrame, resourceName } from "./authority.ts";
 import { Cli } from "./cli.ts";
 import { cliIntent } from "./cli-contract.ts";
@@ -22,6 +27,7 @@ import { terminalIntent } from "./terminal-contract.ts";
 import {
   assetRead,
   cancelRun,
+  challengeImport,
   type ExplorationView,
   fileImport,
   imageImport,
@@ -229,6 +235,11 @@ app
     ipcMain.handle("play:cancel-run", (event, value: unknown) =>
       authorize(event).cancelRun(cancelRun(value)),
     );
+    ipcMain.handle("play:import-challenge", (event, value: unknown) => {
+      const engine = authorize(event);
+      if (!window) throw new Error("unauthorized_frame");
+      return importChallenge(engine, window, challengeImport(value));
+    });
     ipcMain.handle("play:import-image", (event, value: unknown) => {
       const engine = authorize(event);
       if (!window) throw new Error("unauthorized_frame");

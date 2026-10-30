@@ -315,6 +315,7 @@ pub async fn exploration(
     };
     select(connection, &workspace, &exploration, &selected).await?;
     Ok(Exploration {
+        origin: super::challenges::origin(connection, &workspace, &exploration).await?,
         id: exploration,
         workspace_id: workspace,
         title: record.get(0),

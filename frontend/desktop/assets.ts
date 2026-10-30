@@ -11,6 +11,7 @@ import type { Engine } from "./engine.ts";
 import { readImport } from "./imports.ts";
 import type {
   AssetRead,
+  ChallengeImport,
   Context,
   FileImport,
   ImageImport,
@@ -135,5 +136,26 @@ export async function importFile(
     ...value,
     title: basename(path),
     base64: bytes.toString("base64"),
+  });
+}
+
+export async function importChallenge(
+  engine: Engine,
+  window: BrowserWindow,
+  value: ChallengeImport,
+): Promise<unknown> {
+  const selection = await dialog.showOpenDialog(window, {
+    title: "Import a Challenge package",
+    properties: ["openFile"],
+    filters: [{ name: "Cube Play Challenge", extensions: ["json"] }],
+  });
+  if (selection.canceled || selection.filePaths.length !== 1) return null;
+  const path = selection.filePaths[0];
+  if (!path) throw new Error("invalid_package");
+  const bytes = await readImport(path, contract.package_bytes, "package_limit");
+  return engine.workspace({
+    kind: "import_challenge",
+    ...value,
+    package: bytes.toString("base64"),
   });
 }

@@ -129,7 +129,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **19** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **20** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -468,3 +468,12 @@ survive. Unsupported hosts reject session creation with `native_policy_unavailab
 This proof does not establish external discovery, shell job control, grandchildren,
 Windows PTYs or signed distribution support. The [terminal guide](../terminal.md)
 owns the interactive workflow.
+
+## Local Challenge import boundary
+
+The trusted Electron frame requests a native chooser with only Workspace identity
+and an action key. Main reads one regular file with a 128 KiB limit and sends
+`import_challenge` to the engine. The renderer cannot provide package bytes or a
+path. The engine parses the closed [package format](challenge-package.md), validates
+content and commits the ordinary notebook entities and provenance together.
+There is no archive extraction, external content fetch or automatic execution.

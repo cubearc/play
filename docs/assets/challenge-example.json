@@ -1,0 +1,65 @@
+{
+  "format": "cubearc.play.challenge",
+  "version": 1,
+  "id": "0631f871-f627-48c8-b2fe-5c7bc52a1c07",
+  "revision": 1,
+  "title": "Signals in a spiral",
+  "origin": null,
+  "stages": [
+    {
+      "id": "a38d3d8d-0590-4f97-afcc-9e84f3860eac",
+      "title": "Read the image",
+      "blocks": [
+        {
+          "title": "Spiral image",
+          "content": {
+            "kind": "image",
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAAAAABzQ+pjAAAAFElEQVR4nGNwLy1iUFRUYMgpqgAAEJoC5/ShpJAAAAAASUVORK5CYII=",
+            "sha256": "184e84bcc7de5ec87b65e3802a4dd3d899a58aee04a83bda9428b7978f730024",
+            "caption": "Gur xrl vf va gur cvkryf."
+          },
+          "id": "9b5a3e6b-b614-4fae-b937-afd0a0fb0d12"
+        },
+        {
+          "title": "Clue page",
+          "content": {
+            "kind": "page",
+            "text": "<h1>Read the pixels</h1>\n<script>window.packageExecuted = true</script>"
+          },
+          "id": "7a1beafe-91ae-4aa3-a305-e0bcd0452e42"
+        },
+        {
+          "title": "Observation",
+          "content": {
+            "kind": "annotation",
+            "text": "Try the image and caption as separate inputs."
+          },
+          "id": "3fc59a1b-4479-4808-b219-f5f1f86148d6"
+        },
+        {
+          "title": "Bytes",
+          "content": {
+            "kind": "file",
+            "base64": "AAEC",
+            "sha256": "ae4b3280e56e2faf83f414a6e3dabe9d5fbe18976544c05fed121accb85b53fc"
+          },
+          "id": "915e9756-521e-4b5d-8ed5-1fb691cf33ad"
+        }
+      ]
+    },
+    {
+      "id": "8c732ccd-6f04-45e9-b153-d0055e434d67",
+      "title": "Compare the clues",
+      "blocks": [
+        {
+          "id": "7c4eb147-992a-4bb5-81d1-df1d4f19ad13",
+          "title": "Question",
+          "content": {
+            "kind": "text",
+            "text": "What do the image and caption have in common?"
+          }
+        }
+      ]
+    }
+  ]
+}

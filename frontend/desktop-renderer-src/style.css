@@ -1154,3 +1154,22 @@ h1 {
   padding: 4px 12px;
   color: var(--vscode-foreground);
 }
+
+.challenge-origin {
+  margin: 12px 0;
+  color: var(--vscode-foreground);
+  overflow-wrap: anywhere;
+}
+.challenge-origin summary {
+  cursor: pointer;
+  padding-block: 6px;
+}
+.challenge-origin dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+}
+.challenge-origin dd {
+  margin: 0;
+  font-family: var(--vscode-editor-font-family);
+}

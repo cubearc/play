@@ -18,6 +18,7 @@ export function Explorer({
   openNotebook,
   openTrail,
   newExploration,
+  importChallenge,
   newStage,
   chooseWorkspace,
 }: {
@@ -31,6 +32,7 @@ export function Explorer({
   openNotebook: () => void;
   openTrail: (trail: TrailView) => void;
   newExploration: () => void;
+  importChallenge: () => void;
   newStage: () => void;
   chooseWorkspace: () => void;
 }) {
@@ -61,6 +63,16 @@ export function Explorer({
             onClick={newExploration}
           >
             New Exploration
+          </VscodeButton>
+        ) : null}
+        {workspace ? (
+          <VscodeButton
+            secondary
+            icon="folder-opened"
+            disabled={busy}
+            onClick={importChallenge}
+          >
+            Import Challenge
           </VscodeButton>
         ) : null}
       </div>

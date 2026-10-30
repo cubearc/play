@@ -5,6 +5,7 @@ import { terminalIntent } from "./terminal-contract.ts";
 import {
   assetRead,
   cancelRun,
+  challengeImport,
   fileImport,
   imageImport,
   request,
@@ -19,6 +20,8 @@ if (process.isMainFrame) {
     catalog: () => ipcRenderer.invoke("play:catalog"),
     workspace: (value: unknown) =>
       ipcRenderer.invoke("play:workspace", request(value)),
+    importChallenge: (value: unknown) =>
+      ipcRenderer.invoke("play:import-challenge", challengeImport(value)),
     importImage: (value: unknown) =>
       ipcRenderer.invoke("play:import-image", imageImport(value)),
     importFile: (value: unknown) =>

@@ -3453,6 +3453,11 @@ async function checkAuthority(
       const results = [];
       for (const invoke of [
         () => window.play.catalog(),
+        () =>
+          window.play.importChallenge({
+            workspace_id: context.workspace_id,
+            key: crypto.randomUUID(),
+          }),
         () => window.play.workspace({ kind: "list" }),
         () => window.play.importFile({ context, key: crypto.randomUUID() }),
       ]) {
@@ -3477,7 +3482,7 @@ async function checkAuthority(
   );
   assert.deepEqual(
     denied,
-    [true, true, true, true],
+    [true, true, true, true, true],
     "matching URLs cannot authorize another window or its image requests",
   );
   await rogue.close();
@@ -4723,5 +4728,189 @@ test("native notebook queues another cell without disabling unrelated Trails", {
   } finally {
     await application.close();
     await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("canonical Challenge import creates editable grouped content and rejects partial imports", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-challenge-ui-"));
+  const original = await readFile(
+    new URL("../../docs/assets/challenge-example.json", import.meta.url),
+  );
+  const source = join(profile, "challenge.json");
+  await writeFile(source, original);
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Local Challenges");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Import Challenge", exact: true }),
+    ).toBeVisible();
+    await application.evaluate(({ dialog }) => {
+      dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+    });
+    await page
+      .getByRole("button", { name: "Import Challenge", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Import Challenge", exact: true }),
+    ).toBeEnabled();
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, source);
+    await page
+      .getByRole("button", { name: "Import Challenge", exact: true })
+      .click();
+    await expect(
+      notebook(page).getByRole("heading", {
+        name: "Read the image",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const image = () =>
+      notebook(page).getByRole("article", {
+        name: "Spiral image block",
+        exact: true,
+      });
+    await expect(
+      image().getByRole("img", { name: "Spiral image", exact: true }),
+    ).toBeVisible();
+    await expect(image().getByRole("figure")).toContainText(
+      "Gur xrl vf va gur cvkryf.",
+    );
+    await expect(
+      notebook(page).getByRole("article", {
+        name: "Clue page block",
+        exact: true,
+      }),
+    ).toContainText("<script>window.packageExecuted = true</script>");
+    assert.equal(
+      await page.evaluate(
+        () => (window as unknown as Record<string, unknown>).packageExecuted,
+      ),
+      undefined,
+    );
+    await page
+      .getByText("Imported Challenge · revision 1", { exact: true })
+      .click();
+    await expect(notebook(page)).toContainText(
+      JSON.parse(original.toString()).id,
+    );
+    await expect(image()).not.toContainText("Completed");
+    if (nativeWorkers) {
+      await image()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(image()).toContainText("output: The key is in the pixels.");
+    }
+    await saveNote(page, "My local reasoning survives package import.");
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await page
+      .getByText("Imported Challenge · revision 1", { exact: true })
+      .click();
+    await capture(application, "challenge-import");
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("missing_window");
+      window.setSize(800, 700);
+      window.webContents.setZoomFactor(2);
+    });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+      true,
+    );
+    await expect(
+      page.getByText("Imported Challenge · revision 1", { exact: true }),
+    ).toBeVisible();
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("missing_window");
+      window.setSize(1280, 900);
+      window.webContents.setZoomFactor(1);
+    });
+    const identity = JSON.parse(original.toString());
+    identity.stages[0].blocks[3].content.sha256 = "invalid";
+    await writeFile(source, JSON.stringify(identity));
+    await page
+      .getByRole("button", { name: "Import Challenge", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "does not match its recorded checksum",
+    );
+    await expect(
+      page
+        .getByRole("navigation", { name: "Explorations", exact: true })
+        .getByRole("button", { name: "Signals in a spiral", exact: true }),
+    ).toHaveCount(1);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "My local reasoning survives package import.",
+    );
+    await page
+      .getByRole("button", { name: "Dismiss error", exact: true })
+      .click();
+    const moved = join(profile, "moved.json");
+    await writeFile(moved, original);
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, moved);
+    await page
+      .getByRole("button", { name: "Import Challenge", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Explorations", exact: true })
+        .getByRole("button", { name: "Signals in a spiral", exact: true }),
+    ).toHaveCount(2);
+    await expect(page.getByLabel("Stage note", { exact: true })).toHaveValue(
+      "",
+    );
+    await page
+      .getByText("Imported Challenge · revision 1", { exact: true })
+      .click();
+    await expect(notebook(page)).toContainText(identity.id);
+    assert.deepEqual(await readFile(moved), original);
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    await expect(
+      notebook(page).getByRole("heading", {
+        name: "Read the image",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Explorations", exact: true })
+        .getByRole("button", { name: "Signals in a spiral", exact: true }),
+    ).toHaveCount(2);
+    await page
+      .getByRole("button", { name: "02 · Compare the clues", exact: true })
+      .click();
+    await expect(notebook(page)).toContainText(
+      "What do the image and caption have in common?",
+    );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
   }
 });

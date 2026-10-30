@@ -236,8 +236,8 @@ conclusions; local success does not establish hosted CI success. Replace obsolet
 jobs only with reviewed native equivalents. Full local graph/CLI, signed native
 packages, updates and per-OS worker/PTY evidence still gate
 [final acceptance](https://github.com/cubearc/play/issues/57).
-Canonical local package import and private Candidate/Solution journeys remain
-required. Cloud has an independent
+Canonical local package import is tested through the engine and Electron;
+private Candidate/Solution journeys remain required. Cloud has an independent
 [client/service acceptance gate](https://github.com/cubearc/play-platform/issues/9)
 and does not block the local milestone.
 
@@ -349,3 +349,14 @@ supervision helper, original deadlines and unchanged integrity verification. It
 observes Running and Queued cells together, cancels the queued cell without
 stopping the first, and checks keyboard-accessible controls and axe-core rules.
 The normal application and installed worker are not replaced by this fixture.
+
+## Canonical Challenge packages
+
+Engine tests cover grouped image/caption Assets, inert Pages, annotations, binary
+files, ordered Stages, source mappings, independent imports, edits and restart.
+Malformed JSON/Base64, duplicate IDs/keys, unsupported formats, external paths,
+invalid origins, limits and checksum failures reject without partial content.
+The real Electron journey selects the documented example through the chooser,
+checks cancellation and failure recovery, runs the caption with Core, preserves
+reasoning and reopens separate imports. It checks accessibility and zoom/reflow;
+a second frame cannot invoke the import bridge.

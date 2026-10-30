@@ -315,6 +315,10 @@ export function Workbench() {
             }}
             selectStage={(id) => void state.selectStage(id)}
             newExploration={() => setDialog("exploration")}
+            importChallenge={() => {
+              setWelcome(false);
+              void state.importChallenge();
+            }}
             newStage={() => setDialog("stage")}
             chooseWorkspace={() => setWelcome(true)}
             openNotebook={openNotebook}

@@ -58,7 +58,7 @@ pub(super) async fn bytes(
     Ok(())
 }
 
-async fn stage(
+pub(super) async fn stage(
     connection: &mut SqliteConnection,
     workspace: &str,
     exploration: &str,
@@ -98,7 +98,7 @@ async fn stage(
     Ok(id)
 }
 
-async fn new_exploration(
+pub(super) async fn new_exploration(
     connection: &mut SqliteConnection,
     workspace: &str,
     name: &str,
@@ -198,7 +198,7 @@ async fn asset(
     Ok(id)
 }
 
-async fn add(
+pub(super) async fn add(
     connection: &mut SqliteConnection,
     context: &Context,
     name: &str,
@@ -432,6 +432,16 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
                 port,
             )
             .await?
+        }
+        Command::ImportChallenge {
+            workspace_id,
+            package,
+            ..
+        } => {
+            if *workspace_id != owner {
+                return Err("workspace_mismatch");
+            }
+            super::challenges::import(connection, owner, package).await?
         }
         Command::CreateExploration {
             workspace_id,

@@ -118,6 +118,11 @@ pub enum Command {
     Open {
         workspace_id: Uuid,
     },
+    ImportChallenge {
+        workspace_id: Uuid,
+        key: Uuid,
+        package: String,
+    },
     CreateExploration {
         workspace_id: Uuid,
         key: Uuid,
@@ -198,6 +203,7 @@ impl Command {
             | Self::ForkPipeline { key, .. }
             | Self::SaveTrail { key, .. }
             | Self::CreateExploration { key, .. }
+            | Self::ImportChallenge { key, .. }
             | Self::AddAnnotation { key, .. }
             | Self::AddPage { key, .. }
             | Self::PinRunOutput { key, .. }
@@ -409,6 +415,8 @@ pub struct Stage {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Exploration {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<super::challenges::Origin>,
     pub id: String,
     pub workspace_id: String,
     pub title: String,
