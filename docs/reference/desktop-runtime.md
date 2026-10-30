@@ -18,9 +18,11 @@ text Asset revisions for Core execution in a separate worker. Graph
 and the chosen private output retention. Credential storage is not implemented.
 
 The proof is executable on macOS with a locally ad-hoc-signed App Sandbox helper.
-Linux and Windows negotiate the protocol and expose Core adapter descriptions,
-but reject execution with `native_policy_unavailable`. Neither has an
-unrestricted or container fallback. This is not a release-supported desktop
+Linux x64/ARM64 has a separate native worker proof using Landlock and seccomp,
+with the same engine, Core registry and Run supervisor. The Electron source
+preview still enables workers only on macOS; its Linux/Windows path rejects
+execution with `native_policy_unavailable`. No path has an unrestricted or
+container fallback. This is not a release-supported desktop
 distribution. The complete application still requires the remaining shell, storage, worker and
 packaging deliveries. The interactive native PTY below is a macOS development proof.
 
@@ -267,12 +269,47 @@ mappings are measured through the safe `libproc` API before setting the addition
 VM allowance. Refusing the memory policy aborts the worker; no failed limit is
 silently ignored. Core's own Brainfuck work/memory/output limits also apply.
 
-The release target matrix is Windows x64, macOS x64/arm64 and Linux x64. Linux
-requires a proved filesystem/network/process policy such as Landlock plus seccomp;
-Windows requires an AppContainer/restricted-token boundary plus Job Object resource
-and tree ownership. A Job Object alone or Unix file permissions alone is not a
-filesystem/network sandbox. These mechanisms and their OS-version floors require
-native validation; the proof advertises no release-supported matrix yet.
+### Linux worker boundary
+
+The native worker proof runs directly on Ubuntu 24.04 x64 and ARM64 hosts. It
+requires an enabled Landlock LSM with ABI 3 or newer, seccomp filter support and
+readable `/proc/self/status` at startup. Kernel version alone does not establish
+that these facilities are enabled. Unsupported architectures or a failed policy
+refuse execution before reading a task; there is no weaker fallback.
+
+The single-threaded worker measures its initial virtual address space, imposes
+hard resource limits, then installs a Landlock ruleset with no filesystem grants
+and a default-deny seccomp allowlist. It creates the owner watcher and operation
+threads only after both policies succeed. Inputs arrive on inherited pipes; the
+worker has no database handle, source path, scratch directory or export grant.
+
+| Resource or authority | Linux worker policy |
+| --- | --- |
+| Files and metadata | No pathname access; Landlock handles all ABI-3 filesystem rights and seccomp denies path syscalls. |
+| Network and IPC sockets | Socket creation and socket syscalls are denied, including TCP, UDP and Unix sockets. |
+| Processes | Fork, exec and process-form clone are denied. Only thread-form clone flags are admitted; clone3 returns ENOSYS so libc can use the inspected clone form. |
+| Other owners | Process signalling is denied; tgkill is restricted to the worker's own thread group. RLIMIT_NPROC is not changed because it counts the shared host UID. |
+| CPU and memory | One second of process CPU; RLIMIT_AS bounds initial virtual mappings plus 128 MiB. This is not an RSS ceiling. |
+| Files and handles | Zero core dump size, 32 descriptors and 16384-byte file-size limit. No writable file grant is provided. |
+| Threads and Runs | The common executor admits two node threads plus its owner watcher per worker. CPU/VM limits cover the whole process; this is not a kernel thread-count quota. The engine bounds active/queued Runs and enforces the two-second deadline. |
+| Enforcement failure | `filesystem_policy_failed`, `syscall_policy_failed` or the corresponding resource-policy error terminates the worker without executing Core. The supervisor records failed work. |
+
+The adversarial fixture verifies inherited denial inside a real thread, unchanged
+host-UID process limits, refusal when the Landlock syscall is unavailable and
+survival of an unrelated process. The common native matrix executes every eligible
+Core operation and verifies retained outputs after restart. Worker crash,
+cancellation, deadline, queue and owner-death tests use the common supervisor.
+See [Linux verification commands](../development.md#validate-linux-workers).
+
+Policy references: [Landlock](https://docs.kernel.org/userspace-api/landlock.html)
+and [seccomp filtering](https://docs.kernel.org/userspace-api/seccomp_filter.html).
+Linux PTYs, Electron helper preparation/integrity, distribution packaging and the
+remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
+
+The release target matrix is Windows x64, macOS x64/arm64 and Linux x64. Windows
+still needs a proved filesystem/network boundary as well as resource and process
+ownership; Job Objects alone are insufficient. These worker proofs advertise no
+release-supported distribution matrix.
 
 Run `npm run desktop:test --prefix frontend` for real engine/worker and adversarial
 capability checks, and `npm run desktop:smoke --prefix frontend` for actual Electron

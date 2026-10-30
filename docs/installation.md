@@ -4,8 +4,9 @@
 
 Build the current desktop preview from trusted Cube and Play checkouts side by
 side. Use macOS to run operations: the macOS helper is locally signed and runs
-inside App Sandbox. Native Windows/Linux execution returns
+inside App Sandbox. The Electron preview on Windows/Linux returns
 `native_policy_unavailable`; it does not fall back to another runtime.
+Linux workers have a separate [contributor validation](development.md#validate-linux-workers).
 There is no release-supported signed installer or automatic updater yet.
 
 ## Prerequisites

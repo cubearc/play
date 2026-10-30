@@ -127,7 +127,9 @@ test("every discovered native executor runs its Core known answer through owned 
             import.meta.url,
           ),
         )
-      : undefined;
+      : process.platform === "linux"
+        ? binary
+        : undefined;
   let engine = await Engine.connect(binary, worker, join(root, "private"));
   try {
     const catalog = await engine.catalog();
@@ -279,7 +281,7 @@ test("every discovered native executor runs its Core known answer through owned 
         operation_version: operation.operation_version,
         retain_output: true,
       };
-      if (process.platform !== "darwin") {
+      if (!worker) {
         await assert.rejects(
           engine.startRun(request),
           /native_policy_unavailable/,

@@ -100,15 +100,17 @@ Each case has an independent private store, so Workspace quotas do not limit mat
 coverage. Only canonical parameter defaults adopt lower host defaults; the report
 records both configurations. It does not claim native execution for unregistered
 Core operations or unsupported platforms. CI retains `native-operation-conformance.json`
-for each tested macOS architecture. A real
+for each tested macOS and Linux worker architecture. A real
 Electron journey uses generated traversal/optional controls, refuses an invalid
 array draft, connects the byte port through UTF-8 and ROT13, executes a separately
 registered text operation, retains both image-export ports and reopens exact Run
 evidence. Core schemas and the full API conformance matrix remain independent checks.
 
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
-ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not
-prove worker/PTY enforcement; unsupported native execution must refuse. None of
+ad-hoc signed and sandboxed. Linux x64/ARM64 jobs separately execute the native worker boundary, Core matrix
+and workspace/supervisor suite using the commands in [development](../development.md#validate-linux-workers).
+Linux PTYs and Windows worker enforcement remain unproved; ordinary Rust/protocol
+tests do not establish those capabilities. None of
 these commands establishes publisher signing, notarization, signed updates or a
 complete packaged Windows/macOS/Linux release.
 
@@ -222,7 +224,7 @@ pinned sources with `--locked`, review rendered pages and verify the authorized
 public deployment's revisions and content.
 
 The current [CI workflow](../../.github/workflows/ci.yml) requires native Rust
-Linux/macOS/Windows, Rust quality/coverage, frontend/browser, macOS Electron
+Linux/macOS/Windows, Rust quality/coverage, frontend/browser, Linux native workers, macOS Electron
 ARM64/Intel and Docker integration jobs. Record exact revisions and observed
 conclusions; local success does not establish hosted CI success. Replace obsolete
 jobs only with reviewed native equivalents. Full local graph/CLI, signed native
@@ -281,7 +283,7 @@ compares inputs, definitions and actual outputs, reads/cancels the completed Run
 through the CLI, checks reflow and reopens both records after restart.
 
 These checks cover the one-shot attached control client, not external discovery
-or Windows/Linux worker enforcement. Unretired Runner/browser
+or Windows worker enforcement. Linux worker evidence comes from its dedicated native job. Unretired Runner/browser
 checks and the exact Core operation conformance matrix remain required.
 
 
@@ -317,7 +319,8 @@ real IPC test observes two persisted running attempts, cancels both without a jo
 attempt, then uses the production signed worker to compute the joined ROT13 result
 and reopen both histories. Existing EOF, deadline, engine-death and unrelated-process
 checks remain required. This establishes parallel branches inside one worker,
-not cross-Run queue fairness or native execution on Windows/Linux.
+with both macOS and Linux worker policies. Cross-Run admission is verified below;
+Windows native enforcement remains separate.
 
 
 ## Concurrent Run admission

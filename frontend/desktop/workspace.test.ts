@@ -37,12 +37,16 @@ const worker =
           import.meta.url,
         ),
       )
-    : undefined;
+    : process.platform === "linux"
+      ? binary
+      : undefined;
 
 const supervisionWorker = worker
   ? fileURLToPath(
       new URL(
-        "../desktop-native/SupervisionProbe.app/Contents/MacOS/play-engine",
+        process.platform === "linux"
+          ? "../desktop-native/native-supervision-probe"
+          : "../desktop-native/SupervisionProbe.app/Contents/MacOS/play-engine",
         import.meta.url,
       ),
     )
@@ -114,7 +118,7 @@ test("native image adapter pins authorized image input and preserves exact Core 
       /pipeline_mismatch/,
     );
     const run = await finished(engine, context, await engine.startRun(request));
-    if (process.platform !== "darwin") {
+    if (!worker) {
       assert.equal(run.status, "failed");
       return;
     }

@@ -29,9 +29,30 @@ launches the actual Electron app with temporary private data; `desktop:proof`
 opens it interactively. The macOS helpers use local ad-hoc signatures, without a
 publisher certificate or host policy changes.
 
-macOS executes the installed native text adapters. Windows/Linux refuse worker
-execution until their policies are validated; a shell preview does not establish
-release support. See [native execution](reference/desktop-runtime.md).
+The Electron preview enables native execution on macOS. Linux worker validation
+runs separately below; Windows workers remain unavailable. A shell preview does
+not establish release support. See [native execution](reference/desktop-runtime.md).
+
+## Validate Linux workers
+
+On a native Linux x64 or ARM64 host with Landlock ABI 3 and seccomp enabled, run
+from the Play root after `npm ci --prefix frontend`:
+
+```sh
+cargo build -p play-engine --bin play-engine --examples --locked
+mkdir -p frontend/desktop-native
+cp target/debug/play-engine target/debug/examples/native-boundary-probe target/debug/examples/linux-boundary-probe target/debug/examples/native-supervision-probe frontend/desktop-native/
+(cd frontend && npx tsc -p tsconfig.desktop.json)
+(cd frontend && node --test --test-concurrency=1 desktop-dist/linux.test.js desktop-dist/registry.test.js desktop-dist/workspace.test.js)
+```
+
+These checks execute actual Core operations and retained Runs through native
+processes, then verify policy denial, resource limits and supervisor cleanup.
+They require no Electron launch, container, root privilege or host policy change.
+The test binaries are development fixtures; they are not application IPC actions.
+This worker validation does not enable the Linux Electron preview or terminal.
+The [runtime reference](reference/desktop-runtime.md#linux-worker-boundary) owns
+kernel requirements and exact limits.
 
 ## Explore the notebook preview
 
