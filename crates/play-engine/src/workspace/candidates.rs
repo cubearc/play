@@ -141,7 +141,7 @@ pub async fn read(
     )
 }
 
-async fn evidence(
+pub(super) async fn evidence(
     connection: &mut SqliteConnection,
     context: &Context,
     selected: &CandidateSelection,
@@ -228,7 +228,7 @@ async fn output(
     )
 }
 
-fn output_contract(
+pub(super) fn output_contract(
     plan: &Value,
     node: &Value,
 ) -> Result<cube_core::operations::contracts::Contract> {

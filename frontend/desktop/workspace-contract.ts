@@ -196,6 +196,23 @@ export interface WorkspaceList {
 
 export type WorkspaceRequest =
   | {
+      kind: "save_solution";
+      context: Context;
+      key: string;
+      solution_id: string;
+      expected_revision: number;
+      candidate_revision: number;
+      title: string;
+      explanation: string;
+    }
+  | {
+      kind: "get_solution";
+      context: Context;
+      solution_id: string;
+      revision: number | null;
+    }
+  | { kind: "list_solutions"; context: Context }
+  | {
       kind: "select_candidate";
       context: Context;
       key: string;
@@ -503,7 +520,54 @@ export interface CandidateView {
         };
       };
 }
+export interface SolutionSummary {
+  id: string;
+  title: string;
+  revision: number;
+}
+export interface SolutionView extends SolutionSummary {
+  selectedRevision: number;
+  explanation: string;
+  status: "private_unverified";
+  history: { revision: number; title: string }[];
+  evidence: CandidateView["evidence"];
+  gaps: { reference: string; source: string; code: string }[];
+  snapshot: {
+    formatVersion: 1;
+    stageId: string;
+    candidate: { id: string; revision: number };
+    selection: CandidateSelection;
+    path: null | {
+      runId: string;
+      trail: { id: string; revision: number; hypothesis: string };
+      pipeline: { id: string; revision: number };
+      nodes: {
+        id: string;
+        name: string;
+        operation: string;
+        operationVersion: number;
+        parameters: JsonValue;
+        inputs: JsonValue;
+        contractDigest: string;
+        attemptId: string;
+        ports: string[];
+      }[];
+      inputs: Record<
+        string,
+        {
+          assetId: string;
+          revision: number;
+          semanticType: string;
+          used: boolean;
+        }
+      >;
+    };
+  };
+}
 export interface Responses {
+  save_solution: { solutionId: string; revision: number };
+  get_solution: SolutionView;
+  list_solutions: { solutions: SolutionSummary[] };
   select_candidate: { candidateId: string; revision: number };
   get_candidate: { candidate: CandidateView | null };
   create_pipeline: { pipelineId: string; revision: number };
@@ -559,6 +623,17 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    save_solution: [
+      "context",
+      "key",
+      "solution_id",
+      "expected_revision",
+      "candidate_revision",
+      "title",
+      "explanation",
+    ],
+    get_solution: ["context", "solution_id", "revision"],
+    list_solutions: ["context"],
     select_candidate: ["context", "key", "expected_revision", "selection"],
     get_candidate: ["context", "revision"],
     create_pipeline: ["workspace_id", "key", "title", "definition"],
@@ -656,13 +731,13 @@ export function request(value: unknown): WorkspaceRequest {
           throw new Error("invalid_command");
       } else throw new Error("invalid_command");
     } else if (
-      kind === "get_candidate" &&
+      (kind === "get_candidate" || kind === "get_solution") &&
       field === "revision" &&
       value === null
     )
       continue;
     else if (
-      kind === "select_candidate" &&
+      (kind === "select_candidate" || kind === "save_solution") &&
       field === "expected_revision" &&
       value === 0
     )
@@ -718,6 +793,7 @@ export function request(value: unknown): WorkspaceRequest {
     } else if (
       field === "expected_revision" ||
       field === "revision" ||
+      field === "candidate_revision" ||
       field === "operation_version"
     ) {
       if (
@@ -734,6 +810,9 @@ export function request(value: unknown): WorkspaceRequest {
     } else if (field === "title") {
       if (!bytes(value, 120) || !value.trim())
         throw new Error("invalid_command");
+    } else if (field === "explanation") {
+      if (!bytes(value, limits.note_bytes)) throw new Error("input_limit");
+      if (!value.trim()) throw new Error("invalid_command");
     } else if (field === "text") {
       if (
         !bytes(

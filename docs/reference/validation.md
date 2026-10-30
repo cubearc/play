@@ -237,7 +237,7 @@ jobs only with reviewed native equivalents. Full local graph/CLI, signed native
 packages, updates and per-OS worker/PTY evidence still gate
 [final acceptance](https://github.com/cubearc/play/issues/57).
 Canonical local package import and private Stage Candidates are tested through
-the engine and Electron; Solution walkthrough journeys remain required. Cloud has an independent
+the engine and Electron, including Solution walkthrough revisions. Cloud has an independent
 [client/service acceptance gate](https://github.com/cubearc/play-platform/issues/9)
 and does not block the local milestone.
 
@@ -376,4 +376,21 @@ choosing a retained output, stale revision recovery, browsing selection history,
 opening the source Run, independent Explorations and application restart. It
 checks axe-core rules and shell/panel reflow at the supported small window size
 and 200% zoom. None of these checks establishes official answer correctness or
-completion of the Solution workflow.
+completion of remaining note targeting, recursive evidence composition or old runtime retirement.
+
+
+### Native Solution walkthroughs
+
+`crates/play-engine/tests/solutions.rs` covers immutable explanations and exact
+Candidate selections across edits/restart, scoped histories, bounded admission,
+idempotency/conflicts, schema 14 upgrade, protected records and unsupported snapshot
+format refusal. Real Core graph
+execution verifies selected dependency paths excluding alternatives and downstream
+nodes. A controlled missing-output fixture preserves the snapshot and reports an
+availability gap. No old snapshot format reader is used.
+
+The Electron Candidate/Solution journey saves and revises an explanation, handles
+an independently written revision without losing its draft, inspects history,
+reopens the app and checks independent Explorations. It also checks accessibility
+and notebook reflow at the supported small window and 200% zoom. These checks do
+not prove Cloud validation, signed distribution or retirement of the old runtime.

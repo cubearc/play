@@ -1236,3 +1236,47 @@ h1 {
 .candidate-heading {
   overflow-wrap: anywhere;
 }
+
+.solution-panel form,
+.solution-panel form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.solution-panel form {
+  margin-top: 16px;
+}
+.solution-panel vscode-textfield,
+.solution-panel vscode-textarea {
+  width: 100%;
+  min-width: 0;
+}
+.solution-explanation {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.solution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.solution-panel h3,
+.solution-panel li {
+  overflow-wrap: anywhere;
+}
+.solution-summary {
+  cursor: pointer;
+}
+.solution-summary h2 {
+  display: inline;
+  margin-right: 12px;
+}
+.solution-summary .muted {
+  overflow-wrap: anywhere;
+}
+.solution-panel details[open] > .solution-summary {
+  margin-bottom: 12px;
+}
+.solution-panel > details > vscode-button {
+  margin-top: 8px;
+}

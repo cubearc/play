@@ -17,6 +17,7 @@ import { CandidatePanel } from "./Candidates";
 import { ChallengeOrigin } from "./ChallengeOrigin";
 import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
+import { SolutionsPanel } from "./Solutions";
 import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -266,6 +267,7 @@ export function Notebook({
         </span>
       </header>
       <CandidatePanel />
+      <SolutionsPanel />
       {exploration.stage.blocks.map((block, index) => {
         const title = blockTitle(block);
         const draft = block.kind === "note" ? notes.state(block.note) : null;

@@ -15,6 +15,8 @@ mod queries;
 mod results;
 mod run_plan;
 mod runs;
+mod solution_path;
+mod solutions;
 mod storage;
 mod upgrade;
 
@@ -220,6 +222,26 @@ impl Manager {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;
                 self.runtime
                     .block_on(runs::list(store, &context, trail_id, before))
+            }
+            Command::ListSolutions { context } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                let owner = store.identity.workspace_id;
+                self.runtime.block_on(async {
+                    queries::context(store.connection()?, owner, &context).await?;
+                    solutions::list(store.connection()?, &context).await
+                })
+            }
+            Command::GetSolution {
+                context,
+                solution_id,
+                revision,
+            } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                let owner = store.identity.workspace_id;
+                self.runtime.block_on(async {
+                    queries::context(store.connection()?, owner, &context).await?;
+                    solutions::read(store.connection()?, &context, solution_id, revision).await
+                })
             }
             Command::GetCandidate { context, revision } => {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;

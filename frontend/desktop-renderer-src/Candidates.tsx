@@ -46,6 +46,9 @@ interface Candidates {
   openRun: (origin: { trailId: string; runId: string }) => void;
 }
 const CandidateContext = createContext<Candidates | null>(null);
+export function useCandidate() {
+  return useContext(CandidateContext);
+}
 export function CandidateProvider({
   context,
   disabled,
@@ -256,40 +259,12 @@ export function CandidatePanel() {
               ))}
             </select>
           </label>
-          {evidence?.kind === "asset" ? (
-            <>
-              <p>
-                {evidence.asset.title} · Asset r{evidence.asset.revision}
-              </p>
-              {evidence.asset.content.kind === "image" ? (
-                <AssetImage asset={evidence.asset} context={state.context} />
-              ) : evidence.asset.content.kind === "file" ? (
-                <FilePreview content={evidence.asset.content} details />
-              ) : (
-                <pre>{evidence.asset.content.text || "(empty text)"}</pre>
-              )}
-            </>
-          ) : evidence?.kind === "run_output" ? (
-            <>
-              <p>
-                {evidence.origin.operationName} · {evidence.origin.port} · Run{" "}
-                {evidence.origin.sequence} · {evidence.semanticType}
-              </p>
-              <pre>
-                {formatResultValue(evidence.value, evidence.semanticType)}
-              </pre>
-              <VscodeButton
-                secondary
-                onClick={() => state.openRun(evidence.origin)}
-              >
-                Open source Run
-              </VscodeButton>
-            </>
-          ) : evidence?.kind === "unavailable" ? (
-            <p role="alert">
-              Evidence unavailable ({evidence.code}). The selected reference is
-              preserved; availability does not verify an answer.
-            </p>
+          {evidence ? (
+            <CandidateEvidence
+              evidence={evidence}
+              context={state.context}
+              openRun={state.openRun}
+            />
           ) : null}
           <details>
             <summary>Selected evidence reference</summary>
@@ -322,5 +297,50 @@ export function CandidateSummary() {
             ? "Loading Stage candidate…"
             : "Choose an answer in the Stage notebook or asset canvas."}
     </span>
+  );
+}
+
+export function CandidateEvidence({
+  evidence,
+  context,
+  openRun,
+}: {
+  evidence: CandidateView["evidence"];
+  context: Context;
+  openRun: Candidates["openRun"];
+}) {
+  return (
+    <>
+      {evidence?.kind === "asset" ? (
+        <>
+          <p>
+            {evidence.asset.title} · Asset r{evidence.asset.revision}
+          </p>
+          {evidence.asset.content.kind === "image" ? (
+            <AssetImage asset={evidence.asset} context={context} />
+          ) : evidence.asset.content.kind === "file" ? (
+            <FilePreview content={evidence.asset.content} details />
+          ) : (
+            <pre>{evidence.asset.content.text || "(empty text)"}</pre>
+          )}
+        </>
+      ) : evidence?.kind === "run_output" ? (
+        <>
+          <p>
+            {evidence.origin.operationName} · {evidence.origin.port} · Run{" "}
+            {evidence.origin.sequence} · {evidence.semanticType}
+          </p>
+          <pre>{formatResultValue(evidence.value, evidence.semanticType)}</pre>
+          <VscodeButton secondary onClick={() => openRun(evidence.origin)}>
+            Open source Run
+          </VscodeButton>
+        </>
+      ) : evidence?.kind === "unavailable" ? (
+        <p role="alert">
+          Evidence unavailable ({evidence.code}). The selected reference is
+          preserved; availability does not verify an answer.
+        </p>
+      ) : null}
+    </>
   );
 }

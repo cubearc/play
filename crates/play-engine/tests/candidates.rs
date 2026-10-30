@@ -393,7 +393,7 @@ fn native_schema_thirteen_upgrades_without_changing_notebook_or_run_evidence() {
             )
             .await
             .unwrap();
-            sqlx::raw_sql("DROP TABLE candidate_revisions; DROP TABLE candidates;")
+            sqlx::raw_sql("DROP TABLE solution_revisions; DROP TABLE solutions; DROP TABLE candidate_revisions; DROP TABLE candidates;")
                 .execute(&mut db)
                 .await
                 .unwrap();

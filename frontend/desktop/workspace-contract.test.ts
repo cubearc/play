@@ -528,3 +528,40 @@ test("Candidate selections accept only exact scoped immutable references", () =>
       /invalid_command/,
     );
 });
+
+test("Solutions accept scoped Candidate revisions and bounded explanation only", () => {
+  const value = {
+    kind: "save_solution",
+    context: owner,
+    key: randomUUID(),
+    solution_id: randomUUID(),
+    expected_revision: 0,
+    candidate_revision: 1,
+    title: "Answer",
+    explanation: "The clue supports this result.",
+  };
+  assert.deepEqual(request(value), value);
+  for (const extra of [
+    { snapshot: {} },
+    { path: "/tmp/private" },
+    { candidate_revision: 0 },
+    { explanation: " " },
+    { explanation: "é".repeat(1025) },
+    { title: "" },
+    { expected_revision: -1 },
+  ])
+    assert.throws(() => request({ ...value, ...extra }));
+  const read = {
+    kind: "get_solution",
+    context: owner,
+    solution_id: value.solution_id,
+    revision: null,
+  };
+  assert.deepEqual(request(read), read);
+  assert.deepEqual(request({ ...read, revision: 1 }), { ...read, revision: 1 });
+  assert.throws(() => request({ ...read, revision: 0 }));
+  assert.deepEqual(request({ kind: "list_solutions", context: owner }), {
+    kind: "list_solutions",
+    context: owner,
+  });
+});

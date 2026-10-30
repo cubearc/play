@@ -129,7 +129,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **21** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **22** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -480,3 +480,13 @@ and an action key. Main reads one regular file with a 128 KiB limit and sends
 path. The engine parses the closed [package format](challenge-package.md), validates
 content and commits the ordinary notebook entities and provenance together.
 There is no archive extraction, external content fetch or automatic execution.
+
+
+### Solution commands
+
+The native closed command set includes `save_solution`, `list_solutions` and
+`get_solution`. They use the same scoped private engine bridge and trusted-frame
+checks as Candidate commands. Renderer requests carry exact Candidate revisions
+and bounded explanation text; only the engine constructs snapshots. See
+[Solution snapshots](desktop-storage.md#solution-snapshots) for fields, limits,
+revision conflicts, immutable evidence and availability gaps.

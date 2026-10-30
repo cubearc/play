@@ -46,6 +46,23 @@ pub enum CandidateSelection {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    SaveSolution {
+        context: Context,
+        key: Uuid,
+        solution_id: Uuid,
+        expected_revision: i64,
+        candidate_revision: i64,
+        title: String,
+        explanation: String,
+    },
+    ListSolutions {
+        context: Context,
+    },
+    GetSolution {
+        context: Context,
+        solution_id: Uuid,
+        revision: Option<i64>,
+    },
     SelectCandidate {
         context: Context,
         key: Uuid,
@@ -222,7 +239,8 @@ pub enum Command {
 impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
-            Self::SelectCandidate { key, .. }
+            Self::SaveSolution { key, .. }
+            | Self::SelectCandidate { key, .. }
             | Self::CreatePipeline { key, .. }
             | Self::RevisePipeline { key, .. }
             | Self::ForkPipeline { key, .. }

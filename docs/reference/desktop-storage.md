@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **14**, SQLite application ID
+The native store uses generation **2**, schema version **15**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
 `files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql`, `challenges.sql` and `candidates.sql`.
-Recognized native schemas 1–13 upgrade to schema 14 under the owner lock, preserving content,
+Recognized native schemas 1–14 upgrade to schema 15 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -99,7 +99,7 @@ historical definitions and accepted evidence. Accepted executions
 freeze their chosen definition, resolved inputs and Core contract; see
 [native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
 and interruption recovery. [Stage Candidates](#stage-candidates) preserve explicit
-answer selections. Solutions, submissions and official evaluation remain separate
+answer selections and immutable Solution walkthroughs. Submissions and official evaluation remain separate
 deliveries.
 
 ## Inert Page content
@@ -215,7 +215,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **21**, with no older
+change that order. The coordinated app/engine wire protocol is **22**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -370,7 +370,7 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 | One imported PNG | 131072 bytes (128 KiB) |
 | One imported file | 131072 bytes (128 KiB) |
 | File preview source prefix | 256 bytes (512 hexadecimal characters for binary content) |
-| Asset, Note, Trail hypothesis, Run and node-result payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
+| Asset, Note, Trail hypothesis, Run, node-result and Solution payloads/reservations per Exploration | 4194304 bytes (4 MiB) |
 | Runs per Exploration / Workspace | 64 / 128 |
 | Pending Run output reservation | 131072 bytes (128 KiB) |
 | SQLite database | 16777216 bytes (16 MiB), 4096 pages |
@@ -430,3 +430,41 @@ check is not a general replay verifier or official Challenge evaluation. Corrupt
 stores remain errors. No prior browser Candidate/Solution snapshot reader or
 format alias is installed in the native engine; retiring the old served runtime
 remains part of the repository cutover.
+
+
+## Solution snapshots
+
+Schema 15 adds `solutions` and append-only `solution_revisions`, scoped to a
+Workspace/Exploration/Stage. Composite foreign keys pin the selected Candidate
+revision; Candidate and Run storage protect its exact Assets, attempts and inputs.
+Database triggers refuse updates and deletes. The native schema 14 upgrade
+preserves Candidates and their evidence; there is no served-web snapshot reader.
+
+`save_solution` accepts `context`, `key`, `solution_id`, `expected_revision`,
+`candidate_revision`, `title` and `explanation`. A fresh UUID with expected revision
+zero creates a Solution. Later revisions require its current revision. The engine
+builds the snapshot; callers cannot submit snapshot JSON, host paths or evidence
+values. Normal transactional receipt/digest and optimistic conflict rules apply.
+
+`list_solutions` returns `{solutions: [{id, title, revision}]}` for the Stage.
+`get_solution` takes `context`, `solution_id` and `revision` (null for latest),
+returning one selected revision, reference-only history, resolved selected
+`evidence` and explicit `gaps`. Its status is always `private_unverified`.
+
+Snapshot format 1 freezes Stage/Candidate/selection references. For a Run output,
+`path` freezes the selected node's dependency closure, used input Asset revisions,
+node parameters and connections, contract digests, required output ports, actual
+attempts and pinned Trail/Pipeline/Run identity. The full Pipeline definition and
+unselected branches are not copied into the snapshot. Immutable Run plans retain
+the full pinned contracts; reads verify current availability against those exact
+contracts and policies. Asset selections have a null path and retain their exact
+revision/origin without inferred or recursive Run expansion.
+
+There are at most 16 Solutions per Stage, 16 revisions per Solution and 32768
+UTF-8 bytes per generated snapshot. Titles allow 120 bytes, explanations 2048
+bytes and both must contain non-whitespace text. Snapshot/title/explanation bytes
+count toward the existing 4 MiB Exploration quota and 16 MiB database ceiling.
+History responses omit other revisions' full snapshots and evidence values.
+Missing evidence or unavailable contracts/policies remain explicit gaps; malformed
+stores and unsupported snapshot formats fail instead of invoking compatibility
+readers. Reads neither rerun operations nor verify Challenge correctness.

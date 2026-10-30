@@ -40,8 +40,9 @@ upgrade/refusal rules, quotas and recovery.
 
 The [domain contract](reference/desktop-domain.md) defines the complete target
 model. [Stage Candidates](solutions.md) select immutable Asset revisions or retained
-Run outputs. Solution snapshots and official Cloud outcomes remain separate
-deliveries; Run records alone do not imply either.
+Run outputs. [Solutions](solutions.md#save-a-solution-walkthrough) preserve an
+explanation and the chosen contributing path as immutable revisions. Official
+Cloud outcomes remain separate; local evidence does not verify an answer.
 
 ## Request boundary
 
@@ -80,7 +81,7 @@ ad-hoc signing are development checks, not publisher authentication. See
 
 The [local Electron milestone](https://github.com/cubearc/play/milestone/3)
 includes implemented [canonical local Challenge package import](challenges.md)
-and private Stage Candidates. Solution snapshots remain pending.
+and private Stage Candidates and Solution walkthrough revisions.
 Cloud is an [independent project](https://github.com/cubearc/play-platform/issues/10),
 with separate [service](https://github.com/cubearc/play-platform/milestone/1) and
 [desktop integration](https://github.com/cubearc/play/milestone/4) milestones.

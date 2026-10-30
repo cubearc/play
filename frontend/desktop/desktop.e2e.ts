@@ -4915,7 +4915,7 @@ test("canonical Challenge import creates editable grouped content and rejects pa
   }
 });
 
-test("Stage candidates preserve chosen evidence, handle conflicts and reopen independently", {
+test("Stage candidates and Solutions preserve chosen evidence, handle conflicts and reopen independently", {
   timeout: 90000,
 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), "play-candidates-"));
@@ -5044,6 +5044,91 @@ test("Stage candidates preserve chosen evidence, handle conflicts and reopen ind
       ).toContainText("output: First clue.");
       await back();
     }
+    const solutions = () =>
+      notebook(page).getByRole("region", {
+        name: "Stage solutions",
+        exact: true,
+      });
+    await solutions()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await solutions()
+      .getByRole("button", { name: /New solution from Candidate/ })
+      .click();
+    await solutions()
+      .getByLabel("Solution title", { exact: true })
+      .fill("The first clue");
+    await solutions()
+      .getByLabel("Solution explanation", { exact: true })
+      .fill("ROT13 reveals the selected clue. This is my local explanation.");
+    await solutions()
+      .getByRole("button", { name: "Save solution", exact: true })
+      .click();
+    const saved = () =>
+      solutions().getByRole("article", { name: "Saved solution", exact: true });
+    await expect(saved()).toContainText("This is my local explanation.");
+    await expect(saved()).toContainText(
+      nativeWorkers ? "First clue." : "Gur xrl.",
+    );
+    if (nativeWorkers) await expect(saved()).toContainText("Contributing path");
+    await solutions()
+      .getByRole("button", { name: "Revise explanation", exact: true })
+      .click();
+    await solutions()
+      .getByLabel("Solution explanation", { exact: true })
+      .fill("A revised explanation that preserves the same evidence.");
+    const owner = await current(page);
+    await page.evaluate(async ({ workspace, exploration }) => {
+      const context = {
+        workspace_id: workspace.id,
+        exploration_id: exploration.id,
+        stage_id: exploration.stage.id,
+      };
+      const list = await window.play.workspace({
+        kind: "list_solutions",
+        context,
+      });
+      const item = list.solutions[0];
+      if (!item) throw new Error("missing_solution");
+      const detail = await window.play.workspace({
+        kind: "get_solution",
+        context,
+        solution_id: item.id,
+        revision: null,
+      });
+      await window.play.workspace({
+        kind: "save_solution",
+        context,
+        key: crypto.randomUUID(),
+        solution_id: item.id,
+        expected_revision: 1,
+        candidate_revision: detail.snapshot.candidate.revision,
+        title: item.title,
+        explanation: "An independently saved explanation.",
+      });
+    }, owner);
+    await solutions()
+      .getByRole("button", { name: "Save solution", exact: true })
+      .click();
+    await expect(solutions().getByRole("alert")).toContainText(
+      "Your draft is preserved",
+    );
+    await expect(
+      solutions().getByLabel("Solution explanation", { exact: true }),
+    ).toHaveValue("A revised explanation that preserves the same evidence.");
+    await solutions()
+      .getByRole("button", { name: "Save solution", exact: true })
+      .click();
+    await expect(saved()).toContainText("A revised explanation");
+    await saved()
+      .getByLabel("Solution revision", { exact: true })
+      .selectOption("1");
+    await expect(saved()).toContainText("This is my local explanation.");
+    await saved()
+      .getByLabel("Solution revision", { exact: true })
+      .selectOption("3");
+    await solutions().evaluate((e) => e.scrollIntoView({ block: "start" }));
+    await capture(application, "desktop-stage-solution", false);
     assert.deepEqual((await accessibility(page)).violations, []);
     await capture(application, "desktop-stage-candidate");
     for (const zoom of [1, 2]) {
@@ -5054,6 +5139,11 @@ test("Stage candidates preserve chosen evidence, handle conflicts and reopen ind
         win.webContents.setZoomFactor(zoom);
       }, zoom);
       await expect(panel()).toBeVisible();
+      await expect
+        .poll(() =>
+          solutions().evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+        )
+        .toBe(true);
       assert.ok(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth + 1,
@@ -5075,6 +5165,7 @@ test("Stage candidates preserve chosen evidence, handle conflicts and reopen ind
     });
     await create(page, "Exploration", "Independent answer");
     await expect(panel()).toContainText("Choose an asset");
+    await expect(solutions()).toContainText("Explain a selected candidate");
     await explorer(page)
       .getByRole("button", { name: "Hidden message", exact: true })
       .click();
@@ -5091,6 +5182,14 @@ test("Stage candidates preserve chosen evidence, handle conflicts and reopen ind
       .getByLabel("Candidate revision", { exact: true })
       .selectOption("1");
     await expect(panel()).toContainText("Gur xrl.");
+    await solutions()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await expect(saved()).toContainText("A revised explanation");
+    await saved()
+      .getByLabel("Solution revision", { exact: true })
+      .selectOption("1");
+    await expect(saved()).toContainText("This is my local explanation.");
   } finally {
     await application.close();
     await rm(profile, { recursive: true, force: true });
