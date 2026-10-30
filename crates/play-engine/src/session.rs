@@ -204,6 +204,7 @@ fn dispatch(
     output: &mut impl Write,
 ) -> Result<()> {
     let id = command.id();
+    let cli = matches!(command, Command::StartCliRun { .. });
     match command {
         Command::Hello { .. } => reject(output, id, "already_negotiated"),
         Command::Catalog { .. } => protocol::write_frame(
@@ -216,11 +217,15 @@ fn dispatch(
             }
             launch(id, invocation, worker, active, output)
         }
-        Command::StartRun { request, .. } => {
+        Command::StartRun { request, .. } | Command::StartCliRun { request, .. } => {
             let Some(manager) = store.as_mut() else {
                 return reject(output, id, "workspace_unavailable");
             };
-            match manager.existing_run(&request) {
+            match if cli {
+                manager.existing_cli_run(&request)
+            } else {
+                manager.existing_run(&request)
+            } {
                 Ok(Some(data)) => {
                     return protocol::write_frame(
                         output,
@@ -236,7 +241,11 @@ fn dispatch(
             if active.is_some() {
                 return reject(output, id, "busy");
             }
-            let prepared = match manager.prepare_run(&request) {
+            let prepared = match if cli {
+                manager.prepare_cli_run(&request)
+            } else {
+                manager.prepare_run(&request)
+            } {
                 Ok(value) => value,
                 Err(code) => return reject(output, id, code),
             };
@@ -263,6 +272,20 @@ fn dispatch(
             }
             let data = manager.run_detail(&identity.context, identity.id)?;
             protocol::write_frame(output, &json!({"type":"run","id":id,"data":data}))
+        }
+        Command::CliRead {
+            context, command, ..
+        } => {
+            match store
+                .as_mut()
+                .ok_or("workspace_unavailable")
+                .and_then(|store| store.cli_read(&context, command))
+            {
+                Ok(data) => {
+                    protocol::write_frame(output, &json!({"type":"workspace","id":id,"data":data}))
+                }
+                Err(code) => reject(output, id, code),
+            }
         }
         Command::CancelRun {
             context, run_id, ..

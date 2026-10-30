@@ -12,6 +12,8 @@ import {
 } from "electron";
 import { AssetGrants, importFile, importImage } from "./assets.ts";
 import { APP_URL, ownsFrame, resourceName } from "./authority.ts";
+import { Cli } from "./cli.ts";
+import { cliIntent } from "./cli-contract.ts";
 import { Engine } from "./engine.ts";
 import { verifyNative } from "./integrity.ts";
 import {
@@ -52,6 +54,7 @@ const workerPath =
     ? fileURLToPath(new URL("Worker.app/Contents/MacOS/play-engine", native))
     : undefined;
 let engine: Engine | undefined;
+let cli: Cli | undefined;
 let window: BrowserWindow | undefined;
 let quitting = false;
 let dirty = false;
@@ -173,6 +176,12 @@ app
       workerPath,
       join(profile, "workspaces"),
     );
+    cli = new Cli(
+      fileURLToPath(
+        new URL(process.platform === "win32" ? "cube.exe" : "cube", native),
+      ),
+      engine,
+    );
     const authorize = (event: Electron.IpcMainInvokeEvent): Engine => {
       if (!window || !ownsFrame(event, window.webContents) || !engine) {
         throw new Error("unauthorized_frame");
@@ -199,6 +208,11 @@ app
         });
       }
       return data;
+    });
+    ipcMain.handle("play:cli", (event, value: unknown) => {
+      authorize(event);
+      if (!cli) throw new Error("cli_unavailable");
+      return cli.execute(cliIntent(value));
     });
     ipcMain.handle("play:start-run", (event, value: unknown) =>
       authorize(event).startRun(runRequest(value)),
@@ -236,6 +250,7 @@ app
     createWindow();
   })
   .catch(async () => {
+    await cli?.close();
     await engine?.close();
     app.exit(1);
   });
@@ -251,6 +266,7 @@ app.on("before-quit", (event) => {
     if (!discard || quitting) return;
     quitting = true;
     grants.revoke();
+    await cli?.close();
     await engine?.close();
     app.exit(0);
   });

@@ -22,7 +22,11 @@ pub struct Plan {
     pub inputs: BTreeMap<String, super::model::AssetRevision>,
 }
 
-pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> Result<Plan> {
+pub async fn build(
+    connection: &mut SqliteConnection,
+    request: &RunRequest,
+    caller: super::runs::Caller,
+) -> Result<Plan> {
     let context = &request.context;
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
@@ -135,7 +139,7 @@ pub async fn build(connection: &mut SqliteConnection, request: &RunRequest) -> R
         .collect::<Result<Vec<_>>>()?;
     let target_plan = node_plan(target)?;
     let contracts = compact_contracts(&mut nodes, &target_plan)?;
-    let value = json!({"formatVersion":3,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":"desktop","adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let value = json!({"formatVersion":3,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":caller.as_str(),"adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }

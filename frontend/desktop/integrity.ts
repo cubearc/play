@@ -9,6 +9,7 @@ export async function verifyNative(directory: URL): Promise<void> {
     await readFile(new URL("integrity.json", directory), "utf8"),
   ) as Record<string, string>;
   const files: [string, string][] = [
+    ["cli", process.platform === "win32" ? "cube.exe" : "cube"],
     [
       "engine",
       process.platform === "win32" ? "play-engine.exe" : "play-engine",

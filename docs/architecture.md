@@ -16,6 +16,7 @@ Algorithms, operation metadata and input/output contracts belong to `cube-core`.
 | Typed preload | Closed application commands without Node, path or database authority |
 | Electron main | Trusted-frame validation, native file chooser, app lifecycle and exact engine startup |
 | Rust engine (`crates/play-engine`) | Ownership, private SQLite, revisions, admission and Run supervision |
+| Bundled Cube CLI | Closed attached commands through private pipes; no domain database or algorithms in the client |
 | Native worker | Bounded Core operation execution under the platform policy |
 
 The preview has one trusted window and one active managed Workspace. The full
@@ -64,7 +65,7 @@ Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-Parallel branches, contextual CLI/PTY, authenticated Cloud,
+Parallel branches, external CLI attachment and native PTYs, authenticated Cloud,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

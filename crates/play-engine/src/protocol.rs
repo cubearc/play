@@ -72,6 +72,15 @@ pub enum Command {
         id: u32,
         request: crate::workspace::RunRequest,
     },
+    StartCliRun {
+        id: u32,
+        request: crate::workspace::RunRequest,
+    },
+    CliRead {
+        id: u32,
+        context: crate::workspace::Context,
+        command: crate::workspace::Read,
+    },
     CancelRun {
         id: u32,
         context: crate::workspace::Context,
@@ -92,6 +101,8 @@ impl Command {
             | Self::Cancel { id, .. }
             | Self::Workspace { id, .. }
             | Self::StartRun { id, .. }
+            | Self::StartCliRun { id, .. }
+            | Self::CliRead { id, .. }
             | Self::CancelRun { id, .. } => *id,
         }
     }

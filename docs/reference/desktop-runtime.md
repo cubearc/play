@@ -7,7 +7,7 @@ unresolved platform evidence remain in [the native contract issue](https://githu
 
 ## Implemented development proof
 
-`npm run desktop:build --prefix frontend` builds `play-engine`, the packaged
+`npm run desktop:build --prefix frontend` builds `play-engine`, the real sibling Cube CLI, the packaged
 renderer resources and the preload. `npm run desktop:proof --prefix frontend`
 opens the actual Electron application. No web server, Docker or browser launcher
 participates in this path. The [notebook preview](../development.md#explore-the-notebook-preview)
@@ -24,14 +24,12 @@ unrestricted or container fallback. This is not a release-supported desktop
 distribution. The complete application and native terminal still require the
 remaining shell, storage, worker and packaging deliveries.
 
-The proof adapters invoke `cube-core`'s `cipher.rot13` and
-`esolang.brainfuck.execute`. Their descriptions and versions come from actual Core
-descriptors. Display names use Core's canonical name, such as **ROT13**, or its
-human CLI spelling when no profile name exists. Stable IDs still identify
-invocations; this is not a replacement operation catalog. The complete current
-typed API conformance matrix remains required. Worker input is UTF-8 text and its bounded envelope holds `text` or `bytes`.
-The supervisor maps successful output to Core's named ports and commits the Run.
-The private unbound capability probe returns only its test envelope.
+Graph execution discovers the pure executors registered in Core. Descriptors
+supply operation names, typed ports, parameters and representations; Play has no
+per-operation execution switch. The registered capability must support the host's
+bounded representations and retention policy before it is offered. The separate
+unbound development probe uses ROT13 and Brainfuck; it is not the managed
+Workspace execution API. See [execution capabilities](desktop-pipelines.md#execution-capabilities).
 
 ## Trust and process topology
 
@@ -56,7 +54,7 @@ second process contacts that owner or rejects opening the store. A PID or lock
 file is not ownership: after a crash, only acquiring the OS lock permits recovery.
 Never remove a live lock because of an elapsed timeout or a reused PID.
 
-The bundled CLI discovers a per-Workspace native endpoint through a private
+The target external CLI discovers a per-Workspace native endpoint through a private
 per-user registry. Unix sockets require a user-owned private directory; Windows
 named pipes require a DACL for that user's SID and rejection of remote clients.
 Peer authentication, a session credential and exact Workspace/generation binding
@@ -119,12 +117,14 @@ renderer cannot target another invocation by guessing an ID.
 | `hello` | `protocol`, exact `engine` version, 32-hex-character `nonce` | `ready` echoes all three values. |
 | `catalog` | None | `catalog` with adapter `operations` from Core descriptors. |
 | `workspace` | Closed `command` intent | `workspace` with scoped domain data. |
+| `cli_read` | Exact `context` and closed Asset/Pipeline `command` | `workspace` with scoped read data. |
+| `start_cli_run` | Closed Run `request` | `run` from the same coordinator with the CLI caller. |
 | `start_run` | Closed Run `request` | `run` containing the accepted or idempotently recovered record. |
 | `cancel_run` | Exact `context`, `run_id` UUID | `run` after killing/reaping and recording cancellation, or the original terminal record. |
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **14** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **15** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -291,3 +291,42 @@ The final application removes every superseded runtime listed in the
 The proof adds no old-store reader, model alias, schema converter or Docker/HTTP
 execution fallback. The current application paths remain until their validated
 replacements land; this development proof does not claim that retirement is done.
+
+## Attached Cube CLI commands
+
+**Run with Cube CLI** starts the bundled executable as a trusted control client.
+Electron main supplies a fixed Workspace/Exploration/Stage and storage generation
+through inherited private pipes. The closed preload accepts typed Asset, Pipeline
+and Run intents; it exposes no executable path, shell text or arbitrary engine
+command. Main constructs the CLI arguments and validates the request against that
+exact intent before dispatching it. Native operation execution still belongs to
+the engine's restricted worker. The control client is part of the application's
+trusted code; it is not an operation sandbox or a native PTY.
+
+The attached protocol is version 1 with Cube CLI 0.18.0. Each invocation exchanges
+one context, one request, one reply and one result frame. A private random nonce
+correlates the frames; it is never passed in argv or renderer data. Inherited
+pipes provide the channel, not a public endpoint or environment token. Version,
+context, command and result mismatches refuse the exchange. The host returns its
+own engine result only after the client confirms that exact response and exits.
+
+Frames use strict UTF-8 JSON and have a 262,144-byte ceiling including newline.
+The CLI rejects duplicate keys, depth beyond 64 and node counts beyond 262,144;
+these are aggregate transport budgets, not operation or Pipeline limits. Main
+caps cumulative stdout at two frames and drains at most 16,384 stderr bytes
+without forwarding private diagnostics. One CLI command may be active; its
+5-second deadline kills and reaps the client. Closing the app reaps it before
+closing the engine. A lost acknowledgment does not erase an accepted Run: retry
+with the same caller and intent key to recover it from the coordinator.
+
+| Intent | Real CLI arguments after `cube play` | Scope |
+| --- | --- | --- |
+| Inspect Asset | `asset show ID --revision N` | Exact revision of an Asset referenced by a Block in the attached Stage; image metadata and bounded file preview, not host paths |
+| Inspect Pipeline | `pipeline show ID --revision N` | Exact reusable definition in the attached Workspace |
+| Start Run | `run start --pipeline ID --revision N --target NODE_ID` | Frozen Trail request supplied by the parent; the CLI cannot retarget it |
+| Inspect Run | `run status ID` | Owned Stage Run and retained evidence |
+| Cancel Run | `run cancel ID` | Same coordinator cancellation; terminal records remain unchanged |
+
+These commands refuse missing attached context and never fall back to a launcher,
+filesystem search, shell or network service. External terminal discovery, native
+PTY interaction and arbitrary shell execution are not provided by this channel.

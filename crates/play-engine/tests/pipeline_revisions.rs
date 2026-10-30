@@ -183,8 +183,10 @@ fn previous_native_store_keeps_actual_run_evidence_during_pipeline_upgrade() {
     use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("private");
-    let fixture: Value =
+    let mut fixture: Value =
         serde_json::from_str(include_str!("fixtures/native-pipeline-v8.json")).unwrap();
+    // Caller is now exposed in the read DTO; the persisted evidence stays intact.
+    fixture["run"]["caller"] = json!("desktop");
     let c: Context = serde_json::from_value(fixture["context"].clone()).unwrap();
     let manager = Manager::new(root.clone()).unwrap();
     drop(manager);

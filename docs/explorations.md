@@ -232,7 +232,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General structured-result promotion, parallel execution and contextual CLI
+General structured-result promotion, parallel execution and external contextual CLI
 attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 ## Read an image in a spiral
 
@@ -267,3 +267,21 @@ explains which registrations the current native host can admit.
 
 Use [native Run reference](reference/desktop-runs.md) for implemented execution
 semantics and [the domain contract](reference/desktop-domain.md) for full ownership.
+
+## Run a cell with Cube CLI
+
+Open the Asset's Trail canvas and choose **Run with Cube CLI** beside **Run cell**.
+Play starts its bundled Cube executable with the selected Pipeline revision and
+output node. The engine records the same input revisions, executes the same graph
+and displays the result inline. **Saved Run & input evidence → Started by** shows
+**Cube CLI** or **Desktop** for each accepted Run. Both remain available after
+reopening the Workspace.
+
+![A completed numeric PipelineRun with result 8, the Run with Cube CLI action and Started by Cube CLI evidence.](assets/desktop/context-cli.png)
+
+The same saved graph runs through either entry point. [Open full size](assets/desktop/context-cli.png).
+
+This action uses the real CLI through an attached private session. It does not
+open an interactive terminal. External terminal attachment and native PTYs are
+separate work; the [attached command reference](reference/desktop-runtime.md#attached-cube-cli-commands)
+describes the supported commands and limits.

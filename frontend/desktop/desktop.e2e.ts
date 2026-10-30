@@ -156,6 +156,7 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
     const original = await latestRun(page, "spiral.png");
     assert.equal(original.detail.result?.outputs?.output, "The key!!");
     assert.equal(original.detail.attempts.length, 5);
+
     const ports = original.detail.attempts[0]?.result?.outputs;
     assert.equal(
       ports?.data && (ports.data as { base64: string }).base64,
@@ -309,6 +310,67 @@ test("numeric fields compose exact image facts and caption values with retained 
     const original = await latestRun(page, "composition.png");
     assert.equal(original.detail.result?.outputs?.output, 8);
     assert.equal(original.detail.attempts.length, 5);
+    assert.equal(original.detail.caller, "desktop");
+    await canvas
+      .getByRole("button", { name: "Run with Cube CLI", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () => (await latestRun(page, "composition.png")).detail.caller,
+      )
+      .toBe("cli");
+    await expect
+      .poll(
+        async () => (await latestRun(page, "composition.png")).detail.status,
+      )
+      .toBe("completed");
+    const cliRun = await latestRun(page, "composition.png");
+    assert.notEqual(cliRun.detail.id, original.detail.id);
+    assert.deepEqual(cliRun.detail.result, original.detail.result);
+    assert.deepEqual(cliRun.detail.plan.inputs, original.detail.plan.inputs);
+    assert.deepEqual(
+      cliRun.detail.plan.pipeline,
+      original.detail.plan.pipeline,
+    );
+    const inspected = await page.evaluate(
+      async ({ context, id, pipeline, revision }) => ({
+        run: await window.play.cli({ kind: "status", context, run_id: id }),
+        pipeline: await window.play.cli({
+          kind: "pipeline",
+          context,
+          pipeline_id: pipeline,
+          revision,
+        }),
+        cancelled: await window.play.cli({
+          kind: "cancel",
+          context,
+          run_id: id,
+        }),
+      }),
+      {
+        context: cliRun.context,
+        id: cliRun.detail.id,
+        pipeline: cliRun.detail.pipelineId,
+        revision: cliRun.detail.pipelineRevision,
+      },
+    );
+    assert.deepEqual(inspected.run, cliRun.detail);
+    assert.deepEqual(inspected.cancelled, cliRun.detail);
+    assert.deepEqual(
+      inspected.pipeline.definition,
+      cliRun.detail.plan.pipeline.definition,
+    );
+    await canvas
+      .locator("summary")
+      .filter({ hasText: "Saved Run & input evidence" })
+      .click();
+    await expect(canvas).toContainText("Cube CLI");
+    await canvas
+      .locator(".cell-code")
+      .evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await capture(application, "native-context-cli", false);
+    await pipelineReflow(application, true);
+
     await canvas
       .getByRole("button", { name: "Edit Pipeline", exact: true })
       .click();
@@ -338,6 +400,10 @@ test("numeric fields compose exact image facts and caption values with retained 
     assert.deepEqual(
       await frozenRun(page, original.context, original.detail.id),
       original.detail,
+    );
+    assert.deepEqual(
+      await frozenRun(page, cliRun.context, cliRun.detail.id),
+      cliRun.detail,
     );
     assert.deepEqual(
       await frozenRun(page, failed.context, failed.detail.id),
@@ -3019,7 +3085,7 @@ async function checkWorkbench(page: Page) {
     .poll(async () => (await explorer(page).boundingBox())?.width ?? 0)
     .toBeGreaterThan(widthBefore + 20);
 }
-async function pipelineReflow(application: ElectronApplication) {
+async function pipelineReflow(application: ElectronApplication, cell = false) {
   const page = await application.firstWindow();
   const original = await application.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
@@ -3042,7 +3108,10 @@ async function pipelineReflow(application: ElectronApplication) {
       }, settings);
       await expect
         .poll(() =>
-          page.getByRole("dialog").evaluate((dialog) => ({
+          (cell
+            ? page.locator(".cell-controls").first()
+            : page.getByRole("dialog")
+          ).evaluate((dialog) => ({
             shell: document.documentElement.scrollWidth > innerWidth,
             form: dialog.scrollWidth > dialog.clientWidth + 1,
           })),

@@ -129,6 +129,8 @@ export function InlineResult({
               <dd>
                 <code>{run.id}</code>
               </dd>
+              <dt>Started by</dt>
+              <dd>{run.caller === "cli" ? "Cube CLI" : "Desktop"}</dd>
               <dt>Pipeline</dt>
               <dd>
                 <code>

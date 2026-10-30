@@ -1,3 +1,4 @@
+import type { CliIntent, CliResponses } from "./cli-contract.ts";
 import type { Operation } from "./contract.ts";
 import type {
   AssetRead,
@@ -12,6 +13,9 @@ import type {
 } from "./workspace-contract.ts";
 
 export interface PlayBridge {
+  cli: <K extends CliIntent["kind"]>(
+    value: Extract<CliIntent, { kind: K }>,
+  ) => Promise<CliResponses[K]>;
   catalog: () => Promise<Operation[]>;
   workspace: <K extends WorkspaceRequest["kind"]>(
     value: Extract<WorkspaceRequest, { kind: K }>,

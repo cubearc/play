@@ -122,6 +122,28 @@ export class Engine {
       throw new Error("invalid_response");
     return reply.data as import("./workspace-contract.ts").RunDetail;
   }
+  async startCliRun(
+    request: import("./workspace-contract.ts").RunRequest,
+  ): Promise<import("./workspace-contract.ts").RunDetail> {
+    const reply = await this.request({ type: "start_cli_run", request });
+    if (reply.type !== "run" || !reply.data)
+      throw new Error("invalid_response");
+    return reply.data as import("./workspace-contract.ts").RunDetail;
+  }
+  async cliRead(
+    value: Extract<
+      import("./cli-contract.ts").CliIntent,
+      { kind: "asset" | "pipeline" }
+    >,
+  ): Promise<import("./cli-contract.ts").CliResponses["asset" | "pipeline"]> {
+    const { context, ...command } = value;
+    const reply = await this.request({ type: "cli_read", context, command });
+    if (reply.type !== "workspace" || !reply.data)
+      throw new Error("invalid_response");
+    return reply.data as import("./cli-contract.ts").CliResponses[
+      | "asset"
+      | "pipeline"];
+  }
   async cancelRun(
     value: import("./workspace-contract.ts").CancelRun,
   ): Promise<import("./workspace-contract.ts").RunDetail> {

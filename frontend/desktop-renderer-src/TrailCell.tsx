@@ -62,6 +62,22 @@ export function TrailCell({
           >
             Run cell
           </VscodeButton>
+          <VscodeButton
+            secondary
+            icon="terminal"
+            disabled={!operation || executions.busy || trail.archived}
+            onClick={() => {
+              if (operation && !trail.archived)
+                void executions.run(
+                  trail,
+                  operation,
+                  pipeline.outputNodeId,
+                  "cli",
+                );
+            }}
+          >
+            Run with Cube CLI
+          </VscodeButton>
           {cancel}
         </div>
         <VscodeCheckbox

@@ -30,7 +30,7 @@ the last successfully opened Workspace. An OS-held exclusive lock on `owner.lock
 protects the writable connection. Another engine receives `workspace_busy` while
 that owner lives; killing it releases the OS lock. The lock file remains in place.
 Connection shutdown precedes lock release. The development app has one active
-Workspace and one trusted window; multiwindow and contextual CLI attachment are
+Workspace and one trusted window; multiwindow and external contextual CLI attachment are
 separate deliveries.
 
 On Unix, private directories require the current user and mode 0700; files require
@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **11**, SQLite application ID
+The native store uses generation **2**, schema version **12**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql` and `inputs.sql`.
-Recognized native schemas 1–10 upgrade to schema 11 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql` and `callers.sql`.
+Recognized native schemas 1–11 upgrade to schema 12 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -214,7 +214,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **14**, with no older
+change that order. The coordinated app/engine wire protocol is **15**, with no older
 DTO fallback.
 
 ## Block copies and provenance

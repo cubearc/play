@@ -52,13 +52,24 @@ command("cargo", [
   "--bin",
   "play-engine",
 ]);
+command("cargo", [
+  "build",
+  "--locked",
+  "--manifest-path",
+  join(root, "../cube/Cargo.toml"),
+  "-p",
+  "cube-cli",
+]);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const binary = process.platform === "win32" ? "play-engine.exe" : "play-engine";
 cpSync(join(root, "target/debug", binary), join(output, binary));
 const digest = (file: string) =>
   createHash("sha256").update(readFileSync(file)).digest("hex");
+const cli = process.platform === "win32" ? "cube.exe" : "cube";
+cpSync(join(root, "../cube/target/debug", cli), join(output, cli));
 const manifest: Record<string, string> = {
+  cli: digest(join(output, cli)),
   engine: digest(join(output, binary)),
 };
 if (process.platform === "darwin") {

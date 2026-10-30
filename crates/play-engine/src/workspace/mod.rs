@@ -1,6 +1,7 @@
 mod assets;
 mod bindings;
 mod blocks;
+mod cli;
 mod copies;
 mod files;
 mod model;
@@ -16,6 +17,7 @@ mod storage;
 mod upgrade;
 
 use crate::{Result, protocol};
+pub use cli::Read;
 use model::Identity;
 pub use model::{Command, Context, RunRequest};
 pub use runs::{PreparedRun, RunIdentity};
@@ -252,13 +254,30 @@ impl Manager {
         }
     }
 
+    pub fn cli_read(&mut self, context: &Context, command: Read) -> Result<Value> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime.block_on(cli::read(store, context, command))
+    }
+
     pub fn existing_run(&mut self, request: &RunRequest) -> Result<Option<Value>> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
-        self.runtime.block_on(runs::existing(store, request))
+        self.runtime
+            .block_on(runs::existing(store, request, runs::Caller::Desktop))
     }
     pub fn prepare_run(&mut self, request: &RunRequest) -> Result<PreparedRun> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;
-        self.runtime.block_on(runs::prepare(store, request))
+        self.runtime
+            .block_on(runs::prepare(store, request, runs::Caller::Desktop))
+    }
+    pub fn existing_cli_run(&mut self, request: &RunRequest) -> Result<Option<Value>> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime
+            .block_on(runs::existing(store, request, runs::Caller::Cli))
+    }
+    pub fn prepare_cli_run(&mut self, request: &RunRequest) -> Result<PreparedRun> {
+        let store = self.active.as_mut().ok_or("workspace_closed")?;
+        self.runtime
+            .block_on(runs::prepare(store, request, runs::Caller::Cli))
     }
     pub fn start_attempt(&mut self, run: &RunIdentity) -> Result<()> {
         let store = self.active.as_mut().ok_or("workspace_closed")?;

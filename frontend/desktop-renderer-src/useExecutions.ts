@@ -228,6 +228,7 @@ export function useExecutions(
       trail: TrailView,
       operation: Operation,
       targetNodeId = trail.pipeline?.outputNodeId,
+      caller: "desktop" | "cli" = "desktop",
     ) => {
       if (
         active.current ||
@@ -239,7 +240,8 @@ export function useExecutions(
         return;
       active.current = true;
       setBusy(true);
-      const previous = pending.current[trail.id];
+      const pendingKey = `${trail.id}:${caller}`;
+      const previous = pending.current[pendingKey];
       const keep = retention[trail.id] ?? true;
       const request: RunRequest =
         previous &&
@@ -266,11 +268,14 @@ export function useExecutions(
               operation_version: operation.operation_version,
               retain_output: keep,
             };
-      pending.current[trail.id] = request;
+      pending.current[pendingKey] = request;
       update(trail.id, (value) => ({ ...value, error: "" }));
       try {
-        const detail = await window.play.startRun(request);
-        delete pending.current[trail.id];
+        const detail =
+          caller === "cli"
+            ? await window.play.cli({ kind: "start", request })
+            : await window.play.startRun(request);
+        delete pending.current[pendingKey];
         update(trail.id, (value) => ({
           ...value,
           runs: [detail, ...value.runs.filter((run) => run.id !== detail.id)],
@@ -281,7 +286,7 @@ export function useExecutions(
       } catch (error) {
         const conflict =
           error instanceof Error && error.message.includes("state_conflict");
-        if (conflict) delete pending.current[trail.id];
+        if (conflict) delete pending.current[pendingKey];
         update(trail.id, (value) => ({
           ...value,
           error: conflict

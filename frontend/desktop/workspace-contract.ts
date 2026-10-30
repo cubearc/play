@@ -358,6 +358,7 @@ export type RunStatus =
   | "cancelled"
   | "interrupted";
 export interface RunSummary {
+  caller: "desktop" | "cli";
   id: string;
   sequence: number;
   trailId: string;

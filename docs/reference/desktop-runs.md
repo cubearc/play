@@ -173,3 +173,13 @@ those budgets. Storage failure never becomes a successful Run.
 The [native storage reference](desktop-storage.md) owns schema/upgrade and
 filesystem rules. The [IPC reference](desktop-runtime.md) owns sender authority,
 wire framing and worker resource ceilings.
+
+## Execution origin
+
+Runs record `caller: desktop` or `caller: cli` at admission. Electron main chooses
+the engine command from the actual entry point; the renderer cannot insert a
+caller into a Run request. Both commands use the same planner, idempotency checks,
+worker supervisor and persistence. Reusing an intent key across callers is a
+conflict. Schema 12 preserves existing row IDs, frozen plans, results and attempt
+references while admitting the CLI caller. The read DTO also exposes that caller
+for historical Runs.

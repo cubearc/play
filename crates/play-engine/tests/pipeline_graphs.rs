@@ -280,7 +280,9 @@ fn byte_representations_are_never_silently_coerced_at_a_join() {
 fn actual_schema_nine_upgrade_preserves_the_finished_run_and_advances_working_graphs() {
     use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
     use std::fs;
-    let f: Value = serde_json::from_str(include_str!("fixtures/native-graph-v9.json")).unwrap();
+    let mut f: Value = serde_json::from_str(include_str!("fixtures/native-graph-v9.json")).unwrap();
+    // Caller is now exposed in the read DTO; the persisted evidence stays intact.
+    f["run"]["caller"] = json!("desktop");
     let c: Context = serde_json::from_value(f["context"].clone()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("private");

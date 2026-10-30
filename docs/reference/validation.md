@@ -247,3 +247,17 @@ text/PNG limits, scoped Pages, archive/restore, stale Trail revisions and exact
 copy remapping. The Electron journey authors the graph and bindings through VS
 Code Elements, runs both branches, edits/rebinds a caption, reuses the definition
 in another Exploration, checks accessibility and reopens the private profile.
+
+## Attached CLI parity
+
+`cube-cli/tests/play_context.rs` exercises the real binary and strict private
+frames, including absent context, incompatible versions, duplicate keys, budgets,
+retargeting and capture refusal. `desktop/cli.test.ts` runs that bundled CLI
+against the real engine and checks Stage/Workspace isolation. The numeric Electron
+journey runs the same saved graph through **Run cell** and **Run with Cube CLI**,
+compares inputs, definitions and actual outputs, reads/cancels the completed Run
+through the CLI, checks reflow and reopens both records after restart.
+
+These checks cover the attached control client, not external discovery, native
+PTY lifecycle or Windows/Linux worker enforcement. Unretired Runner/browser
+checks and the exact Core operation conformance matrix remain required.

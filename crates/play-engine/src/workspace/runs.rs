@@ -12,6 +12,19 @@ use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteRow};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+#[derive(Clone, Copy)]
+pub enum Caller {
+    Desktop,
+    Cli,
+}
+impl Caller {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Desktop => "desktop",
+            Self::Cli => "cli",
+        }
+    }
+}
 #[derive(Clone)]
 pub struct RunIdentity {
     pub context: Context,
@@ -39,12 +52,18 @@ async fn authorize(store: &mut Owned, context: &Context) -> Result<()> {
     queries::context(store.connection()?, owner, context).await
 }
 
-pub async fn existing(store: &mut Owned, request: &RunRequest) -> Result<Option<Value>> {
+pub async fn existing(
+    store: &mut Owned,
+    request: &RunRequest,
+    caller: Caller,
+) -> Result<Option<Value>> {
     authorize(store, &request.context).await?;
-    let row=sqlx::query("SELECT id,intent_digest FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND intent_key=?")
+    let row=sqlx::query("SELECT id,intent_digest,caller FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND intent_key=?")
   .bind(request.context.workspace_id.to_string()).bind(request.context.exploration_id.to_string()).bind(request.key.to_string()).fetch_optional(store.connection()?).await.map_err(storage::failure)?;
     if let Some(row) = row {
-        if row.get::<String, _>("intent_digest") != digest(request)? {
+        if row.get::<String, _>("intent_digest") != digest(request)?
+            || row.get::<&str, _>("caller") != caller.as_str()
+        {
             return Err("idempotency_conflict");
         }
         let id = Uuid::parse_str(row.get("id")).map_err(|_| "corrupt_store")?;
@@ -53,7 +72,11 @@ pub async fn existing(store: &mut Owned, request: &RunRequest) -> Result<Option<
     Ok(None)
 }
 
-pub async fn prepare(store: &mut Owned, request: &RunRequest) -> Result<PreparedRun> {
+pub async fn prepare(
+    store: &mut Owned,
+    request: &RunRequest,
+    caller: Caller,
+) -> Result<PreparedRun> {
     authorize(store, &request.context).await?;
     let context = &request.context;
     let workspace = context.workspace_id.to_string();
@@ -88,14 +111,14 @@ pub async fn prepare(store: &mut Owned, request: &RunRequest) -> Result<Prepared
         protocol::contract().run_reserve_bytes + 16384,
     )
     .await?;
-    let plan = run_plan::build(&mut tx, request).await?;
+    let plan = run_plan::build(&mut tx, request, caller).await?;
     let identity = RunIdentity {
         context: context.clone(),
         id: Uuid::new_v4(),
         node_id: plan.node_id,
     };
-    sqlx::query("INSERT INTO pipeline_runs(workspace_id,exploration_id,stage_id,id,trail_id,pipeline_id,pipeline_revision,intent_key,intent_digest,caller,status,created_ms,retain_output,plan,reservation) VALUES(?,?,?,?,?,?,?,?,?,'desktop','queued',?,?,?,zeroblob(?))")
-  .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(identity.id.to_string()).bind(request.trail_id.to_string()).bind(plan.pipeline_id).bind(plan.pipeline_revision).bind(request.key.to_string()).bind(digest(request)?).bind(now()?).bind(request.retain_output).bind(plan.value.to_string()).bind(protocol::contract().run_reserve_bytes as i64).execute(&mut *tx).await.map_err(storage::failure)?;
+    sqlx::query("INSERT INTO pipeline_runs(workspace_id,exploration_id,stage_id,id,trail_id,pipeline_id,pipeline_revision,intent_key,intent_digest,caller,status,created_ms,retain_output,plan,reservation) VALUES(?,?,?,?,?,?,?,?,?,?,'queued',?,?,?,zeroblob(?))")
+  .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(identity.id.to_string()).bind(request.trail_id.to_string()).bind(plan.pipeline_id).bind(plan.pipeline_revision).bind(request.key.to_string()).bind(digest(request)?).bind(caller.as_str()).bind(now()?).bind(request.retain_output).bind(plan.value.to_string()).bind(protocol::contract().run_reserve_bytes as i64).execute(&mut *tx).await.map_err(storage::failure)?;
     for (slot, asset) in plan.inputs {
         sqlx::query("INSERT INTO run_inputs VALUES(?,?,?,?,?,?)")
             .bind(&workspace)
@@ -217,7 +240,7 @@ fn normalize(result: Value, plan: &Value, retain: bool) -> Result<Value> {
 fn summary(row: &SqliteRow) -> Result<Value> {
     let plan: Value = serde_json::from_str(row.get("plan")).map_err(|_| "corrupt_store")?;
     Ok(
-        json!({"id":row.get::<String,_>("id"),"sequence":row.get::<i64,_>("sequence"),"trailId":row.get::<String,_>("trail_id"),"pipelineId":row.get::<String,_>("pipeline_id"),"pipelineRevision":row.get::<i64,_>("pipeline_revision"),"status":row.get::<String,_>("status"),"createdMs":row.get::<i64,_>("created_ms"),"finishedMs":row.get::<Option<i64>,_>("finished_ms"),"retainOutput":row.get::<bool,_>("retain_output"),"operation":plan["operation"]}),
+        json!({"caller":row.get::<String,_>("caller"),"id":row.get::<String,_>("id"),"sequence":row.get::<i64,_>("sequence"),"trailId":row.get::<String,_>("trail_id"),"pipelineId":row.get::<String,_>("pipeline_id"),"pipelineRevision":row.get::<i64,_>("pipeline_revision"),"status":row.get::<String,_>("status"),"createdMs":row.get::<i64,_>("created_ms"),"finishedMs":row.get::<Option<i64>,_>("finished_ms"),"retainOutput":row.get::<bool,_>("retain_output"),"operation":plan["operation"]}),
     )
 }
 

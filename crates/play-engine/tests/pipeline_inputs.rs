@@ -477,7 +477,10 @@ fn scoped_bindings_and_targets_are_validated_before_any_run_is_queued() {
 fn actual_schema_ten_upgrade_preserves_the_finished_run_and_advances_working_graphs() {
     use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
     use std::fs;
-    let f: Value = serde_json::from_str(include_str!("fixtures/native-inputs-v10.json")).unwrap();
+    let mut f: Value =
+        serde_json::from_str(include_str!("fixtures/native-inputs-v10.json")).unwrap();
+    // Caller is now exposed in the read DTO; the persisted evidence stays intact.
+    f["run"]["caller"] = json!("desktop");
     let c: Context = serde_json::from_value(f["context"].clone()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("private");
@@ -737,4 +740,86 @@ fn registered_spiral_export_retains_metadata_and_bytes_through_the_real_graph_an
     let mut m = Manager::new(root.path().join("private")).unwrap();
     call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
     assert_eq!(m.run_detail(&c, id).unwrap(), completed);
+}
+
+#[test]
+fn cli_and_desktop_admission_share_the_same_pinned_plan_with_distinct_caller_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Contextual callers");
+    let v = image_from(
+        &mut m,
+        &c,
+        "7",
+        include_bytes!("../../../tests/fixtures/composition.png"),
+    );
+    let d = numeric_definition("/dimensions");
+    let p = pipeline(&mut m, &c, &d);
+    let v = bind(&mut m, &c, &v, &p, "Same graph through both clients");
+    let desktop = request(&c, trail(&v, &figure(&v)["asset"]), &d["nodes"][4]);
+    let ui = execute(&mut m, &desktop);
+    let mut cli = desktop.clone();
+    cli.key = Uuid::new_v4();
+    let prepared = m.prepare_cli_run(&cli).unwrap();
+    let record = m.run_detail(&c, prepared.identity.id).unwrap();
+    assert_eq!(record["plan"]["caller"], "cli");
+    assert_eq!(record["caller"], "cli");
+    assert_eq!(record["plan"]["pipeline"], ui["plan"]["pipeline"]);
+    assert_eq!(record["plan"]["inputs"], ui["plan"]["inputs"]);
+    assert_ne!(record["id"], ui["id"]);
+    assert!(m.existing_run(&cli).is_err());
+    assert!(m.existing_cli_run(&cli).unwrap().is_some());
+    drop(m);
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    let recovered = m.run_detail(&c, prepared.identity.id).unwrap();
+    assert_eq!(recovered["caller"], "cli");
+    assert_eq!(recovered["status"], "interrupted");
+    assert_eq!(
+        m.run_detail(&c, serde_json::from_value(ui["id"].clone()).unwrap())
+            .unwrap(),
+        ui
+    );
+}
+
+#[test]
+fn contextual_cli_reads_only_assets_in_its_stage_and_workspace_pipelines() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "CLI scope");
+    let v = image(&mut m, &c, "Private caption");
+    let f = figure(&v);
+    let read = |asset: &Value| {
+        serde_json::from_value(
+            json!({"kind":"asset","asset_id":asset["id"],"revision":asset["revision"]}),
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        m.cli_read(&c, read(&f["caption"])).unwrap()["content"]["text"],
+        "Private caption"
+    );
+    assert_eq!(
+        m.cli_read(&c, read(&f["asset"])).unwrap()["content"],
+        json!({"kind":"image"})
+    );
+    let d = definition();
+    let p = pipeline(&mut m, &c, &d);
+    let read_pipeline = || {
+        serde_json::from_value(
+            json!({"kind":"pipeline","pipeline_id":p["pipelineId"],"revision":1}),
+        )
+        .unwrap()
+    };
+    assert_eq!(m.cli_read(&c, read_pipeline()).unwrap()["definition"], d);
+    let other = context(&mut m, Some(c.workspace_id), "Other exploration");
+    assert!(m.cli_read(&other, read(&f["caption"])).is_err());
+    let wrong = Context {
+        stage_id: Uuid::new_v4(),
+        ..c.clone()
+    };
+    assert!(m.cli_read(&wrong, read(&f["caption"])).is_err());
+    let other_workspace = context(&mut m, None, "Other workspace");
+    assert!(m.cli_read(&other_workspace, read_pipeline()).is_err());
+    assert!(m.cli_read(&c, read(&f["caption"])).is_err());
 }
