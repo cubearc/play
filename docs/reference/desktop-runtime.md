@@ -128,7 +128,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **17** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **18** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -202,6 +202,9 @@ CLI peers. There is no older-version negotiation or fallback interpreter.
 responses contain an output. Rejections have a bounded machine-readable `code`.
 Diagnostics do not echo input, paths or stderr. A busy engine rejects a new
 invocation; the proof has one active worker and a bounded inbound command queue.
+A Pipeline worker runs at most two ready nodes on separate threads under the same
+process-wide CPU/VM and Run wall-time/output budgets. This does not admit concurrent
+Runs or create extra worker processes; see [parallel branches](desktop-runs.md#bounded-parallel-branches).
 The renderer does not schedule operation dependencies.
 
 Cancellation kills and waits for the owned worker before announcing its terminal

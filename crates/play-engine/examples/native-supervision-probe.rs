@@ -10,10 +10,22 @@ fn main() -> play_engine::Result<()> {
     let worker::Task::Pipeline { invocation } = worker::receive_task()? else {
         return Err("invalid_command");
     };
+    let selected = invocation.definition.schedule()?;
+    let hold_after = invocation
+        .definition
+        .nodes
+        .iter()
+        .filter(|node| selected.contains(&node.id) && node.dependencies().next().is_none())
+        .count()
+        .min(protocol::contract().parallel_nodes);
+    let mut started = 0;
     let mut output = io::stdout().lock();
     let outcome = worker::execute_pipeline(invocation, |event| {
         protocol::write_frame(&mut output, &event)?;
         if event["type"] == "node_started" {
+            started += 1;
+        }
+        if started == hold_after {
             // Use the production lifetime guard, not a fixture-only PID check.
             // The engine's unchanged wall deadline also bounds this hold.
             loop {

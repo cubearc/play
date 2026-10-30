@@ -73,7 +73,7 @@ revisions; previous Runs keep their evidence and results.
 
 The working revision and historical Run keep separate configurations. [Open full size](assets/desktop/pipeline-revision.png).
 
-The worker executes dependencies sequentially within one Run's resource limits.
+The worker executes up to two ready nodes concurrently within one Run's resource limits.
 Expand **Saved Run & input evidence** to inspect each actual node attempt and
 retained intermediate output. Disconnected nodes do not execute. Saving an output
 as a Block refers to the selected output node's actual attempt.
@@ -150,7 +150,8 @@ node at `(0, 0)` and build these connections:
 
 Set **Separator** to one space, keep Node 5 as the output and save. The left
 branch produces `The`; the right produces `key.`. **Run cell** returns **The key.**
-with five actual node attempts. The worker runs dependencies sequentially.
+with five actual node attempts. Image and caption branches can overlap; the
+join waits for both inputs. All nodes share the Run's resource limits.
 
 ![Five-node Pipeline editor with image decoding, caption ROT13 and explicitly ordered text inputs and separator.](assets/desktop/composition-editor.png)
 
@@ -232,7 +233,7 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General structured-result promotion, parallel execution and external contextual CLI
+General structured-result promotion, concurrent Runs and external contextual CLI
 attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
 ## Read an image in a spiral
 

@@ -300,7 +300,11 @@ test("every discovered native executor runs its Core known answer through owned 
           run_id: run.id,
         })) as RunDetail;
       }
-      assert.equal(run.status, "completed", operation.operation);
+      assert.equal(
+        run.status,
+        "completed",
+        `${operation.operation}: ${JSON.stringify(run.result)}`,
+      );
       assert.equal(
         run.plan.contractDigest,
         fixture.contract_sha256,

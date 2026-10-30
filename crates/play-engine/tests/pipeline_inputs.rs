@@ -103,9 +103,9 @@ fn numeric_field_graph_preserves_actual_types_attempts_and_snapshot_after_restar
 #[test]
 fn numeric_failures_preserve_completed_values_and_stop_consumers() {
     for (caption, pointer, code, attempt_count) in [
-        ("7", "/missing", "missing_field", 2),
+        ("7", "/missing", "missing_field", 3),
         ("9007199254740991", "/dimensions", "numeric_overflow", 5),
-        ("7", "/dimensions/0", "contract_mismatch", 2),
+        ("7", "/dimensions/0", "contract_mismatch", 3),
     ] {
         let root = tempfile::tempdir().unwrap();
         let mut m = Manager::new(root.path().join("private")).unwrap();
@@ -126,6 +126,19 @@ fn numeric_failures_preserve_completed_values_and_stop_consumers() {
         assert_eq!(run["result"], json!({"status":"failed","code":code}));
         let attempts = run["attempts"].as_array().unwrap();
         assert_eq!(attempts.len(), attempt_count);
+        let caption_attempt = attempts
+            .iter()
+            .find(|a| a["nodeId"] == d["nodes"][3]["id"])
+            .unwrap();
+        assert_eq!(caption_attempt["status"], "completed");
+        if code != "numeric_overflow" {
+            assert!(
+                !attempts
+                    .iter()
+                    .any(|a| a["nodeId"] == d["nodes"][2]["id"]
+                        || a["nodeId"] == d["nodes"][4]["id"])
+            );
+        }
         assert_eq!(
             attempts[0]["result"]["outputs"]["output"],
             json!({"dimensions":[1,1]})

@@ -49,6 +49,13 @@ pub struct Definition {
     pub output: Uuid,
 }
 impl Node {
+    pub fn dependencies(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.inputs.values().filter_map(|source| match source {
+            Source::Output { node_id, .. } => Some(*node_id),
+            _ => None,
+        })
+    }
+
     pub fn contract(&self) -> Result<Contract> {
         worker::validate_configuration(&self.operation, self.operation_version, &self.parameters)?;
         cube_core::operations::require(&self.operation)

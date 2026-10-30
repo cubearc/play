@@ -8,8 +8,10 @@ shows the editing workflow.
 The editor supports a typed graph with up to four named Asset inputs, up to eight
 nodes and one selected output node. The engine discovers executable operations
 from the Core registry, validates the whole graph and plans the chosen output's
-ancestor closure. One bounded worker executes those dependencies sequentially.
-Parallelism, output caching and contextual CLI attachment remain separate deliveries.
+ancestor closure. One bounded worker executes up to two dependency-ready nodes concurrently, sharing
+the Run resource limits. See [parallel branches](desktop-runs.md#bounded-parallel-branches)
+for grouping, join and failure behavior.
+Concurrent Runs, output caching and external contextual CLI attachment remain separate deliveries.
 
 ## Execution capabilities
 

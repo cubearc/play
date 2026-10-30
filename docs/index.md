@@ -13,12 +13,15 @@ are not available through this source workflow.
 | Add text or an image with its caption | [Assets and imports](workspace.md) |
 | Run a text cell and save reasoning | [Stage notebook](notebook.md) |
 | Inspect an image in its own canvas | [Image inspection](visual-lab.md) |
-| Understand unavailable official/terminal journeys | [Challenges](challenges.md), [Candidates and Solutions](solutions.md), [terminal](terminal.md) |
+| Explore the terminal and local/official evidence | [Challenges](challenges.md), [Candidates and Solutions](solutions.md), [terminal](terminal.md) |
 | Develop and verify the native app | [Development](development.md), [Contributing](../CONTRIBUTING.md) |
 
-The executor supports bounded typed graphs using ROT13, Brainfuck and image pixel
-reads. Parallel branches, additional Asset bindings, contextual terminal execution and Cloud
-participation are tracked in the [refactor milestone](https://github.com/cubearc/play/milestone/3).
+The executor discovers eligible operations from the Core registry and supports typed
+graphs with named Asset bindings and two concurrent independent branches per Run.
+The [Cube terminal](terminal.md) uses the same scoped Run coordinator.
+Cross-Run concurrency and complete native release delivery remain in the
+[local milestone](https://github.com/cubearc/play/milestone/3); Cloud participation
+belongs to the [independent Cloud project](https://github.com/cubearc/play-platform/issues/10).
 Catalog discovery alone does not make an operation executable in this preview.
 
 Exact ownership, IPC, storage and Run contracts are grouped under Reference in

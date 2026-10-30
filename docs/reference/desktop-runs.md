@@ -3,8 +3,9 @@
 Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
 The executor plans the explicitly selected target node and its ancestors in a typed graph,
-using the [Core-registered executable capabilities](desktop-pipelines.md#execution-capabilities). One sandboxed worker executes the plan sequentially.
-Parallelism, executor output reuse and contextual CLI execution are separate deliveries.
+using the [Core-registered executable capabilities](desktop-pipelines.md#execution-capabilities). One sandboxed worker executes up to two dependency-ready nodes concurrently.
+UI and contextual CLI Runs use this same coordinator. Concurrent Runs, fair admission
+between Explorations and executor output reuse remain separate deliveries.
 
 ## Accepted invocation
 
@@ -74,8 +75,10 @@ accepted-intent retries and scoped Run history remain available; new work requir
 restoring the Block first.
 
 The engine commits `queued` before spawning the worker, then records `running` and each actual
-node attempt on worker progress. Completed node results commit before the next
-node can start. A failed/cancelled worker preserves prior completed attempts;
+node attempt on worker progress. Independent nodes can both be running. Persistence
+accepts a dependent node only after all its producers have committed completed
+attempts; duplicate starts and a third active node are rejected. A failed/cancelled
+worker preserves prior completed attempts;
 unstarted consumers have no fabricated attempt. It owns supervision independently of React and
 commits terminal evidence before a client can observe success.
 
@@ -100,6 +103,29 @@ releasing SQLite ownership. A killed engine cannot report success; reopening its
 recognized store marks queued/running work `interrupted` with `owner_stopped`,
 without changing completed records. This recovery is not a complete release
 claim about native descendant/PTY cleanup on every platform.
+
+## Bounded parallel branches
+
+The worker selects at most two ready nodes in the frozen plan order. Each runs on
+its own thread inside the same sandboxed process. It collects the group's results
+in plan order before selecting the next group. This keeps joins and output-budget
+accounting deterministic; a fast branch does not dispatch its next node while its
+current sibling is still running.
+
+All nodes in a group start before its results are reported. When the group returns,
+the worker records each failure and any successful sibling's evidence; a failure
+stops the Run before another group starts. A process crash can interrupt the whole
+group before those results are committed. Unstarted descendants have no attempt. Cancellation, owner-pipe
+loss and the wall deadline stop the whole worker, including both threads. Threads
+do not receive extra filesystem, network or subprocess authority.
+
+The two threads share the existing one-second process CPU budget, 128 MiB VM-growth
+limit and two-second Run deadline. The aggregate raw output ceiling remains
+16384 bytes; concurrency does not multiply it. At most two node results are held
+for the current group before collection. Native execution is still proved only on
+macOS. There is still one active Run per engine; another Run receives `busy` rather
+than entering a cross-Run queue. The remaining admission/platform work is tracked
+in [#46](https://github.com/cubearc/play/issues/46).
 
 ## Edited inputs
 

@@ -134,6 +134,9 @@ fixtures competing for initialization deadlines on shared hosts. On Unix use
 `export RUST_TEST_THREADS=1`; on PowerShell use
 `$env:RUST_TEST_THREADS = '1'`. Concurrent-request tests still exercise concurrency.
 Do not raise production deadlines or lower gates to compensate for CI contention.
+The native Node test command also runs independent test files one at a time.
+Worker deadlines and process CPU/VM ceilings stay unchanged; the tests for
+parallel nodes still synchronize two real execution threads inside one Run.
 
 ## Coverage and Core conformance
 
@@ -297,3 +300,19 @@ It checks terminal console errors separately from axe's blocked measurement styl
 and the preexisting VSCode textarea resizer data-URL denial. The actual screen is
 included in the terminal guide. This is macOS development evidence, not a claim
 that every platform or the broader terminal milestone is complete.
+
+
+## Parallel branches within a Run
+
+A synchronized Rust test requires two actual execution threads to rendezvous before
+invoking Core; it does not infer overlap from elapsed time. Graph/storage tests
+cover two simultaneous attempts, the third-node ceiling, reverse independent start
+order, duplicate starts, dependency joins, aggregate output limits, successful
+sibling evidence after failure, and exact retained results after reopening.
+
+The signed native supervision fixture holds a group after its start events. A
+real IPC test observes two persisted running attempts, cancels both without a join
+attempt, then uses the production signed worker to compute the joined ROT13 result
+and reopen both histories. Existing EOF, deadline, engine-death and unrelated-process
+checks remain required. This establishes parallel branches inside one worker,
+not cross-Run queue fairness or native execution on Windows/Linux.

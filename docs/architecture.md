@@ -62,11 +62,14 @@ The macOS proof uses a locally ad-hoc-signed App Sandbox helper with filesystem,
 network, CPU/time, output and process controls. Typed graphs discover pure executors registered by their owning Core modules.
 The host negotiates representations and retention policy; it contains no operation-ID
 execution dispatcher. See [Pipeline execution capabilities](reference/desktop-pipelines.md#execution-capabilities).
+Independent branches execute in groups of at most two within the same sandboxed
+Run worker, sharing its CPU, VM, wall-time and output limits. Dependency-aware
+attempt admission and deterministic result collection preserve join evidence.
 Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-Parallel branches, external CLI attachment, Linux/Windows PTYs,
+Concurrent Runs, external CLI attachment, Linux/Windows PTYs,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.

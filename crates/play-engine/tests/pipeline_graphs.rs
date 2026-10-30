@@ -151,7 +151,12 @@ fn selected_output_executes_ancestors_once_with_real_core_outputs_and_no_unrelat
     g.nodes.push(serde_json::from_value(disconnected).unwrap());
     assert_eq!(g.schedule().unwrap().len(), 2);
 }
-fn execute(m: &mut Manager, c: &Context, g: &Value, retain: bool) -> Value {
+fn prepare(
+    m: &mut Manager,
+    c: &Context,
+    g: &Value,
+    retain: bool,
+) -> play_engine::workspace::PreparedRun {
     let p = create(m, c, g);
     call(
         m,
@@ -178,7 +183,10 @@ fn execute(m: &mut Manager, c: &Context, g: &Value, retain: bool) -> Value {
         .find(|n| n["id"] == g["output"])
         .unwrap();
     let request=serde_json::from_value(json!({"context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"trail_revision":t["revision"],"target_node_id":t["pipeline"]["outputNodeId"],"pipeline_id":p["pipelineId"],"pipeline_revision":1,"source_asset_id":t["source"]["id"],"source_revision":1,"operation":output["operation"],"operation_version":output["operationVersion"],"retain_output":retain})).unwrap();
-    let prepared = m.prepare_run(&request).unwrap();
+    m.prepare_run(&request).unwrap()
+}
+fn execute(m: &mut Manager, c: &Context, g: &Value, retain: bool) -> Value {
+    let prepared = prepare(m, c, g, retain);
     let id = prepared.identity.clone();
     let outcome = play_engine::worker::execute_pipeline(prepared.invocation, |event| {
         let mut attempt = id.clone();
@@ -381,11 +389,170 @@ fn output_budget_measures_raw_bytes_once_across_the_whole_run() {
         ),
         Err("output_limit")
     );
+    assert_eq!(events.last().unwrap()["status"], "failed");
+    assert_eq!(events.last().unwrap()["code"], "output_limit");
     assert_eq!(
         events
             .iter()
-            .filter(|v| v["type"] == "node_finished")
+            .filter(|v| v["type"] == "node_finished" && v["status"] == "completed")
             .count(),
         2
+    );
+}
+
+fn fork_join() -> Value {
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    let join = Uuid::new_v4();
+    json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[
+        node(a,json!({"kind":"input","name":"source"}),80),
+        node(b,json!({"kind":"input","name":"source"}),200),
+        {"id":join,"operation":"text.concat","operationVersion":1,"parameters":{},"position":{"x":400,"y":120},"inputs":{"left":{"kind":"output","nodeId":a,"port":"output"},"right":{"kind":"output","nodeId":b,"port":"output"}}}
+    ],"output":join})
+}
+#[test]
+fn independent_branches_start_together_and_join_waits_for_both_results() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let c = setup(&mut m);
+    let g = fork_join();
+    let p = prepare(&mut m, &c, &g, true);
+    let mut events = Vec::new();
+    let output = play_engine::worker::execute_pipeline(p.invocation, |event| {
+        events.push(event);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(output["text"], "The key.The key.");
+    assert_eq!(
+        events
+            .iter()
+            .take(2)
+            .map(|e| e["type"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["node_started", "node_started"]
+    );
+    assert_eq!(events[4]["type"], "node_started");
+    assert_eq!(events[4]["nodeId"], g["output"]);
+}
+#[test]
+fn durable_attempt_admission_uses_dependencies_instead_of_a_global_sequence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("private");
+    let mut m = Manager::new(root.clone()).unwrap();
+    let c = setup(&mut m);
+    let g = fork_join();
+    let p = prepare(&mut m, &c, &g, true);
+    let identity = p.identity;
+    let attempt = |index: usize| {
+        let mut a = identity.clone();
+        a.node_id = serde_json::from_value(g["nodes"][index]["id"].clone()).unwrap();
+        a
+    };
+    assert_eq!(m.start_attempt(&attempt(2)), Err("state_conflict"));
+    // The second independent branch can start first; both may remain running.
+    m.start_attempt(&attempt(1)).unwrap();
+    m.start_attempt(&attempt(0)).unwrap();
+    assert_eq!(m.start_attempt(&attempt(0)), Err("state_conflict"));
+    assert_eq!(m.start_attempt(&attempt(2)), Err("state_conflict"));
+    m.finish_attempt(
+        &attempt(1),
+        json!({"status":"completed","output":{"text":"right"}}),
+    )
+    .unwrap();
+    assert_eq!(m.start_attempt(&attempt(2)), Err("state_conflict"));
+    m.finish_attempt(
+        &attempt(0),
+        json!({"status":"completed","output":{"text":"left"}}),
+    )
+    .unwrap();
+    m.start_attempt(&attempt(2)).unwrap();
+    m.finish_attempt(
+        &attempt(2),
+        json!({"status":"completed","output":{"text":"leftright"}}),
+    )
+    .unwrap();
+    let finished = m
+        .finish_run(
+            &identity,
+            json!({"status":"completed","output":{"text":"leftright"}}),
+        )
+        .unwrap();
+    drop(m);
+    let mut m = Manager::new(root).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(m.run_detail(&c, identity.id).unwrap(), finished);
+}
+
+fn wider_fork() -> Value {
+    let mut g = fork_join();
+    let third = Uuid::new_v4();
+    let output = Uuid::new_v4();
+    let first_join = g["output"].clone();
+    g["nodes"].as_array_mut().unwrap().push(node(
+        third,
+        json!({"kind":"input","name":"source"}),
+        240,
+    ));
+    g["nodes"].as_array_mut().unwrap().push(json!({"id":output,"operation":"text.concat","operationVersion":1,"parameters":{},"position":{"x":600,"y":120},"inputs":{"left":{"kind":"output","nodeId":first_join,"port":"output"},"right":{"kind":"output","nodeId":third,"port":"output"}}}));
+    g["output"] = json!(output);
+    g
+}
+#[test]
+fn wider_graphs_never_admit_a_third_active_node_and_keep_the_same_output_budget() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let c = setup(&mut m);
+    let g = wider_fork();
+    let p = prepare(&mut m, &c, &g, true);
+    let mut live = std::collections::BTreeSet::new();
+    let mut maximum = 0;
+    let out = play_engine::worker::execute_pipeline(p.invocation, |event| {
+        let mut id = p.identity.clone();
+        id.node_id = serde_json::from_value(event["nodeId"].clone()).unwrap();
+        if event["type"] == "node_started" {
+            m.start_attempt(&id)?;
+            live.insert(id.node_id);
+            maximum = maximum.max(live.len());
+            assert!(live.len() <= 2);
+            if live.len() == 2
+                && live.contains(&serde_json::from_value(g["nodes"][0]["id"].clone()).unwrap())
+            {
+                let mut third = id.clone();
+                third.node_id = serde_json::from_value(g["nodes"][3]["id"].clone()).unwrap();
+                assert_eq!(m.start_attempt(&third), Err("state_conflict"));
+            }
+        } else {
+            m.finish_attempt(&id, event)?;
+            assert!(live.remove(&id.node_id));
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(maximum, 2);
+    assert!(live.is_empty());
+    assert_eq!(out["text"], "The key.The key.The key.");
+    let done = m
+        .finish_run(&p.identity, json!({"status":"completed","output":out}))
+        .unwrap();
+    assert_eq!(done["attempts"].as_array().unwrap().len(), 5);
+}
+#[test]
+fn failure_keeps_a_successful_sibling_and_never_starts_the_join() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(tmp.path().join("private")).unwrap();
+    let c = setup(&mut m);
+    let mut g = fork_join();
+    g["nodes"][0]["operation"] = json!("text.utf8.decode");
+    g["nodes"][0]["inputs"]["input"] = json!({"kind":"literal","value":{"base64":"/w=="}});
+    let failed = execute(&mut m, &c, &g, true);
+    assert_eq!(failed["status"], "failed");
+    assert_eq!(failed["result"]["code"], "invalid_encoding");
+    assert_eq!(failed["attempts"].as_array().unwrap().len(), 2);
+    assert_eq!(failed["attempts"][0]["status"], "failed");
+    assert_eq!(failed["attempts"][1]["status"], "completed");
+    assert_eq!(
+        failed["attempts"][1]["result"]["outputs"]["output"],
+        "The key."
     );
 }

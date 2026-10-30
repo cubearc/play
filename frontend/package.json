@@ -10,7 +10,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "desktop:build": "node node_modules/electron/install.js && tsc -p tsconfig.desktop.json && vite build --config vite.desktop.config.ts && vite build --config vite.preload.config.ts && node desktop-dist/prepare.js",
     "desktop:proof": "electron desktop-dist/main.js",
-    "desktop:test": "node --test desktop-dist/*.test.js",
+    "desktop:test": "node --test --test-concurrency=1 desktop-dist/*.test.js",
     "desktop:smoke": "node --test desktop-dist/desktop.e2e.js",
     "build": "tsc --noEmit && vite build && vite build --config vite.launcher.config.ts",
     "typecheck": "tsc --noEmit",

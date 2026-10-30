@@ -118,7 +118,7 @@ test("native image adapter pins authorized image input and preserves exact Core 
       assert.equal(run.status, "failed");
       return;
     }
-    assert.equal(run.status, "completed");
+    assert.equal(run.status, "completed", JSON.stringify(run.result));
     assert.deepEqual(run.result?.outputs, { output: { base64: "FFAy" } });
     assert.deepEqual(run.plan.inputs, {
       source: {
@@ -255,7 +255,7 @@ test("a real retained byte Run becomes an exact file result with immutable attem
         run_id: run.id,
       })) as RunDetail;
     }
-    assert.equal(run.status, "completed");
+    assert.equal(run.status, "completed", JSON.stringify(run.result));
     const attempt = run.attempts[0];
     const port = run.plan.contract.outputs.find(
       (output) => output.semantic_type === "bytes",
@@ -768,7 +768,11 @@ test("archive keeps admitted native work supervised and refuses new work until r
           operation_version: 1,
         }),
       );
-      assert.equal(completed.status, "completed");
+      assert.equal(
+        completed.status,
+        "completed",
+        JSON.stringify(completed.result),
+      );
       assert.deepEqual(completed.result?.outputs, { output: "+[]" });
     }
   } finally {
@@ -1068,7 +1072,11 @@ test("editing an input during a real worker Run preserves its plan and rejects s
         operation_version: 1,
       }),
     );
-    assert.equal(completed.status, "completed");
+    assert.equal(
+      completed.status,
+      "completed",
+      JSON.stringify(completed.result),
+    );
     assert.deepEqual(completed.result?.outputs, { output: "alpha" });
     assert.deepEqual(
       (
@@ -1154,3 +1162,150 @@ async function reconnect(
   await next.workspace({ kind: "open", workspace_id: context.workspace_id });
   return next;
 }
+
+test("parallel branches persist together, cancel together and retain a real joined result", {
+  skip: !worker,
+  timeout: 15000,
+}, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "play-parallel-"));
+  const root = join(temporary, "private");
+  let engine = await Engine.connect(binary, supervisionWorker, root);
+  try {
+    const base = await runFixture(engine, "Hello");
+    const context = base.context;
+    const view = (await engine.workspace({
+      kind: "open_exploration",
+      ...context,
+    })) as ExplorationView;
+    const trail = view.trails.find((t) => t.id === base.trail_id);
+    assert.ok(trail);
+    const a = randomUUID(),
+      b = randomUUID(),
+      output = randomUUID();
+    const definition = {
+      formatVersion: 4,
+      inputs: [{ name: "source", semanticType: "text" }],
+      nodes: [
+        ...[a, b].map((id) => ({
+          id,
+          operation: "cipher.rot13",
+          operationVersion: 1,
+          parameters: {},
+          position: { x: 40, y: 40 },
+          inputs: { input: { kind: "input", name: "source" } },
+        })),
+        {
+          id: output,
+          operation: "text.concat",
+          operationVersion: 1,
+          parameters: {},
+          position: { x: 400, y: 40 },
+          inputs: {
+            left: { kind: "output", nodeId: a, port: "output" },
+            right: { kind: "output", nodeId: b, port: "output" },
+          },
+        },
+      ],
+      output,
+    };
+    const pipeline = (await engine.workspace({
+      kind: "create_pipeline",
+      workspace_id: context.workspace_id,
+      key: randomUUID(),
+      title: "Parallel branches",
+      definition,
+    })) as { pipelineId: string; revision: number };
+    const saved = (await engine.workspace({
+      kind: "save_trail",
+      context,
+      key: randomUUID(),
+      trail_id: trail.id,
+      expected_revision: trail.revision,
+      hypothesis: "Join both branches",
+      bindings: {},
+      pipeline: { id: pipeline.pipelineId, revision: pipeline.revision },
+    })) as { revision: number };
+    const request = {
+      ...base,
+      key: randomUUID(),
+      trail_revision: saved.revision,
+      pipeline_id: pipeline.pipelineId,
+      pipeline_revision: pipeline.revision,
+      target_node_id: output,
+      operation: "text.concat",
+      operation_version: 1,
+    };
+    let running = await engine.startRun(request);
+    const deadline = Date.now() + contract.run_ms;
+    while (running.attempts.length < 2 && Date.now() < deadline) {
+      await delay(10);
+      running = (await engine.workspace({
+        kind: "run_detail",
+        context,
+        run_id: running.id,
+      })) as RunDetail;
+    }
+    assert.equal(running.status, "running");
+    assert.deepEqual(
+      running.attempts.map((a) => a.status),
+      ["running", "running"],
+    );
+    assert.deepEqual(
+      new Set(running.attempts.map((a) => a.nodeId)),
+      new Set([a, b]),
+    );
+    const cancelled = await engine.cancelRun({ context, run_id: running.id });
+    assert.deepEqual(
+      cancelled.attempts.map((a) => a.status),
+      ["cancelled", "cancelled"],
+    );
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal(
+      cancelled.attempts.some((a) => a.nodeId === output),
+      false,
+    );
+    engine = await reconnect(engine, worker, root, context);
+    const completed = await finished(
+      engine,
+      context,
+      await engine.startRun({ ...request, key: randomUUID() }),
+    );
+    assert.equal(
+      completed.status,
+      "completed",
+      JSON.stringify(completed.result),
+    );
+    assert.deepEqual(completed.result?.outputs, { output: "UryybUryyb" });
+    assert.equal(completed.attempts.length, 3);
+    const joinAttempt = completed.attempts.find((a) => a.nodeId === output);
+    assert.ok(joinAttempt);
+    for (const branch of completed.attempts.filter(
+      (a) => a.nodeId !== output,
+    )) {
+      assert.ok(
+        branch.finishedMs !== null &&
+          branch.finishedMs <= joinAttempt.startedMs,
+      );
+    }
+    engine = await reconnect(engine, worker, root, context);
+    assert.deepEqual(
+      await engine.workspace({
+        kind: "run_detail",
+        context,
+        run_id: completed.id,
+      }),
+      completed,
+    );
+    assert.deepEqual(
+      await engine.workspace({
+        kind: "run_detail",
+        context,
+        run_id: cancelled.id,
+      }),
+      cancelled,
+    );
+  } finally {
+    await engine.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});

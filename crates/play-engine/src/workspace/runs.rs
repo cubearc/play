@@ -148,10 +148,27 @@ pub async fn started(store: &mut Owned, run: &RunIdentity) -> Result<()> {
     let row=sqlx::query("SELECT plan,status FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND status IN ('queued','running')").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.context.stage_id.to_string()).bind(run.id.to_string()).fetch_optional(&mut *tx).await.map_err(storage::failure)?.ok_or("state_conflict")?;
     let plan: Value = serde_json::from_str(row.get("plan")).map_err(|_| "corrupt_store")?;
     let previous=sqlx::query("SELECT node_id,status FROM node_attempts WHERE workspace_id=? AND exploration_id=? AND run_id=? ORDER BY started_ms,rowid").bind(run.context.workspace_id.to_string()).bind(run.context.exploration_id.to_string()).bind(run.id.to_string()).fetch_all(&mut *tx).await.map_err(storage::failure)?;
-    if previous
+    let graph = crate::graph::Definition::parse(plan["pipeline"]["definition"].clone())?;
+    let node = graph.node(run.node_id).map_err(|_| "state_conflict")?;
+    let selected = plan["executionOrder"].as_array().ok_or("corrupt_store")?;
+    let completed = previous
         .iter()
-        .any(|p| p.get::<&str, _>("status") != "completed")
-        || plan["executionOrder"][previous.len()] != run.node_id.to_string()
+        .filter(|p| p.get::<&str, _>("status") == "completed")
+        .map(|p| p.get::<String, _>("node_id"))
+        .collect::<std::collections::BTreeSet<_>>();
+    if !selected.contains(&json!(run.node_id))
+        || previous.iter().any(|p| {
+            p.get::<&str, _>("node_id") == run.node_id.to_string()
+                || !matches!(p.get::<&str, _>("status"), "running" | "completed")
+        })
+        || previous
+            .iter()
+            .filter(|p| p.get::<&str, _>("status") == "running")
+            .count()
+            >= protocol::contract().parallel_nodes
+        || !node
+            .dependencies()
+            .all(|id| completed.contains(&id.to_string()))
     {
         return Err("state_conflict");
     }

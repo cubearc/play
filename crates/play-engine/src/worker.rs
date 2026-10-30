@@ -1,4 +1,6 @@
 //! Native transport for the Core-owned pure-data execution registry.
+mod parallel;
+
 use crate::{
     Result,
     protocol::{self, Invocation},
@@ -472,77 +474,141 @@ pub fn execute_pipeline(
     invocation: PipelineInvocation,
     mut emit: impl FnMut(Value) -> Result<()>,
 ) -> Result<Value> {
-    use crate::graph::Source;
     use std::collections::BTreeMap;
     validate_pipeline(&invocation)?;
     let mut outputs: BTreeMap<uuid::Uuid, Value> = BTreeMap::new();
+    let mut pending = invocation.definition.schedule()?;
     let mut used = 0usize;
     let mut final_output = Value::Null;
-    for id in invocation.definition.schedule()? {
-        let node = invocation.definition.node(id)?;
-        let contract = node.contract()?;
-        let mut values = serde_json::Map::new();
-        for (port, binding) in &node.inputs {
-            let value = match binding {
-                Source::Input { name } => invocation
-                    .inputs
-                    .get(name)
-                    .ok_or("invalid_binding")?
-                    .canonical()?,
-                Source::Literal { value } => value.clone(),
-                Source::Output { node_id, port } => outputs
-                    .get(node_id)
-                    .and_then(|v| v.get(port))
-                    .ok_or("invalid_connection")?
-                    .clone(),
-            };
-            values.insert(port.clone(), value);
+    while !pending.is_empty() {
+        let ready = pending
+            .iter()
+            .copied()
+            .filter(|id| {
+                invocation
+                    .definition
+                    .node(*id)
+                    .is_ok_and(|n| n.dependencies().all(|id| outputs.contains_key(&id)))
+            })
+            .take(protocol::contract().parallel_nodes)
+            .collect::<Vec<_>>();
+        if ready.is_empty() {
+            return Err("invalid_connection");
         }
-        let values = Value::Object(values);
-        contract
-            .validate_inputs(&values)
-            .map_err(|_| "contract_mismatch")?;
-        let raw = execute_node(node, &values, &mut emit)?;
-        let named = named_outputs(&node.operation, &raw)?;
-        contract
-            .validate_outputs(&named)
-            .map_err(|_| "invalid_response")?;
-        let size = core::output_size(&node.operation, &named).map_err(failure)?;
-        used = used.checked_add(size).ok_or("output_limit")?;
-        if used > protocol::contract().output_bytes {
-            return Err("output_limit");
+        let tasks = ready
+            .iter()
+            .map(|id| {
+                let node = invocation.definition.node(*id)?;
+                let values = pipeline_inputs(&invocation, node, &outputs)?;
+                core::validate(
+                    &node.operation,
+                    node.operation_version,
+                    &values,
+                    &node.parameters,
+                    budget(),
+                )
+                .map_err(failure)?;
+                Ok((*id, (node, values)))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let results = parallel::batch(
+            tasks,
+            |(node, values)| {
+                let named = core::execute(
+                    &node.operation,
+                    node.operation_version,
+                    &values,
+                    &node.parameters,
+                    budget(),
+                )
+                .map_err(failure)?;
+                raw_outputs(&node.operation, &named)
+            },
+            |id| emit(json!({"type":"node_started","nodeId":id})),
+        )?;
+        if let Some(output) = finish_wave(
+            &invocation.definition,
+            ready.iter().copied().zip(results),
+            &mut outputs,
+            &mut used,
+            &mut emit,
+        )? {
+            final_output = output;
         }
-        emit(json!({"type":"node_finished","nodeId":id,"status":"completed","output":raw}))?;
-        outputs.insert(id, named);
-        final_output = raw;
+        pending.retain(|id| !ready.contains(id));
     }
     Ok(final_output)
 }
 
-fn execute_node(
-    node: &crate::graph::Node,
-    values: &Value,
+fn bounded_output(node: &crate::graph::Node, raw: &Value, used: &mut usize) -> Result<Value> {
+    let named = named_outputs(&node.operation, raw)?;
+    *used = used
+        .checked_add(core::output_size(&node.operation, &named).map_err(failure)?)
+        .ok_or("output_limit")?;
+    if *used > protocol::contract().output_bytes {
+        return Err("output_limit");
+    }
+    Ok(named)
+}
+
+fn finish_wave(
+    graph: &crate::graph::Definition,
+    results: impl Iterator<Item = (uuid::Uuid, Result<Value>)>,
+    outputs: &mut std::collections::BTreeMap<uuid::Uuid, Value>,
+    used: &mut usize,
     emit: &mut impl FnMut(Value) -> Result<()>,
+) -> Result<Option<Value>> {
+    let mut failed = None;
+    let mut final_output = None;
+    for (id, result) in results {
+        let node = graph.node(id)?;
+        match result.and_then(|raw| bounded_output(node, &raw, used).map(|named| (raw, named))) {
+            Ok((raw, named)) => {
+                emit(
+                    json!({"type":"node_finished","nodeId":id,"status":"completed","output":raw}),
+                )?;
+                outputs.insert(id, named);
+                if id == graph.output {
+                    final_output = Some(raw);
+                }
+            }
+            Err(code) => {
+                // Preserve completed siblings; never dispatch another wave after a failure.
+                emit(json!({"type":"node_finished","nodeId":id,"status":"failed","code":code}))?;
+                failed.get_or_insert(code);
+            }
+        }
+    }
+    match failed {
+        Some(code) => Err(code),
+        None => Ok(final_output),
+    }
+}
+
+fn pipeline_inputs(
+    invocation: &PipelineInvocation,
+    node: &crate::graph::Node,
+    outputs: &std::collections::BTreeMap<uuid::Uuid, Value>,
 ) -> Result<Value> {
-    executable(&node.operation)?;
-    core::validate(
-        &node.operation,
-        node.operation_version,
-        values,
-        &node.parameters,
-        budget(),
-    )
-    .map_err(failure)?;
-    emit(json!({"type":"node_started","nodeId":node.id}))?;
-    let output = core::execute(
-        &node.operation,
-        node.operation_version,
-        values,
-        &node.parameters,
-        budget(),
-    )
-    .map_err(failure)?;
-    raw_outputs(&node.operation, &output)
+    use crate::graph::Source;
+    let mut values = serde_json::Map::new();
+    for (port, binding) in &node.inputs {
+        let value = match binding {
+            Source::Input { name } => invocation
+                .inputs
+                .get(name)
+                .ok_or("invalid_binding")?
+                .canonical()?,
+            Source::Literal { value } => value.clone(),
+            Source::Output { node_id, port } => outputs
+                .get(node_id)
+                .and_then(|v| v.get(port))
+                .ok_or("invalid_connection")?
+                .clone(),
+        };
+        values.insert(port.clone(), value);
+    }
+    Ok(Value::Object(values))
 }
 
 #[cfg(test)]
