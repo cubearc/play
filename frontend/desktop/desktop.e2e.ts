@@ -496,10 +496,11 @@ test("numeric fields compose exact image facts and caption values with retained 
       )
       .toBe("cli");
     await expect
-      .poll(
-        async () => (await latestRun(page, "composition.png")).detail.status,
-      )
-      .toBe("completed");
+      .poll(async () => {
+        const { detail } = await latestRun(page, "composition.png");
+        return { status: detail.status, result: detail.result };
+      })
+      .toMatchObject({ status: "completed" });
     const cliRun = await latestRun(page, "composition.png");
     assert.notEqual(cliRun.detail.id, original.detail.id);
     assert.deepEqual(cliRun.detail.result, original.detail.result);
@@ -729,8 +730,8 @@ test("structured fields preserve JSON types, distinguish null and missing, and r
       .click();
     await canvas.getByRole("button", { name: "Run node", exact: true }).click();
     const result = canvas.getByRole("region", { name: "Cell result" });
-    await expect(result).toContainText('"base64": "YQ=="');
-    await expect(result).not.toContainText("Base64 YQ==");
+    await expect(result.getByRole("status")).toContainText('"base64": "YQ=="');
+    await expect(result.getByRole("status")).not.toContainText("Base64 YQ==");
     const object = await latestRun(page, "Structured clue");
     assert.deepEqual(object.detail.result?.outputs?.output, { base64: "YQ==" });
     assert.equal(object.detail.attempts.length, 2);
@@ -3377,6 +3378,9 @@ async function frozenRun(page: Page, context: Context, id: string) {
 }
 
 async function current(page: Page) {
+  await expect(
+    page.getByRole("tablist", { name: "Exploration tabs", exact: true }),
+  ).toBeVisible();
   return page.evaluate(async () => {
     const list = await window.play.workspace({ kind: "list" });
     if (!list.lastWorkspaceId) throw new Error("workspace_missing");
