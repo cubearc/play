@@ -286,7 +286,11 @@ OS credential facility and privileged broker, never in renderer state, worker
 environment, reusable definitions, command history or diagnostics. If protected
 credential storage is unavailable, reject persistent credential storage.
 
-Remote Challenge content runs in a separate unprivileged session/view without the
+The following remote-view and callback requirements belong to the separate
+[Cloud client milestone](https://github.com/cubearc/play/milestone/4). They do not
+gate local release; local private storage and native isolation remain required.
+
+Remote Challenge content must run in a separate unprivileged session/view without the
 application preload, local resource grants or IPC handlers. Content URLs and
 downloaded files never execute automatically. The proof rejects external views and
 implements no Cloud callback.

@@ -66,10 +66,19 @@ Windows/Linux reject worker execution with `native_policy_unavailable`
 until their native policies are proved. Rust tests on those systems are not
 proof of a complete native execution boundary.
 
-Parallel branches, external CLI attachment, Linux/Windows PTYs, authenticated Cloud,
+Parallel branches, external CLI attachment, Linux/Windows PTYs,
 signed packages and verified updates remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. See
 [contributor verification](reference/validation.md) for actual checks.
+
+The [local Electron milestone](https://github.com/cubearc/play/milestone/3)
+includes canonical local Challenge package import and private Candidates/Solutions.
+Cloud is an [independent project](https://github.com/cubearc/play-platform/issues/10),
+with separate [service](https://github.com/cubearc/play-platform/milestone/1) and
+[desktop integration](https://github.com/cubearc/play/milestone/4) milestones.
+Authentication, online Challenge cloning, progressive authorization, submissions,
+publication and official rankings/rewards do not gate local completion. Cloud
+integration will consume the canonical local contracts.
 
 ## Repository transition
 

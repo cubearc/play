@@ -220,9 +220,13 @@ The current [CI workflow](../../.github/workflows/ci.yml) requires native Rust
 Linux/macOS/Windows, Rust quality/coverage, frontend/browser, macOS Electron
 ARM64/Intel and Docker integration jobs. Record exact revisions and observed
 conclusions; local success does not establish hosted CI success. Replace obsolete
-jobs only with reviewed native equivalents. Full graph/CLI/Cloud, signed native
+jobs only with reviewed native equivalents. Full local graph/CLI, signed native
 packages, updates and per-OS worker/PTY evidence still gate
 [final acceptance](https://github.com/cubearc/play/issues/57).
+Canonical local package import and private Candidate/Solution journeys remain
+required. Cloud has an independent
+[client/service acceptance gate](https://github.com/cubearc/play-platform/issues/9)
+and does not block the local milestone.
 
 Pipeline authoring tests cover explicit creation/revision/fork, stable node IDs,
 independent Trail hypotheses, pinned reuse across Explorations, stale edits,

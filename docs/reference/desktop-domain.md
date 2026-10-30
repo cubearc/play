@@ -4,8 +4,14 @@ Use this contract when implementing the Electron investigation IDE. It defines
 entity ownership, evidence identity and the required retirement of superseded
 interfaces. The [architecture](../architecture.md) describes the runtime currently
 implemented. Delivery status and scope belong to the
-[Electron refactor milestone](https://github.com/cubearc/play/milestone/3), rather
+[local Electron refactor milestone](https://github.com/cubearc/play/milestone/3), rather
 than a second repository backlog.
+
+The [Cloud project](https://github.com/cubearc/play-platform/issues/10) separately
+owns remote services and their desktop integration. Local Challenge package
+import, Candidates and Solutions remain part of the local milestone. Cloud
+origins and official outcome boundaries below define future integration contracts;
+they do not require a Cloud account or service to complete local Play.
 
 ## Canonical vocabulary
 
@@ -155,7 +161,8 @@ explicitly, without a container or unrestricted fallback. Exact IPC layouts,
 limits and supported OS/architecture mechanisms are owned by the
 [native execution contract](desktop-runtime.md).
 
-Remote Challenge pages/forms run in a separate unprivileged view/session without
+In the separate Cloud integration, remote Challenge pages/forms must run in a
+separate unprivileged view/session without
 the application preload or local command authority. Bind authentication callbacks
 to their desktop session. Cloud/update credentials remain in privileged
 OS-protected storage and never enter remote content, workers or command logs.
