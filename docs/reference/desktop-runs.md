@@ -125,7 +125,8 @@ The two threads share the existing one-second process CPU budget, 128 MiB VM-gro
 limit and two-second Run deadline. The aggregate raw output ceiling remains
 16384 bytes; concurrency does not multiply it. At most two node results are held
 for the current group before collection. Native worker checks run on macOS and
-Linux x64/ARM64, including Electron dispatch; Linux PTYs remain incomplete. Each concurrent Run has its own worker and budgets; the coordinator
+Linux x64/ARM64, including Electron dispatch and contextual PTYs. Each concurrent Run has its own
+worker and budgets; the coordinator
 bounds their combined use as described below. Remaining platform work is tracked
 in [#46](https://github.com/cubearc/play/issues/46).
 

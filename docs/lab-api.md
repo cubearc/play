@@ -20,6 +20,6 @@ SQLite, Node filesystem APIs or an unrestricted command channel.
 | Saved definitions, Trail hypotheses and revision selection | [Saved Pipelines](reference/desktop-pipelines.md) |
 | Accepted graph invocations, attempts and output retention | [PipelineRuns](reference/desktop-runs.md) |
 
-Native adapters currently execute ROT13, Brainfuck and image pixel reads on macOS. Their metadata
+Native adapters execute Core-registered operations on macOS and Linux. Their metadata
 and schemas come from Core; catalog discovery does not authorize an adapter.
 For a working example, use [your first notebook](getting-started.md).

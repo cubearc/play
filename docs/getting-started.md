@@ -2,7 +2,7 @@
 
 <a id="inspect-your-first-file"></a>
 
-[Open the Electron preview](installation.md) on macOS. This example uses a text
+[Open the Electron preview](installation.md) on macOS or Linux. This example uses a text
 Asset and the real Core ROT13 operation; it does not require a Challenge or a file.
 
 1. On the welcome screen, enter a Workspace name, such as **Signal studies**, and
