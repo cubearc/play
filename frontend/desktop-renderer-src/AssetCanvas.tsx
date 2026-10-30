@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
+import { CandidateButton } from "./Candidates";
 import { FilePreview } from "./FilePreview";
 import { PipelineGraph } from "./PipelineGraph";
 import { TrailCell } from "./TrailCell";
@@ -87,6 +88,14 @@ export function AssetCanvas({
                     : "File inspection"}
           </span>
         </div>
+        <CandidateButton
+          label={trail.source.title}
+          selection={{
+            kind: "asset",
+            asset_id: trail.source.id,
+            revision: trail.source.revision,
+          }}
+        />
       </header>
       {trail.archived ? (
         <p className="archive-notice" role="note">

@@ -236,8 +236,8 @@ conclusions; local success does not establish hosted CI success. Replace obsolet
 jobs only with reviewed native equivalents. Full local graph/CLI, signed native
 packages, updates and per-OS worker/PTY evidence still gate
 [final acceptance](https://github.com/cubearc/play/issues/57).
-Canonical local package import is tested through the engine and Electron;
-private Candidate/Solution journeys remain required. Cloud has an independent
+Canonical local package import and private Stage Candidates are tested through
+the engine and Electron; Solution walkthrough journeys remain required. Cloud has an independent
 [client/service acceptance gate](https://github.com/cubearc/play-platform/issues/9)
 and does not block the local milestone.
 
@@ -360,3 +360,20 @@ The real Electron journey selects the documented example through the chooser,
 checks cancellation and failure recovery, runs the caption with Core, preserves
 reasoning and reopens separate imports. It checks accessibility and zoom/reflow;
 a second frame cannot invoke the import bridge.
+
+## Stage Candidates
+
+Engine tests select exact Asset revisions and typed retained outputs, including a
+numeric result from the real Core executor. They cover editing/reopening,
+Exploration isolation, optimistic conflicts, idempotent receipts, unknown ports,
+unretained outputs, revision limits and native schema-13 upgrade preservation.
+Database tests reject Candidate/evidence mutation and inject missing output to
+check an explicit availability gap with the selected reference intact.
+
+The real Electron journey covers initial empty state through IPC, choosing an
+Asset in its canvas, editing its working text without changing the Candidate,
+choosing a retained output, stale revision recovery, browsing selection history,
+opening the source Run, independent Explorations and application restart. It
+checks axe-core rules and shell/panel reflow at the supported small window size
+and 200% zoom. None of these checks establishes official answer correctness or
+completion of the Solution workflow.

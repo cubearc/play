@@ -4,6 +4,7 @@ use std::io::{BufRead, Read, Write};
 
 #[derive(Deserialize)]
 pub struct Contract {
+    pub candidate_revision_limit: usize,
     pub package_bytes: usize,
     pub active_runs: usize,
     pub active_runs_per_exploration: usize,

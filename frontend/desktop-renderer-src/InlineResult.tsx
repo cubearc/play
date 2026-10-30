@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { RunDetail, TrailView } from "../desktop/workspace-contract";
+import { CandidateButton } from "./Candidates";
 import { attemptOutputType, formatResultValue } from "./ResultValue";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -66,6 +67,28 @@ export function InlineResult({
             </span>
           </div>
           <pre role="status">{value(run)}</pre>
+          {run.status === "completed" && run.retainOutput
+            ? run.attempts
+                .filter(
+                  (a) =>
+                    run.plan.targetNodes.includes(a.nodeId) &&
+                    a.status === "completed",
+                )
+                .flatMap((attempt) =>
+                  Object.keys(attempt.result?.outputs ?? {}).map((port) => (
+                    <CandidateButton
+                      key={`${attempt.id}/${port}`}
+                      label={port}
+                      selection={{
+                        kind: "run_output",
+                        run_id: run.id,
+                        attempt_id: attempt.id,
+                        port,
+                      }}
+                    />
+                  )),
+                )
+            : null}
           {run.status === "completed" &&
           run.retainOutput &&
           run.attempts.some(

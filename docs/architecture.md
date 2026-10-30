@@ -39,8 +39,9 @@ unchanged. [Native storage](reference/desktop-storage.md) owns exact format,
 upgrade/refusal rules, quotas and recovery.
 
 The [domain contract](reference/desktop-domain.md) defines the complete target
-model. Native Candidates/Solutions and official Cloud outcomes are separate
-future deliveries, rather than implied by current Run records.
+model. [Stage Candidates](solutions.md) select immutable Asset revisions or retained
+Run outputs. Solution snapshots and official Cloud outcomes remain separate
+deliveries; Run records alone do not imply either.
 
 ## Request boundary
 
@@ -79,7 +80,7 @@ ad-hoc signing are development checks, not publisher authentication. See
 
 The [local Electron milestone](https://github.com/cubearc/play/milestone/3)
 includes implemented [canonical local Challenge package import](challenges.md)
-and the pending private Candidates/Solutions workflow.
+and private Stage Candidates. Solution snapshots remain pending.
 Cloud is an [independent project](https://github.com/cubearc/play-platform/issues/10),
 with separate [service](https://github.com/cubearc/play-platform/milestone/1) and
 [desktop integration](https://github.com/cubearc/play/milestone/4) milestones.

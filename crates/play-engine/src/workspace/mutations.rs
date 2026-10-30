@@ -414,6 +414,15 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
             queries::context(connection, owner, context).await?;
             notes::add(connection, context, title, text).await?
         }
+        Command::SelectCandidate {
+            context,
+            expected_revision,
+            selection,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            super::candidates::select(connection, context, *expected_revision, selection).await?
+        }
         Command::PinRunOutput {
             context,
             expected_revision,

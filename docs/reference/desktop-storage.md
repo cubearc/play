@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **13**, SQLite application ID
+The native store uses generation **2**, schema version **14**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql` and `challenges.sql`.
-Recognized native schemas 1–12 upgrade to schema 13 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql`, `challenges.sql` and `candidates.sql`.
+Recognized native schemas 1–13 upgrade to schema 14 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -98,8 +98,9 @@ Native schema upgrades append complete working revisions while preserving
 historical definitions and accepted evidence. Accepted executions
 freeze their chosen definition, resolved inputs and Core contract; see
 [native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
-and interruption recovery. Candidates, Solutions, submissions and official
-evaluation are separate deliveries.
+and interruption recovery. [Stage Candidates](#stage-candidates) preserve explicit
+answer selections. Solutions, submissions and official evaluation remain separate
+deliveries.
 
 ## Inert Page content
 
@@ -214,7 +215,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **16**, with no older
+change that order. The coordinated app/engine wire protocol is **21**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -388,3 +389,44 @@ entities in one transaction. Schema 13 adds immutable `challenge_imports` record
 scoped to Workspace/Exploration, preserving the package identity, exact source
 digest, claimed remote origin and source-to-local Stage/Block mappings.
 The native upgrade preserves existing content, Run evidence and caller identity.
+
+## Stage Candidates
+
+Schema 14 adds one immutable `candidates` identity per local Stage and append-only
+`candidate_revisions`. Composite foreign keys retain exact Asset revisions or
+Run/attempt references within their owning Workspace and Exploration. Commands
+also verify that the selected Asset (including a caption or archived Block) or
+Run belongs to the requested Stage. Updates and deletes of Candidate identities
+or revisions are refused by database triggers. Native schema 13 upgrades without
+rewriting notebook content, imported origin or finished Run evidence.
+
+`select_candidate` takes `context`, `key`, `expected_revision` and a closed tagged
+`selection`. The first expected revision is zero; subsequent selections require
+the current Candidate revision. The request uses the normal transactional receipt
+and digest rules, so an exact retry returns its original receipt and changed
+content under the same key conflicts. Each Stage permits 32 selections. A rejected
+selection writes neither a revision nor a receipt.
+
+| Selection | Required fields | Resolution |
+| --- | --- | --- |
+| `asset` | `asset_id`, positive `revision` | Exact immutable Asset revision, without copying bytes. |
+| `run_output` | `run_id`, `attempt_id`, `port` | Named output of a completed attempt in a completed, retained Run. |
+
+Run output selection verifies the pinned node operation version, Core contract and
+digest, retention policy, named port and typed value. Sensitive/private operations
+are refused. The Candidate does not accept literal values, paths, projections or
+implicit conversions; explicit Core operations produce those transformations.
+
+`get_candidate` takes `context` and nullable positive `revision`. Null reads the
+current selection; a positive value reads that historical revision without making
+it current. The response contains the stable Candidate ID, current and selected
+revision, bounded reference-only history, `private_unverified` status and one
+resolved evidence view. Its `candidate` field is null when the Stage has no Candidate. History
+does not duplicate large Asset data or Run outputs.
+
+Missing or discarded output and unavailable contracts produce an explicit
+`unavailable` evidence view with the selected reference intact. This availability
+check is not a general replay verifier or official Challenge evaluation. Corrupt
+stores remain errors. No prior browser Candidate/Solution snapshot reader or
+format alias is installed in the native engine; retiring the old served runtime
+remains part of the repository cutover.

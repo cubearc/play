@@ -129,7 +129,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **20** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **21** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -138,7 +138,10 @@ and extra fields are refused. Preview text never becomes HTML or a resource URL.
 Workspace intents cover list/create/open, create/open Exploration, create Stage,
 add text/Page source, revise existing text/captions/Pages, reorder, duplicate, archive or restore Stage content Blocks,
 save retained Run outputs as Blocks, add annotations, save individual Notes, list scoped Run summaries
-and read Run details. Internal image import/read and file import commands are Main-owned.
+and read Run details. Stage Candidate intents select an exact Asset revision or
+retained named output and read bounded selection history; they accept no literal
+answer or path. Empty reads use `{candidate: null}` within the required object
+response. See [Candidate storage](desktop-storage.md#stage-candidates). Internal image import/read and file import commands are Main-owned.
 Every contextual request carries Workspace, Exploration and Stage UUIDs; the
 engine resolves content and rejects mixed owners or absent exact revisions.
 Stage responses expose one tagged active Block sequence, including reasoning,

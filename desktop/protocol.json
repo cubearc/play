@@ -1,5 +1,5 @@
 {
-  "protocol": 20,
+  "protocol": 21,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -10,7 +10,7 @@
   "vm_growth_bytes": 134217728,
   "output_bytes": 16384,
   "storage_generation": 2,
-  "schema_version": 13,
+  "schema_version": 14,
   "workspace_limit": 16,
   "exploration_limit": 32,
   "stage_limit": 16,
@@ -41,5 +41,6 @@
   "queued_runs": 4,
   "queued_runs_per_exploration": 2,
   "active_runs_per_exploration": 1,
+  "candidate_revision_limit": 32,
   "package_bytes": 131072
 }

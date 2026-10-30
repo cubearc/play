@@ -5,6 +5,7 @@ import type {
   TrailView,
   WorkspaceView,
 } from "../desktop/workspace-contract";
+import { CandidateSummary } from "./Candidates";
 import VscodeButton from "./VscodeButton";
 
 export function Explorer({
@@ -199,7 +200,7 @@ export function Explorer({
           >
             <div className="evidence-empty">
               <VscodeIcon name="bookmark" />
-              <span>No candidates or solutions saved.</span>
+              <CandidateSummary />
             </div>
             <p className="sidebar-note muted">
               Content, saved reasoning and retained Run results persist locally.

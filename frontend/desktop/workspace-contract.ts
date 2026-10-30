@@ -196,6 +196,14 @@ export interface WorkspaceList {
 
 export type WorkspaceRequest =
   | {
+      kind: "select_candidate";
+      context: Context;
+      key: string;
+      expected_revision: number;
+      selection: CandidateSelection;
+    }
+  | { kind: "get_candidate"; context: Context; revision: number | null }
+  | {
       kind: "create_pipeline";
       workspace_id: string;
       key: string;
@@ -465,7 +473,39 @@ export interface MutationResult {
   revision?: number;
   blockId?: string;
 }
+export type CandidateSelection =
+  | { kind: "asset"; asset_id: string; revision: number }
+  | { kind: "run_output"; run_id: string; attempt_id: string; port: string };
+export interface CandidateView {
+  id: string;
+  revision: number;
+  selectedRevision: number;
+  status: "private_unverified";
+  selection: CandidateSelection;
+  history: { revision: number; selection: CandidateSelection }[];
+  evidence:
+    | { kind: "asset"; asset: AssetView }
+    | { kind: "unavailable"; code: string }
+    | {
+        kind: "run_output";
+        semanticType: string;
+        value: JsonValue;
+        origin: {
+          runId: string;
+          attemptId: string;
+          nodeId: string;
+          trailId: string;
+          pipelineId: string;
+          pipelineRevision: number;
+          sequence: number;
+          operationName: string;
+          port: string;
+        };
+      };
+}
 export interface Responses {
+  select_candidate: { candidateId: string; revision: number };
+  get_candidate: { candidate: CandidateView | null };
   create_pipeline: { pipelineId: string; revision: number };
   revise_pipeline: { pipelineId: string; revision: number };
   fork_pipeline: { pipelineId: string; revision: number };
@@ -519,6 +559,8 @@ export function request(value: unknown): WorkspaceRequest {
   const record = object(value);
   const kind = record.kind;
   const fields: Record<string, string[]> = {
+    select_candidate: ["context", "key", "expected_revision", "selection"],
+    get_candidate: ["context", "revision"],
     create_pipeline: ["workspace_id", "key", "title", "definition"],
     revise_pipeline: [
       "workspace_id",
@@ -597,7 +639,35 @@ export function request(value: unknown): WorkspaceRequest {
   keys(record, ["kind", ...expected]);
   for (const field of expected) {
     const value = record[field];
-    if (field === "context") context(value);
+    if (field === "selection") {
+      const selected = object(value);
+      if (selected.kind === "asset") {
+        keys(selected, ["kind", "asset_id", "revision"]);
+        if (!id(selected.asset_id) || !revision(selected.revision))
+          throw new Error("invalid_command");
+      } else if (selected.kind === "run_output") {
+        keys(selected, ["kind", "run_id", "attempt_id", "port"]);
+        if (
+          !id(selected.run_id) ||
+          !id(selected.attempt_id) ||
+          typeof selected.port !== "string" ||
+          !/^[a-zA-Z0-9_-]{1,64}$/.test(selected.port)
+        )
+          throw new Error("invalid_command");
+      } else throw new Error("invalid_command");
+    } else if (
+      kind === "get_candidate" &&
+      field === "revision" &&
+      value === null
+    )
+      continue;
+    else if (
+      kind === "select_candidate" &&
+      field === "expected_revision" &&
+      value === 0
+    )
+      continue;
+    else if (field === "context") context(value);
     else if (field === "pipeline") {
       if (value !== null) {
         const p = object(value);

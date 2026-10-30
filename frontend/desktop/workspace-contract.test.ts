@@ -490,3 +490,41 @@ test("Challenge import accepts only chooser intent, never renderer paths or pack
     /invalid_command/,
   );
 });
+
+test("Candidate selections accept only exact scoped immutable references", () => {
+  const value = {
+    kind: "select_candidate",
+    context: owner,
+    key: randomUUID(),
+    expected_revision: 0,
+    selection: { kind: "asset", asset_id: randomUUID(), revision: 1 },
+  };
+  assert.deepEqual(request(value), value);
+  assert.deepEqual(
+    request({ kind: "get_candidate", context: owner, revision: null }),
+    { kind: "get_candidate", context: owner, revision: null },
+  );
+  const output = {
+    kind: "run_output",
+    run_id: randomUUID(),
+    attempt_id: randomUUID(),
+    port: "number",
+  };
+  assert.deepEqual(
+    request({ ...value, selection: output }).kind,
+    "select_candidate",
+  );
+  for (const selection of [
+    { ...value.selection, revision: 0 },
+    { ...value.selection, path: "/tmp/answer" },
+    { ...output, port: "../answer" },
+    { ...output, value: 42 },
+    { kind: "literal", value: "answer" },
+  ])
+    assert.throws(() => request({ ...value, selection }), /invalid_command/);
+  for (const expected_revision of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(
+      () => request({ ...value, expected_revision }),
+      /invalid_command/,
+    );
+});

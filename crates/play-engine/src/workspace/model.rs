@@ -31,7 +31,31 @@ pub enum BlockSource {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CandidateSelection {
+    Asset {
+        asset_id: Uuid,
+        revision: i64,
+    },
+    RunOutput {
+        run_id: Uuid,
+        attempt_id: Uuid,
+        port: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    SelectCandidate {
+        context: Context,
+        key: Uuid,
+        expected_revision: i64,
+        selection: CandidateSelection,
+    },
+    GetCandidate {
+        context: Context,
+        revision: Option<i64>,
+    },
     CreatePipeline {
         workspace_id: Uuid,
         key: Uuid,
@@ -198,7 +222,8 @@ pub enum Command {
 impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
-            Self::CreatePipeline { key, .. }
+            Self::SelectCandidate { key, .. }
+            | Self::CreatePipeline { key, .. }
             | Self::RevisePipeline { key, .. }
             | Self::ForkPipeline { key, .. }
             | Self::SaveTrail { key, .. }

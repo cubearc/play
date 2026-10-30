@@ -1173,3 +1173,66 @@ h1 {
   margin: 0;
   font-family: var(--vscode-editor-font-family);
 }
+
+.candidate-panel {
+  margin: 0 0 24px;
+  padding: 16px 0;
+  border-block: 1px solid var(--separator-border);
+  min-width: 0;
+}
+.candidate-heading,
+.candidate-history {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.candidate-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.candidate-panel p {
+  overflow-wrap: anywhere;
+}
+.candidate-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
+.candidate-panel .asset-image {
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+}
+.candidate-history {
+  margin-top: 12px;
+}
+.candidate-history select {
+  max-width: 100%;
+  min-height: 28px;
+  color: var(--vscode-settings-dropdownForeground);
+  background: var(--vscode-settings-dropdownBackground);
+  border: 1px solid var(--vscode-settings-dropdownBorder);
+}
+.candidate-action {
+  margin-block: 8px;
+}
+.candidate-action p {
+  overflow-wrap: anywhere;
+}
+
+.candidate-panel summary {
+  cursor: pointer;
+  padding-block: 6px;
+  overflow-wrap: anywhere;
+}
+.candidate-panel vscode-button {
+  max-width: 100%;
+}
+.candidate-panel vscode-button::part(base) {
+  white-space: normal;
+}
+.candidate-heading {
+  overflow-wrap: anywhere;
+}

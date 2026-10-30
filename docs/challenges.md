@@ -37,5 +37,5 @@ You can also assemble clues with **New Exploration**, **New Stage** and the
 For package authors, see the [package format and limits](reference/challenge-package.md).
 
 Online cloning, progressive unlocking, submissions and official evaluation belong
-to the separate Cloud project. Private Candidates/Solutions remain a separate
-local delivery; imported content and successful Runs do not imply a saved solution.
+to the separate Cloud project. Private [Stage Candidates](solutions.md) are
+available locally. Solution snapshots remain a separate local delivery; imported content and successful Runs do not imply a saved solution.

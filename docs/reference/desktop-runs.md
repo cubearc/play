@@ -215,8 +215,9 @@ downstream consumers.
 Without retention, every completed node and the Run record has `output_not_retained` as an explicit
 replay gap, and contains neither output bytes nor their fingerprint. It cannot
 silently recover discarded output. These records are private local evidence,
-not Candidates, Solutions, official Challenge validation or a general replay
-verifier.
+not automatic Candidate selections, Solutions, official Challenge validation or a
+general replay verifier. A [Stage Candidate](../solutions.md) can explicitly select
+a named retained output without changing that Run.
 
 ## Save a selected output
 

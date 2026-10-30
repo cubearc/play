@@ -13,6 +13,7 @@ import type {
 } from "../desktop/workspace-contract";
 import { blockTitle, contextOf } from "../desktop/workspace-contract";
 import { ArchivedBlocks } from "./ArchivedBlocks";
+import { CandidatePanel } from "./Candidates";
 import { ChallengeOrigin } from "./ChallengeOrigin";
 import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
@@ -264,6 +265,7 @@ export function Notebook({
           {moved?.stageId === exploration.stage.id ? moved.message : ""}
         </span>
       </header>
+      <CandidatePanel />
       {exploration.stage.blocks.map((block, index) => {
         const title = blockTitle(block);
         const draft = block.kind === "note" ? notes.state(block.note) : null;

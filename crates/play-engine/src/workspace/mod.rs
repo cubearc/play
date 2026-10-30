@@ -1,6 +1,7 @@
 mod assets;
 mod bindings;
 mod blocks;
+mod candidates;
 mod challenges;
 mod cli;
 mod copies;
@@ -219,6 +220,16 @@ impl Manager {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;
                 self.runtime
                     .block_on(runs::list(store, &context, trail_id, before))
+            }
+            Command::GetCandidate { context, revision } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                let owner = store.identity.workspace_id;
+                self.runtime.block_on(async {
+                    queries::context(store.connection()?, owner, &context).await?;
+                    candidates::read(store.connection()?, &context, revision)
+                        .await
+                        .map(|candidate| json!({"candidate":candidate}))
+                })
             }
             Command::RunDetail { context, run_id } => self.run_detail(&context, run_id),
             Command::GetPipeline {

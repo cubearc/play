@@ -4914,3 +4914,185 @@ test("canonical Challenge import creates editable grouped content and rejects pa
     await rm(profile, { recursive: true, force: true });
   }
 });
+
+test("Stage candidates preserve chosen evidence, handle conflicts and reopen independently", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-candidates-"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Selected answers");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Hidden message");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const cell = () =>
+      notebook(page).getByRole("article", { name: "Clue block", exact: true });
+    const panel = () =>
+      notebook(page).getByRole("region", {
+        name: "Stage candidate",
+        exact: true,
+      });
+    const back = async () => {
+      await page.keyboard.press("ControlOrMeta+Shift+p");
+      await page
+        .getByRole("textbox", { name: "Command", exact: true })
+        .fill("Stage notebook");
+      await page.keyboard.press("Enter");
+    };
+    await cell()
+      .getByRole("button", { name: "Explore Clue", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Choose Clue as candidate", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Selected Clue as candidate",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await back();
+    await expect(panel()).toContainText("Gur xrl.");
+    await cell()
+      .getByRole("button", { name: "Edit text", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Svefg pyhr.");
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await expect(panel()).toContainText("Gur xrl.");
+    await expect(panel()).toContainText("Asset r1");
+    if (nativeWorkers) {
+      await cell()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(cell()).toContainText("output: First clue.");
+      const snapshot = await current(page);
+      await page.evaluate(async ({ workspace, exploration }) => {
+        const asset = exploration.trails[0]?.source;
+        if (!asset) throw new Error("missing_asset");
+        await window.play.workspace({
+          kind: "select_candidate",
+          context: {
+            workspace_id: workspace.id,
+            exploration_id: exploration.id,
+            stage_id: exploration.stage.id,
+          },
+          key: crypto.randomUUID(),
+          expected_revision: 1,
+          selection: { kind: "asset", asset_id: asset.id, revision: 1 },
+        });
+      }, snapshot);
+      await cell()
+        .getByRole("button", {
+          name: "Choose output as candidate",
+          exact: true,
+        })
+        .click();
+      await expect(panel().getByRole("alert")).toContainText(
+        "Stage candidate changed",
+      );
+      await cell()
+        .getByRole("button", {
+          name: "Choose output as candidate",
+          exact: true,
+        })
+        .click();
+      await expect(panel()).toContainText("First clue.");
+      await expect(panel()).toContainText("Private · Unverified");
+      await panel()
+        .getByLabel("Candidate revision", { exact: true })
+        .selectOption("1");
+      await expect(panel()).toContainText("Gur xrl.");
+      await panel()
+        .getByLabel("Candidate revision", { exact: true })
+        .selectOption("3");
+      await expect(panel()).toContainText("First clue.");
+      await panel()
+        .getByRole("button", { name: "Open source Run", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Trail canvas" }),
+      ).toContainText("output: First clue.");
+      await back();
+    }
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await capture(application, "desktop-stage-candidate");
+    for (const zoom of [1, 2]) {
+      await application.evaluate(({ BrowserWindow }, zoom) => {
+        const win = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+        if (!win) throw new Error("missing_window");
+        win.setSize(860, 640);
+        win.webContents.setZoomFactor(zoom);
+      }, zoom);
+      await expect(panel()).toBeVisible();
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      );
+      await expect
+        .poll(() =>
+          panel().evaluate((e) => ({
+            width: e.clientWidth,
+            overflow: e.scrollWidth > e.clientWidth + 1,
+          })),
+        )
+        .toMatchObject({ overflow: false });
+    }
+    await application.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+      win?.webContents.setZoomFactor(1);
+      win?.setSize(1280, 800);
+    });
+    await create(page, "Exploration", "Independent answer");
+    await expect(panel()).toContainText("Choose an asset");
+    await explorer(page)
+      .getByRole("button", { name: "Hidden message", exact: true })
+      .click();
+    await expect(panel()).toContainText(
+      nativeWorkers ? "First clue." : "Gur xrl.",
+    );
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    await expect(panel()).toContainText(
+      nativeWorkers ? "First clue." : "Gur xrl.",
+    );
+    await panel()
+      .getByLabel("Candidate revision", { exact: true })
+      .selectOption("1");
+    await expect(panel()).toContainText("Gur xrl.");
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
