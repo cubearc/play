@@ -225,8 +225,14 @@ impl Definition {
                 name: "source".into(),
             },
         )]);
-        if operation == "esolang.brainfuck.execute" {
-            inputs.insert("input".into(), Source::Literal { value: json!([]) });
+        let executable = cube_core::operations::execution::describe(operation, Default::default())
+            .map_err(|e| e.0)?;
+        for (name, representation) in executable.inputs {
+            if let std::collections::btree_map::Entry::Vacant(entry) = inputs.entry(name) {
+                entry.insert(Source::Literal {
+                    value: worker::empty_value(representation)?,
+                });
+            }
         }
         let d = Self {
             format_version: 4,

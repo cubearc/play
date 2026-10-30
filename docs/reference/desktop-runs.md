@@ -3,10 +3,8 @@
 Running a text or image cell creates a durable, Exploration-owned PipelineRun. Its saved
 result and exact input evidence reopen in the notebook and its Trail canvas.
 The executor plans the explicitly selected target node and its ancestors in a typed graph,
-using native ROT13, Brainfuck, image pixel-reading, UTF-8 and ordered text/byte
-concatenation adapters. One sandboxed worker executes the plan sequentially.
-Structured field/numeric composition, parallelism, executor output reuse and contextual CLI execution are
-separate deliveries.
+using the [Core-registered executable capabilities](desktop-pipelines.md#execution-capabilities). One sandboxed worker executes the plan sequentially.
+Parallelism, executor output reuse and contextual CLI execution are separate deliveries.
 
 ## Accepted invocation
 
@@ -42,6 +40,8 @@ Repeated operations share that snapshot. Parameters and connections stay in the
 frozen definition. This avoids repeated schema/configuration copies while keeping
 the existing **16384-byte** plan ceiling; an oversized plan is rejected before
 admission. Historical finished plans remain immutable in their recorded format.
+Adapter version 3 identifies registry-driven execution and complete named multiport
+outputs; earlier retained evidence remains readable without executing old dispatchers.
 
 [Save and select a Pipeline revision](../explorations.md#save-and-reuse-a-pipeline)
 before executing another configuration. A Run never creates or substitutes a

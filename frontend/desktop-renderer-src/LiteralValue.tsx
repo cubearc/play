@@ -60,9 +60,9 @@ export function LiteralValue({
       ? "Text value"
       : bytes
         ? "Bytes (Base64)"
-        : json
-          ? "JSON value"
-          : "Byte values (JSON)";
+        : semanticType === "bytes.array"
+          ? "Byte values (JSON)"
+          : "JSON value";
   const encoded =
     bytes && value !== null && typeof value === "object" && "base64" in value
       ? String(value.base64)

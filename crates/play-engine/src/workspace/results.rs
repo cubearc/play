@@ -73,7 +73,7 @@ fn contract(plan: &Value) -> Result<cube_core::operations::contracts::Contract> 
 
 fn resolve(plan: &Value, result: &Value, node: &str, sequence: i64, port: &str) -> Result<Output> {
     if plan["targetNodes"] != json!([node])
-        || !matches!(plan["adapterVersion"].as_u64(), Some(1 | 2))
+        || !matches!(plan["adapterVersion"].as_u64(), Some(1..=3))
     {
         return Err("unsupported_pipeline");
     }

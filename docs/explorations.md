@@ -234,5 +234,36 @@ explains restart and interruption behavior.
 
 General structured-result promotion, parallel execution and contextual CLI
 attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
+## Read an image in a spiral
+
+Open the image's Trail canvas and choose **New Pipeline**. Select **image pixels**,
+then set **Traversal** to **Spiral clockwise** or **Spiral counterclockwise** and
+choose the starting corner. Leave **Use channels** off to keep native sample order;
+turn it on for an explicit ordered JSON list such as `["gray"]`. **Use region**
+accepts `[x,y,width,height]`. Coordinates begin at the image's top-left corner.
+
+![Core-driven traversal choices and optional channel controls](assets/desktop/spiral-editor.png)
+
+[Open the full-size parameter editor](assets/desktop/spiral-editor.png).
+
+Add **Decode UTF-8** and bind its byte input to **image pixels · data**. The other
+port, **output**, retains region, channels and traversal metadata. Add **ROT13**
+when the decoded text requires that transformation, save the Pipeline and choose
+**Run cell**. This reads encoded sample bytes; it does not recognize drawn letters.
+
+The example's grayscale rows are `Gur`, `!! ` and `lrx`. Clockwise traversal yields
+`Gur xrl!!`; UTF-8 decoding and ROT13 produce `The key!!`. The screenshot also reverses
+the text twice to demonstrate an unrelated Core registration in the same graph.
+Every actual node attempt and both export ports remain inspectable after restart.
+
+![Completed spiral graph with inline result and retained evidence](assets/desktop/spiral-canvas.png)
+
+[Open the full-size completed graph](assets/desktop/spiral-canvas.png).
+
+The native catalog discovers registered Core executors, their typed ports and
+parameter choices. An operation with supported capabilities needs no per-operation
+Play implementation. [Execution capabilities](reference/desktop-pipelines.md#execution-capabilities)
+explains which registrations the current native host can admit.
+
 Use [native Run reference](reference/desktop-runs.md) for implemented execution
 semantics and [the domain contract](reference/desktop-domain.md) for full ownership.

@@ -139,3 +139,9 @@ different targets from one graph revision, preserves a pinned caption during
 editing, explicitly rebinds it and reuses the graph in another Exploration. It
 captures `native-pipeline-inputs-editor`, `native-pipeline-inputs-canvas` and
 `native-pipeline-inputs-binding` for the guide.
+
+The registry journey captures `native-spiral-editor` and `native-spiral-canvas`
+for `spiral-editor.png` and `spiral-canvas.png`. It also checks the long contract
+form at the minimum 800×540 window and 200% zoom, keeping the save action visible
+and shell status within the viewport. These are real Core/worker Runs and exact
+restart assertions, not fabricated operation or Cloud results.

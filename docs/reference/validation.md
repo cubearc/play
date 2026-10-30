@@ -78,6 +78,13 @@ checkboxes by keyboard, then verify disabled state and an unchanged checked valu
 when Space reaches an archived control. These checks do not establish
 complete WCAG conformance.
 
+Registry checks compare the native eligible set with Core registrations and execute
+all registered operations against their canonical known-answer vectors. A real
+Electron journey uses generated traversal/optional controls, refuses an invalid
+array draft, connects the byte port through UTF-8 and ROT13, executes a separately
+registered text operation, retains both image-export ports and reopens exact Run
+evidence. Core schemas and the full API conformance matrix remain independent checks.
+
 CI runs the Electron proof on macOS ARM64 and Intel. The macOS worker is locally
 ad-hoc signed and sandboxed. Windows/Linux Rust tests and protocol checks do not
 prove worker/PTY enforcement; unsupported native execution must refuse. None of

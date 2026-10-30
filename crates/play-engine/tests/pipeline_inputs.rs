@@ -694,3 +694,47 @@ fn page_inputs_are_stage_scoped_and_archival_blocks_only_new_admissions() {
             .is_err()
     );
 }
+
+#[test]
+fn registered_spiral_export_retains_metadata_and_bytes_through_the_real_graph_and_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Spiral evidence");
+    let v = image_from(
+        &mut m,
+        &c,
+        "Image caption",
+        include_bytes!("../../../tests/fixtures/spiral.png"),
+    );
+    let ids: [Uuid; 3] = std::array::from_fn(|_| Uuid::new_v4());
+    let nodes=[
+        ("image.pixels.export",json!({"input":{"kind":"input","name":"source"}}),json!({"traversal":"spiral_cw"})),
+        ("text.utf8.decode",json!({"input":{"kind":"output","nodeId":ids[0],"port":"data"}}),json!({})),
+        ("cipher.rot13",json!({"input":{"kind":"output","nodeId":ids[1],"port":"output"}}),json!({})),
+    ].into_iter().enumerate().map(|(i,(op,inputs,parameters))|json!({"id":ids[i],"operation":op,"operationVersion":1,"inputs":inputs,"parameters":parameters,"position":{"x":80+i*240,"y":80}})).collect::<Vec<_>>();
+    let d = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"image.samples"}],"nodes":nodes,"output":ids[2]});
+    let p = pipeline(&mut m, &c, &d);
+    let t = trail(&v, &figure(&v)["asset"]);
+    call(
+        &mut m,
+        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Read the spiral","pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":{}}),
+    );
+    let v = view(&mut m, &c);
+    let r = request(&c, trail(&v, &figure(&v)["asset"]), &d["nodes"][2]);
+    let completed = execute(&mut m, &r);
+    assert_eq!(completed["result"]["outputs"]["output"], "The key!!");
+    assert_eq!(
+        completed["attempts"][0]["result"]["outputs"]["output"]["traversal"],
+        "spiral_cw"
+    );
+    assert_eq!(
+        completed["attempts"][0]["result"]["outputs"]["data"]["base64"],
+        cube_core::encoding::base64_encode(b"Gur xrl!!")
+    );
+    assert_eq!(completed["plan"]["adapterVersion"], 3);
+    let id = serde_json::from_value(completed["id"].clone()).unwrap();
+    drop(m);
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(m.run_detail(&c, id).unwrap(), completed);
+}

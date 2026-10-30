@@ -6,15 +6,35 @@ one Exploration. [Explorations and Trails](../explorations.md#save-and-reuse-a-p
 shows the editing workflow.
 
 The editor supports a typed graph with up to four named Asset inputs, up to eight
-nodes and one selected output node. Native ROT13, Brainfuck, image pixel reads,
-UTF-8 encoding/decoding and ordered text/byte concatenation
-use their installed Core names, versions, named ports and parameter contracts.
-Rust validates the whole graph and plans the chosen output's ancestor closure;
-one bounded worker executes those dependencies sequentially. Structured field and
-numeric composition, additional representation conversions, parallelism, output caching and
-contextual CLI attachment remain separate deliveries under
-[issue 42](https://github.com/cubearc/play/issues/42) and
-[issue 45](https://github.com/cubearc/play/issues/45).
+nodes and one selected output node. The engine discovers executable operations
+from the Core registry, validates the whole graph and plans the chosen output's
+ancestor closure. One bounded worker executes those dependencies sequentially.
+Parallelism, output caching and contextual CLI attachment remain separate deliveries.
+
+## Execution capabilities
+
+Core owns executable registration beside each operation's descriptor and typed
+contract. The native engine admits only pure-data registrations whose input/output
+representations and retention policy it supports. A catalog entry, CLI command or
+linear Core Pipeline adapter alone grants no native execution.
+
+The host handles text, lossless Base64 bytes, byte arrays, structured JSON and
+materialized image inputs. It refuses generated image outputs until their retention
+path exists. New registrations using supported capabilities appear in operation
+selection without a Play ID list, new dispatcher branch or operation-specific form.
+New representations or permissions require explicit host work. Algorithms remain
+in Core; schema/default discovery never executes them.
+
+Parameter controls follow the full executable contract: enum choices retain their
+actual string/number values, optional values can be omitted, and ordered arrays
+use explicit JSON. The engine revalidates the complete schema and budget on save
+and invocation. Invalid drafts cannot save a graph. **Advanced parameters** exposes
+the same values, rather than an alternate execution path.
+
+Image pixel export retains both `output` (`image.pixel_data` metadata) and `data`
+(bytes). Choose the `data` port to decode UTF-8. Clockwise/counterclockwise spirals,
+starting corner, reversal, region and channel selection belong to this operation's
+Core parameters. See [read an image in a spiral](../explorations.md#read-an-image-in-a-spiral).
 
 ## Closed commands
 
@@ -123,8 +143,8 @@ unchanged when the working hypothesis, Pipeline or Asset changes.
 
 The signed worker executes the saved parameters through Core. Image reads accept
 `x`, `y` and `expand_palette`; coordinates are checked against the authorized image
-before admission. Brainfuck accepts its three Core limit fields, each constrained
-by the native adapter's existing ceiling. ROT13 accepts an empty parameter object.
+before admission. Brainfuck exposes Core cell width, EOF policy and limit fields. Its instruction,
+memory and output values cannot exceed the native ceilings. ROT13 accepts an empty parameter object.
 The editor cannot raise worker CPU, time, memory or output ceilings.
 
 ## Limits and storage

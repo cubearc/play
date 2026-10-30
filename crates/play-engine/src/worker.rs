@@ -1,24 +1,103 @@
+//! Native transport for the Core-owned pure-data execution registry.
 use crate::{
     Result,
     protocol::{self, Invocation},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use cube_core::operations::execution::{self as core, Budget, Effects, Representation};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, Read};
-mod composition;
-mod structured;
 
-fn supported(operation: &str) -> bool {
-    Probe::parse(operation).is_ok()
-        || composition::supported(operation)
-        || structured::supported(operation)
-        || operation == "image.dimensions"
+fn budget() -> Budget {
+    Budget {
+        input_bytes: protocol::contract().input_bytes,
+        output_bytes: protocol::contract().output_bytes,
+        ..Budget::default()
+    }
 }
-
+fn failure(error: core::Failure) -> &'static str {
+    error.0
+}
+fn executable(operation: &str) -> Result<core::Executable> {
+    let e = core::describe(operation, budget()).map_err(failure)?;
+    if e.effects != Effects::Pure {
+        return Err("unsupported_operation");
+    }
+    if e.contract.policy.private_input
+        || e.contract.policy.private_output
+        || !e.contract.policy.sensitive_parameters.is_empty()
+    {
+        return Err("retention_policy_unavailable");
+    }
+    // The native host can materialize images as inputs; it does not yet retain
+    // generated rasters. Unsupported representations never gain execution.
+    if e.outputs
+        .values()
+        .any(|r| matches!(r, Representation::ImageSamples))
+    {
+        return Err("unsupported_representation");
+    }
+    Ok(e)
+}
+pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
+    executable(operation)?;
+    core::validate_parameters(operation, version, parameters, budget()).map_err(failure)
+}
+pub fn parameters(operation: &str) -> Result<Value> {
+    Ok(executable(operation)?.parameters)
+}
+fn image(input: &str) -> Result<cube_core::image::Image> {
+    let data = STANDARD.decode(input).map_err(|_| "invalid_image")?;
+    if data.len() > protocol::contract().image_bytes || !data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("invalid_image");
+    }
+    cube_core::image::Image::decode(&data).map_err(|_| "invalid_image")
+}
+pub fn empty_value(representation: Representation) -> Result<Value> {
+    match representation {
+        Representation::Text => Ok(json!("")),
+        Representation::Bytes => Ok(json!({"base64":""})),
+        Representation::ByteArray => Ok(json!([])),
+        Representation::Json => Ok(Value::Null),
+        Representation::ImageSamples => Err("invalid_binding"),
+    }
+}
+pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
+    let e = executable(&invocation.operation)?;
+    let primary = e
+        .contract
+        .inputs
+        .iter()
+        .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
+        .ok_or("contract_mismatch")?;
+    let mut inputs = serde_json::Map::new();
+    for port in &e.contract.inputs {
+        let representation = *e.inputs.get(&port.name).ok_or("contract_mismatch")?;
+        let value = if port.name == primary.name {
+            match representation {
+                Representation::Text => json!(invocation.input),
+                Representation::ImageSamples => {
+                    json!(cube_core::operations::contracts::values::Image::from(
+                        &image(&invocation.input)?
+                    ))
+                }
+                _ => return Err("contract_mismatch"),
+            }
+        } else {
+            empty_value(representation)?
+        };
+        inputs.insert(port.name.clone(), value);
+    }
+    Ok(Value::Object(inputs))
+}
 pub fn validate(invocation: &Invocation) -> Result<()> {
-    let probe = Probe::parse(&invocation.operation)?;
-    let maximum = if matches!(probe, Probe::Pixel) {
+    let e = executable(&invocation.operation)?;
+    let maximum = if e
+        .inputs
+        .values()
+        .any(|r| *r == Representation::ImageSamples)
+    {
         protocol::contract().image_bytes.div_ceil(3) * 4
     } else {
         protocol::contract().input_bytes
@@ -31,238 +110,91 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
         invocation.operation_version,
         &invocation.parameters,
     )?;
-    if matches!(probe, Probe::Pixel) {
-        let p: PixelParameters = serde_json::from_value(invocation.parameters.clone())
-            .map_err(|_| "invalid_parameters")?;
-        let image = image(&invocation.input)?;
-        image
-            .view(p.expand_palette)
-            .map_err(|_| "invalid_image")?
-            .pixel(p.x, p.y)
-            .map_err(|_| "invalid_parameters")?;
-    }
-    Ok(())
+    core::validate(
+        &invocation.operation,
+        invocation.operation_version,
+        &named_inputs(invocation)?,
+        &invocation.parameters,
+        budget(),
+    )
+    .map_err(failure)
 }
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PixelParameters {
-    x: u32,
-    y: u32,
-    expand_palette: bool,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct BrainfuckParameters {
-    max_instructions: u64,
-    max_output_bytes: usize,
-    max_memory_bytes: usize,
-}
-fn configured_limits(value: &Value) -> Result<cube_core::esolang::brainfuck::Limits> {
-    let p: BrainfuckParameters =
-        serde_json::from_value(value.clone()).map_err(|_| "invalid_parameters")?;
-    let maximum = brainfuck_limits();
-    if p.max_instructions == 0
-        || p.max_instructions > maximum.max_instructions
-        || p.max_output_bytes == 0
-        || p.max_output_bytes > maximum.max_output_bytes
-        || p.max_memory_bytes == 0
-        || p.max_memory_bytes > maximum.max_memory_bytes
-    {
-        return Err("input_limit");
+// Worker transport keeps compact single values and complete named maps for
+// multiple outputs. This choice depends only on representation and port count.
+fn raw_outputs(operation: &str, named: &Value) -> Result<Value> {
+    let e = executable(operation)?;
+    if e.outputs.len() != 1 {
+        return Ok(json!({"ports":named}));
     }
-    Ok(cube_core::esolang::brainfuck::Limits {
-        max_instructions: p.max_instructions,
-        max_output_bytes: p.max_output_bytes,
-        max_memory_bytes: p.max_memory_bytes,
-    })
-}
-pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
-    let probe = Probe::parse(operation).ok();
-    if !supported(operation) {
-        return Err("unsupported_operation");
+    let (name, representation) = e.outputs.first_key_value().ok_or("contract_mismatch")?;
+    let v = named.get(name).ok_or("invalid_response")?;
+    match representation {
+        Representation::Text => Ok(json!({"text":v})),
+        Representation::Bytes => Ok(
+            json!({"bytes":STANDARD.decode(v["base64"].as_str().ok_or("invalid_response")?).map_err(|_|"invalid_response")?}),
+        ),
+        Representation::ByteArray => Ok(json!({"bytes":v})),
+        Representation::Json => Ok(json!({"value":v})),
+        Representation::ImageSamples => Err("unsupported_representation"),
     }
-    let contract = cube_core::operations::require(operation)
-        .map_err(|_| "unsupported_operation")?
-        .contract()
-        .map_err(|_| "contract_mismatch")?;
-    if contract.operation_version != version {
-        return Err("contract_mismatch");
-    }
-    if contract.policy.private_input
-        || contract.policy.private_output
-        || !contract.policy.sensitive_parameters.is_empty()
-    {
-        return Err("retention_policy_unavailable");
-    }
-    contract
-        .validate_parameters(parameters)
-        .map_err(|_| "invalid_parameters")?;
-    match probe {
-        Some(Probe::Rot13) | None => {}
-        Some(Probe::Pixel) => {
-            let _: PixelParameters =
-                serde_json::from_value(parameters.clone()).map_err(|_| "invalid_parameters")?;
-        }
-        Some(Probe::Brainfuck) => {
-            configured_limits(parameters)?;
-        }
-    }
-    Ok(())
-}
-
-enum Probe {
-    Rot13,
-    Brainfuck,
-    Pixel,
-}
-
-impl Probe {
-    fn parse(operation: &str) -> Result<Self> {
-        match operation {
-            "cipher.rot13" => Ok(Self::Rot13),
-            "image.pixels.read" => Ok(Self::Pixel),
-            "esolang.brainfuck.execute" => Ok(Self::Brainfuck),
-            _ => Err("unsupported_operation"),
-        }
-    }
-
-    fn execute(self, input: &str, parameters: &Value) -> Result<Value> {
-        self.execute_with_bytes(input, &[], parameters)
-    }
-    fn execute_with_bytes(self, input: &str, bytes: &[u8], parameters: &Value) -> Result<Value> {
-        match self {
-            Self::Pixel => {
-                let p: PixelParameters =
-                    serde_json::from_value(parameters.clone()).map_err(|_| "invalid_parameters")?;
-                image(input)?
-                    .view(p.expand_palette)
-                    .map_err(|_| "operation_failed")?
-                    .pixel(p.x, p.y)
-                    .map(|bytes| json!({"bytes":bytes}))
-                    .map_err(|_| "operation_failed")
-            }
-            Self::Rot13 => Ok(json!({"text": cube_core::ciphers::rot13(input)})),
-            Self::Brainfuck => {
-                let limits = configured_limits(parameters)?;
-                cube_core::esolang::brainfuck::execute(input, bytes, limits)
-                    .map(|bytes| json!({"bytes": bytes}))
-                    .map_err(|_| "operation_failed")
-            }
-        }
-    }
-}
-
-fn image(input: &str) -> Result<cube_core::image::Image> {
-    let data = STANDARD.decode(input).map_err(|_| "invalid_image")?;
-    if data.len() > protocol::contract().image_bytes || !data.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err("invalid_image");
-    }
-    cube_core::image::Image::decode(&data).map_err(|_| "invalid_image")
-}
-
-fn brainfuck_limits() -> cube_core::esolang::brainfuck::Limits {
-    cube_core::esolang::brainfuck::Limits {
-        max_output_bytes: protocol::contract().output_bytes,
-        ..Default::default()
-    }
-}
-
-pub fn parameters(operation: &str) -> Result<Value> {
-    if composition::supported(operation)
-        || structured::supported(operation)
-        || operation == "image.dimensions"
-    {
-        return composition::parameters(operation);
-    }
-    match Probe::parse(operation)? {
-        Probe::Rot13 => Ok(json!({})),
-        Probe::Pixel => Ok(json!({"x":0,"y":0,"expand_palette":false})),
-        Probe::Brainfuck => serde_json::to_value(brainfuck_limits()).map_err(|_| "invalid_state"),
-    }
-}
-pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
-    let contract = cube_core::operations::require(&invocation.operation)
-        .map_err(|_| "unsupported_operation")?
-        .contract()
-        .map_err(|_| "contract_mismatch")?;
-    let port = contract
-        .inputs
-        .iter()
-        .find(|port| ["text", "image.samples"].contains(&port.semantic_type.as_str()))
-        .ok_or("contract_mismatch")?;
-    let value = if port.semantic_type == "image.samples" {
-        json!(cube_core::operations::contracts::values::Image::from(
-            &image(&invocation.input)?
-        ))
-    } else {
-        json!(invocation.input)
-    };
-    let mut inputs = json!({port.name.clone():value});
-    if invocation.operation == "esolang.brainfuck.execute" {
-        inputs["input"] = json!([]);
-    }
-    Ok(inputs)
 }
 pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
-    if !supported(operation) {
-        return Err("unsupported_operation");
-    }
-    let contract = cube_core::operations::require(operation)
-        .map_err(|_| "unsupported_operation")?
-        .contract()
-        .map_err(|_| "contract_mismatch")?;
-    let port = contract.outputs.first().ok_or("contract_mismatch")?;
-    let value = match port.semantic_type.as_str() {
-        "text" => {
-            let text = output["text"].as_str().ok_or("invalid_response")?;
-            if text.len() > protocol::contract().output_bytes {
-                return Err("output_limit");
-            }
-            json!(text)
+    let e = executable(operation)?;
+    let named = if let Some(ports) = output.get("ports") {
+        ports.clone()
+    } else {
+        if e.outputs.len() != 1 {
+            return Err("invalid_response");
         }
-        "bytes" => {
-            let bytes = output["bytes"].as_array().ok_or("invalid_response")?;
-            if bytes.len() > protocol::contract().output_bytes {
-                return Err("output_limit");
+        let (name, representation) = e.outputs.first_key_value().ok_or("contract_mismatch")?;
+        let value = match representation {
+            Representation::Text => output.get("text").cloned().ok_or("invalid_response")?,
+            Representation::Json => output.get("value").cloned().ok_or("invalid_response")?,
+            Representation::Bytes => {
+                let data: Vec<u8> = serde_json::from_value(output["bytes"].clone())
+                    .map_err(|_| "invalid_response")?;
+                json!(cube_core::operations::contracts::values::Bytes { data })
             }
-            let data = bytes
-                .iter()
-                .map(|v| {
-                    v.as_u64()
-                        .and_then(|v| u8::try_from(v).ok())
-                        .ok_or("invalid_response")
-                })
-                .collect::<Result<Vec<_>>>()?;
-            json!(cube_core::operations::contracts::values::Bytes { data })
-        }
-        "json" => output.get("value").cloned().ok_or("invalid_response")?,
-        _ => return Err("contract_mismatch"),
+            Representation::ByteArray => output.get("bytes").cloned().ok_or("invalid_response")?,
+            Representation::ImageSamples => return Err("unsupported_representation"),
+        };
+        json!({name.clone():value})
     };
-    Ok(json!({port.name.clone():value}))
+    e.contract
+        .validate_outputs(&named)
+        .map_err(|_| "invalid_response")?;
+    if core::output_size(operation, &named).map_err(failure)? > protocol::contract().output_bytes {
+        return Err("output_limit");
+    }
+    Ok(named)
 }
-
 pub fn catalog() -> Result<Value> {
-    let entries = cube_core::operations::catalog()
-        .into_iter()
-        .filter(|descriptor| supported(descriptor.id))
-        .map(|descriptor| {
-            let contract = descriptor.contract().map_err(|_| "contract_mismatch")?;
-            let name = descriptor
-                .metadata()
-                .map_or(descriptor.command, |metadata| metadata.canonical_name);
-            Ok(
-                json!({"operation":descriptor.id, "operation_version":contract.operation_version,
-                "name":name, "description":descriptor.description, "input_type":contract.inputs.first().ok_or("contract_mismatch")?.semantic_type, "parameters":parameters(descriptor.id)?,"contract":contract}),
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let mut entries = Vec::new();
+    for registration in core::catalog(budget()).map_err(failure)? {
+        let e = match executable(registration.operation) {
+            Ok(e) => e,
+            Err("unsupported_representation" | "retention_policy_unavailable") => continue,
+            Err(e) => return Err(e),
+        };
+        let d = cube_core::operations::require(e.operation).map_err(|_| "contract_mismatch")?;
+        entries.push(json!({"operation":e.operation,"operation_version":e.contract.operation_version,
+            "name":d.metadata().map_or(d.command,|m|m.canonical_name),"description":d.description,
+            "input_type":e.contract.inputs.first().ok_or("contract_mismatch")?.semantic_type,
+            "parameters":e.parameters,"execution":{"effects":e.effects,"inputs":e.inputs,"outputs":e.outputs},"contract":e.contract}));
+    }
     Ok(json!(entries))
 }
-
 fn execute(invocation: Invocation) -> Result<Value> {
     validate(&invocation)?;
-    Probe::parse(&invocation.operation)?.execute(&invocation.input, &invocation.parameters)
+    let named = core::execute(
+        &invocation.operation,
+        invocation.operation_version,
+        &named_inputs(&invocation)?,
+        &invocation.parameters,
+        budget(),
+    )
+    .map_err(failure)?;
+    raw_outputs(&invocation.operation, &named)
 }
 
 pub fn run() -> Result<()> {
@@ -457,18 +389,6 @@ impl InputValue {
         }
     }
 }
-fn image_input<'a>(
-    invocation: &'a PipelineInvocation,
-    node: &crate::graph::Node,
-) -> Result<&'a str> {
-    let Some(crate::graph::Source::Input { name }) = node.inputs.get("input") else {
-        return Err("invalid_connection");
-    };
-    match invocation.inputs.get(name) {
-        Some(InputValue::Image { png }) => Ok(png),
-        _ => Err("contract_mismatch"),
-    }
-}
 pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
     invocation.definition.validate()?;
     let required = invocation.definition.required_inputs();
@@ -505,14 +425,31 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
     {
         return Err("input_limit");
     }
-    for n in &invocation.definition.nodes {
-        if n.operation == "image.pixels.read" {
-            validate(&Invocation {
-                operation: n.operation.clone(),
-                operation_version: n.operation_version,
-                input: image_input(invocation, n)?.into(),
-                parameters: n.parameters.clone(),
-            })?;
+    for node in &invocation.definition.nodes {
+        // Preflight materialized inputs before admission. Dependencies are
+        // checked at their execution boundary once their outputs exist.
+        let mut values = serde_json::Map::new();
+        for (port, source) in &node.inputs {
+            let value = match source {
+                crate::graph::Source::Input { name } => invocation
+                    .inputs
+                    .get(name)
+                    .ok_or("invalid_binding")?
+                    .canonical()?,
+                crate::graph::Source::Literal { value } => value.clone(),
+                crate::graph::Source::Output { .. } => continue,
+            };
+            values.insert(port.clone(), value);
+        }
+        if values.len() == node.inputs.len() {
+            core::validate(
+                &node.operation,
+                node.operation_version,
+                &Value::Object(values),
+                &node.parameters,
+                budget(),
+            )
+            .map_err(failure)?;
         }
     }
     Ok(())
@@ -551,18 +488,12 @@ pub fn execute_pipeline(
         contract
             .validate_inputs(&values)
             .map_err(|_| "contract_mismatch")?;
-        let raw = execute_node(&invocation, node, &values, &mut emit)?;
+        let raw = execute_node(node, &values, &mut emit)?;
         let named = named_outputs(&node.operation, &raw)?;
         contract
             .validate_outputs(&named)
             .map_err(|_| "invalid_response")?;
-        let size = match raw.get("text").and_then(Value::as_str) {
-            Some(text) => text.len(),
-            None => match raw.get("value") {
-                Some(value) => value.to_string().len(),
-                None => raw["bytes"].as_array().ok_or("invalid_response")?.len(),
-            },
-        };
+        let size = core::output_size(&node.operation, &named).map_err(failure)?;
         used = used.checked_add(size).ok_or("output_limit")?;
         if used > protocol::contract().output_bytes {
             return Err("output_limit");
@@ -575,64 +506,79 @@ pub fn execute_pipeline(
 }
 
 fn execute_node(
-    invocation: &PipelineInvocation,
     node: &crate::graph::Node,
     values: &Value,
     emit: &mut impl FnMut(Value) -> Result<()>,
 ) -> Result<Value> {
-    let id = node.id;
-    if node.operation == "image.dimensions" {
-        emit(json!({"type":"node_started","nodeId":id}))?;
-        return Ok(
-            json!({"value":cube_core::image::dimensions::inspect(&image(image_input(invocation,node)?)?)}),
-        );
-    }
-    if structured::supported(&node.operation) {
-        structured::validate_inputs(&node.operation, values, &node.parameters)?;
-        emit(json!({"type":"node_started","nodeId":id}))?;
-        return structured::execute(&node.operation, values, &node.parameters);
-    }
-    if composition::supported(&node.operation) {
-        composition::validate_inputs(&node.operation, values, &node.parameters)?;
-        emit(json!({"type":"node_started","nodeId":id}))?;
-        return composition::execute(&node.operation, values, &node.parameters);
-    }
-    let contract = node.contract()?;
-    let primary = contract
-        .inputs
-        .iter()
-        .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
-        .ok_or("contract_mismatch")?;
-    let input = if primary.semantic_type == "image.samples" {
-        image_input(invocation, node)?
-    } else {
-        values[&primary.name].as_str().ok_or("contract_mismatch")?
-    };
-    let single = Invocation {
-        operation: node.operation.clone(),
-        operation_version: node.operation_version,
-        parameters: node.parameters.clone(),
-        input: input.into(),
-    };
-    validate(&single)?;
-    let bytes = if node.operation == "esolang.brainfuck.execute" {
-        values["input"]
+    executable(&node.operation)?;
+    core::validate(
+        &node.operation,
+        node.operation_version,
+        values,
+        &node.parameters,
+        budget(),
+    )
+    .map_err(failure)?;
+    emit(json!({"type":"node_started","nodeId":node.id}))?;
+    let output = core::execute(
+        &node.operation,
+        node.operation_version,
+        values,
+        &node.parameters,
+        budget(),
+    )
+    .map_err(failure)?;
+    raw_outputs(&node.operation, &output)
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+    #[test]
+    fn native_catalog_discovers_all_core_pure_executors_without_an_operation_allowlist() {
+        let native = catalog().unwrap();
+        let installed = cube_core::operations::execution::catalog(Default::default()).unwrap();
+        let ids = native
             .as_array()
-            .ok_or("contract_mismatch")?
+            .unwrap()
             .iter()
-            .map(|v| {
-                v.as_u64()
-                    .and_then(|n| u8::try_from(n).ok())
-                    .ok_or("contract_mismatch")
-            })
-            .collect::<Result<Vec<_>>>()?
-    } else {
-        Vec::new()
-    };
-    if bytes.len() > protocol::contract().output_bytes {
-        return Err("input_limit");
+            .map(|e| e["operation"].as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(ids, installed.iter().map(|e| e.operation).collect());
+        assert!(ids.contains("text.reverse"));
+        assert!(ids.contains("image.pixels.export"));
+        assert!(!ids.contains("file.info.inspect"));
     }
-    emit(json!({"type":"node_started","nodeId":id}))?;
-    let raw = Probe::parse(&node.operation)?.execute_with_bytes(input, &bytes, &node.parameters)?;
-    Ok(raw)
+    #[test]
+    fn discovers_text_reverse_and_preserves_both_spiral_output_ports() {
+        let invocation = Invocation {
+            operation: "text.reverse".into(),
+            operation_version: 1,
+            input: "abc".into(),
+            parameters: json!({}),
+        };
+        assert_eq!(execute(invocation).unwrap(), json!({"text":"cba"}));
+        let im = cube_core::image::Image::from_bytes(
+            3,
+            3,
+            cube_core::image::ColorModel::Gray,
+            b"Gur!! lrx",
+            &[],
+            &[],
+        )
+        .unwrap();
+        let inputs = json!({"input":cube_core::operations::contracts::values::Image::from(&im)});
+        let output = cube_core::operations::execution::execute(
+            "image.pixels.export",
+            1,
+            &inputs,
+            &json!({"traversal":"spiral_cw"}),
+            Default::default(),
+        )
+        .unwrap();
+        let raw = json!({"ports":output});
+        let named = named_outputs("image.pixels.export", &raw).unwrap();
+        assert_eq!(named["data"]["base64"], STANDARD.encode(b"Gur xrl!!"));
+        assert_eq!(named["output"]["traversal"], "spiral_cw");
+    }
 }

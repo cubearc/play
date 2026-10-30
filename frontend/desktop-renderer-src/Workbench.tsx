@@ -399,7 +399,12 @@ export function Workbench() {
               <div className="breadcrumbs">
                 <span>{workspace?.title ?? "Cube Play"}</span>
                 <VscodeIcon name="chevron-right" />
-                <span>{exploration?.title ?? ""}</span>
+                <span
+                  className="status-exploration"
+                  title={exploration?.title ?? ""}
+                >
+                  {exploration?.title ?? ""}
+                </span>
                 <VscodeIcon name="chevron-right" />
                 <span>{exploration.stage.title}</span>
                 {activeTrail ? (
@@ -484,10 +489,14 @@ export function Workbench() {
               ? "Engine ready"
               : "Connecting…"}
         </span>
-        <span>{exploration?.title ?? ""}</span>
+        <span className="status-exploration" title={exploration?.title ?? ""}>
+          {exploration?.title ?? ""}
+        </span>
         <span className="status-spacer" />
-        <span>{activeTrail ? "Trail canvas" : "Stage notebook"}</span>
-        <span>
+        <span className="status-view">
+          {activeTrail ? "Trail canvas" : "Stage notebook"}
+        </span>
+        <span className="status-storage">
           {state.noteSaving
             ? "Saving…"
             : state.noteDirty || editorDirty

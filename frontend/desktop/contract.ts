@@ -25,7 +25,14 @@ export interface Operation {
 }
 
 export type RunResult =
-  | { status: "completed"; output: { text: string } | { bytes: number[] } }
+  | {
+      status: "completed";
+      output:
+        | { text: string }
+        | { bytes: number[] }
+        | { value: unknown }
+        | { ports: Record<string, unknown> };
+    }
   | { status: "cancelled" }
   | { status: "failed"; code: string };
 

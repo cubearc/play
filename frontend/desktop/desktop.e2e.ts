@@ -22,6 +22,167 @@ declare global {
 import type {} from "./bridge.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
+test("Core registrations drive spiral controls, named outputs and unrelated text execution", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-native-registry-"));
+  let application = await electron.launch({
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Read the spiral");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Follow the samples");
+    const image = fileURLToPath(
+      new URL("../../tests/fixtures/spiral.png", import.meta.url),
+    );
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, image);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Read the grayscale bytes clockwise, then decode the text.");
+    await editor
+      .getByRole("button", { name: "Choose PNG", exact: true })
+      .click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore spiral.png", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+    await editor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Spiral to text");
+    const choose = async (label: string, option: string) => {
+      await editor.getByRole("combobox", { name: label, exact: true }).click();
+      await editor.getByRole("option", { name: option, exact: true }).click();
+    };
+    await choose("Operation", "image pixels");
+    await choose("Traversal", "Spiral clockwise");
+    await choose("Start corner", "Top left");
+    const channels = editor.getByRole("checkbox", {
+      name: "Use channels",
+      exact: true,
+    });
+    await channels.focus();
+    await page.keyboard.press("Space");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await editor
+      .getByRole("textbox", { name: "Channels (JSON)", exact: true })
+      .fill('["gray"]');
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeInViewport();
+    await capture(application, "native-spiral-editor");
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("missing_window");
+      window.setSize(800, 540);
+      window.webContents.setZoomFactor(2);
+    });
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeInViewport();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      )
+      .toBe(true);
+    await capture(application, "native-spiral-compact");
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("missing_window");
+      window.webContents.setZoomFactor(1);
+      window.setSize(1280, 800);
+    });
+
+    assert.deepEqual((await accessibility(page)).violations, []);
+    const add = async (operation: string) => {
+      await editor
+        .getByRole("button", { name: "Add node", exact: true })
+        .click();
+      await choose("Operation", operation);
+    };
+    await add("Decode UTF-8");
+    await choose("input · bytes", "1. image pixels · data");
+    await add("ROT13");
+    await choose("input · text", "2. Decode UTF-8 · output");
+    await add("text reverse");
+    await choose("input · text", "3. ROT13 · output");
+    await add("text reverse");
+    await choose("input · text", "4. text reverse · output");
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      process.platform === "darwin"
+        ? "output: The key!!"
+        : "Execution rejected",
+    );
+    if (process.platform !== "darwin") return;
+    const original = await latestRun(page, "spiral.png");
+    assert.equal(original.detail.result?.outputs?.output, "The key!!");
+    assert.equal(original.detail.attempts.length, 5);
+    const ports = original.detail.attempts[0]?.result?.outputs;
+    assert.equal(
+      ports?.data && (ports.data as { base64: string }).base64,
+      Buffer.from("Gur xrl!!").toString("base64"),
+    );
+    assert.ok(ports);
+    assert.equal(
+      (ports.output as { traversal: string }).traversal,
+      "spiral_cw",
+    );
+    await capture(application, "native-spiral-canvas", false);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await application.close();
+    application = await electron.launch({
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    const restored = await latestRun(page, "spiral.png");
+    assert.deepEqual(restored, original);
+  } finally {
+    await application.evaluate(({ app }) => app.exit(0));
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("numeric fields compose exact image facts and caption values with retained evidence", {
   timeout: 90000,
 }, async () => {

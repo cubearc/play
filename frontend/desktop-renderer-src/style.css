@@ -1097,3 +1097,19 @@ h1 {
   width: 100%;
   background: #181818;
 }
+
+.status-exploration {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-remote,
+.connection,
+.status-storage {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .status-view {
+    display: none;
+  }
+}

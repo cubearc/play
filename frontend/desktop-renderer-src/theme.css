@@ -172,3 +172,24 @@
 .bound-inputs h2 {
   font-size: 14px;
 }
+
+/* Long contract forms keep their editor actions reachable. */
+.pipeline-editor > h2 {
+  position: sticky;
+  top: -24px;
+  z-index: 2;
+  background: var(--vscode-panel-background);
+  padding: 12px 0;
+}
+.pipeline-editor > .dialog-actions {
+  position: sticky;
+  bottom: -24px;
+  z-index: 2;
+  background: var(--vscode-panel-background);
+  padding: 12px 0;
+}
+.pipeline-editor .graph-inspector {
+  max-height: 55vh;
+  overflow: auto;
+  padding-right: 8px;
+}
