@@ -61,12 +61,8 @@ export function NotePicker({
     </fieldset>
   );
 }
-export function SavedSolutionNotes({
-  notes,
-}: {
-  notes: NoteView[] | undefined;
-}) {
-  if (!notes?.length) return null;
+export function SavedSolutionNotes({ notes }: { notes: NoteView[] }) {
+  if (!notes.length) return null;
   return (
     <section aria-label="Included solution notes">
       <h4>Included notes</h4>

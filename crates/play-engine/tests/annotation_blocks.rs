@@ -1,5 +1,3 @@
-#[path = "support/native_schema.rs"]
-mod native_schema;
 use play_engine::workspace::{Context, Manager};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -278,51 +276,4 @@ fn annotation_capacity_and_database_guards_preserve_reasoning_and_note_history()
             );
             db.close().await.unwrap();
         });
-}
-
-#[test]
-fn native_schema_six_upgrade_preserves_saved_results_and_reasoning_before_annotation_creation() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let context = setup(&mut manager);
-    command(
-        &mut manager,
-        json!({"kind":"add_text","context":context,"key":Uuid::new_v4(),"title":"Clue","text":"Gur xrl."}),
-    );
-    let state = view(&mut manager, &context);
-    let trail = &state["trails"][0];
-    let request=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
-    let prepared = manager.prepare_run(&request).unwrap();
-    manager.start_attempt(&prepared.identity).unwrap();
-    let run = manager
-        .finish_run(
-            &prepared.identity,
-            json!({"status":"completed","output":{"text":"The key."}}),
-        )
-        .unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"pin_run_output","context":context,"key":Uuid::new_v4(),"expected_revision":state["stage"]["revision"],"run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":"output"}),
-    );
-    let before = view(&mut manager, &context);
-    drop(manager);
-    native_schema::snapshot(&root, context.workspace_id, 6);
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(view(&mut manager, &context), before);
-    assert_eq!(
-        manager.run_detail(&context, prepared.identity.id).unwrap(),
-        run
-    );
-    command(
-        &mut manager,
-        add(&context, "Observation", "The earlier result remains exact."),
-    );
-    let after = view(&mut manager, &context);
-    assert_eq!(after["stage"]["blocks"][1], before["stage"]["blocks"][1]);
-    assert_eq!(after["stage"]["blocks"][2]["note"]["kind"], "annotation");
 }

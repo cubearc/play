@@ -20,6 +20,8 @@ export default defineConfig({
   ],
   build: {
     outDir: "../desktop-renderer",
+    sourcemap: "hidden",
+    minify: false,
     emptyOutDir: true,
     rollupOptions: {
       output: {

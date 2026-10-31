@@ -97,8 +97,7 @@ trusted import handler. It does not establish arbitrary graph execution or Cloud
 participation. Screenshots are written under `frontend/playwright-report/`.
 The duplication journey checks independent text/caption edits and Runs, source
 revision conflicts, keyboard copy, grouped images, quota state and restart.
-Native tests also preserve copy provenance across schema 2 upgrades and refuse
-lineage changes; engine tests cover atomic rollback after a caption quota failure.
+Native tests also preserve copy provenance and refuse lineage changes; engine tests cover atomic rollback after a caption quota failure.
 
 Use **Add file** to import a small text or binary fixture. Its Block opens an
 inert inspection canvas with a byte count, bounded preview and digest. The file
@@ -111,21 +110,18 @@ and follow **Open source Run** after editing/re-running the original clue. The
 result journey verifies exact historical selection, keyboard focus, preserved
 reasoning drafts, read-only roots, archive/restore, isolation and restart. Native
 IPC also promotes actual Brainfuck bytes without text coercion; engine tests
-cover unavailable outputs, conflicts, quota rollback, unique origins and schema-5
-upgrade. Core determines the operation version and output contract in these checks.
+cover unavailable outputs, conflicts, quota rollback and unique origins. Core determines the operation version and output contract in these checks.
 Archive journeys cover preserved history and drafts, keyboard restoration,
 image/caption grouping, active-slot reuse, retained limits and independent
 Explorations. Native tests archive an admitted worker without stopping its
-supervision, then cancel it and reject new work until restoration. Schema fixtures
-reconstruct exact earlier native stores with their real domain records and verify
-protected evidence after upgrade.
+supervision, then cancel it and reject new work until restoration. Rejection tests preserve archived store bytes without conversion.
 
 Use **Add annotation** for narrative text independent of Asset operations. The
 annotation Electron journey checks per-Note keyboard saves, separate reasoning
 drafts, inert markup, revision-conflict recovery and discard, keyboard copy/order,
 archive/restore, Exploration isolation and restart. Engine checks cover the same
 Note revision storage, stale snapshots, byte/capacity admission, immutable source
-lineage and protected reasoning, including schema-6 upgrades with saved evidence.
+lineage and protected reasoning.
 
 The complete notebook journey combines inert Page source, grouped image/caption,
 File, annotation and Result Blocks. It uses keyboard creation/edit/copy/order/
@@ -135,8 +131,8 @@ identities. Hostile page scripts/forms/embeds stay text. axe-core runs in the re
 Electron document with WCAG 2 A/AA and 2.1 AA rules for notebook and image canvas;
 no rules are disabled. Tests cover tab arrow/Home/End navigation, readable
 contrast and keyboard access to the image viewport. Native IPC also saves actual
-pixel bytes as a File result and rejects archived-image dispatch; schema-7
-fixtures preserve Notes and bind prior image Trails without losing evidence.
+pixel bytes as a File result and rejects archived-image dispatch. Reopening
+retains Notes and exact image Trail bindings.
 
 ## Source boundaries
 
@@ -174,14 +170,11 @@ verify the published image bytes alongside the page.
 
 Pipeline authoring tests cover explicit creation/revision/fork, stable node IDs,
 independent Trail hypotheses, pinned reuse across Explorations, stale edits,
-parameter/version/type/ownership rejection and complete Run evidence. A real
-schema-8 store and signed Core Run fixture prove schema-9 upgrades preserve
-historical evidence. Worker tests exercise saved pixel coordinates and Brainfuck
+parameter/version/type/ownership rejection and complete Run evidence. Worker tests exercise saved pixel coordinates and Brainfuck
 limits. The real Electron journey edits hypotheses and definitions, reuses a
 chosen older revision, checks accessibility and preserves the preceding result.
 
-Named-input tests retain an actual schema-10 signed Run while upgrading to schema
-11. The complete Electron journey declares and binds image/caption inputs, runs
+Named-input tests preserve exact immutable Run evidence. The complete Electron journey declares and binds image/caption inputs, runs
 different targets from one graph revision, preserves a pinned caption during
 editing, explicitly rebinds it and reuses the graph in another Exploration. It
 captures `native-pipeline-inputs-editor`, `native-pipeline-inputs-canvas` and

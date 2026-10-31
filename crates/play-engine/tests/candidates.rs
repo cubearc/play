@@ -280,7 +280,7 @@ fn database_protects_candidate_revisions_and_missing_output_is_an_explicit_gap()
                 .execute(&mut db)
                 .await
                 .unwrap();
-            let trigger = include_str!("../src/workspace/graphs.sql")
+            let trigger = include_str!("../src/workspace/schema.sql")
                 .lines()
                 .find(|line| line.starts_with("CREATE TRIGGER immutable_node_result_delete "))
                 .unwrap();
@@ -360,74 +360,4 @@ fn typed_numeric_candidate_uses_core_contract_without_text_conversion() {
     let saved = candidate(&mut manager, &context, None);
     assert_eq!(saved["evidence"]["semanticType"], "json");
     assert_eq!(saved["evidence"]["value"], 42);
-}
-
-#[test]
-fn native_schema_thirteen_upgrades_without_changing_notebook_or_run_evidence() {
-    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (context, initial) = setup(&mut manager);
-    let run = complete(
-        &mut manager,
-        &context,
-        &initial["trails"][0],
-        true,
-        json!({"text":"The key."}),
-    );
-    let before = view(&mut manager, &context);
-    drop(manager);
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut db = SqliteConnection::connect_with(
-                &SqliteConnectOptions::new()
-                    .filename(
-                        root.join(context.workspace_id.to_string())
-                            .join("workspace.sqlite3"),
-                    )
-                    .foreign_keys(false),
-            )
-            .await
-            .unwrap();
-            sqlx::raw_sql("DROP TABLE note_targets; DROP TABLE solution_revisions; DROP TABLE solutions; DROP TABLE candidate_revisions; DROP TABLE candidates;")
-                .execute(&mut db)
-                .await
-                .unwrap();
-            let schema = include_str!("../src/workspace/challenges.sql");
-            let previous = &schema[schema.find("CREATE TABLE workspace_meta_next").unwrap()..];
-            sqlx::raw_sql(previous).execute(&mut db).await.unwrap();
-            db.close().await.unwrap();
-        });
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(view(&mut manager, &context), before);
-    assert_eq!(
-        manager
-            .run_detail(
-                &context,
-                Uuid::parse_str(run["id"].as_str().unwrap()).unwrap()
-            )
-            .unwrap(),
-        run
-    );
-    assert_eq!(candidate(&mut manager, &context, None), Value::Null);
-    command(
-        &mut manager,
-        select(
-            &context,
-            0,
-            json!({"kind":"run_output","run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":"output"}),
-        ),
-    );
-    assert_eq!(
-        candidate(&mut manager, &context, None)["evidence"]["value"],
-        "The key."
-    );
 }

@@ -226,7 +226,7 @@ fn targets_cannot_cross_stages_or_explorations_and_rejected_writes_are_atomic() 
 }
 
 #[test]
-fn native_upgrade_preserves_notes_and_links_are_immutable() {
+fn current_store_reopens_notes_and_protects_immutable_links() {
     use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("private");
@@ -245,25 +245,6 @@ fn native_upgrade_preserves_notes_and_links_are_immutable() {
     let path = root
         .join(c.workspace_id.to_string())
         .join("workspace.sqlite3");
-    runtime.block_on(async {
-        let mut db = SqliteConnection::connect_with(
-            &SqliteConnectOptions::new()
-                .filename(&path)
-                .foreign_keys(false),
-        )
-        .await
-        .unwrap();
-        sqlx::query("DROP TABLE note_targets")
-            .execute(&mut db)
-            .await
-            .unwrap();
-        let schema = include_str!("../src/workspace/solutions.sql");
-        sqlx::raw_sql(&schema[schema.find("CREATE TABLE workspace_meta_next").unwrap()..])
-            .execute(&mut db)
-            .await
-            .unwrap();
-        db.close().await.unwrap();
-    });
     let mut m = Manager::new(root.clone()).unwrap();
     call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
     assert_eq!(view(&mut m, &c), before);

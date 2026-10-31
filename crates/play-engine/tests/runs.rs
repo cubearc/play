@@ -1,8 +1,6 @@
 #[path = "support/graph.rs"]
 mod graph;
 use graph::configuration;
-#[path = "support/native_schema.rs"]
-mod native_schema;
 use play_engine::workspace::{Command, Context, Manager, RunRequest};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -204,56 +202,6 @@ fn explicitly_saved_pipeline_freezes_a_reusable_definition_and_real_bytes_contra
     assert_eq!(next["attempts"], json!([]));
 }
 
-fn native_baseline_fixture(root: &std::path::Path, workspace: Uuid) {
-    native_schema::snapshot(root, workspace, 1);
-}
-
-#[test]
-fn recognized_native_baseline_upgrades_atomically_without_reassigning_content() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (request, before) = setup(&mut manager);
-    drop(manager);
-    native_baseline_fixture(&root, request.context.workspace_id);
-    let marker = root
-        .join(request.context.workspace_id.to_string())
-        .join("workspace.json");
-    let marker_before = std::fs::read(&marker).unwrap();
-    let mut manager = Manager::new(root.clone()).unwrap();
-    manager
-        .handle(Command::Open {
-            workspace_id: request.context.workspace_id,
-        })
-        .unwrap();
-    let after = command(
-        &mut manager,
-        json!({"kind":"open_exploration","workspace_id":request.context.workspace_id,"exploration_id":request.context.exploration_id,"stage_id":request.context.stage_id}),
-    );
-    assert_eq!(after, before);
-    assert_eq!(std::fs::read(marker).unwrap(), marker_before);
-    let prepared = manager.prepare_run(&request).unwrap();
-    manager.start_attempt(&prepared.identity).unwrap();
-    assert_eq!(
-        manager
-            .finish_run(
-                &prepared.identity,
-                json!({"status":"completed","output":{"text":"The key."}})
-            )
-            .unwrap()["status"],
-        "completed"
-    );
-    let bytes = std::fs::read(
-        root.join(request.context.workspace_id.to_string())
-            .join("workspace.sqlite3"),
-    )
-    .unwrap();
-    assert_eq!(
-        u32::from_be_bytes(bytes[60..64].try_into().unwrap()),
-        play_engine::protocol::contract().schema_version
-    );
-}
-
 #[test]
 fn pagination_and_retention_quota_preserve_all_completed_evidence() {
     let tmp = tempfile::tempdir().unwrap();
@@ -382,82 +330,4 @@ fn sqlite_guards_frozen_run_and_node_evidence_even_during_execution() {
             .unwrap(),
         completed
     );
-}
-
-fn private_file(path: &std::path::Path, bytes: &[u8]) {
-    use std::io::Write;
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path).unwrap().write_all(bytes).unwrap();
-}
-#[test]
-fn an_interrupted_native_upgrade_discards_only_its_marked_unpublished_copy() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (request, before) = setup(&mut manager);
-    drop(manager);
-    native_baseline_fixture(&root, request.context.workspace_id);
-    let directory = root.join(request.context.workspace_id.to_string());
-    let temporary = Uuid::new_v4();
-    let copy = directory.join(format!(".upgrade-{temporary}.sqlite3"));
-    let marker = directory.join("upgrade.json");
-    private_file(&copy, b"interrupted private upgrade");
-    private_file(
-        &directory.join(format!(".upgrade-{temporary}.sqlite3-journal")),
-        b"unpublished journal",
-    );
-    private_file(&marker,serde_json::to_string(&json!({"product":"cubearc.play.workspace.upgrade","workspace_id":request.context.workspace_id,"generation":2,"from_schema":1,"to_schema":2,"temporary":temporary})).unwrap().as_bytes());
-    let unrelated = directory.join("unrelated-private-evidence");
-    private_file(&unrelated, b"preserve");
-    let mut manager = Manager::new(root).unwrap();
-    manager
-        .handle(Command::Open {
-            workspace_id: request.context.workspace_id,
-        })
-        .unwrap();
-    assert!(!copy.exists());
-    assert!(!marker.exists());
-    assert_eq!(std::fs::read(unrelated).unwrap(), b"preserve");
-    assert_eq!(
-        command(
-            &mut manager,
-            json!({"kind":"open_exploration","workspace_id":request.context.workspace_id,"exploration_id":request.context.exploration_id,"stage_id":request.context.stage_id})
-        ),
-        before
-    );
-}
-#[test]
-fn an_unrecognized_upgrade_marker_cannot_authorize_mutation_or_cleanup() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (request, _) = setup(&mut manager);
-    drop(manager);
-    native_baseline_fixture(&root, request.context.workspace_id);
-    let directory = root.join(request.context.workspace_id.to_string());
-    let marker = directory.join("upgrade.json");
-    private_file(
-        &marker,
-        b"{\"product\":\"unknown\",\"temporary\":\"../../source\"}",
-    );
-    let database = directory.join("workspace.sqlite3");
-    let before = std::fs::read(&database).unwrap();
-    let original = std::fs::read(&marker).unwrap();
-    let mut manager = Manager::new(root).unwrap();
-    assert_eq!(
-        manager
-            .handle(Command::Open {
-                workspace_id: request.context.workspace_id
-            })
-            .unwrap_err(),
-        "unsupported_store"
-    );
-    assert_eq!(std::fs::read(database).unwrap(), before);
-    assert_eq!(std::fs::read(marker).unwrap(), original);
 }

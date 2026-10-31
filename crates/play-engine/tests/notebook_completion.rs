@@ -179,10 +179,8 @@ fn image_run_uses_the_exact_image_revision_and_rejects_text_operations() {
     );
 }
 
-#[path = "support/native_schema.rs"]
-mod native_schema;
 #[test]
-fn schema_seven_preserves_notes_and_assets_while_binding_prior_image_trails() {
+fn current_store_preserves_notes_images_and_bound_trails_after_restart() {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("private");
@@ -198,16 +196,6 @@ fn schema_seven_preserves_notes_and_assets_while_binding_prior_image_trails() {
     );
     let before = view(&mut m, &c);
     drop(m);
-    native_schema::snapshot(&root, c.workspace_id, 7);
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(async {
- use sqlx::{Connection,SqliteConnection,sqlite::SqliteConnectOptions};
- let mut db=SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(root.join(c.workspace_id.to_string()).join("workspace.sqlite3"))).await.unwrap();
- sqlx::query("UPDATE trails SET pipeline_id=NULL,pipeline_revision=NULL WHERE source_id IN (SELECT id FROM assets WHERE kind='image')").execute(&mut db).await.unwrap();db.close().await.unwrap();
- });
     let mut m = Manager::new(root).unwrap();
     command(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
     let after = view(&mut m, &c);
@@ -223,7 +211,7 @@ fn schema_seven_preserves_notes_and_assets_while_binding_prior_image_trails() {
         image["source"]["id"],
         before["stage"]["blocks"][1]["asset"]["id"]
     );
-    command(&mut m, add(&c, "<h1>Page after upgrade</h1>"));
+    command(&mut m, add(&c, "<h1>Page after restart</h1>"));
     assert_eq!(
         view(&mut m, &c)["stage"]["blocks"][2]["asset"]["content"]["kind"],
         "page"

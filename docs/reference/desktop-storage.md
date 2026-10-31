@@ -40,23 +40,17 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **16**, SQLite application ID
-`0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
-accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql`, `challenges.sql`, `candidates.sql`, `solutions.sql` and `note_targets.sql`.
-Recognized native schemas 1–15 upgrade to schema 16 under the owner lock, preserving content,
-IDs and Run evidence. The engine
-recovers the recognized source, closes its connection, upgrades a private copy,
-verifies it and publishes it by atomic rename. A validated Workspace-bound
-`upgrade.json` marker identifies that unpublished copy; a new owner discards
-only its marked copy/journal before retrying. Unknown markers refuse opening
-without database writes or cleanup.
-Fresh stores initialize that same baseline/evolution. No previous product-store
-reader, converter or automatic reset is installed. The engine checks the immutable marker, raw SQLite
-header, complete schema signature and stored identity through a read-only immutable
-connection before writable recovery or migration under the owner lock. Foreign-key integrity
-is then checked. WAL/SHM files are unsupported; this baseline uses rollback
-journaling.
+The native store accepts generation **2**, schema version **16**, SQLite
+application ID `0x4355504e` and 4096-byte pages. One complete baseline lives in
+`crates/play-engine/src/workspace/schema.sql`. Fresh stores initialize it directly;
+current stores reopen with the same schema, identities and evidence.
+
+The engine checks the identity marker, raw header, complete schema signature and
+stored identity through a read-only immutable connection before writable recovery
+under the owner lock. Schemas 1–15, newer versions, conversion markers and
+WAL/SHM stores are unsupported. Rejection preserves database, journals, markers,
+archival copies and source bytes; there is no migration chain or converter.
+The current baseline uses rollback journaling and checks foreign-key integrity.
 
 An unknown generation, altered schema, damaged header or unsafe store is refused.
 The app preserves its files and reports the failure. It never silently creates a
@@ -89,13 +83,11 @@ duplicate records; changed payloads receive `idempotency_conflict`.
 Text Assets create a reusable, single-node ROT13 Pipeline definition using the
 actual Core descriptor/version. Trails bind their own source Asset revision and a complete map of additional
 named inputs. `trail_input_bindings` stores exact revision references with scoped
-foreign keys and an active same-Stage admission trigger. Schema 11 appends
-format-4 working definitions, leaving historical definitions and finished Runs
-unchanged.
+foreign keys and an active same-Stage admission trigger. Pipeline definitions
+use the current format 4; unsupported definitions are rejected.
 [Pipeline edits](desktop-pipelines.md) append complete immutable definitions;
 Trail configuration pins a selected revision and saves a private hypothesis.
-Native schema upgrades append complete working revisions while preserving
-historical definitions and accepted evidence. Accepted executions
+Accepted executions
 freeze their chosen definition, resolved inputs and Core contract; see
 [native PipelineRuns](desktop-runs.md) for state, named outputs, private retention
 and interruption recovery. [Stage Candidates](#stage-candidates) preserve explicit
@@ -116,12 +108,6 @@ archive/restore preserves their saved source and revisions. Page Trails have no
 executable Pipeline binding. File extensions do not grant Page identity or
 execution. Scripts/forms/links remain source text in active, archived and canvas
 views. No webview, iframe or content-created resource/IPC authority is introduced.
-
-Schema 8 widens the Asset-kind constraint and restores the existing immutable
-result admission guard during the table rebuild. It also binds prior image
-inspection Trails to a Workspace-owned native pixel-reading definition without
-changing their IDs, captions or Run evidence. The upgrade still uses the verified
-private-copy transaction under exclusive ownership.
 
 ## File content and previews
 
@@ -146,8 +132,7 @@ Neither extensions nor apparent markup grant HTML, scripting or network behavior
 File Trails have no executable Pipeline binding in this preview. Files are not
 coerced to text inputs or editable with `revise_text`. Their Blocks use the same
 ordering, independent copy/lineage and archive/restore lifecycle as other Assets;
-copies retain exact bytes, while archived views remain readable. Schema 5 widens
-the Asset-kind constraint while preserving existing references and triggers.
+copies retain exact bytes, while archived views remain readable.
 
 ## Saved Run outputs
 
@@ -187,9 +172,7 @@ text Run; byte results remain inspection-only Files in this preview.
 Matching intent retries return the original receipt. A fresh intent for the same
 Run/attempt/port returns its existing Block without adding content or restoring
 an archive. A stale Stage revision fails before mutation. `result_not_available`
-identifies unfinished or unretained work. Recognized native schema 5 upgrades
-preserve files, archived content, source lineage and completed Runs before
-accepting promotion.
+identifies unfinished or unretained work.
 
 ## Block ordering
 
@@ -266,9 +249,9 @@ bindings. Concurrent content edits conflict even if the Stage order is unchanged
 The protected reasoning Block returns `invalid_block_type`; annotations use
 the same lifecycle with an exact Note revision snapshot.
 
-Schema 4 adds nullable `blocks.archived_revision`. `NULL` means active; a positive
-value pins the Stage revision that last archived that Block. Schema 7 adds
-insert/update triggers that keep the unique reasoning Block active while
+`blocks.archived_revision` is nullable. `NULL` means active; a positive
+value pins the Stage revision that last archived that Block.
+Insert/update triggers that keep the unique reasoning Block active while
 permitting archived annotations. A deletion trigger preserves Block rows.
 There is no permanent-delete command or implicit data cleanup.
 
@@ -329,8 +312,7 @@ The renderer keeps drafts by Note UUID with the original context and expected
 revision. Cmd/Ctrl+S inside a Note saves only that Note. Conflict reloads retain
 the draft; discarding it reveals the latest saved revision. Copy/archive controls
 require a clean saved annotation, while moves preserve drafts. Notes are plain
-text and never interpret HTML or execute Cmd/Ctrl+Enter. Schema-6 upgrades retain
-existing reasoning, results and Runs before enabling annotations.
+text and never interpret HTML or execute Cmd/Ctrl+Enter.
 
 ## Text and caption revisions
 
@@ -377,28 +359,24 @@ lengths measure UTF-8 bytes, and historical revisions consume storage.
 
 Core additionally applies its image decode limits. SQLite rollback journals and
 small identity/navigation/lock files are separate from the database page ceiling.
-An active schema upgrade can additionally hold one private database copy and its
-rollback journal (up to 16 MiB each), separate from the live database ceiling.
 These conservative development limits are explicit admission controls, not a
 release-wide aggregate disk or process memory guarantee.
 
 ## Imported Challenge provenance
 
 Canonical [local packages](challenge-package.md) create independent notebook
-entities in one transaction. Schema 13 adds immutable `challenge_imports` records
-scoped to Workspace/Exploration, preserving the package identity, exact source
+entities in one transaction. Immutable `challenge_imports` records are
+scoped to Workspace/Exploration and preserve the package identity, exact source
 digest, claimed remote origin and source-to-local Stage/Block mappings.
-The native upgrade preserves existing content, Run evidence and caller identity.
 
 ## Stage Candidates
 
-Schema 14 adds one immutable `candidates` identity per local Stage and append-only
+The baseline contains one immutable `candidates` identity per local Stage and append-only
 `candidate_revisions`. Composite foreign keys retain exact Asset revisions or
 Run/attempt references within their owning Workspace and Exploration. Commands
 also verify that the selected Asset (including a caption or archived Block) or
 Run belongs to the requested Stage. Updates and deletes of Candidate identities
-or revisions are refused by database triggers. Native schema 13 upgrades without
-rewriting notebook content, imported origin or finished Run evidence.
+or revisions are refused by database triggers.
 
 `select_candidate` takes `context`, `key`, `expected_revision` and a closed tagged
 `selection`. The first expected revision is zero; subsequent selections require
@@ -433,11 +411,10 @@ remains part of the repository cutover.
 
 ## Solution snapshots
 
-Schema 15 adds `solutions` and append-only `solution_revisions`, scoped to a
+The baseline contains `solutions` and append-only `solution_revisions`, scoped to a
 Workspace/Exploration/Stage. Composite foreign keys pin the selected Candidate
 revision; Candidate and Run storage protect its exact Assets, attempts and inputs.
-Database triggers refuse updates and deletes. The native schema 14 upgrade
-preserves Candidates and their evidence; there is no served-web snapshot reader.
+Database triggers refuse updates and deletes.
 
 `save_solution` accepts `context`, `key`, `solution_id`, `expected_revision`,
 `candidate_revision`, `notes`, `title` and `explanation`. A fresh UUID with expected revision
@@ -500,7 +477,7 @@ readers. Reads neither rerun operations nor verify Challenge correctness.
 
 ## Evidence-linked annotations
 
-Schema 16 adds `note_targets` to the canonical Notes model. An annotation has at
+`note_targets` belongs to the canonical Notes model. An annotation has at
 most one immutable target: `block` with `block_id`, `asset` with `asset_id` and
 `revision`, `attempt` with `run_id` and `attempt_id`, or `run_output` with those
 IDs and `port`. The engine validates Workspace, Exploration and Stage membership
@@ -512,8 +489,7 @@ Asset targets identify exact immutable revisions. Block targets identify the
 notebook item without snapshotting its content. Attempt targets retain execution
 identity and status. Targets cannot be replaced or deleted, and duplication
 preserves the reference while creating independent Note content/revisions.
-Archiving preserves both records. Existing native schema 15 stores upgrade
-without changing their Notes, Candidates or Solution snapshots.
+Archiving preserves both records.
 
 Notebook views contain an optional `target: { reference, label }` on each Note.
 Evidence is loaded separately with `inspect_note_target`, keeping repeated large

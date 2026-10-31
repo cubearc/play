@@ -593,9 +593,9 @@ export interface SolutionView extends SolutionSummary {
     stageId: string;
     candidate: { id: string; revision: number };
     selection: CandidateSelection;
-    notes?: NoteView[];
+    notes: NoteView[];
     path: SolutionPath | null;
-    lineage?: {
+    lineage: {
       assets: {
         assetId: string;
         revision: number;

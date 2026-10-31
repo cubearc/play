@@ -36,7 +36,7 @@ Workspace/Exploration ownership before reading or writing. Reasoning, Asset and
 Pipeline revisions are immutable; accepted graph Runs preserve their plan,
 inputs, actual attempts and chosen output retention. Sources remain separate and
 unchanged. [Native storage](reference/desktop-storage.md) owns exact format,
-upgrade/refusal rules, quotas and recovery.
+baseline/refusal rules, quotas and recovery.
 
 The [domain contract](reference/desktop-domain.md) defines the complete target
 model. [Stage Candidates](solutions.md) select immutable Asset revisions or retained
@@ -92,11 +92,17 @@ Authentication, online Challenge cloning, progressive authorization, submissions
 publication and official rankings/rewards do not gate local completion. Cloud
 integration will consume the canonical local contracts.
 
-## Repository transition
+## Native-only source and distribution
 
-The source tree still contains `play-local`, `play-launcher`, `play-runner`, the
-served web frontend and Docker checks. They are outside the Electron invocation
-path. [#56](https://github.com/cubearc/play/issues/56) owns their required removal;
-this documentation update does not establish retirement. Existing tests remain
-required until reviewed native replacements land. There is no native fallback
-into those runtimes and no old product-store converter.
+The source and build graph contain one application: the Electron workbench and
+`play-engine`, with the real bundled Cube CLI. Local REST/WebSocket servers,
+host/browser launchers, container runners and their build/runtime dependencies
+are absent. Native IPC, worker/PTY and packaged journeys exercise their replacements.
+The structural retirement check rejects removed entry points; Core's complete
+conformance matrix and native adapter checks retain their independent roles.
+
+Storage initializes one current baseline. Earlier schemas and pending conversion
+markers are refused before writes; previous stores and external volumes remain
+untouched. No format converter or compatibility runtime is shipped.
+Windows execution and signed release/update requirements remain separate
+incomplete deliveries; removing old runtimes does not establish their support.

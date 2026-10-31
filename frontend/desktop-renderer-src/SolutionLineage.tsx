@@ -27,12 +27,6 @@ export function SolutionLineage({
   lineage: SolutionView["snapshot"]["lineage"];
   openRun: (origin: { trailId: string; runId: string }) => void;
 }) {
-  if (!lineage)
-    return (
-      <p className="muted">
-        This saved revision does not include source history.
-      </p>
-    );
   if (!lineage.assets.length && !lineage.paths.length) return null;
   return (
     <section aria-label="Recorded source history">

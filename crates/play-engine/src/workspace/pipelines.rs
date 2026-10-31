@@ -30,7 +30,7 @@ pub async fn read(c: &mut SqliteConnection, w: &str, id: &str, rev: i64) -> Resu
         .fetch_one(&mut *c)
         .await
         .map_err(storage::failure)?;
-    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=4 ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
+    let revisions=sqlx::query_scalar("SELECT revision FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? ORDER BY revision DESC").bind(w).bind(id).fetch_all(&mut *c).await.map_err(storage::failure)?;
     let origin=sqlx::query("SELECT source_pipeline_id,source_revision FROM pipeline_origins WHERE workspace_id=? AND pipeline_id=?").bind(w).bind(id).fetch_optional(c).await.map_err(storage::failure)?.map(|r|PipelineOrigin{pipeline_id:r.get(0),revision:r.get(1)});
     let node = d.node(d.output)?;
     Ok(Pipeline {
@@ -106,7 +106,14 @@ pub async fn revise(
     {
         return Ok(json!({"pipelineId":id,"revision":head}));
     }
-    let count:i64=sqlx::query_scalar("SELECT count(*) FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=? AND json_extract(definition,'$.formatVersion')=4").bind(w).bind(id).fetch_one(&mut *c).await.map_err(storage::failure)?;
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pipeline_revisions WHERE workspace_id=? AND pipeline_id=?",
+    )
+    .bind(w)
+    .bind(id)
+    .fetch_one(&mut *c)
+    .await
+    .map_err(storage::failure)?;
     if count >= crate::protocol::contract().pipeline_revision_limit as i64 {
         return Err("storage_quota");
     }
@@ -226,97 +233,4 @@ pub async fn save_trail(
     mutations::bytes(c, &w, &e, hypothesis.len().saturating_sub(previous.len())).await?;
     sqlx::query("UPDATE trails SET hypothesis=?,pipeline_id=?,pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=? AND revision=?").bind(hypothesis).bind(pipeline.map(|p|p.id.to_string())).bind(pipeline.map(|p|p.revision)).bind(w).bind(e).bind(ctx.stage_id.to_string()).bind(trail.to_string()).bind(expected).execute(c).await.map_err(storage::failure)?;
     Ok(json!({"trailId":trail,"revision":expected+1}))
-}
-// Preserve immutable historical definitions and Run snapshots; publish complete working revisions.
-pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
-    let rows=sqlx::query("SELECT p.workspace_id,p.id,p.current_revision,r.definition FROM pipelines p JOIN pipeline_revisions r ON (p.workspace_id,p.id,p.current_revision)=(r.workspace_id,r.pipeline_id,r.revision)").fetch_all(&mut *c).await.map_err(storage::failure)?;
-    for row in rows {
-        let raw: Value =
-            serde_json::from_str(row.get("definition")).map_err(|_| "corrupt_store")?;
-        if matches!(raw["formatVersion"].as_u64(), Some(2..=4)) {
-            continue;
-        }
-        if raw["formatVersion"] != 1 || raw["nodes"].as_array().is_none_or(|n| n.len() != 1) {
-            return Err("unsupported_pipeline");
-        }
-        let w: String = row.get("workspace_id");
-        let id: String = row.get("id");
-        let rev: i64 = row.get("current_revision");
-        let node = &raw["nodes"][0];
-        let op = node["operation"].as_str().ok_or("corrupt_store")?;
-        let d = historical_definition(
-            serde_json::from_value(node["id"].clone()).map_err(|_| "corrupt_store")?,
-            op,
-            serde_json::from_value(node["operation_version"].clone())
-                .map_err(|_| "corrupt_store")?,
-            &worker::parameters(op)?,
-        )?;
-        sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,?,?)")
-            .bind(&w)
-            .bind(&id)
-            .bind(rev + 1)
-            .bind(serde_json::to_string(&d).map_err(|_| "invalid_state")?)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE pipelines SET current_revision=? WHERE workspace_id=? AND id=?")
-            .bind(rev + 1)
-            .bind(&w)
-            .bind(&id)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE trails SET pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND pipeline_id=? AND pipeline_revision=?").bind(rev+1).bind(w).bind(id).bind(rev).execute(&mut *c).await.map_err(storage::failure)?;
-    }
-    Ok(())
-}
-
-fn historical_definition(id: Uuid, op: &str, version: u32, params: &Value) -> Result<Value> {
-    let d = Definition::single(id, op, version, params.clone())?;
-    Ok(
-        json!({"formatVersion":2,"inputs":d.inputs,"nodes":[{"id":id,"operation":op,"operation_version":version,"input":"source","parameters":params}]}),
-    )
-}
-pub async fn upgrade_graphs(c: &mut SqliteConnection) -> Result<()> {
-    let rows=sqlx::query("SELECT workspace_id,pipeline_id,revision,definition FROM pipeline_revisions WHERE json_extract(definition,'$.formatVersion')=2 ORDER BY workspace_id,pipeline_id,revision").fetch_all(&mut *c).await.map_err(storage::failure)?;
-    for r in rows {
-        let raw: Value = serde_json::from_str(r.get("definition")).map_err(|_| "corrupt_store")?;
-        let n = &raw["nodes"][0];
-        let mut d = Definition::single(
-            serde_json::from_value(n["id"].clone()).map_err(|_| "corrupt_store")?,
-            n["operation"].as_str().ok_or("corrupt_store")?,
-            serde_json::from_value(n["operation_version"].clone()).map_err(|_| "corrupt_store")?,
-            n["parameters"].clone(),
-        )?;
-        d.format_version = 3;
-        let w: String = r.get("workspace_id");
-        let id: String = r.get("pipeline_id");
-        let rev: i64 = r.get("revision");
-        let head: i64 = sqlx::query_scalar(
-            "SELECT current_revision FROM pipelines WHERE workspace_id=? AND id=?",
-        )
-        .bind(&w)
-        .bind(&id)
-        .fetch_one(&mut *c)
-        .await
-        .map_err(storage::failure)?;
-        let next = head + 1;
-        sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,?,?)")
-            .bind(&w)
-            .bind(&id)
-            .bind(next)
-            .bind(serde_json::to_string(&d).map_err(|_| "invalid_state")?)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE pipelines SET current_revision=? WHERE workspace_id=? AND id=?")
-            .bind(next)
-            .bind(&w)
-            .bind(&id)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE trails SET pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND pipeline_id=? AND pipeline_revision=?").bind(next).bind(&w).bind(&id).bind(rev).execute(&mut *c).await.map_err(storage::failure)?;
-    }
-    Ok(())
 }

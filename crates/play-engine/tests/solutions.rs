@@ -235,7 +235,7 @@ fn solution_keeps_only_selected_dependencies_and_reports_missing_evidence() {
                 .execute(&mut db)
                 .await
                 .unwrap();
-            let trigger = include_str!("../src/workspace/graphs.sql")
+            let trigger = include_str!("../src/workspace/schema.sql")
                 .lines()
                 .find(|l| l.starts_with("CREATE TRIGGER immutable_node_result_delete "))
                 .unwrap();
@@ -302,103 +302,52 @@ fn solution_limits_and_invalid_input_leave_history_unchanged() {
 }
 
 #[test]
-fn schema_fourteen_upgrade_preserves_candidates_and_adds_solution_storage() {
-    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (context, _) = setup(&mut manager);
-    let get = json!({"kind":"get_candidate","context":context,"revision":null});
-    let before = command(&mut manager, get.clone());
-    drop(manager);
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut db = SqliteConnection::connect_with(
-                &SqliteConnectOptions::new()
-                    .filename(
-                        root.join(context.workspace_id.to_string())
-                            .join("workspace.sqlite3"),
-                    )
-                    .foreign_keys(false),
-            )
-            .await
-            .unwrap();
-            sqlx::raw_sql(
-                "DROP TABLE note_targets; DROP TABLE solution_revisions; DROP TABLE solutions;",
-            )
-            .execute(&mut db)
-            .await
-            .unwrap();
-            let schema = include_str!("../src/workspace/candidates.sql");
-            sqlx::raw_sql(&schema[schema.find("CREATE TABLE workspace_meta_next").unwrap()..])
-                .execute(&mut db)
-                .await
-                .unwrap();
-            db.close().await.unwrap();
-        });
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(command(&mut manager, get), before);
-    let id = Uuid::new_v4();
-    command(&mut manager, save(&context, id, 0));
-    assert_eq!(
-        read(&mut manager, &context, id, None)["evidence"],
-        before["candidate"]["evidence"]
-    );
-}
-
-#[test]
 fn unsupported_solution_snapshots_are_refused_without_compatibility_readers() {
     use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (context, _) = setup(&mut manager);
-    let id = Uuid::new_v4();
-    command(&mut manager, save(&context, id, 0));
-    drop(manager);
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut db = SqliteConnection::connect_with(
-                &SqliteConnectOptions::new().filename(
-                    root.join(context.workspace_id.to_string())
-                        .join("workspace.sqlite3"),
-                ),
-            )
-            .await
-            .unwrap();
-            sqlx::query("DROP TRIGGER solution_revisions_immutable_update")
-                .execute(&mut db)
+    for statement in [
+        "UPDATE solution_revisions SET snapshot=json_set(snapshot,'$.formatVersion',0)",
+        "UPDATE solution_revisions SET snapshot=json_remove(snapshot,'$.notes')",
+        "UPDATE solution_revisions SET snapshot=json_remove(snapshot,'$.lineage')",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("private");
+        let mut manager = Manager::new(root.clone()).unwrap();
+        let (context, _) = setup(&mut manager);
+        let id = Uuid::new_v4();
+        command(&mut manager, save(&context, id, 0));
+        drop(manager);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let mut db = SqliteConnection::connect_with(
+                    &SqliteConnectOptions::new().filename(
+                        root.join(context.workspace_id.to_string())
+                            .join("workspace.sqlite3"),
+                    ),
+                )
                 .await
                 .unwrap();
-            sqlx::query(
-                "UPDATE solution_revisions SET snapshot=json_set(snapshot,'$.formatVersion',0)",
-            )
-            .execute(&mut db)
-            .await
-            .unwrap();
-            let trigger = include_str!("../src/workspace/solutions.sql")
-                .lines()
-                .find(|l| l.starts_with("CREATE TRIGGER solution_revisions_immutable_update "))
-                .unwrap();
-            sqlx::raw_sql(trigger).execute(&mut db).await.unwrap();
-            db.close().await.unwrap();
-        });
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(manager.handle(serde_json::from_value(json!({"kind":"get_solution","context":context,"solution_id":id,"revision":null})).unwrap()).unwrap_err(),"unsupported_solution");
+                sqlx::query("DROP TRIGGER solution_revisions_immutable_update")
+                    .execute(&mut db)
+                    .await
+                    .unwrap();
+                sqlx::query(statement).execute(&mut db).await.unwrap();
+                let trigger = include_str!("../src/workspace/schema.sql")
+                    .lines()
+                    .find(|l| l.starts_with("CREATE TRIGGER solution_revisions_immutable_update "))
+                    .unwrap();
+                sqlx::raw_sql(trigger).execute(&mut db).await.unwrap();
+                db.close().await.unwrap();
+            });
+        let mut manager = Manager::new(root).unwrap();
+        command(
+            &mut manager,
+            json!({"kind":"open","workspace_id":context.workspace_id}),
+        );
+        assert_eq!(manager.handle(serde_json::from_value(json!({"kind":"get_solution","context":context,"solution_id":id,"revision":null})).unwrap()).unwrap_err(),"unsupported_solution");
+    }
 }
 
 fn execute(manager: &mut Manager, context: &Context, trail: &Value) -> Value {
@@ -585,7 +534,7 @@ fn remove_result(root: &std::path::Path, context: &Context, attempt: &str) {
                 .execute(&mut db)
                 .await
                 .unwrap();
-            let trigger = include_str!("../src/workspace/graphs.sql")
+            let trigger = include_str!("../src/workspace/schema.sql")
                 .lines()
                 .find(|l| l.starts_with("CREATE TRIGGER immutable_node_result_delete "))
                 .unwrap();

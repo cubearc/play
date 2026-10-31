@@ -624,13 +624,3 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
     transaction.commit().await.map_err(storage::failure)?;
     Ok(result)
 }
-
-// Bind existing image inspection Trails without changing their identities or evidence.
-pub(super) async fn bind_image_trails(connection: &mut SqliteConnection) -> Result<()> {
-    let workspaces: Vec<String> = sqlx::query_scalar("SELECT DISTINCT t.workspace_id FROM trails t JOIN assets a ON (t.workspace_id,t.exploration_id,t.source_id)=(a.workspace_id,a.exploration_id,a.id) WHERE a.kind='image' AND t.pipeline_id IS NULL").fetch_all(&mut *connection).await.map_err(storage::failure)?;
-    for workspace in workspaces {
-        let id = pipeline(connection, &workspace, "image.pixels.read").await?;
-        sqlx::query("UPDATE trails SET pipeline_id=?,pipeline_revision=? WHERE workspace_id=? AND pipeline_id IS NULL AND EXISTS(SELECT 1 FROM assets a WHERE (a.workspace_id,a.exploration_id,a.id)=(trails.workspace_id,trails.exploration_id,trails.source_id) AND a.kind='image')").bind(id.id.to_string()).bind(id.revision).bind(workspace).execute(&mut *connection).await.map_err(storage::failure)?;
-    }
-    Ok(())
-}

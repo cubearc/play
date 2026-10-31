@@ -13,18 +13,7 @@ use uuid::Uuid;
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
 pub const SCHEMA_VERSION: u32 = 16;
-pub const CALLER_SCHEMA: &str = include_str!("callers.sql");
-pub const RUN_SCHEMA: &str = include_str!("runs.sql");
-pub const COPY_SCHEMA: &str = include_str!("copies.sql");
-pub const ARCHIVE_SCHEMA: &str = include_str!("archive.sql");
-pub const FILE_SCHEMA: &str = include_str!("files.sql");
-pub const RESULT_SCHEMA: &str = include_str!("results.sql");
-pub const INPUT_SCHEMA: &str = include_str!("inputs.sql");
-pub const GRAPH_SCHEMA: &str = include_str!("graphs.sql");
-pub const PIPELINE_SCHEMA: &str = include_str!("pipelines.sql");
-pub const NOTEBOOK_SCHEMA: &str = include_str!("notebook.sql");
-pub const ANNOTATION_SCHEMA: &str = include_str!("annotations.sql");
-pub type Schemas = Vec<Vec<(String, String, String)>>;
+pub type Schema = Vec<(String, String, String)>;
 pub const SCHEMA: &str = include_str!("schema.sql");
 
 pub fn failure(error: sqlx::Error) -> &'static str {
@@ -185,9 +174,9 @@ pub fn preflight(directory: &Path, id: Uuid) -> Result<Identity> {
     if &header[..16] != b"SQLite format 3\0"
         || u32::from_be_bytes(header[68..72].try_into().map_err(|_| "unsupported_store")?)
             != APPLICATION_ID
-        || !(1..=SCHEMA_VERSION).contains(&u32::from_be_bytes(
-            header[60..64].try_into().map_err(|_| "unsupported_store")?,
-        ))
+        || u32::from_be_bytes(header[60..64].try_into().map_err(|_| "unsupported_store")?)
+            != SCHEMA_VERSION
+        || fs::symlink_metadata(directory.join("upgrade.json")).is_ok()
         || header[16..18] != [0x10, 0x00]
     {
         return Err("unsupported_store");
@@ -237,7 +226,7 @@ async fn schema_rows(connection: &mut SqliteConnection) -> Result<Vec<(String, S
         .collect())
 }
 
-pub async fn expected_schema() -> Result<Schemas> {
+pub async fn expected_schema() -> Result<Schema> {
     let mut connection = SqliteConnection::connect(":memory:")
         .await
         .map_err(failure)?;
@@ -245,16 +234,12 @@ pub async fn expected_schema() -> Result<Schemas> {
         .execute(&mut connection)
         .await
         .map_err(failure)?;
-    let mut versions = vec![schema_rows(&mut connection).await?];
-    for version in 2..=SCHEMA_VERSION {
-        migrate_to(&mut connection, version).await?;
-        versions.push(schema_rows(&mut connection).await?);
-    }
+    let schema = schema_rows(&mut connection).await?;
     connection.close().await.map_err(failure)?;
-    Ok(versions)
+    Ok(schema)
 }
 
-pub async fn inspect(path: &Path, id: Uuid, expected: &Schemas) -> Result<u32> {
+pub async fn inspect(path: &Path, id: Uuid, expected: &Schema) -> Result<u32> {
     let mut check = SqliteConnection::connect_with(&options(path).read_only(true).immutable(true))
         .await
         .map_err(|_| "unsupported_store")?;
@@ -263,9 +248,9 @@ pub async fn inspect(path: &Path, id: Uuid, expected: &Schemas) -> Result<u32> {
             .fetch_one(&mut check)
             .await
             .map_err(|_| "unsupported_store")?;
-        let expected = expected
-            .get(usize::try_from(version - 1).map_err(|_| "unsupported_store")?)
-            .ok_or("unsupported_store")?;
+        if version != i64::from(SCHEMA_VERSION) {
+            return Err("unsupported_store");
+        }
         let schema = schema_rows(&mut check)
             .await
             .map_err(|_| "unsupported_store")?;
@@ -296,14 +281,13 @@ pub struct Owned {
     pub _lock: File,
 }
 impl Owned {
-    pub async fn open(directory: PathBuf, id: Uuid, expected: &Schemas) -> Result<Self> {
+    pub async fn open(directory: PathBuf, id: Uuid, expected: &Schema) -> Result<Self> {
         let identity = preflight(&directory, id)?;
         inspect(&directory.join("workspace.sqlite3"), id, expected).await?;
         let lock = lock(&directory.join("owner.lock"), false)?;
         // Repeat identity/schema checks under the owner lock before writable recovery.
         preflight(&directory, id)?;
-        let version = inspect(&directory.join("workspace.sqlite3"), id, expected).await?;
-        super::upgrade::pending(&directory, id)?;
+        inspect(&directory.join("workspace.sqlite3"), id, expected).await?;
         let mut connection =
             SqliteConnection::connect_with(&options(&directory.join("workspace.sqlite3")))
                 .await
@@ -325,27 +309,6 @@ impl Owned {
             connection.close().await.map_err(failure)?;
             return Err(code);
         }
-        let cleaned = super::upgrade::clean(&directory, id);
-        if let Err(code) = cleaned {
-            connection.close().await.map_err(failure)?;
-            return Err(code);
-        }
-        if version < SCHEMA_VERSION {
-            connection.close().await.map_err(failure)?;
-            super::upgrade::publish(&directory, id, version, expected).await?;
-            connection =
-                SqliteConnection::connect_with(&options(&directory.join("workspace.sqlite3")))
-                    .await
-                    .map_err(failure)?;
-            if let Err(error) = sqlx::query("PRAGMA max_page_count=4096")
-                .execute(&mut connection)
-                .await
-            {
-                let code = failure(error);
-                connection.close().await.map_err(failure)?;
-                return Err(code);
-            }
-        }
         if let Err(code) = super::runs::recover(&mut connection).await {
             connection.close().await.map_err(failure)?;
             return Err(code);
@@ -365,73 +328,4 @@ impl Owned {
         }
         Ok(())
     }
-}
-
-pub async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
-    migrate_to(connection, SCHEMA_VERSION).await
-}
-
-async fn migrate_to(connection: &mut SqliteConnection, target: u32) -> Result<()> {
-    let version: i64 = sqlx::query_scalar("PRAGMA user_version")
-        .fetch_one(&mut *connection)
-        .await
-        .map_err(failure)?;
-    if version < 1 || version > i64::from(target) || target > SCHEMA_VERSION {
-        return Err("unsupported_store");
-    }
-    sqlx::query("PRAGMA foreign_keys=OFF")
-        .execute(&mut *connection)
-        .await
-        .map_err(failure)?;
-    let result = async {
-        let mut transaction = connection.begin().await.map_err(failure)?;
-        for (next, schema) in [
-            (2, RUN_SCHEMA),
-            (3, COPY_SCHEMA),
-            (4, ARCHIVE_SCHEMA),
-            (5, FILE_SCHEMA),
-            (6, RESULT_SCHEMA),
-            (7, ANNOTATION_SCHEMA),
-            (8, NOTEBOOK_SCHEMA),
-            (9, PIPELINE_SCHEMA),
-            (10, GRAPH_SCHEMA),
-            (11, INPUT_SCHEMA),
-            (12, CALLER_SCHEMA),
-            (13, include_str!("challenges.sql")),
-            (14, include_str!("candidates.sql")),
-            (15, include_str!("solutions.sql")),
-            (16, include_str!("note_targets.sql")),
-        ] {
-            if version < i64::from(next) && next <= target {
-                sqlx::raw_sql(schema)
-                    .execute(&mut *transaction)
-                    .await
-                    .map_err(failure)?;
-                if next == 11 {
-                    super::bindings::upgrade(&mut transaction).await?;
-                }
-                if next == 10 {
-                    super::pipelines::upgrade_graphs(&mut transaction).await?;
-                }
-                if next == 9 {
-                    super::pipelines::upgrade(&mut transaction).await?;
-                }
-                if next == 8 {
-                    super::mutations::bind_image_trails(&mut transaction).await?;
-                }
-            }
-        }
-        sqlx::query("PRAGMA foreign_key_check")
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(failure)?
-            .map_or(Ok(()), |_| Err("corrupt_store"))?;
-        transaction.commit().await.map_err(failure)
-    }
-    .await;
-    sqlx::query("PRAGMA foreign_keys=ON")
-        .execute(connection)
-        .await
-        .map_err(failure)?;
-    result
 }

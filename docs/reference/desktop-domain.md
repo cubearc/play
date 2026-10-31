@@ -195,8 +195,8 @@ chain, manifest converter, model alias or alternate Docker runtime.
    desktop runtime. Automatic conversion/deletion is not a delivery requirement.
 
 The [storage implementation](https://github.com/cubearc/play/issues/35) assigns the
-concrete generation marker, baseline and rejection fixtures. Later migrations
-evolve only that accepted generation. Updates check compatibility before any
+concrete generation marker, baseline and rejection fixtures. Only the current
+baseline ships. Updates check compatibility before any
 data-changing handover.
 
 ## Interface retirement inventory
@@ -206,6 +206,10 @@ Linked issues own implementation/status; this page does not duplicate their
 backlog. Remove a superseded path in the slice that replaces it, then audit the
 complete tree and distributable under
 [canonical architecture acceptance](https://github.com/cubearc/play/issues/56).
+
+The source entries below are retired from the current tree. Their canonical
+replacements and remaining capability/platform acceptance stay owned by the linked
+issues; source deletion does not establish Windows enforcement or signed updates.
 
 ### Domain, storage and content
 

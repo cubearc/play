@@ -58,7 +58,7 @@ try {
   await cp(
     join(frontend, "desktop-renderer"),
     join(target, "desktop-renderer"),
-    { recursive: true },
+    { recursive: true, filter: (path) => !path.endsWith(".map") },
   );
   const bundled = join(target, "desktop-native");
   await mkdir(bundled);
