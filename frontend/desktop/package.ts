@@ -1,6 +1,6 @@
 //! Build-only preview packaging; no certificate or release channel is selected.
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -19,6 +19,11 @@ if (platform !== "darwin" && platform !== "linux" && platform !== "win32")
   throw new Error("package_target_unavailable");
 if (arch !== "x64" && arch !== "arm64")
   throw new Error("package_target_unavailable");
+function checkOutputPath(path: string): void {
+  if (platform === "linux" && /\s/u.test(path))
+    throw new Error("linux_sandbox_requires_package_path_without_whitespace");
+}
+checkOutputPath(output);
 const files = nativeFiles();
 if (!files.worker || !files.terminal)
   throw new Error("package_execution_policy_unavailable");
@@ -102,10 +107,11 @@ try {
     JSON.stringify(proof, null, 2),
   );
   await mkdir(output, { recursive: true });
+  checkOutputPath(await realpath(output));
   const paths = await packager({
     dir: app,
     out: output,
-    name: "Cube Play",
+    name: platform === "linux" ? "cube-play" : "Cube Play",
     executableName: "cube-play",
     appBundleId: "com.cubearc.play.preview",
     appVersion: metadata.version,
