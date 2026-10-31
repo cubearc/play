@@ -379,6 +379,42 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
     await expect(
       editor.getByRole("button", { name: "Create Pipeline", exact: true }),
     ).toBeEnabled();
+    const region = editor.getByRole("checkbox", {
+      name: "Use region",
+      exact: true,
+    });
+    await region.check();
+    const regionInput = editor.getByRole("textbox", {
+      name: "Region (JSON)",
+      exact: true,
+    });
+    await regionInput.fill("[");
+    await expect(
+      editor.getByRole("alert").filter({ hasText: "Enter a valid array" }),
+    ).toBeVisible();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await regionInput.fill("[0,0,1.5,3]");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await regionInput.fill("[0,0,3,3]");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeEnabled();
+    await region.uncheck();
+    await expect(regionInput).toBeHidden();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeEnabled();
+    const reverse = editor.getByRole("checkbox", {
+      name: "Reverse",
+      exact: true,
+    });
+    await reverse.check();
+    await expect(reverse).toBeChecked();
+    await reverse.uncheck();
     await expect(
       editor.getByRole("button", { name: "Create Pipeline", exact: true }),
     ).toBeInViewport();

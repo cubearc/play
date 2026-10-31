@@ -73,4 +73,45 @@ describe("native contract-driven parameters", () => {
         false,
       );
   });
+  it("rejects unknown options and missing required values before Run admission", () => {
+    const required: Operation = {
+      ...operation,
+      contract: {
+        ...operation.contract,
+        parameters: {
+          type: "object",
+          required: ["count", "enabled", "options"],
+          properties: {
+            count: { type: "integer" },
+            enabled: { type: "boolean" },
+            options: { type: "object" },
+          },
+        },
+      },
+    };
+    const values = { count: 3, enabled: false, options: {} };
+    expect(parameterTypesValid(required, values)).toBe(true);
+    for (const count of [3.5, "3", Number.MAX_SAFE_INTEGER + 1])
+      expect(parameterTypesValid(required, { ...values, count })).toBe(false);
+    for (const options of [null, [], "{}"])
+      expect(parameterTypesValid(required, { ...values, options })).toBe(false);
+    expect(parameterTypesValid(required, { ...values, enabled: "false" })).toBe(
+      false,
+    );
+    expect(parameterTypesValid(required, { ...values, count: undefined })).toBe(
+      false,
+    );
+    expect(parameterTypesValid(required, { ...values, extra: true })).toBe(
+      false,
+    );
+  });
+  it("permits a no-parameter contract but never an undeclared option", () => {
+    const empty: Operation = {
+      ...operation,
+      parameters: {},
+      contract: { ...operation.contract, parameters: null },
+    };
+    expect(parameterTypesValid(empty, {})).toBe(true);
+    expect(parameterTypesValid(empty, { hidden: true })).toBe(false);
+  });
 });
