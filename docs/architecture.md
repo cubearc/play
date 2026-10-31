@@ -75,8 +75,11 @@ journeys exercise actual dispatch and retained evidence. Windows worker enforcem
 remains incomplete; no unrestricted fallback is available.
 
 External CLI attachment, Windows PTYs,
-signed packages and verified updates remain incomplete. Local build digests and
-ad-hoc signing are development checks, not publisher authentication. See
+publisher-signed packages and verified updates remain incomplete. Local build digests and
+ad-hoc signing are development checks, not publisher authentication. A
+[standalone preview bundle](installation.md#build-a-standalone-preview-bundle)
+stages compiled runtime files and exact native components; its receipt records
+version/digest/source identity without claiming a signed release. See
 [contributor verification](reference/validation.md) for actual checks.
 
 The [local Electron milestone](https://github.com/cubearc/play/milestone/3)

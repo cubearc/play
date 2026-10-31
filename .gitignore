@@ -13,3 +13,6 @@
 .env
 .env.*
 .DS_Store
+
+/frontend/desktop-main/
+/frontend/desktop-packages/

@@ -15,7 +15,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   type ElectronApplication,
-  _electron as electron,
+  _electron as electronRuntime,
   expect,
   type Page,
 } from "@playwright/test";
@@ -29,7 +29,48 @@ declare global {
 
 import type {} from "./bridge.ts";
 import { nativeFiles } from "./native-files.ts";
+import { packagedWorkerFixture } from "./package-fixture.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
+
+const electron = {
+  async launch(
+    options: Parameters<typeof electronRuntime.launch>[0],
+    fixtureExecutable?: string,
+  ) {
+    const executable =
+      fixtureExecutable ?? process.env.PLAY_PACKAGED_EXECUTABLE;
+    if (!executable) return electronRuntime.launch(options);
+    const [entry, ...args] = options?.args ?? [];
+    assert.ok(entry?.endsWith("/main.js"));
+    assert.ok(
+      entry === main || fixtureExecutable,
+      "Staged app requires its own packaged fixture",
+    );
+    const application = await electronRuntime.launch({
+      ...options,
+      executablePath: executable,
+      args,
+      cwd: tmpdir(),
+      env: {
+        PATH:
+          process.platform === "win32"
+            ? (process.env.SystemRoot ?? "C:\\Windows")
+            : "/usr/bin:/bin",
+        ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
+      },
+    });
+    try {
+      assert.equal(
+        await application.evaluate(({ app }) => app.isPackaged),
+        true,
+      );
+      return application;
+    } catch (error) {
+      await application.close();
+      throw error;
+    }
+  },
+};
 
 const nativeWorkers = ["darwin", "linux"].includes(process.platform);
 
@@ -4657,13 +4698,23 @@ test("native notebook queues another cell without disabling unrelated Trails", {
     join(staged, "package.json"),
     JSON.stringify({ type: "module" }),
   );
-  const application = await electron.launch({
-    chromiumSandbox: true,
-    args: [
-      join(staged, "desktop-dist/main.js"),
-      `--user-data-dir=${join(staged, "profile")}`,
-    ],
-  });
+  const fixtureExecutable = process.env.PLAY_PACKAGED_EXECUTABLE
+    ? await packagedWorkerFixture(
+        process.env.PLAY_PACKAGED_EXECUTABLE,
+        temporary,
+        join(staged, "desktop-native"),
+      )
+    : undefined;
+  const application = await electron.launch(
+    {
+      chromiumSandbox: true,
+      args: [
+        join(staged, "desktop-dist/main.js"),
+        `--user-data-dir=${join(staged, "profile")}`,
+      ],
+    },
+    fixtureExecutable,
+  );
   try {
     const page = await application.firstWindow();
     page.setDefaultTimeout(5000);

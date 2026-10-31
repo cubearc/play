@@ -192,3 +192,29 @@ for `spiral-editor.png` and `spiral-canvas.png`. It also checks the long contrac
 form at the minimum 800×540 window and 200% zoom, keeping the save action visible
 and shell status within the viewport. These are real Core/worker Runs and exact
 restart assertions, not fabricated operation or Cloud results.
+
+## Validate a standalone bundle
+
+Build the source preview and run `npm run desktop:package --prefix frontend`.
+Inspect `package-proof.json` and verify the matching engine/CLI/helpers before
+calling a bundle release-ready. On macOS, the executable is inside
+`Cube Play.app/Contents/MacOS/cube-play`; on Linux it is `cube-play` in the output
+directory.
+
+Set `PLAY_PACKAGED_EXECUTABLE` to that absolute executable and run
+`npm run desktop:smoke --prefix frontend`. The same real journeys launch the
+packaged entry, assert `app.isPackaged`, use a temporary working directory and
+exclude development tools from the child's PATH. The driver and fixtures still
+run from the development checkout. No test adds a renderer API or a production
+startup override. The source-preview suite remains available without the variable.
+
+The queue/cancellation journey needs a worker that stays active. It makes an
+owned temporary copy of the actual package, replaces only its worker with the
+existing sandboxed supervision fixture, and records that qualification fixture
+and updated digest in the copied receipt. All other journeys use the unmodified
+package. Neither test probes nor their launch controls ship in the bundle.
+
+The preview receipt is provenance/integrity information, not publisher identity.
+Signed OS packages, install/upgrade/uninstall integration and authenticated update
+channels require their own verified delivery under [packaging](https://github.com/cubearc/play/issues/63)
+and [updates](https://github.com/cubearc/play/issues/64).

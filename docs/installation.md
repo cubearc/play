@@ -47,6 +47,31 @@ Continue with [your first notebook](getting-started.md).
 The actual Linux Electron notebook, captured by the native UI test with disposable
 example data. [Open full size](assets/desktop/linux-notebook.png).
 
+## Build a standalone preview bundle
+
+After the source build, create a bundle for the current host and architecture:
+
+```sh
+npm run desktop:package --prefix frontend
+```
+
+The command places **Cube Play** under `frontend/desktop-packages/`. macOS produces
+an application bundle; Linux produces a directory containing `cube-play`. Copy the
+whole bundle/directory together. The package contains Electron, the Rust engine,
+Cube CLI and the verified native helpers. Running it does not require Cargo, npm,
+Docker or the source checkout. Linux still needs the OS libraries and Chromium
+sandbox support described above; missing enforcement remains an error.
+
+A populated output is preserved. Choose another output directory as a trailing
+argument when creating another preview. `package-proof.json` inside the app records
+the source revision/dirty state, exact component versions and native binary digests.
+Only compiled runtime files are staged; build tooling, test probes and private
+Workspace data are excluded. Private data stays in the normal app profile.
+
+This is a local qualification bundle with no publisher signing or notarization.
+It does not establish a release installer, Windows worker support or verified
+updates. Save work before quitting or replacing an application bundle.
+
 Use **Quit** to end the app. Closing a window on macOS can leave the app and its
 engine alive; closing a canvas does not cancel its Run. Save reasoning before
 quitting. [Resume saved work](persistence.md) explains what survives restart.
