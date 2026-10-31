@@ -987,6 +987,24 @@ test("typed composition joins image/caption branches and keeps binary and failed
       await editor.getByRole("option", { name: option, exact: true }).click();
     };
     await choose("Asset for caption", "Image caption · r1");
+    const x = editor.getByRole("textbox", { name: "X", exact: true });
+    for (const draft of ["1.5", "9007199254740993", "1e3", ""]) {
+      await x.fill(draft);
+      await expect(x).toHaveValue(draft);
+      await expect(
+        editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+      ).toBeDisabled();
+    }
+    await x.fill("0");
+    const y = editor.getByRole("textbox", { name: "Y", exact: true });
+    await y.fill("-1");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await y.fill("0");
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeEnabled();
     const add = async (operation: string) => {
       await editor
         .getByRole("button", { name: "Add node", exact: true })
