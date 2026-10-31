@@ -58,6 +58,9 @@ const electron = {
               ? (process.env.SystemRoot ?? "C:\\Windows")
               : "/usr/bin:/bin",
           ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
+          ...(process.env.XAUTHORITY
+            ? { XAUTHORITY: process.env.XAUTHORITY }
+            : {}),
         },
       };
     }
