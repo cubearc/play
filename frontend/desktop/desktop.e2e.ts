@@ -5486,16 +5486,35 @@ test("Solutions follow reused outputs across Runs and reopen exact source histor
       .getByRole("heading", { name: "Solutions", exact: true })
       .click();
     await expect(history()).toContainText("Clue · r1");
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(860, 640),
-    );
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.webContents.setZoomFactor(2),
-    );
-    assert.equal(
-      await panel().evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
-      true,
-    );
+    for (const width of [860, 800]) {
+      const contentWidth = await application.evaluate(
+        ({ BrowserWindow }, width) => {
+          const window = BrowserWindow.getAllWindows()[0];
+          if (!window) throw new Error("window_missing");
+          window.setSize(width, 640);
+          window.webContents.setZoomFactor(2);
+          const size = window.getContentSize()[0];
+          if (size === undefined) throw new Error("window_size_missing");
+          return size;
+        },
+        width,
+      );
+      await expect
+        .poll(() => page.evaluate(() => window.innerWidth))
+        .toBe(Math.round(contentWidth / 2));
+      await expect
+        .poll(
+          () =>
+            panel().evaluate(
+              (element) => element.scrollWidth <= element.clientWidth + 1,
+            ),
+          {
+            message:
+              "Solution content reflows at 200% zoom in the supported window",
+          },
+        )
+        .toBe(true);
+    }
     assert.deepEqual((await accessibility(page)).violations, []);
   } finally {
     await application.close();
