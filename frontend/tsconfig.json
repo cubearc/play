@@ -21,6 +21,8 @@
     "desktop-renderer-src",
     "vite.config.ts",
     "vite.desktop.config.ts",
-    "vite.preload.config.ts"
+    "vite.preload.config.ts",
+    "coverage.config.ts",
+    "mcr.config.ts"
   ]
 }

@@ -50,7 +50,8 @@ npm run test:coverage --prefix frontend
 ```
 
 The frontend command combines current workbench unit tests with V8 coverage from
-real Electron journeys. It verifies a matching bundle digest, source maps and
+real Electron journeys. Both producers share one source mapping and V8
+conversion. The command verifies a matching bundle digest, source maps and the
 presence of every production renderer source before enforcing **80% lines,
 functions, statements and branches**. Collection happens in the test driver;
 no coverage authority or counters are exposed by production IPC. Packaged smoke

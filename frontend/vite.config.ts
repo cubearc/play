@@ -10,14 +10,13 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     coverage: {
-      provider: "v8",
+      provider: "custom",
+      customProviderModule: "vitest-monocart-coverage",
       reportsDirectory: "coverage/unit",
-      reporter: ["text", "json"],
       include: ["desktop-renderer-src/**/*.{ts,tsx}"],
       exclude: [
         "desktop-renderer-src/test/**",
         "desktop-renderer-src/**/*.test.{ts,tsx}",
-        "desktop-renderer-src/main.tsx",
       ],
       // Unit and real Electron coverage share the unchanged gates in scripts/coverage.mjs.
     },
