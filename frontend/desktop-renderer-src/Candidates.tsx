@@ -287,6 +287,8 @@ export function CandidatePanel() {
 
 export function CandidateSummary() {
   const state = useContext(CandidateContext);
+  if (!state?.context)
+    return <span>Open a Stage to inspect its candidate.</span>;
   return (
     <span>
       {state?.value
