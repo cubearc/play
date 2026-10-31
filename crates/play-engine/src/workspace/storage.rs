@@ -184,7 +184,16 @@ pub fn preflight(directory: &Path, id: Uuid) -> Result<Identity> {
     Ok(identity)
 }
 
-pub fn lock(path: &Path, create: bool) -> Result<File> {
+pub struct Lock(File);
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        // End ownership even if a child still holds a duplicated description.
+        let _ = self.0.unlock();
+    }
+}
+
+pub fn lock(path: &Path, create: bool) -> Result<Lock> {
     if !path.exists() && create {
         match create_file(path, b"") {
             Ok(()) => (),
@@ -199,7 +208,7 @@ pub fn lock(path: &Path, create: bool) -> Result<File> {
         .open(path)
         .map_err(|_| "storage_unavailable")?;
     file.try_lock().map_err(|_| "workspace_busy")?;
-    Ok(file)
+    Ok(Lock(file))
 }
 
 pub fn options(path: &Path) -> SqliteConnectOptions {
@@ -278,7 +287,7 @@ pub async fn inspect(path: &Path, id: Uuid, expected: &Schema) -> Result<u32> {
 pub struct Owned {
     pub identity: Identity,
     pub connection: Option<SqliteConnection>,
-    pub _lock: File,
+    pub _lock: Lock,
 }
 impl Owned {
     pub async fn open(directory: PathBuf, id: Uuid, expected: &Schema) -> Result<Self> {
@@ -327,5 +336,26 @@ impl Owned {
             connection.close().await.map_err(failure)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ending_lock_ownership_releases_inherited_file_descriptions() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("creation.lock");
+        let owner = lock(&path, true).unwrap();
+        // An OS child can briefly inherit this description before close-on-exec.
+        let inherited = owner.0.try_clone().unwrap();
+        assert!(lock(&path, false).is_err());
+        drop(owner);
+        let next = lock(&path, false).expect("ended ownership must release its lock");
+        drop(inherited);
+        assert!(lock(&path, false).is_err());
+        drop(next);
+        assert!(lock(&path, false).is_ok());
     }
 }
