@@ -28,7 +28,17 @@ declare global {
 }
 
 import type {} from "./bridge.ts";
+import { captureBeforeClose } from "./coverage.ts";
 import { nativeFiles } from "./native-files.ts";
+
+const coverageFinalizers = new WeakMap<
+  ElectronApplication,
+  () => Promise<void>
+>();
+async function finalizeCoverage(application: ElectronApplication) {
+  await coverageFinalizers.get(application)?.();
+}
+
 import { packagedWorkerFixture } from "./package-fixture.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
@@ -75,39 +85,45 @@ const electron = {
         const page = await application.firstWindow();
         await page.coverage.startJSCoverage({ resetOnNavigation: false });
         await page.reload();
-        const close = application.close.bind(application);
-        application.close = async () => {
-          try {
-            const entries = (await page.coverage.stopJSCoverage()).filter(
-              (entry) => entry.url.endsWith("/app.js"),
-            );
+        const flush = captureBeforeClose(application, async () => {
+          const entries = (await page.coverage.stopJSCoverage()).filter(
+            (entry) => entry.url.endsWith("/app.js"),
+          );
+          assert.equal(
+            entries.length,
+            1,
+            "Expected the actual bundled workbench",
+          );
+          const bundle = await readFile(
+            new URL("../desktop-renderer/app.js", import.meta.url),
+          );
+          const sourceMap = JSON.parse(
+            await readFile(
+              new URL("../desktop-renderer/app.js.map", import.meta.url),
+              "utf8",
+            ),
+          );
+          for (const entry of entries) {
+            assert.equal(typeof entry.source, "string");
             assert.equal(
-              entries.length,
-              1,
-              "Expected the actual bundled workbench",
+              createHash("sha256")
+                .update(entry.source ?? "")
+                .digest("hex"),
+              createHash("sha256").update(bundle).digest("hex"),
+              "Coverage source differs from the current workbench",
             );
-            const bundle = await readFile(
-              new URL("../desktop-renderer/app.js", import.meta.url),
-            );
-            const sourceMap = JSON.parse(
-              await readFile(
-                new URL("../desktop-renderer/app.js.map", import.meta.url),
-                "utf8",
-              ),
-            );
-            const directory = process.env.PLAY_COVERAGE as string;
-            await mkdir(directory, { recursive: true });
-            await writeFile(
-              join(directory, `${randomUUID()}.json`),
-              JSON.stringify({
-                bundleSha256: createHash("sha256").update(bundle).digest("hex"),
-                entries: entries.map((entry) => ({ ...entry, sourceMap })),
-              }),
-            );
-          } finally {
-            await close();
           }
-        };
+          const directory = process.env.PLAY_COVERAGE as string;
+          await mkdir(directory, { recursive: true });
+          await writeFile(
+            join(directory, `${randomUUID()}.json`),
+            JSON.stringify({
+              bundleSha256: createHash("sha256").update(bundle).digest("hex"),
+              entries: entries.map((entry) => ({ ...entry, sourceMap })),
+            }),
+          );
+        });
+        coverageFinalizers.set(application, flush);
       }
       return application;
     } catch (error) {
@@ -441,6 +457,7 @@ test("Core registrations drive spiral controls, named outputs and unrelated text
     const restored = await latestRun(page, "spiral.png");
     assert.deepEqual(restored, original);
   } finally {
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.exit(0));
     await application.close();
     await rm(profile, { recursive: true, force: true });
@@ -2335,6 +2352,7 @@ test("annotation Blocks save independently, preserve drafts and restore their No
       .click();
     await expect(cell("Observation")).toBeVisible();
     const saved = await current(page);
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
     await application.close();
     application = await launch();
@@ -2342,6 +2360,7 @@ test("annotation Blocks save independently, preserve drafts and restore their No
     page.setDefaultTimeout(5000);
     await expect(cell("Observation")).toBeVisible();
     assert.deepEqual(await current(page), saved);
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
   } finally {
     await application
@@ -2571,6 +2590,7 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
       .click();
     await expect(result()).toContainText("output: Gur xrl.");
     const before = await current(page);
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
     await application.close();
     application = await launch();
@@ -2580,6 +2600,7 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
     await expect(result()).toContainText("output: Gur xrl.");
     assert.deepEqual(await current(page), before);
     assert.deepEqual(await readFile(file), Buffer.from([0, 128, 255]));
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
   } finally {
     await application
@@ -2757,6 +2778,7 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
       .click();
     await expect(cell()).toBeVisible();
     const saved = await current(page);
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
     await application.close();
     application = await launch();
@@ -2765,6 +2787,7 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
     await expect(cell()).toBeVisible();
     assert.deepEqual(await current(page), saved);
     assert.deepEqual(await readFile(path), Buffer.from(text));
+    await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
   } finally {
     await application.close().catch(() => {});
