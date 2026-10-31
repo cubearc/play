@@ -61,15 +61,7 @@ const electron = {
         },
       };
     }
-    // Keep the UI test independent of shared-desktop occlusion. Chromium's
-    // actionability checks still require ordinary visible, stable controls.
-    const application = await electronRuntime.launch({
-      ...launchOptions,
-      args: [
-        ...(launchOptions?.args ?? []),
-        "--disable-backgrounding-occluded-windows",
-      ],
-    });
+    const application = await electronRuntime.launch(launchOptions);
     try {
       if (executable)
         assert.equal(

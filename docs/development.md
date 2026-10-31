@@ -208,12 +208,6 @@ exclude development tools from the child's PATH. The driver and fixtures still
 run from the development checkout. No test adds a renderer API or a production
 startup override. The source-preview suite remains available without the variable.
 
-The driver disables occluded-window backgrounding for the UI test process, so
-another application taking desktop focus cannot suspend pointer actionability. Ordinary
-visibility, stability and enabled checks remain active. This test setting does
-not change the shipped window defaults or worker limits, and does not qualify
-background-renderer power or performance behavior.
-
 The queue/cancellation journey needs a worker that stays active. It makes an
 owned temporary copy of the actual package, replaces only its worker with the
 existing sandboxed supervision fixture, and records that qualification fixture
