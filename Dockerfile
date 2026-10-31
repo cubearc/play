@@ -13,8 +13,9 @@ WORKDIR /build
 COPY --from=cube_engine /Cargo.toml /cube/Cargo.toml
 COPY --from=cube_engine /Cargo.lock /cube/Cargo.lock
 COPY --from=cube_engine /crates/cube-cli/ /cube/crates/cube-cli/
-COPY --from=cube_engine /bindings/python/Cargo.toml /cube/bindings/python/Cargo.toml
-COPY --from=cube_engine /bindings/python/src/lib.rs /cube/bindings/python/src/lib.rs
+# Cargo resolves every workspace member, including bindings not built for the CLI.
+# The reviewed Core build context admits only the required manifest/source files.
+COPY --from=cube_engine /bindings/ /cube/bindings/
 COPY --from=cube_engine /crates/cube-core/Cargo.toml /cube/crates/cube-core/Cargo.toml
 COPY --from=cube_engine /crates/cube-core/src/ /cube/crates/cube-core/src/
 COPY --from=cube_engine /vendor/salsa20/ /cube/vendor/salsa20/
