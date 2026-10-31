@@ -112,6 +112,15 @@ export function useExecutions(
   );
   const watch = useCallback(
     async (trail: TrailView, initial: RunDetail) => {
+      const receive = (latest: RunDetail) =>
+        update(trail.id, (previous) => ({
+          ...previous,
+          runs: previous.runs.map((run) =>
+            run.id === latest.id ? latest : run,
+          ),
+          detail: previous.selected === latest.id ? latest : previous.detail,
+        }));
+      receive(initial);
       if (watching.current.has(initial.id)) return;
       watching.current.add(initial.id);
       setBusy(true);
@@ -125,14 +134,7 @@ export function useExecutions(
             context: contextFor(trail),
             run_id: detail.id,
           });
-          const latest = detail;
-          update(trail.id, (previous) => ({
-            ...previous,
-            runs: previous.runs.map((run) =>
-              run.id === latest.id ? latest : run,
-            ),
-            detail: previous.selected === latest.id ? latest : previous.detail,
-          }));
+          receive(detail);
         }
       } catch {
         update(trail.id, (previous) => ({
