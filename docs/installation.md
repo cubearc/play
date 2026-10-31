@@ -67,6 +67,15 @@ setuid Chromium sandbox helper [truncates executable paths containing spaces](ht
 the package builder rejects such an output path. Keep the sandbox enabled and
 choose a suitable location, such as `/opt/cube-play`.
 
+If the system uses the setuid helper, configure it inside the copied bundle,
+not only inside the source installation. For a bundle copied to `/opt/cube-play`:
+
+```sh
+sudo chown root:root /opt/cube-play/chrome-sandbox
+sudo chmod 4755 /opt/cube-play/chrome-sandbox
+/opt/cube-play/cube-play
+```
+
 A populated output is preserved. Choose another output directory as a trailing
 argument when creating another preview. `package-proof.json` inside the app records
 the source revision/dirty state, exact component versions and native binary digests.
