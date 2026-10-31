@@ -110,7 +110,7 @@ function Field({
 }) {
   const field = useRef<HTMLElementTagNameMap["vscode-textfield"]>(null);
   const area = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
-  const check = useRef<HTMLElementTagNameMap["vscode-checkbox"]>(null);
+  const check = useRef<HTMLInputElement>(null);
   const label = name === "pointer" ? "Field path" : readable(name);
   const id = `parameter-${name}`;
   if (schema.enum)

@@ -13,7 +13,7 @@ export function TrailCell({
   executions: Executions;
 }) {
   const pipeline = trail.pipeline;
-  const keep = useRef<HTMLElementTagNameMap["vscode-checkbox"]>(null);
+  const keep = useRef<HTMLInputElement>(null);
   const operation = executions.operationFor(trail);
   const history = executions.history[trail.id];
   const running =

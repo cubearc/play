@@ -1336,7 +1336,31 @@ h1 {
   align-items: center;
   margin-block: 8px;
 }
-.solution-note-picker vscode-checkbox {
+.solution-note-picker .workbench-checkbox {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+label.workbench-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+.workbench-checkbox > input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--vscode-focusBorder);
+}
+.workbench-checkbox > input:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+.workbench-checkbox:has(input:disabled) {
+  opacity: 0.6;
+  cursor: default;
 }
