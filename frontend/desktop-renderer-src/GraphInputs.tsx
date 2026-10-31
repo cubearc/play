@@ -58,6 +58,13 @@ export function Select({
   );
 }
 function emptyLiteral(semanticType: string, schema?: unknown): unknown {
+  if (
+    schema !== null &&
+    typeof schema === "object" &&
+    "type" in schema &&
+    schema.type === "array"
+  )
+    return [];
   if (semanticType === "json")
     return schema !== null &&
       typeof schema === "object" &&
