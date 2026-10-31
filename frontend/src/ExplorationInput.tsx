@@ -39,6 +39,9 @@ export function InputField({
   onValidityChange: (valid: boolean) => void;
 }) {
   const source = step.inputs[port.name];
+  const filesystemInput = ["file_path", "file.source"].includes(
+    port.semantic_type,
+  );
   const [saved, setSaved] = useState<Choice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +80,9 @@ export function InputField({
       ? "text"
       : port.semantic_type === "image.samples"
         ? "image"
-        : ["bytes", "byte_reader", "file_path"].includes(port.semantic_type)
+        : ["bytes", "byte_reader", "file_path", "file.source"].includes(
+              port.semantic_type,
+            )
           ? "bytes"
           : null;
   const chosen =
@@ -192,8 +197,8 @@ export function InputField({
             }
           }}
         >
-          <option value="literal" disabled={port.semantic_type === "file_path"}>
-            {port.semantic_type === "file_path"
+          <option value="literal" disabled={filesystemInput}>
+            {filesystemInput
               ? "Choose a workspace file"
               : privateInput
                 ? "Private value for this run"
@@ -290,7 +295,7 @@ export function InputField({
           </small>
         </label>
       )}
-      {port.semantic_type === "file_path" && chosen === "literal" && (
+      {filesystemInput && chosen === "literal" && (
         <p>
           Select an asset in Files. Typed paths do not grant filesystem access.
         </p>
@@ -301,25 +306,24 @@ export function InputField({
           configuration and must be entered again.
         </p>
       )}
-      {port.semantic_type !== "file_path" &&
-        (!source || source.type === "literal") && (
-          <SchemaField
-            label={`${port.name} value`}
-            schema={port.schema}
-            value={
-              privateInput
-                ? privateValue
-                : source?.type === "literal"
-                  ? source.value
-                  : undefined
-            }
-            required={port.required}
-            onValidityChange={onValidityChange}
-            onChange={(value) => {
-              onChange({ type: "literal", value: value ?? null });
-            }}
-          />
-        )}
+      {!filesystemInput && (!source || source.type === "literal") && (
+        <SchemaField
+          label={`${port.name} value`}
+          schema={port.schema}
+          value={
+            privateInput
+              ? privateValue
+              : source?.type === "literal"
+                ? source.value
+                : undefined
+          }
+          required={port.required}
+          onValidityChange={onValidityChange}
+          onChange={(value) => {
+            onChange({ type: "literal", value: value ?? null });
+          }}
+        />
+      )}
     </div>
   );
 }

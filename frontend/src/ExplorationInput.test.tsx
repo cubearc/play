@@ -181,3 +181,38 @@ it("requires explicit Base64 conversion when a structured field feeds a byte rea
     selection: { pointer: "/", conversion: "base64_bytes" },
   });
 });
+
+it("preserves the authorized file selector for the version-two file source contract", async () => {
+  const onChange = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <InputField
+      port={{
+        ...port,
+        semantic_type: "file.source",
+        schema: { type: "object" },
+      }}
+      step={step}
+      exploration={graph}
+      catalog={catalog}
+      asset={{ store: "source", path: "sample.bin" }}
+      onChange={onChange}
+      onValidityChange={vi.fn()}
+      privateInput={false}
+      privateValue={undefined}
+    />,
+  );
+  expect(
+    screen.getByRole("option", { name: "Choose a workspace file" }),
+  ).toBeDisabled();
+  await user.selectOptions(
+    screen.getByLabelText("input · file.source"),
+    "file",
+  );
+  expect(onChange).toHaveBeenLastCalledWith({
+    type: "file",
+    store: "source",
+    path: "sample.bin",
+    representation: "bytes",
+  });
+});

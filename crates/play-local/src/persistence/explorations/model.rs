@@ -252,7 +252,10 @@ impl Definition {
                             && !(semantic == "bytes"
                                 && (port.semantic_type == "byte_reader"
                                     || (step.operation == "file.info.inspect"
-                                        && port.semantic_type == "file_path")))
+                                        && matches!(
+                                            port.semantic_type.as_str(),
+                                            "file_path" | "file.source"
+                                        ))))
                         {
                             return Err(super::invalid());
                         }

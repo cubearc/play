@@ -2561,7 +2561,7 @@ async fn every_catalog_operation_is_available_and_file_metadata_requires_workspa
         .unwrap()
         .set_len(20 * 1024 * 1024)
         .unwrap();
-    let request = |input| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"file.info.inspect","operation_version":1,"inputs":{"input":input},"parameters":{}});
+    let request = |input| json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"file.info.inspect","operation_version":2,"inputs":{"input":input},"parameters":{}});
     let binding =
         json!({"type":"file","store":"source","path":"metadata.png","representation":"bytes"});
     let (status, result) = server
@@ -2962,20 +2962,18 @@ async fn every_installed_operation_has_an_authorized_real_api_conformance_result
                 cube_core::hashing::sha256(&serde_json::to_vec(&c).unwrap()),
                 "{op}"
             );
-            let mut inputs: serde_json::Map<String, Value> = fixture["inputs"]
+            let inputs: serde_json::Map<String, Value> = fixture["inputs"]
                 .as_object()
                 .unwrap()
                 .iter()
                 .map(|(k, v)| (k.clone(), json!({"type":"literal","value":v})))
                 .collect();
-            if op == "file.info.inspect" {
-                inputs.insert("input".into(),json!({"type":"file","store":"source","path":"fixture.bin","representation":"bytes"}));
-            }
+
             let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":op,"operation_version":fixture["operation_version"],"inputs":inputs,"parameters":fixture["parameters"],"retain_private_output":true});
             let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
             assert_eq!(status, 200, "{op}: {result}");
             assert_eq!(result["retained"], true, "{op}");
-            let mut actual = if result["inline"]["type"] == "structured" {
+            let actual = if result["inline"]["type"] == "structured" {
                 result["inline"]["data"].clone()
             } else {
                 let id = result["result"]["id"].as_str().unwrap();
@@ -2990,10 +2988,7 @@ async fn every_installed_operation_has_an_authorized_real_api_conformance_result
             };
             c.validate_outputs(&actual)
                 .unwrap_or_else(|e| panic!("{op}: {e}"));
-            if op == "file.info.inspect" {
-                actual["output"]["modified"] = Value::Null;
-                actual["output"]["created"] = Value::Null;
-            }
+
             assert!(
                 same_fixture_value(&actual, &fixture["outputs"]),
                 "{op}: actual {actual} expected {}",
@@ -3052,4 +3047,20 @@ async fn stream_keys_are_per_run_and_outputs_require_explicit_retention() {
     let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"cipher.salsa20","operation_version":1,"inputs":{"input":{"type":"literal","value":{"base64":"AA=="}},"key":{"type":"literal","value":{"base64":cube_core::encoding::base64_encode(&[0;32])}}},"parameters":{"nonce":[0,0,0,0,0,0,0,0],"counter":"18446744073709551615"}});
     let (status, output) = server.api("POST", "/api/lab/v2/execute", request).await;
     assert_eq!(status, 200, "{output}");
+}
+
+#[tokio::test]
+async fn supplied_file_artifacts_report_bytes_without_filesystem_authority() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Server::start(directory.path(), Uuid::new_v4());
+    let request = json!({"schema_version":2,"id":Uuid::new_v4(),"operation":"file.info.inspect","operation_version":2,
+        "inputs":{"input":{"type":"literal","value":{"base64":"AP+A"}}},"parameters":{}});
+    let (status, result) = server.api("POST", "/api/lab/v2/execute", request).await;
+    assert_eq!(status, 200, "{result}");
+    let info = &result["inline"]["data"]["output"];
+    assert_eq!(info["size"], 3);
+    assert_eq!(info["source_kind"], "artifact");
+    assert!(info["regular_file"].is_null());
+    assert!(info["modified"].is_null());
+    assert!(info["created"].is_null());
 }

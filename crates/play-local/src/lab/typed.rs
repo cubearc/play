@@ -323,7 +323,7 @@ async fn authorized_file_info(
         let digest=execute::json_bytes(&output,MAX_INLINE)?;
         let source=serde_json::to_value(store).map_err(|_|Error::invalid())?;
         let value=json!({"reference":format!("{}:{}",source.as_str().ok_or_else(Error::invalid)?,path)});
-        Ok((value,InputRecord {reference:json!({"type":"file","store":store,"path":path,"representation":"bytes","digest_representation":"file_metadata_json"}),semantic_type:"file_path".into(),byte_size:digest.len(),sha256:cube_core::hashing::sha256(&digest)},output))
+        Ok((value,InputRecord {reference:json!({"type":"file","store":store,"path":path,"representation":"bytes","digest_representation":"file_metadata_json"}),semantic_type:"file.source".into(),byte_size:digest.len(),sha256:cube_core::hashing::sha256(&digest)},output))
     }).await.map_err(|_|Error::storage())?
 }
 async fn invoke(
@@ -415,7 +415,7 @@ async fn job(
             .iter()
             .find(|p| p.name == name)
             .ok_or_else(Error::invalid)?;
-        if request.operation == "file.info.inspect" {
+        if request.operation == "file.info.inspect" && matches!(&binding, Binding::File { .. }) {
             let (value, mut record, output) = authorized_file_info(&app, binding).await?;
             record.reference["input_port"] = json!(name);
             record.reference["schema_sha256"] = json!(cube_core::hashing::sha256(

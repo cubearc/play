@@ -167,7 +167,12 @@ real fixture/version/schema and validate named outputs. It writes
 `target/play-operation-conformance.json`. Reject missing/duplicate IDs and drift;
 there is no count threshold or handwritten substitute catalog. Integers, decimal
 strings and bytes remain exact; floating-point analyses use relative tolerance
-1e-12. File metadata times are validated separately from known-answer equality.
+1e-12. The served Lab accepts `file.info.inspect` version 2 with either an
+authorized workspace-file binding or literal byte data. Selected files retain
+the scoped filesystem checks; byte data reports its actual size and signature
+through Core and leaves filesystem-only facts null. Literal paths and artifact
+references grant no filesystem access. The matrix uses exact byte-artifact
+answers, while separate tests validate selected-file metadata and authority.
 Regenerate canonical contracts in Cube with
 `cargo run --locked -p cube-core --example operation_contracts`.
 

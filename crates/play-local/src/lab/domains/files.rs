@@ -74,10 +74,9 @@ pub(super) fn execute(op: &str, inputs: Value, p: Value) -> Result<Value, Operat
     let selected = adapter(op).ok_or_else(invalid)?;
     let result = (|| {
         if matches!(selected, Adapter::Info) {
-            return Err(OperationError::new(
-                ErrorCode::InvalidInput,
-                "File inspection requires an authorized workspace file binding",
-            ));
+            return output(forensics::inspect::artifact_info(&super::bytes(
+                &inputs["input"],
+            )?));
         }
         if matches!(selected, Adapter::Carve) {
             let selection = if p.get("length").is_some() {
