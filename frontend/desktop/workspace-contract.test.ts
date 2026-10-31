@@ -565,3 +565,49 @@ test("Solutions accept scoped Candidate revisions and bounded explanation only",
     context: owner,
   });
 });
+
+test("evidence annotations accept only exact scoped Note targets", () => {
+  const base = {
+    kind: "annotate_evidence",
+    context: owner,
+    key: randomUUID(),
+    title: "Observation",
+    text: "Preserve this evidence.",
+  };
+  const asset = { kind: "asset", asset_id: randomUUID(), revision: 1 };
+  for (const target of [
+    { kind: "block", block_id: randomUUID() },
+    asset,
+    { kind: "attempt", run_id: randomUUID(), attempt_id: randomUUID() },
+    {
+      kind: "run_output",
+      run_id: randomUUID(),
+      attempt_id: randomUUID(),
+      port: "output",
+    },
+  ])
+    assert.deepEqual(request({ ...base, target }), { ...base, target });
+  for (const target of [
+    { kind: "literal", value: "fake" },
+    { ...asset, revision: 0 },
+    { ...asset, path: "/tmp/private" },
+    { kind: "attempt", run_id: randomUUID() },
+    { kind: "block", block_id: "other" },
+    {
+      kind: "run_output",
+      run_id: randomUUID(),
+      attempt_id: randomUUID(),
+      port: "../output",
+    },
+  ])
+    assert.throws(() => request({ ...base, target }));
+  assert.throws(() =>
+    request({ ...base, target: asset, text: "é".repeat(1025) }),
+  );
+  const inspect = {
+    kind: "inspect_note_target",
+    context: owner,
+    note_id: randomUUID(),
+  };
+  assert.deepEqual(request(inspect), inspect);
+});

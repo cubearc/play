@@ -8,6 +8,7 @@ mod copies;
 mod files;
 mod model;
 mod mutations;
+mod note_targets;
 mod notes;
 mod order;
 mod pipelines;
@@ -241,6 +242,14 @@ impl Manager {
                 self.runtime.block_on(async {
                     queries::context(store.connection()?, owner, &context).await?;
                     solutions::read(store.connection()?, &context, solution_id, revision).await
+                })
+            }
+            Command::InspectNoteTarget { context, note_id } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                let owner = store.identity.workspace_id;
+                self.runtime.block_on(async {
+                    queries::context(store.connection()?, owner, &context).await?;
+                    note_targets::inspect(store.connection()?, &context, note_id).await
                 })
             }
             Command::GetCandidate { context, revision } => {

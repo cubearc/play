@@ -4,6 +4,7 @@ import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
 import { CandidateButton } from "./Candidates";
+import { AnnotateButton } from "./EvidenceNotes";
 import { FilePreview } from "./FilePreview";
 import { PipelineGraph } from "./PipelineGraph";
 import { TrailCell } from "./TrailCell";
@@ -91,6 +92,14 @@ export function AssetCanvas({
         <CandidateButton
           label={trail.source.title}
           selection={{
+            kind: "asset",
+            asset_id: trail.source.id,
+            revision: trail.source.revision,
+          }}
+        />
+        <AnnotateButton
+          label={`${trail.source.title} r${trail.source.revision}`}
+          target={{
             kind: "asset",
             asset_id: trail.source.id,
             revision: trail.source.revision,

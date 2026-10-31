@@ -51,6 +51,31 @@ Closing or quitting with unsaved Notes offers **Keep editing** or **Discard
 draft**. Save before quitting; drafts do not survive a crash. Cmd/Ctrl+Enter
 inside an annotation or reasoning never runs another cell.
 
+## Annotate evidence
+
+Use the note icon in a Block heading to record an observation about that notebook
+item. In an Asset canvas, choose **Annotate asset** to link the note to the exact
+Asset revision currently selected. For a retained cell result, choose **Annotate
+output**; expand its node attempts and choose **Annotate attempt** to discuss a
+finished attempt, including a failure.
+
+Give the annotation a title and text, then choose **Add annotation**. Play returns
+to its new notebook cell. Expand **Linked to…** and choose **Inspect linked
+evidence** to see the source. A result link also offers **Open source Run**.
+
+![An annotation in the native notebook inspecting its original Asset revision beside the saved observation.](assets/desktop/evidence-annotation.png)
+
+The link stays fixed when you edit or copy the annotation, revise the Asset, run
+again or restart Play. An Asset link preserves a particular revision; a Block
+link identifies the notebook item without freezing its content. Copies have
+independent Note text and share the same evidence reference. Archiving keeps the
+reference; restore the annotation to inspect it again.
+
+If an output was not retained or is unavailable, inspection reports that gap.
+An annotation is your observation, not proof of a successful execution or an
+officially accepted answer. Notes are not automatically included in a saved
+Solution walkthrough.
+
 ## Add an inert page
 
 Choose **Add page**, enter a title and paste the page source, then choose

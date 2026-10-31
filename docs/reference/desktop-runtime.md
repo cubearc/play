@@ -129,7 +129,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **22** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **23** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -407,7 +407,6 @@ These commands refuse missing attached context and never fall back to a launcher
 filesystem search, shell or network service. External terminal discovery and
 arbitrary shell execution are not provided by this channel.
 
-
 ## Interactive native PTY
 
 On macOS, the Rust engine opens the real PTY, owns its dimensions and launches the
@@ -481,7 +480,6 @@ path. The engine parses the closed [package format](challenge-package.md), valid
 content and commits the ordinary notebook entities and provenance together.
 There is no archive extraction, external content fetch or automatic execution.
 
-
 ### Solution commands
 
 The native closed command set includes `save_solution`, `list_solutions` and
@@ -490,3 +488,14 @@ checks as Candidate commands. Renderer requests carry exact Candidate revisions
 and bounded explanation text; only the engine constructs snapshots. See
 [Solution snapshots](desktop-storage.md#solution-snapshots) for fields, limits,
 revision conflicts, immutable evidence and availability gaps.
+
+### Evidence annotation commands
+
+`annotate_evidence` accepts `context`, receipt `key`, `title`, `text` and a closed
+`target` reference. It creates a canonical annotation and returns `blockId`.
+`inspect_note_target` accepts `context` and `note_id`; it returns the reference,
+human label, available evidence and optional source Run/Trail origin. Both are
+scoped to the selected Stage. The existing Note byte/revision and Block capacity
+limits apply. Running attempts return `attempt_not_finished`; invalid ownership
+or undeclared ports return `not_found`. See
+[evidence-linked annotations](desktop-storage.md#evidence-linked-annotations).

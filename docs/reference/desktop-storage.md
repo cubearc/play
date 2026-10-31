@@ -40,11 +40,11 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store uses generation **2**, schema version **15**, SQLite application ID
+The native store uses generation **2**, schema version **16**, SQLite application ID
 `0x4355504e` and 4096-byte pages. The native baseline is in `crates/play-engine/src/workspace/schema.sql` and its
 accepted generation evolves through `runs.sql`, `copies.sql`, `archive.sql`,
-`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql`, `challenges.sql` and `candidates.sql`.
-Recognized native schemas 1–14 upgrade to schema 15 under the owner lock, preserving content,
+`files.sql`, `results.sql`, `annotations.sql`, `notebook.sql`, `pipelines.sql`, `graphs.sql`, `inputs.sql`, `callers.sql`, `challenges.sql`, `candidates.sql`, `solutions.sql` and `note_targets.sql`.
+Recognized native schemas 1–15 upgrade to schema 16 under the owner lock, preserving content,
 IDs and Run evidence. The engine
 recovers the recognized source, closes its connection, upgrades a private copy,
 verifies it and publishes it by atomic rename. A validated Workspace-bound
@@ -215,7 +215,7 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **22**, with no older
+change that order. The coordinated app/engine wire protocol is **23**, with no older
 DTO fallback.
 
 ## Block copies and provenance
@@ -431,7 +431,6 @@ stores remain errors. No prior browser Candidate/Solution snapshot reader or
 format alias is installed in the native engine; retiring the old served runtime
 remains part of the repository cutover.
 
-
 ## Solution snapshots
 
 Schema 15 adds `solutions` and append-only `solution_revisions`, scoped to a
@@ -468,3 +467,27 @@ History responses omit other revisions' full snapshots and evidence values.
 Missing evidence or unavailable contracts/policies remain explicit gaps; malformed
 stores and unsupported snapshot formats fail instead of invoking compatibility
 readers. Reads neither rerun operations nor verify Challenge correctness.
+
+## Evidence-linked annotations
+
+Schema 16 adds `note_targets` to the canonical Notes model. An annotation has at
+most one immutable target: `block` with `block_id`, `asset` with `asset_id` and
+`revision`, `attempt` with `run_id` and `attempt_id`, or `run_output` with those
+IDs and `port`. The engine validates Workspace, Exploration and Stage membership
+before creating the Note and Block in one receipt-backed transaction. Only
+finished attempts can be annotated; output references require a declared port.
+An unretained or unavailable result remains an explicit gap, not an empty value.
+
+Asset targets identify exact immutable revisions. Block targets identify the
+notebook item without snapshotting its content. Attempt targets retain execution
+identity and status. Targets cannot be replaced or deleted, and duplication
+preserves the reference while creating independent Note content/revisions.
+Archiving preserves both records. Existing native schema 15 stores upgrade
+without changing their Notes, Candidates or Solution snapshots.
+
+Notebook views contain an optional `target: { reference, label }` on each Note.
+Evidence is loaded separately with `inspect_note_target`, keeping repeated large
+result payloads out of the bounded notebook response. Inspection checks available
+content using the same Asset/output validation as Candidates and reports missing
+or incompatible evidence explicitly. Targets do not introduce a second note
+store, old-store reader, automatic execution or official verification.

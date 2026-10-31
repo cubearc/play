@@ -45,7 +45,44 @@ pub enum CandidateSelection {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum NoteTarget {
+    Block {
+        block_id: Uuid,
+    },
+    Asset {
+        asset_id: Uuid,
+        revision: i64,
+    },
+    Attempt {
+        run_id: Uuid,
+        attempt_id: Uuid,
+    },
+    RunOutput {
+        run_id: Uuid,
+        attempt_id: Uuid,
+        port: String,
+    },
+}
+#[derive(Serialize)]
+pub struct NoteLink {
+    pub reference: NoteTarget,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    AnnotateEvidence {
+        context: Context,
+        key: Uuid,
+        title: String,
+        text: String,
+        target: NoteTarget,
+    },
+    InspectNoteTarget {
+        context: Context,
+        note_id: Uuid,
+    },
     SaveSolution {
         context: Context,
         key: Uuid,
@@ -239,7 +276,8 @@ pub enum Command {
 impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
-            Self::SaveSolution { key, .. }
+            Self::AnnotateEvidence { key, .. }
+            | Self::SaveSolution { key, .. }
             | Self::SelectCandidate { key, .. }
             | Self::CreatePipeline { key, .. }
             | Self::RevisePipeline { key, .. }
@@ -356,7 +394,7 @@ pub enum Block {
     },
     Note {
         id: String,
-        note: Note,
+        note: Box<Note>,
     },
 }
 
@@ -384,6 +422,8 @@ pub struct Note {
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<NoteOrigin>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<NoteLink>,
 }
 #[derive(Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

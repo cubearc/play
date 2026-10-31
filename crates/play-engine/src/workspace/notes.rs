@@ -15,7 +15,7 @@ pub(super) async fn read(
     id: &str,
 ) -> Result<Note> {
     let row=sqlx::query("SELECT n.id,n.kind,n.title,n.current_revision,r.text,n.source_note_id,n.source_revision,p.title AS source_title FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id,n.current_revision)=(r.workspace_id,r.exploration_id,r.note_id,r.revision) LEFT JOIN notes p ON (n.workspace_id,n.exploration_id,n.source_note_id)=(p.workspace_id,p.exploration_id,p.id) WHERE n.workspace_id=? AND n.exploration_id=? AND n.id=?")
-        .bind(workspace).bind(exploration).bind(id).fetch_optional(connection).await.map_err(storage::failure)?.ok_or("not_found")?;
+        .bind(workspace).bind(exploration).bind(id).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
     let kind = match row.get::<&str, _>("kind") {
         "reasoning" => NoteKind::Reasoning,
         "annotation" => NoteKind::Annotation,
@@ -45,6 +45,7 @@ pub(super) async fn read(
         revision: row.get("current_revision"),
         text,
         origin,
+        target: super::note_targets::read(connection, workspace, exploration, id).await?,
     })
 }
 
@@ -185,5 +186,6 @@ pub(super) async fn duplicate(
         Some((&original.id, revision)),
     )
     .await?;
+    super::note_targets::copy(connection, context, &original.id, &copy).await?;
     block(connection, context, &copy, position).await
 }

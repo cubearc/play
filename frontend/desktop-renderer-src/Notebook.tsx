@@ -15,6 +15,7 @@ import { blockTitle, contextOf } from "../desktop/workspace-contract";
 import { ArchivedBlocks } from "./ArchivedBlocks";
 import { CandidatePanel } from "./Candidates";
 import { ChallengeOrigin } from "./ChallengeOrigin";
+import { AnnotateButton } from "./EvidenceNotes";
 import { NotebookAsset } from "./NotebookAsset";
 import { NoteCell, type NoteEditing } from "./NoteCell";
 import { SolutionsPanel } from "./Solutions";
@@ -395,6 +396,11 @@ export function Notebook({
                       onClick={() => void duplicate(block)}
                     />
                   ) : null}
+                  <AnnotateButton
+                    compact
+                    label={`${title} block`}
+                    target={{ kind: "block", block_id: block.id }}
+                  />
                   {!protectedReasoning ? (
                     <VscodeButton
                       secondary

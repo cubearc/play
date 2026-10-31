@@ -24,11 +24,15 @@ export function ContentDialog({
   onClose,
   onSubmit,
   error,
+  description,
+  onDirty,
 }: {
   kind: DialogKind;
   onClose: () => void;
   onSubmit: (title: string, text: string, key: string) => Promise<boolean>;
   error: string;
+  description?: string;
+  onDirty?: (dirty: boolean) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleField = useRef<HTMLElementTagNameMap["vscode-textfield"]>(null);
@@ -56,6 +60,9 @@ export function ContentDialog({
       onCancel={onClose}
     >
       <h2>{titles[kind]}</h2>
+      {description ? (
+        <p className="linked-target-label">{description}</p>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {kind !== "image" ? (
         <>
@@ -67,6 +74,7 @@ export function ContentDialog({
             value={title}
             maxlength={120}
             onInput={() => {
+              onDirty?.(true);
               key.current = crypto.randomUUID();
               setTitle(titleField.current?.value ?? "");
             }}
@@ -98,6 +106,7 @@ export function ContentDialog({
             value={text}
             rows={4}
             onInput={() => {
+              onDirty?.(true);
               key.current = crypto.randomUUID();
               setText(textField.current?.value ?? "");
             }}

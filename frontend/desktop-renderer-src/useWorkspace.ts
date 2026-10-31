@@ -4,6 +4,7 @@ import type {
   BlockView,
   Context,
   ExplorationView,
+  NoteTarget,
   NoteView,
   PipelineRef,
   PipelineView,
@@ -636,6 +637,28 @@ export function useWorkspace() {
       setSaving((previous) => ({ ...previous, [noteId]: false }));
     }
   };
+  const annotateEvidence = async (
+    context: Context,
+    target: NoteTarget,
+    title: string,
+    text: string,
+    key: string,
+  ): Promise<string | null> => {
+    let block: string | null = null;
+    await execute(async () => {
+      const result = await window.play.workspace({
+        kind: "annotate_evidence",
+        context,
+        key,
+        title,
+        text,
+        target,
+      });
+      await reloadCurrent(context);
+      block = result.blockId;
+    });
+    return block;
+  };
   const addAnnotation = (
     title: string,
     text: string,
@@ -782,6 +805,7 @@ export function useWorkspace() {
     saveNote,
     discardNote,
     addAnnotation,
+    annotateEvidence,
     noteState: (note: NoteView) => ({
       value: drafts[note.id]?.value ?? note.text,
       dirty: Boolean(drafts[note.id]),

@@ -5195,3 +5195,187 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
     await rm(profile, { recursive: true, force: true });
   }
 });
+
+test("evidence annotations retain exact Asset revisions and source Runs in the notebook", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-evidence-notes-"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Evidence notebook");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Hidden message");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const cell = () =>
+      notebook(page).getByRole("article", { name: "Clue block", exact: true });
+    const annotation = () =>
+      notebook(page).getByRole("article", {
+        name: "Original clue block",
+        exact: true,
+      });
+    await cell()
+      .getByRole("button", { name: "Explore Clue", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Annotate Clue r1", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Add annotation", exact: true });
+    await expect(dialog).toContainText("Linked to Clue r1");
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Original clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("é".repeat(1025));
+    await dialog
+      .getByRole("button", { name: "Add annotation", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText("draft is preserved");
+    await expect(
+      dialog.getByRole("textbox", { name: "Title", exact: true }),
+    ).toHaveValue("Original clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill(
+        "ROT13 may reveal the key. Keep this original revision for comparison.",
+      );
+    await dialog
+      .getByRole("button", { name: "Add annotation", exact: true })
+      .click();
+    await expect(annotation()).toBeVisible();
+    await cell()
+      .getByRole("button", { name: "Edit text", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "Edit text", exact: true });
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Svefg pyhr.");
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await annotation()
+      .getByText("Linked to Clue · Asset r1", { exact: true })
+      .click();
+    await annotation()
+      .getByRole("button", { name: "Inspect linked evidence", exact: true })
+      .click();
+    await expect(annotation()).toContainText("Gur xrl.");
+    if (nativeWorkers) {
+      await cell()
+        .getByRole("button", { name: "Run cell", exact: true })
+        .click();
+      await expect(cell()).toContainText("output: First clue.");
+      await cell()
+        .getByRole("button", {
+          name: "Annotate output from Run 1",
+          exact: true,
+        })
+        .click();
+      dialog = page.getByRole("dialog", {
+        name: "Add annotation",
+        exact: true,
+      });
+      await dialog
+        .getByRole("textbox", { name: "Title", exact: true })
+        .fill("Decoded clue");
+      await dialog
+        .getByRole("textbox", { name: "Text", exact: true })
+        .fill("This retained result supports the next step.");
+      await dialog
+        .getByRole("button", { name: "Add annotation", exact: true })
+        .click();
+      const outputNote = notebook(page).getByRole("article", {
+        name: "Decoded clue block",
+        exact: true,
+      });
+      await outputNote.getByText(/Linked to ROT13/).click();
+      await outputNote
+        .getByRole("button", { name: "Inspect linked evidence", exact: true })
+        .click();
+      await expect(outputNote).toContainText("First clue.");
+      await expect(
+        outputNote.getByRole("button", {
+          name: "Open source Run",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await outputNote
+        .getByRole("button", { name: "Open source Run", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Trail canvas", exact: true }),
+      ).toContainText("output: First clue.");
+      await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+      await annotation()
+        .getByText("Linked to Clue · Asset r1", { exact: true })
+        .click();
+      await annotation()
+        .getByRole("button", { name: "Inspect linked evidence", exact: true })
+        .click();
+      await outputNote.getByText(/Linked to ROT13/).click();
+      await outputNote
+        .getByRole("button", { name: "Inspect linked evidence", exact: true })
+        .click();
+    }
+    await annotation().evaluate((e) => e.scrollIntoView({ block: "start" }));
+    await capture(application, "desktop-evidence-annotation", false);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    for (const zoom of [1, 2]) {
+      await application.evaluate(({ BrowserWindow }, zoom) => {
+        const w = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+        w?.setSize(860, 640);
+        w?.webContents.setZoomFactor(zoom);
+      }, zoom);
+      await expect
+        .poll(() =>
+          annotation().evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+        )
+        .toBe(true);
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      );
+    }
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    await expect(annotation()).toBeVisible();
+    await annotation()
+      .getByText("Linked to Clue · Asset r1", { exact: true })
+      .click();
+    await annotation()
+      .getByRole("button", { name: "Inspect linked evidence", exact: true })
+      .click();
+    await expect(annotation()).toContainText("Gur xrl.");
+    await create(page, "Exploration", "Independent notes");
+    await expect(annotation()).toHaveCount(0);
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});

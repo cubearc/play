@@ -2,6 +2,7 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import { useRef } from "react";
 import limits from "../../desktop/protocol.json";
 import type { NoteView } from "../desktop/workspace-contract";
+import { LinkedEvidence } from "./EvidenceNotes";
 import VscodeButton from "./VscodeButton";
 export interface NoteDraftState {
   value: string;
@@ -31,6 +32,9 @@ export function NoteCell({
         <p className="copy-origin">
           Copied from {note.origin.title} · r{note.origin.revision}
         </p>
+      ) : null}
+      {note.target ? (
+        <LinkedEvidence noteId={note.id} link={note.target} />
       ) : null}
       <VscodeTextarea
         ref={field}

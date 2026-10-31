@@ -326,10 +326,12 @@ fn schema_fourteen_upgrade_preserves_candidates_and_adds_solution_storage() {
             )
             .await
             .unwrap();
-            sqlx::raw_sql("DROP TABLE solution_revisions; DROP TABLE solutions;")
-                .execute(&mut db)
-                .await
-                .unwrap();
+            sqlx::raw_sql(
+                "DROP TABLE note_targets; DROP TABLE solution_revisions; DROP TABLE solutions;",
+            )
+            .execute(&mut db)
+            .await
+            .unwrap();
             let schema = include_str!("../src/workspace/candidates.sql");
             sqlx::raw_sql(&schema[schema.find("CREATE TABLE workspace_meta_next").unwrap()..])
                 .execute(&mut db)

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { RunDetail, TrailView } from "../desktop/workspace-contract";
 import { CandidateButton } from "./Candidates";
+import { AnnotateButton } from "./EvidenceNotes";
 import { attemptOutputType, formatResultValue } from "./ResultValue";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -76,16 +77,29 @@ export function InlineResult({
                 )
                 .flatMap((attempt) =>
                   Object.keys(attempt.result?.outputs ?? {}).map((port) => (
-                    <CandidateButton
+                    <div
+                      className="evidence-actions"
                       key={`${attempt.id}/${port}`}
-                      label={port}
-                      selection={{
-                        kind: "run_output",
-                        run_id: run.id,
-                        attempt_id: attempt.id,
-                        port,
-                      }}
-                    />
+                    >
+                      <CandidateButton
+                        label={port}
+                        selection={{
+                          kind: "run_output",
+                          run_id: run.id,
+                          attempt_id: attempt.id,
+                          port,
+                        }}
+                      />
+                      <AnnotateButton
+                        label={`${port} from Run ${run.sequence}`}
+                        target={{
+                          kind: "run_output",
+                          run_id: run.id,
+                          attempt_id: attempt.id,
+                          port,
+                        }}
+                      />
+                    </div>
                   )),
                 )
             : null}
@@ -182,6 +196,16 @@ export function InlineResult({
                       {run.plan.nodes?.find((n) => n.id === a.nodeId)?.operation
                         .name ?? run.operation.name}{" "}
                       · {a.status}
+                      {a.status !== "running" ? (
+                        <AnnotateButton
+                          label={`${run.plan.nodes?.find((n) => n.id === a.nodeId)?.operation.name ?? run.operation.name} attempt in Run ${run.sequence}`}
+                          target={{
+                            kind: "attempt",
+                            run_id: run.id,
+                            attempt_id: a.id,
+                          }}
+                        />
+                      ) : null}
                       {a.result?.outputs ? (
                         <pre>
                           {Object.entries(a.result.outputs)

@@ -323,6 +323,7 @@ h1 {
 }
 .block-order-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
 }
 .copy-origin {
@@ -379,6 +380,7 @@ h1 {
 }
 .block-heading {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: space-between;
   align-items: center;
@@ -387,6 +389,8 @@ h1 {
   color: #d7d7d7;
 }
 .block-heading > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -999,6 +1003,12 @@ h1 {
   align-items: center;
   margin-top: 12px;
 }
+.note-save vscode-button {
+  max-width: 100%;
+}
+.note-save vscode-button::part(base) {
+  white-space: normal;
+}
 .note-save span {
   color: #8b9d97;
   font-size: 11px;
@@ -1276,6 +1286,40 @@ h1 {
 }
 .solution-panel details[open] > .solution-summary {
   margin-bottom: 12px;
+}
+.linked-evidence {
+  margin: 8px 0 12px;
+  min-width: 0;
+}
+.linked-evidence summary {
+  cursor: pointer;
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+.linked-evidence pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
+.linked-evidence .asset-image {
+  max-width: 100%;
+}
+.linked-evidence vscode-button {
+  max-width: 100%;
+  margin: 4px 0;
+}
+.linked-evidence vscode-button::part(base) {
+  white-space: normal;
+}
+.linked-target-label {
+  overflow-wrap: anywhere;
+}
+.evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 .solution-panel > details > vscode-button {
   margin-top: 8px;

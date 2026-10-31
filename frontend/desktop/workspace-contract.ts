@@ -65,6 +65,22 @@ export interface ArchivedBlockView {
   block: BlockView;
   archivedRevision: number;
 }
+export type NoteTarget =
+  | { kind: "block"; block_id: string }
+  | { kind: "asset"; asset_id: string; revision: number }
+  | { kind: "attempt"; run_id: string; attempt_id: string }
+  | { kind: "run_output"; run_id: string; attempt_id: string; port: string };
+export interface NoteLink {
+  reference: NoteTarget;
+  label: string;
+}
+export interface NoteTargetDetail extends NoteLink {
+  evidence:
+    | CandidateView["evidence"]
+    | { kind: "block"; title: string; archived: boolean }
+    | { kind: "attempt"; status: string; code: string | null };
+  origin?: { runId: string; trailId: string } | null;
+}
 export interface NoteView {
   id: string;
   kind: "reasoning" | "annotation";
@@ -72,6 +88,7 @@ export interface NoteView {
   revision: number;
   text: string;
   origin?: { noteId: string; revision: number; title: string };
+  target?: NoteLink;
 }
 export interface NoteBlockView {
   kind: "note";
@@ -195,6 +212,15 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "annotate_evidence";
+      context: Context;
+      key: string;
+      title: string;
+      text: string;
+      target: NoteTarget;
+    }
+  | { kind: "inspect_note_target"; context: Context; note_id: string }
   | {
       kind: "save_solution";
       context: Context;
@@ -565,6 +591,8 @@ export interface SolutionView extends SolutionSummary {
   };
 }
 export interface Responses {
+  annotate_evidence: { blockId: string };
+  inspect_note_target: NoteTargetDetail;
   save_solution: { solutionId: string; revision: number };
   get_solution: SolutionView;
   list_solutions: { solutions: SolutionSummary[] };
@@ -655,6 +683,8 @@ export function request(value: unknown): WorkspaceRequest {
       "pipeline",
       "bindings",
     ],
+    annotate_evidence: ["context", "key", "title", "text", "target"],
+    inspect_note_target: ["context", "note_id"],
     add_annotation: ["context", "key", "title", "text"],
     add_page: ["context", "key", "title", "text"],
     pin_run_output: [
@@ -714,7 +744,9 @@ export function request(value: unknown): WorkspaceRequest {
   keys(record, ["kind", ...expected]);
   for (const field of expected) {
     const value = record[field];
-    if (field === "selection") {
+    if (field === "target") {
+      noteTarget(value);
+    } else if (field === "selection") {
       const selected = object(value);
       if (selected.kind === "asset") {
         keys(selected, ["kind", "asset_id", "revision"]);
@@ -817,7 +849,9 @@ export function request(value: unknown): WorkspaceRequest {
       if (
         !bytes(
           value,
-          kind === "save_note" || kind === "add_annotation"
+          kind === "save_note" ||
+            kind === "add_annotation" ||
+            kind === "annotate_evidence"
             ? limits.note_bytes
             : limits.text_bytes,
         )
@@ -1001,4 +1035,36 @@ export function graphDefinition(value: unknown): PipelineDefinition {
     }
   }
   return d as unknown as PipelineDefinition;
+}
+
+function noteTarget(value: unknown) {
+  const target = object(value);
+  switch (target.kind) {
+    case "block":
+      keys(target, ["kind", "block_id"]);
+      if (!id(target.block_id)) throw new Error("invalid_command");
+      break;
+    case "asset":
+      keys(target, ["kind", "asset_id", "revision"]);
+      if (!id(target.asset_id) || !revision(target.revision))
+        throw new Error("invalid_command");
+      break;
+    case "attempt":
+      keys(target, ["kind", "run_id", "attempt_id"]);
+      if (!id(target.run_id) || !id(target.attempt_id))
+        throw new Error("invalid_command");
+      break;
+    case "run_output":
+      keys(target, ["kind", "run_id", "attempt_id", "port"]);
+      if (
+        !id(target.run_id) ||
+        !id(target.attempt_id) ||
+        typeof target.port !== "string" ||
+        !/^[a-zA-Z0-9_-]{1,64}$/.test(target.port)
+      )
+        throw new Error("invalid_command");
+      break;
+    default:
+      throw new Error("invalid_command");
+  }
 }

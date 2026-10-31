@@ -250,7 +250,7 @@ pub async fn exploration(
             }
             Block::Note {
                 id: row.get("id"),
-                note,
+                note: Box::new(note),
             }
         } else {
             Block::Asset {

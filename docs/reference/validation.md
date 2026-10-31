@@ -292,7 +292,6 @@ These checks cover the one-shot attached control client, not external discovery
 or Windows worker enforcement. Linux worker evidence comes from its dedicated native job. Unretired Runner/browser
 checks and the exact Core operation conformance matrix remain required.
 
-
 ## Contextual native terminal
 
 The native CLI test opens a Rust-owned PTY, reads an exact Asset, changes
@@ -314,7 +313,6 @@ and the preexisting VSCode textarea resizer data-URL denial. The actual screen i
 included in the terminal guide. These are macOS/Linux development checks, not a claim
 that Windows or the broader terminal milestone is complete.
 
-
 ## Parallel branches within a Run
 
 A synchronized Rust test requires two actual execution threads to rendezvous before
@@ -330,7 +328,6 @@ and reopen both histories. Existing EOF, deadline, engine-death and unrelated-pr
 checks remain required. This establishes parallel branches inside one worker,
 with both macOS and Linux worker policies. Cross-Run admission is verified below;
 Windows native enforcement remains separate.
-
 
 ## Concurrent Run admission
 
@@ -378,7 +375,6 @@ checks axe-core rules and shell/panel reflow at the supported small window size
 and 200% zoom. None of these checks establishes official answer correctness or
 completion of remaining note targeting, recursive evidence composition or old runtime retirement.
 
-
 ### Native Solution walkthroughs
 
 `crates/play-engine/tests/solutions.rs` covers immutable explanations and exact
@@ -394,3 +390,15 @@ an independently written revision without losing its draft, inspects history,
 reopens the app and checks independent Explorations. It also checks accessibility
 and notebook reflow at the supported small window and 200% zoom. These checks do
 not prove Cloud validation, signed distribution or retirement of the old runtime.
+
+### Evidence-linked annotations
+
+Engine checks cover exact Asset revisions after edits/copy/archive/restart,
+Block identity, finished and failed attempts, unavailable output, invalid ports,
+cross-Stage/Exploration isolation, atomic rejected writes, immutable targets and
+schema 15 upgrades. The closed IPC parser rejects malformed targets and oversized
+UTF-8 notes. The Electron journey creates annotations from the Asset canvas and
+retained cell output, preserves an oversized draft for correction, inspects the
+original revision after editing, checks source Run navigation, reopens the
+profile and verifies independent Explorations. It exercises axe-core and reflow
+at the native minimum window size and 200% zoom.

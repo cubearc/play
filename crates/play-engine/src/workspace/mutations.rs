@@ -405,6 +405,16 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
                 .await?
                 .value()
         }
+        Command::AnnotateEvidence {
+            context,
+            title,
+            text,
+            target,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            super::note_targets::annotate(connection, context, title, text, target).await?
+        }
         Command::AddAnnotation {
             context,
             title,
