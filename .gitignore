@@ -2,8 +2,6 @@
 /coverage/
 /lcov.info
 /frontend/node_modules/
-/frontend/dist/
-/frontend/launcher-dist/
 /frontend/desktop-dist/
 /frontend/desktop-renderer/
 /frontend/desktop-native/

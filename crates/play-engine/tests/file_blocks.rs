@@ -1,5 +1,3 @@
-#[path = "support/native_schema.rs"]
-mod native_schema;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use play_engine::workspace::{Context, Manager};
 use serde_json::{Value, json};
@@ -222,61 +220,4 @@ fn file_import_refuses_overflow_invalid_encoding_and_foreign_context_without_mut
         "storage_quota"
     );
     assert_eq!(view(&mut manager, &context), full);
-}
-
-#[test]
-fn schema_four_upgrade_preserves_archived_text_lineage_and_runs_before_import() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let context = setup(&mut manager);
-    command(
-        &mut manager,
-        json!({"kind":"add_text","context":context,"key":Uuid::new_v4(),"title":"Clue","text":"Gur xrl."}),
-    );
-    let initial = view(&mut manager, &context);
-    let block = &initial["stage"]["blocks"][0];
-    let trail = &initial["trails"][0];
-    let request=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":block["asset"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
-    let run = manager.prepare_run(&request).unwrap();
-    manager.start_attempt(&run.identity).unwrap();
-    let completed = manager
-        .finish_run(
-            &run.identity,
-            json!({"status":"completed","output":{"text":"The key."}}),
-        )
-        .unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"duplicate_block","context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":initial["stage"]["revision"],"source":source(block)}),
-    );
-    let copied = view(&mut manager, &context);
-    command(
-        &mut manager,
-        json!({"kind":"archive_block","context":context,"key":Uuid::new_v4(),"block_id":block["id"],"expected_revision":copied["stage"]["revision"],"source":source(block)}),
-    );
-    let before = view(&mut manager, &context);
-    drop(manager);
-    native_schema::snapshot(&root, context.workspace_id, 4);
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(view(&mut manager, &context), before);
-    assert_eq!(
-        manager.run_detail(&context, run.identity.id).unwrap(),
-        completed
-    );
-    command(&mut manager, import(&context, "new.dat", b"kept"));
-    let after = view(&mut manager, &context);
-    assert_eq!(
-        after["stage"]["archivedBlocks"],
-        before["stage"]["archivedBlocks"]
-    );
-    assert_eq!(after["stage"]["blocks"][0], before["stage"]["blocks"][0]);
-    assert_eq!(
-        after["stage"]["blocks"][1]["asset"]["content"]["kind"],
-        "file"
-    );
 }

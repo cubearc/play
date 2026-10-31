@@ -49,7 +49,7 @@ folder or delete an owner lock to force access. Another live owner produces
 
 An incompatible store remains intact. Use a supporting app version or create a
 separate Workspace. There is no old product-store importer or automatic reset.
-Recognized native schema upgrades are described in
+The current baseline and unsupported-store refusal are described in
 [native storage](reference/desktop-storage.md), together with exact paths, quotas
 and lock ownership. Signed updates, backup/export and uninstall preservation have
 not been delivered by this development preview.

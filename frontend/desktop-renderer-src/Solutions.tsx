@@ -85,7 +85,7 @@ function useSolutions(notes: NoteView[]) {
       solution_id: existing?.id ?? crypto.randomUUID(),
       expected_revision: existing?.revision ?? 0,
       notes:
-        existing?.snapshot.notes?.map((note) => ({
+        existing?.snapshot.notes.map((note) => ({
           note_id: note.id,
           revision: note.revision,
         })) ?? [],

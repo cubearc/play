@@ -73,7 +73,8 @@ fn contract(plan: &Value) -> Result<cube_core::operations::contracts::Contract> 
 
 fn resolve(plan: &Value, result: &Value, node: &str, sequence: i64, port: &str) -> Result<Output> {
     if plan["targetNodes"] != json!([node])
-        || !matches!(plan["adapterVersion"].as_u64(), Some(1..=3))
+        || plan["adapterVersion"] != 3
+        || plan["formatVersion"] != 3
     {
         return Err("unsupported_pipeline");
     }
@@ -201,4 +202,33 @@ pub(super) async fn origin(
         }))
     })
     .transpose()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_current_adapter_results_can_be_promoted_to_assets() {
+        let contract = cube_core::operations::require("cipher.rot13")
+            .unwrap()
+            .contract()
+            .unwrap();
+        let mut plan = json!({"formatVersion":3,"adapterVersion":3,"targetNodes":["node"],"operation":{"operation":"cipher.rot13","operationVersion":contract.operation_version,"name":"ROT13"},"contract":contract,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&contract).unwrap())});
+        let result = json!({"status":"completed","outputs":{"output":"Hello"}});
+        assert_eq!(
+            resolve(&plan, &result, "node", 1, "output").unwrap().data,
+            b"Hello"
+        );
+        for version in [0, 1, 2, 4] {
+            plan["adapterVersion"] = json!(version);
+            assert!(
+                matches!(
+                    resolve(&plan, &result, "node", 1, "output"),
+                    Err("unsupported_pipeline")
+                ),
+                "adapter {version}"
+            );
+        }
+    }
 }

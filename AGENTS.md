@@ -23,19 +23,18 @@
   processing. Workers receive minimum inputs, no database/credential access.
   Refuse unavailable native enforcement; no unrestricted/container fallback,
   implicit network reporting or automatic Challenge execution.
-- Existing served-web/Runner/container production paths retain their security
-  checks until validated replacements retire them. Do not weaken Host/Origin,
-  session, resource or conformance coverage or add host container-control access.
-  Replace obsolete code/checks as their native equivalents land; final retirement
-  and delivery status belong to GitHub Issues and CubeArc Roadmap.
+- Ship only the native Electron/engine runtime. Keep the reviewed retirement
+  boundary enforced by tests/architecture_test.py. Unsupported stores/formats are
+  refused without writes; never add converters, browser servers or container
+  fallbacks. Keep native worker/PTY, exact Core conformance and coverage checks.
 - Write docs, comments, errors, templates and issue descriptions in English.
   Update task/reference docs and [navigation](docs/SUMMARY.md) with functionality.
   Follow the [shared authoring guide](https://github.com/cubearc/docs/blob/main/content/contributing/documentation.md),
   adopt validated product revisions in the portal and verify authorized publication.
 - Follow [CONTRIBUTING](CONTRIBUTING.md) and
   [verification](docs/reference/validation.md). Keep strict warnings, exact real
-  conformance and unchanged Rust/frontend 80% coverage gates. Native proofs do
-  not replace unretired browser/Runner/Docker checks or prove signed releases.
+  conformance and unchanged Rust/frontend 80% coverage gates. Native checks
+  do not establish signed releases or unsupported operating-system enforcement.
 - Use focused Conventional Commits and preserve history. Follow the user's
   authorized branch/commit/push scope; direct main delivery needs no PR when
   explicitly authorized. Verify remote commits and required CI before closing

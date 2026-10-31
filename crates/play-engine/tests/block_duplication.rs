@@ -1,5 +1,3 @@
-#[path = "support/native_schema.rs"]
-mod native_schema;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use play_engine::workspace::{Context, Manager, RunRequest};
 use serde_json::{Value, json};
@@ -300,112 +298,7 @@ fn with_database(
         connection.close().await.unwrap();
     });
 }
-#[test]
-fn native_schema_two_and_interrupted_copies_upgrade_without_reassigning_evidence() {
-    for interrupted in [false, true] {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path().join("private");
-        let mut manager = Manager::new(root.clone()).unwrap();
-        let (context, before) = setup(&mut manager, false);
-        let trail = &before["trails"][0];
-        let request:RunRequest=serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":1,"source_asset_id":trail["source"]["id"],"source_revision":1,"operation":"cipher.rot13","operation_version":1,"retain_output":true})).unwrap();
-        let prepared = manager.prepare_run(&request).unwrap();
-        manager.start_attempt(&prepared.identity).unwrap();
-        let run = manager
-            .finish_run(
-                &prepared.identity,
-                json!({"status":"completed","output":{"text":"The key."}}),
-            )
-            .unwrap();
-        drop(manager);
-        native_schema::snapshot(&root, context.workspace_id, 2);
-        let directory = root.join(context.workspace_id.to_string());
-        let identity = std::fs::read(directory.join("workspace.json")).unwrap();
-        let temporary = Uuid::new_v4();
-        let private = directory.join(format!(".upgrade-{temporary}.sqlite3"));
-        if interrupted {
-            std::fs::write(&private, b"unpublished interrupted copy").unwrap();
-            let marker = directory.join("upgrade.json");
-            std::fs::write(&marker,serde_json::to_vec(&json!({"product":"cubearc.play.workspace.upgrade","workspace_id":context.workspace_id,"generation":2,"from_schema":2,"to_schema":3,"temporary":temporary})).unwrap()).unwrap();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                for path in [&private, &marker] {
-                    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
-                }
-            }
-        }
-        let mut manager = Manager::new(root.clone()).unwrap();
-        command(
-            &mut manager,
-            json!({"kind":"open","workspace_id":context.workspace_id}),
-        );
-        assert_eq!(open(&mut manager, &context), before);
-        assert_eq!(
-            manager.run_detail(&context, prepared.identity.id).unwrap(),
-            run
-        );
-        assert_eq!(
-            std::fs::read(directory.join("workspace.json")).unwrap(),
-            identity
-        );
-        assert!(!private.exists());
-        assert!(!directory.join("upgrade.json").exists());
-        command(&mut manager, copy(&context, &before, 0));
-        let after = open(&mut manager, &context);
-        let copied_asset = after["stage"]["blocks"][1]["asset"]["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
-        drop(manager);
-        with_database(&root, context.workspace_id, async |connection| {
-            let version: i64 = sqlx::query_scalar("PRAGMA user_version")
-                .fetch_one(&mut *connection)
-                .await
-                .unwrap();
-            assert_eq!(
-                version,
-                i64::from(play_engine::protocol::contract().schema_version)
-            );
-            sqlx::query("PRAGMA foreign_keys=ON")
-                .execute(&mut *connection)
-                .await
-                .unwrap();
-            assert!(
-                sqlx::query("UPDATE asset_origins SET source_revision=2 WHERE asset_id=?")
-                    .bind(&copied_asset)
-                    .execute(&mut *connection)
-                    .await
-                    .unwrap_err()
-                    .to_string()
-                    .contains("immutable_origin")
-            );
-            assert!(
-                sqlx::query("DELETE FROM asset_origins WHERE asset_id=?")
-                    .bind(&copied_asset)
-                    .execute(&mut *connection)
-                    .await
-                    .unwrap_err()
-                    .to_string()
-                    .contains("immutable_origin")
-            );
-            assert!(
-                sqlx::query("INSERT INTO asset_origins VALUES(?,?,?,?,1)")
-                    .bind(context.workspace_id.to_string())
-                    .bind(context.exploration_id.to_string())
-                    .bind(
-                        before["stage"]["blocks"][0]["asset"]["id"]
-                            .as_str()
-                            .unwrap()
-                    )
-                    .bind(Uuid::new_v4().to_string())
-                    .execute(&mut *connection)
-                    .await
-                    .is_err()
-            );
-        });
-    }
-}
+
 #[test]
 fn image_copy_rolls_back_its_first_asset_when_the_caption_exceeds_retained_byte_quota() {
     let tmp = tempfile::tempdir().unwrap();

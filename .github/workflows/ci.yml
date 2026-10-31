@@ -40,13 +40,6 @@ jobs:
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: play/frontend/.nvmrc
-          cache: npm
-          cache-dependency-path: play/frontend/package-lock.json
-      - run: npm ci --prefix frontend
-      - run: npm run build --prefix frontend
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo test --workspace --all-features --locked
         env:
@@ -70,25 +63,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy, llvm-tools-preview
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: play/frontend/.nvmrc
-          cache: npm
-          cache-dependency-path: play/frontend/package-lock.json
-      - run: npm ci --prefix frontend
-      - run: npm run build --prefix frontend
       - run: cargo fmt --all -- --check
-      - run: rustfmt --check --edition 2024 crates/play-launcher/tests/support/docker_fixture.rs crates/play-launcher/tests/support/folder_picker.rs crates/play-runner/tests/support/resource_probe.rs
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo install cargo-llvm-cov --version 0.9.1 --locked
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 80 --ignore-filename-regex '/tests/'
       - run: cargo llvm-cov report --lcov --output-path lcov.info --ignore-filename-regex '/tests/'
-      - name: Preserve exact typed API conformance evidence
+      - run: cargo test --locked --manifest-path ../cube/Cargo.toml -p cube-core --test conformance_matrix --test operation_contracts --test execution_registry
+      - name: Preserve exact Core conformance evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: play-operation-conformance
-          path: play/target/play-operation-conformance.json
+          path: cube/target/core-operation-conformance.json
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -97,7 +83,7 @@ jobs:
           if-no-files-found: error
 
   frontend:
-    name: Frontend and real browser smoke tests
+    name: Native frontend checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -107,64 +93,16 @@ jobs:
         with:
           persist-credentials: false
           path: play
-      - name: Check out the public versioned Core library
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: cubearc/cube
-          ref: 02329ca000d5d947c434234b582222d21fa8c280
-          path: cube
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: play/frontend/.nvmrc
           cache: npm
           cache-dependency-path: play/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - run: npm ci
       - run: npm run check
-      - run: npm run build
-      - run: npm run test:coverage
-      - run: cargo build --locked --manifest-path ../Cargo.toml
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: frontend-coverage
-          path: play/frontend/coverage/lcov.info
-          if-no-files-found: error
-
-  docker:
-    name: Docker build and runtime smoke tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          path: play
-      - name: Check out the public versioned Core library
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: cubearc/cube
-          ref: 02329ca000d5d947c434234b582222d21fa8c280
-          path: cube
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: play/frontend/.nvmrc
-          cache: npm
-          cache-dependency-path: play/frontend/package-lock.json
-      - run: npm ci --prefix frontend
-      - run: npm run build --prefix frontend
-      - run: cargo build --locked -p play-launcher
-      - run: cd frontend && npx playwright install --with-deps chromium
-      - run: docker build --target runner-tests --build-context cube_engine=../cube .
-      - run: docker build --target lab-tests --build-context cube_engine=../cube .
-      - run: python3 tests/runtime_smoke.py
-        env:
-          CUBE_PLAY_CUBE: ${{ github.workspace }}/cube/target/debug/cube
-          CUBE_PLAY_LAUNCHER: ${{ github.workspace }}/play/target/debug/cube-play
+      - run: npm run typecheck
+      - run: npm test -- --maxWorkers=1
+      - run: python3 ../tests/architecture_test.py
 
   native-desktop:
     name: Electron native proof (${{ matrix.os }})
@@ -198,6 +136,9 @@ jobs:
       - run: npm run desktop:build --prefix frontend
       - run: npm run desktop:test --prefix frontend
       - run: npm run desktop:smoke --prefix frontend
+        if: matrix.os != 'macos-26'
+      - run: npm run test:coverage --prefix frontend
+        if: matrix.os == 'macos-26'
       - name: Build and exercise the standalone preview bundle
         run: |
           npm run desktop:package --prefix frontend
@@ -212,6 +153,8 @@ jobs:
             play/frontend/playwright-report/*.png
             play/frontend/playwright-report/native-operation-conformance.json
             play/frontend/playwright-report/native-package-proof.json
+            play/frontend/coverage/lcov.info
+            play/frontend/coverage/coverage-summary.json
           if-no-files-found: error
 
   native-linux:

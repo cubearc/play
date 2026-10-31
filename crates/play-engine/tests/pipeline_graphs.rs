@@ -284,65 +284,7 @@ fn byte_representations_are_never_silently_coerced_at_a_join() {
     );
     assert!(!image.is_empty());
 }
-#[test]
-fn actual_schema_nine_upgrade_preserves_the_finished_run_and_advances_working_graphs() {
-    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
-    use std::fs;
-    let mut f: Value = serde_json::from_str(include_str!("fixtures/native-graph-v9.json")).unwrap();
-    // Caller is now exposed in the read DTO; the persisted evidence stays intact.
-    f["run"]["caller"] = json!("desktop");
-    let c: Context = serde_json::from_value(f["context"].clone()).unwrap();
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    drop(Manager::new(root.clone()).unwrap());
-    let directory = root.join(c.workspace_id.to_string());
-    fs::create_dir(&directory).unwrap();
-    fs::write(directory.join("workspace.json"), f["identity"].to_string()).unwrap();
-    fs::write(directory.join("owner.lock"), []).unwrap();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(async {
-        let mut db = SqliteConnection::connect_with(
-            &SqliteConnectOptions::new()
-                .filename(directory.join("workspace.sqlite3"))
-                .create_if_missing(true)
-                .foreign_keys(false),
-        )
-        .await
-        .unwrap();
-        sqlx::raw_sql(include_str!("fixtures/native-graph-v9.sql"))
-            .execute(&mut db)
-            .await
-            .unwrap();
-        db.close().await.unwrap();
-    });
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
-        for file in ["workspace.json", "owner.lock", "workspace.sqlite3"] {
-            fs::set_permissions(directory.join(file), fs::Permissions::from_mode(0o600)).unwrap();
-        }
-    }
-    let mut m = Manager::new(root).unwrap();
-    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
-    assert_eq!(
-        m.run_detail(&c, serde_json::from_value(f["run"]["id"].clone()).unwrap())
-            .unwrap(),
-        f["run"]
-    );
-    let view = call(
-        &mut m,
-        json!({"kind":"open_exploration","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"stage_id":c.stage_id}),
-    );
-    assert_eq!(view["stage"], f["view"]["stage"]);
-    for t in view["trails"].as_array().unwrap() {
-        assert_eq!(t["pipeline"]["definition"]["formatVersion"], 4);
-        assert_eq!(t["pipeline"]["revision"], 3);
-    }
-}
+
 #[test]
 fn output_budget_measures_raw_bytes_once_across_the_whole_run() {
     let input = "x".repeat(8192);

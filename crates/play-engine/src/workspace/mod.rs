@@ -21,7 +21,6 @@ mod solution_notes;
 mod solution_path;
 mod solutions;
 mod storage;
-mod upgrade;
 
 use crate::{Result, protocol};
 pub use cli::Read;
@@ -41,7 +40,7 @@ use uuid::Uuid;
 pub struct Manager {
     root: PathBuf,
     runtime: Runtime,
-    expected: storage::Schemas,
+    expected: storage::Schema,
     active: Option<Owned>,
 }
 
@@ -393,12 +392,14 @@ async fn initialize(directory: &Path, identity: &Identity) -> Result<()> {
             .execute(&mut connection)
             .await
             .map_err(storage::failure)?;
-        sqlx::query("INSERT INTO workspace_meta VALUES(?,2,1)")
+        sqlx::query("INSERT INTO workspace_meta VALUES(?,?,?)")
             .bind(identity.workspace_id.to_string())
+            .bind(storage::GENERATION)
+            .bind(storage::SCHEMA_VERSION)
             .execute(&mut connection)
             .await
             .map_err(storage::failure)?;
-        storage::migrate(&mut connection).await
+        Ok(())
     }
     .await;
     connection.close().await.map_err(storage::failure)?;

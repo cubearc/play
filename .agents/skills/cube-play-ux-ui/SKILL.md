@@ -21,7 +21,7 @@ Before changing UI:
 4. Reuse the existing stack and visual system. Introduce a dependency or new pattern only when it resolves a demonstrated gap. Keep changes proportional to the request.
 5. For screenshot-only work, distinguish visible problems from interaction assumptions. State what needs runtime verification. Do not invent hidden behavior or claim to have tested it.
 
-For `cubearc/play`, inspect `docs/architecture.md`, `docs/reference/desktop-domain.md`, and `docs/explorations.md` when relevant. The native renderer currently lives in `frontend/desktop-renderer-src/`; start with `Workbench.tsx`, `Notebook.tsx`, `AssetCanvas.tsx`, `PipelineEditor.tsx`, `PipelineGraph.tsx`, `InlineResult.tsx`, `theme.css`, and `style.css`. Verify these paths and their role before editing; older browser surfaces may coexist during migration.
+For `cubearc/play`, inspect `docs/architecture.md`, `docs/reference/desktop-domain.md`, and `docs/explorations.md` when relevant. The native renderer currently lives in `frontend/desktop-renderer-src/`; start with `Workbench.tsx`, `Notebook.tsx`, `AssetCanvas.tsx`, `PipelineEditor.tsx`, `PipelineGraph.tsx`, `InlineResult.tsx`, `theme.css`, and `style.css`. Verify these paths and their role before editing; the product has one native renderer.
 
 Use the existing React/VSCode Elements/Codicons system and semantic theme variables when working on that renderer. Treat these as discovery anchors, not a permanent dependency or feature inventory.
 

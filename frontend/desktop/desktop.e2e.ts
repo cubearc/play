@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   cp,
   mkdir,
@@ -71,6 +71,44 @@ const electron = {
           await application.evaluate(({ app }) => app.isPackaged),
           true,
         );
+      if (process.env.PLAY_COVERAGE) {
+        const page = await application.firstWindow();
+        await page.coverage.startJSCoverage({ resetOnNavigation: false });
+        await page.reload();
+        const close = application.close.bind(application);
+        application.close = async () => {
+          try {
+            const entries = (await page.coverage.stopJSCoverage()).filter(
+              (entry) => entry.url.endsWith("/app.js"),
+            );
+            assert.equal(
+              entries.length,
+              1,
+              "Expected the actual bundled workbench",
+            );
+            const bundle = await readFile(
+              new URL("../desktop-renderer/app.js", import.meta.url),
+            );
+            const sourceMap = JSON.parse(
+              await readFile(
+                new URL("../desktop-renderer/app.js.map", import.meta.url),
+                "utf8",
+              ),
+            );
+            const directory = process.env.PLAY_COVERAGE as string;
+            await mkdir(directory, { recursive: true });
+            await writeFile(
+              join(directory, `${randomUUID()}.json`),
+              JSON.stringify({
+                bundleSha256: createHash("sha256").update(bundle).digest("hex"),
+                entries: entries.map((entry) => ({ ...entry, sourceMap })),
+              }),
+            );
+          } finally {
+            await close();
+          }
+        };
+      }
       return application;
     } catch (error) {
       await application.close();

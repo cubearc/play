@@ -28,7 +28,7 @@ access to sibling files. Remote content must not gain application preload or
 native authority, and Challenge content never executes automatically.
 
 macOS execution uses a locally ad-hoc-signed App Sandbox helper with bounded
-inputs/outputs and enforced file/network/process/time controls. Windows/Linux
+inputs/outputs and enforced file/network/process/time controls. Linux uses Landlock/seccomp and native process limits. Windows
 workers refuse execution while native enforcement is unavailable. These are
 explicit development boundaries, not a complete signed release or aggregate
 process-tree/PTY guarantee. See [native execution](docs/reference/desktop-runtime.md)
@@ -41,13 +41,12 @@ occur during setup/builds. Diagnostics must omit credentials, private payloads,
 command contents and unnecessary source paths. Protect the host account: the
 application does not defend against an attacker controlling that account.
 
-## Repository transition
+## Native-only runtime
 
-The served-web, host launcher and container Runner still exist pending
-[required retirement](https://github.com/cubearc/play/issues/56). Their session,
-Host/Origin, source, network and resource checks remain required until replaced;
-they are not fallback policies for native execution. Do not add container-control
-privileges to application workers or weaken tests while retiring those paths.
+Only the Electron shell, private native engine, worker and terminal are shipped.
+Unsupported store generations and format versions fail without conversion or
+cleanup of archival material. Do not reintroduce browser or container fallbacks,
+expand worker authority or weaken native boundary and conformance checks.
 
 Follow the [native architecture](docs/architecture.md) and
 [contributor verification](docs/reference/validation.md) when changing a boundary.

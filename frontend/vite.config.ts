@@ -1,46 +1,25 @@
-import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    host: "127.0.0.1",
-    port: 5173,
-    strictPort: true,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:7331",
-        changeOrigin: false,
-        ws: true,
-      },
-      "/healthz": {
-        target: "http://127.0.0.1:7331",
-        changeOrigin: false,
-        ws: true,
-      },
-    },
-  },
+  plugins: [react()],
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
-    include: [
-      "src/**/*.test.{ts,tsx}",
-      "desktop-renderer-src/**/*.test.{ts,tsx}",
-    ],
+    setupFiles: ["./desktop-renderer-src/test/setup.ts"],
+    include: ["desktop-renderer-src/**/*.test.{ts,tsx}"],
     clearMocks: true,
     restoreMocks: true,
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov"],
-      include: ["src/**/*.{ts,tsx}"],
+      reportsDirectory: "coverage/unit",
+      reporter: ["text", "json"],
+      include: ["desktop-renderer-src/**/*.{ts,tsx}"],
       exclude: [
-        "src/main.tsx",
-        "src/launcher-main.tsx",
-        "src/test/**",
-        "src/**/*.test.{ts,tsx}",
+        "desktop-renderer-src/test/**",
+        "desktop-renderer-src/**/*.test.{ts,tsx}",
+        "desktop-renderer-src/main.tsx",
       ],
-      thresholds: { lines: 80, functions: 80, statements: 80, branches: 80 },
+      // Unit and real Electron coverage share the unchanged gates in scripts/coverage.mjs.
     },
   },
 });

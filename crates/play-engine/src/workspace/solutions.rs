@@ -132,19 +132,18 @@ pub async fn read(
         .find(|r| r.get::<i64, _>("revision") == selected_revision)
         .ok_or("not_found")?;
     let snapshot: Value = serde_json::from_str(row.get("snapshot")).map_err(|_| "corrupt_store")?;
-    if snapshot["formatVersion"] != 1 {
+    if snapshot["formatVersion"] != 1
+        || !snapshot["lineage"].is_object()
+        || !snapshot["notes"].is_array()
+    {
         return Err("unsupported_solution");
     }
     let selected =
         serde_json::from_value(snapshot["selection"].clone()).map_err(|_| "corrupt_store")?;
     let evidence = available(candidates::evidence(connection, context, &selected).await)?;
     let mut gaps = solution_path::gaps(connection, context, &snapshot["path"]).await?;
-    if let Some(lineage) = snapshot.get("lineage") {
-        gaps.extend(solution_lineage::gaps(connection, context, lineage).await?);
-    }
-    if let Some(notes) = snapshot.get("notes") {
-        gaps.extend(solution_notes::gaps(connection, context, notes).await?);
-    }
+    gaps.extend(solution_lineage::gaps(connection, context, &snapshot["lineage"]).await?);
+    gaps.extend(solution_notes::gaps(connection, context, &snapshot["notes"]).await?);
     let gaps = gaps
         .into_iter()
         .map(|gap| {

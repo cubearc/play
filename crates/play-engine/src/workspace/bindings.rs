@@ -5,7 +5,6 @@ use super::{
     pipelines, queries, storage,
 };
 use crate::{Result, graph::Definition};
-use serde_json::Value;
 use sqlx::{Row, SqliteConnection};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -105,43 +104,6 @@ pub async fn replace(
             .execute(&mut *c)
             .await
             .map_err(storage::failure)?;
-    }
-    Ok(())
-}
-// Append working revisions; historical definitions and accepted Run evidence remain immutable.
-pub async fn upgrade(c: &mut SqliteConnection) -> Result<()> {
-    let rows=sqlx::query("SELECT workspace_id,pipeline_id,revision,definition FROM pipeline_revisions WHERE json_extract(definition,'$.formatVersion')=3 ORDER BY workspace_id,pipeline_id,revision").fetch_all(&mut *c).await.map_err(storage::failure)?;
-    for r in rows {
-        let mut raw: Value =
-            serde_json::from_str(r.get("definition")).map_err(|_| "corrupt_store")?;
-        raw["formatVersion"] = Value::from(4);
-        let d = Definition::parse(raw)?;
-        let w: String = r.get("workspace_id");
-        let id: String = r.get("pipeline_id");
-        let head: i64 = sqlx::query_scalar(
-            "SELECT current_revision FROM pipelines WHERE workspace_id=? AND id=?",
-        )
-        .bind(&w)
-        .bind(&id)
-        .fetch_one(&mut *c)
-        .await
-        .map_err(storage::failure)?;
-        sqlx::query("INSERT INTO pipeline_revisions VALUES(?,?,?,?)")
-            .bind(&w)
-            .bind(&id)
-            .bind(head + 1)
-            .bind(serde_json::to_string(&d).map_err(|_| "invalid_state")?)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE pipelines SET current_revision=? WHERE workspace_id=? AND id=?")
-            .bind(head + 1)
-            .bind(&w)
-            .bind(&id)
-            .execute(&mut *c)
-            .await
-            .map_err(storage::failure)?;
-        sqlx::query("UPDATE trails SET pipeline_revision=?,revision=revision+1 WHERE workspace_id=? AND pipeline_id=? AND pipeline_revision=?").bind(head+1).bind(&w).bind(&id).bind(r.get::<i64,_>("revision")).execute(&mut *c).await.map_err(storage::failure)?;
     }
     Ok(())
 }

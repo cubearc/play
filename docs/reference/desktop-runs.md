@@ -251,7 +251,7 @@ remainder. The aggregate raw node outputs are bounded by the existing
 (128 MiB) apply to the one worker for the whole Run; adding nodes never multiplies
 those budgets. Storage failure never becomes a successful Run.
 
-The [native storage reference](desktop-storage.md) owns schema/upgrade and
+The [native storage reference](desktop-storage.md) owns baseline/refusal and
 filesystem rules. The [IPC reference](desktop-runtime.md) owns sender authority,
 wire framing and worker resource ceilings.
 

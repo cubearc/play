@@ -5,19 +5,18 @@
 Start with [Development](docs/development.md) to build the Electron workbench and
 [installation](docs/installation.md) to try the source preview. Keep the trusted
 Cube checkout beside Play. The [architecture](docs/architecture.md) describes
-implemented native behavior and the explicit remaining repository transition.
+implemented native behavior and native trust boundaries.
 
 ## Quality checks
 
 Run [Contributor verification](docs/reference/validation.md), including native
 engine/Electron checks, strict Rust/TypeScript/Biome, real operation conformance
-and unchanged 80% coverage gates. Keep LF line endings on every OS. Existing
-browser/Runner/Docker checks remain required while their production paths still
-exist; they are not prerequisites for opening Electron. Replace each check only
-with validated native coverage when its implementation is retired.
+and unchanged 80% coverage gates. Keep LF line endings on every OS. The structural retirement check rejects superseded entry points and build paths.
+The combined frontend gate measures unit and real Electron workbench coverage;
+all four metrics retain the 80% minimum. It never measures a removed interface.
 
 [CI](.github/workflows/ci.yml) uses an explicit public Cube revision and records
-native Rust, quality/coverage, frontend, macOS/Linux Electron and remaining Docker jobs.
+native Rust, quality/coverage, frontend and macOS/Linux Electron jobs.
 Report exact revisions and observed local/hosted results separately. A workflow
 definition or local helper signature does not establish signed release support.
 Do not suppress warnings, skip supported operation IDs or lower coverage gates.

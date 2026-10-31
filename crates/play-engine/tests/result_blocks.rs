@@ -1,8 +1,6 @@
 #[path = "support/graph.rs"]
 mod graph;
 use graph::configuration;
-#[path = "support/native_schema.rs"]
-mod native_schema;
 use play_engine::workspace::{Context, Manager, RunRequest};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -386,58 +384,4 @@ fn result_identity_is_unique_across_fresh_intents_and_archive_never_reapplies_a_
             );
             db.close().await.unwrap();
         });
-}
-
-#[test]
-fn native_schema_five_upgrade_preserves_file_archive_and_run_before_saving_output() {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().join("private");
-    let mut manager = Manager::new(root.clone()).unwrap();
-    let (context, initial) = setup(&mut manager);
-    let run = complete(
-        &mut manager,
-        &context,
-        &initial["trails"][0],
-        true,
-        json!({"text":"The key."}),
-    );
-    command(
-        &mut manager,
-        json!({"kind":"add_file","context":context,"key":Uuid::new_v4(),"title":"data.bin","base64":STANDARD.encode([0,255,128])}),
-    );
-    let added = view(&mut manager, &context);
-    let file = &added["stage"]["blocks"][1];
-    command(
-        &mut manager,
-        json!({"kind":"archive_block","context":context,"key":Uuid::new_v4(),"block_id":file["id"],"expected_revision":added["stage"]["revision"],"source":source(file)}),
-    );
-    let before = view(&mut manager, &context);
-    drop(manager);
-    native_schema::snapshot(&root, context.workspace_id, 5);
-    let mut manager = Manager::new(root).unwrap();
-    command(
-        &mut manager,
-        json!({"kind":"open","workspace_id":context.workspace_id}),
-    );
-    assert_eq!(view(&mut manager, &context), before);
-    assert_eq!(
-        manager
-            .run_detail(
-                &context,
-                Uuid::parse_str(run["id"].as_str().unwrap()).unwrap()
-            )
-            .unwrap(),
-        run
-    );
-    command(&mut manager, intent(&context, &before, &run, "output"));
-    let after = view(&mut manager, &context);
-    assert_eq!(
-        after["stage"]["archivedBlocks"],
-        before["stage"]["archivedBlocks"]
-    );
-    assert_eq!(
-        after["stage"]["blocks"][1]["asset"]["content"]["text"],
-        "The key."
-    );
 }
