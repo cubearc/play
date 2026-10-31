@@ -198,6 +198,11 @@ jobs:
       - run: npm run desktop:build --prefix frontend
       - run: npm run desktop:test --prefix frontend
       - run: npm run desktop:smoke --prefix frontend
+      - name: Build and exercise the standalone preview bundle
+        run: |
+          npm run desktop:package --prefix frontend
+          PLAY_PACKAGED_EXECUTABLE="$PWD/frontend/desktop-packages/Cube Play-darwin-$(node -p process.arch)/Cube Play.app/Contents/MacOS/cube-play" npm run desktop:smoke --prefix frontend
+          cp "frontend/desktop-packages/Cube Play-darwin-$(node -p process.arch)/Cube Play.app/Contents/Resources/app/package-proof.json" frontend/playwright-report/native-package-proof.json
       - name: Preserve native conformance and Electron screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -206,6 +211,7 @@ jobs:
           path: |
             play/frontend/playwright-report/*.png
             play/frontend/playwright-report/native-operation-conformance.json
+            play/frontend/playwright-report/native-package-proof.json
           if-no-files-found: error
 
   native-linux:
@@ -246,6 +252,14 @@ jobs:
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: npm run desktop:test --prefix frontend
       - run: xvfb-run -a npm run desktop:smoke --prefix frontend
+      - name: Build and exercise the standalone preview bundle
+        run: |
+          npm run desktop:package --prefix frontend
+          package="$PWD/frontend/desktop-packages/Cube Play-linux-$(node -p process.arch)"
+          sudo chown root:root "$package/chrome-sandbox"
+          sudo chmod 4755 "$package/chrome-sandbox"
+          PLAY_PACKAGED_EXECUTABLE="$package/cube-play" xvfb-run -a npm run desktop:smoke --prefix frontend
+          cp "$package/resources/app/package-proof.json" frontend/playwright-report/native-package-proof.json
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -253,4 +267,5 @@ jobs:
           path: |
             play/frontend/playwright-report/native-operation-conformance.json
             play/frontend/playwright-report/*.png
+            play/frontend/playwright-report/native-package-proof.json
           if-no-files-found: error
