@@ -66,7 +66,12 @@ export function PipelineEditor({
   const [definition, setDefinition] = useState<PipelineDefinition>(() => {
     if (pipeline && mode !== "create")
       return structuredClone(pipeline.definition);
-    const op = operations.find((o) => o.input_type === inputType);
+    const op =
+      operations.find(
+        (o) =>
+          o.operation === trail.pipeline?.outputOperation &&
+          o.input_type === inputType,
+      ) ?? operations.find((o) => o.input_type === inputType);
     if (!op) throw new Error("catalog_unavailable");
     const id = crypto.randomUUID();
     return {
