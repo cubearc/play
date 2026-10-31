@@ -1,7 +1,7 @@
 use super::{
     candidates,
     model::{CandidateSelection, Command, Context},
-    mutations, solution_lineage, solution_path, storage,
+    mutations, solution_lineage, solution_notes, solution_path, storage,
 };
 use crate::{Result, protocol};
 use serde_json::{Value, json};
@@ -32,6 +32,7 @@ pub async fn save(connection: &mut SqliteConnection, command: &Command) -> Resul
         solution_id,
         expected_revision,
         candidate_revision,
+        notes,
         title,
         explanation,
         ..
@@ -73,7 +74,8 @@ pub async fn save(connection: &mut SqliteConnection, command: &Command) -> Resul
     candidates::evidence(connection, context, &selected).await?;
     let path = solution_path::build(connection, context, &selected).await?;
     let lineage = solution_lineage::build(connection, context, &selected, &path).await?;
-    let snapshot = json!({"formatVersion":1,"stageId":context.stage_id,"candidate":{"id":candidate["id"],"revision":candidate_revision},"selection":selected,"path":path,"lineage":lineage});
+    let notes = solution_notes::capture(connection, context, notes).await?;
+    let snapshot = json!({"formatVersion":1,"stageId":context.stage_id,"candidate":{"id":candidate["id"],"revision":candidate_revision},"selection":selected,"path":path,"lineage":lineage,"notes":notes});
     let encoded = snapshot.to_string();
     if encoded.len() > protocol::contract().solution_snapshot_bytes {
         return Err("output_limit");
@@ -139,6 +141,9 @@ pub async fn read(
     let mut gaps = solution_path::gaps(connection, context, &snapshot["path"]).await?;
     if let Some(lineage) = snapshot.get("lineage") {
         gaps.extend(solution_lineage::gaps(connection, context, lineage).await?);
+    }
+    if let Some(notes) = snapshot.get("notes") {
+        gaps.extend(solution_notes::gaps(connection, context, notes).await?);
     }
     let gaps = gaps
         .into_iter()

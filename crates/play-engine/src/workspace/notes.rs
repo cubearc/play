@@ -14,8 +14,18 @@ pub(super) async fn read(
     exploration: &str,
     id: &str,
 ) -> Result<Note> {
-    let row=sqlx::query("SELECT n.id,n.kind,n.title,n.current_revision,r.text,n.source_note_id,n.source_revision,p.title AS source_title FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id,n.current_revision)=(r.workspace_id,r.exploration_id,r.note_id,r.revision) LEFT JOIN notes p ON (n.workspace_id,n.exploration_id,n.source_note_id)=(p.workspace_id,p.exploration_id,p.id) WHERE n.workspace_id=? AND n.exploration_id=? AND n.id=?")
-        .bind(workspace).bind(exploration).bind(id).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
+    read_revision(connection, workspace, exploration, id, None).await
+}
+
+pub(super) async fn read_revision(
+    connection: &mut SqliteConnection,
+    workspace: &str,
+    exploration: &str,
+    id: &str,
+    revision: Option<i64>,
+) -> Result<Note> {
+    let row=sqlx::query("SELECT n.id,n.kind,n.title,r.revision AS current_revision,r.text,n.source_note_id,n.source_revision,p.title AS source_title FROM notes n JOIN note_revisions r ON (n.workspace_id,n.exploration_id,n.id)=(r.workspace_id,r.exploration_id,r.note_id) AND r.revision=COALESCE(?,n.current_revision) LEFT JOIN notes p ON (n.workspace_id,n.exploration_id,n.source_note_id)=(p.workspace_id,p.exploration_id,p.id) WHERE n.workspace_id=? AND n.exploration_id=? AND n.id=?")
+        .bind(revision).bind(workspace).bind(exploration).bind(id).fetch_optional(&mut *connection).await.map_err(storage::failure)?.ok_or("not_found")?;
     let kind = match row.get::<&str, _>("kind") {
         "reasoning" => NoteKind::Reasoning,
         "annotation" => NoteKind::Annotation,

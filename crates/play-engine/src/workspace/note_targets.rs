@@ -149,7 +149,7 @@ pub async fn inspect(
         Ok(detail)
     }
 }
-async fn resolve(
+pub(super) async fn resolve(
     connection: &mut SqliteConnection,
     context: &Context,
     target: &NoteTarget,

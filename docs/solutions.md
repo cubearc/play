@@ -55,9 +55,11 @@ selection. Repeating an accepted request does not create another revision.
 1. Select the Candidate revision you want to explain in the Stage notebook.
 2. Expand **Solutions** and choose **New solution from Candidate r…**. Confirm the
    displayed Candidate revision, enter a title and explain your reasoning.
-3. Choose **Save solution**. The saved walkthrough shows your explanation, exact
+3. Under **Include saved notes**, choose the saved Reasoning and annotation
+   revisions that support this explanation. Save edits in the notebook first.
+4. Choose **Save solution**. The saved walkthrough shows your explanation, exact
    selected evidence and, for a Run output, its contributing operations.
-4. Choose **Revise explanation** to append another revision. Earlier revisions
+5. Choose **Revise explanation** to append another revision. Earlier revisions
    remain available through **Revision**; the selected Candidate stays pinned.
    Choose **New solution from Candidate r…** to save a separate walkthrough.
 
@@ -84,6 +86,16 @@ not a claim that a pipeline reproduces its edited bytes. Plain Assets have no
 invented execution path. Earlier saved revisions that lack source history say so;
 saving another revision captures it without changing the earlier snapshot.
 
+**Included notes** preserves the selected text, revision and any fixed evidence
+link. Editing or archiving that notebook Note leaves the Solution intact. Revising
+an explanation keeps the earlier choices; **Use … r…** explicitly selects a later
+saved Note revision. Unselected notes stay outside the walkthrough.
+
+![Solution preserving Reasoning revision 2 alongside its selected result and exact input](assets/desktop/solution-notes.png)
+
+A missing linked result appears as an evidence gap. The saved note text remains
+available and does not establish that the selected answer is correct.
+
 Each Stage can save 16 Solutions, each with 16 immutable revisions. Titles allow
 120 UTF-8 bytes and explanations 2048 bytes. A conflict preserves your draft and
 shows the saved revision for review before another save. Drafts survive switching
@@ -97,8 +109,7 @@ checks do not run the pipeline again or establish that an answer is correct.
 
 ## Official outcomes
 
-Walkthrough export and including selected annotations in a Solution are not available
-in this preview.
+Walkthrough export is not available in this preview.
 
 Candidates and Solutions are private and unverified. Neither a successful Run, an integrity
 hash nor available evidence establishes that a Challenge answer is correct.

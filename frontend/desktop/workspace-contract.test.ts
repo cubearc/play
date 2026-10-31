@@ -537,6 +537,7 @@ test("Solutions accept scoped Candidate revisions and bounded explanation only",
     solution_id: randomUUID(),
     expected_revision: 0,
     candidate_revision: 1,
+    notes: [],
     title: "Answer",
     explanation: "The clue supports this result.",
   };
@@ -551,6 +552,20 @@ test("Solutions accept scoped Candidate revisions and bounded explanation only",
     { expected_revision: -1 },
   ])
     assert.throws(() => request({ ...value, ...extra }));
+  const selected = { note_id: randomUUID(), revision: 1 };
+  assert.deepEqual(request({ ...value, notes: [selected] }), {
+    ...value,
+    notes: [selected],
+  });
+  for (const notes of [
+    [selected, selected],
+    [{ ...selected, revision: 0 }],
+    [{ ...selected, text: "renderer-owned forged text" }],
+    [{ ...selected, note_id: "../private" }],
+    Array.from({ length: 17 }, () => ({ note_id: randomUUID(), revision: 1 })),
+    null,
+  ])
+    assert.throws(() => request({ ...value, notes }));
   const read = {
     kind: "get_solution",
     context: owner,

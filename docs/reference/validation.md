@@ -373,7 +373,7 @@ choosing a retained output, stale revision recovery, browsing selection history,
 opening the source Run, independent Explorations and application restart. It
 checks axe-core rules and shell/panel reflow at the supported small window size
 and 200% zoom. None of these checks establishes official answer correctness or
-completion of selected-note inclusion, walkthrough export or old runtime retirement.
+completion of walkthrough export or old runtime retirement.
 
 ### Native Solution walkthroughs
 
@@ -396,6 +396,12 @@ not prove Cloud validation, signed distribution or retirement of the old runtime
 The cross-Run Electron journey reuses a saved result through the notebook,
 inspects the contributing Run, reopens the source history and checks axe/reflow
 at 200% zoom.
+
+Selected-note tests preserve exact saved revisions and fixed targets across
+notebook edits/restart, exclude unselected notes, reject duplicate/missing/foreign
+references and retain note text when a linked output is unavailable. The Electron
+journey selects Reasoning by keyboard, edits its working text, preserves the earlier
+choice through explanation conflicts, reopens it and checks accessibility/reflow.
 
 ### Evidence-linked annotations
 

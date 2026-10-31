@@ -440,7 +440,7 @@ Database triggers refuse updates and deletes. The native schema 14 upgrade
 preserves Candidates and their evidence; there is no served-web snapshot reader.
 
 `save_solution` accepts `context`, `key`, `solution_id`, `expected_revision`,
-`candidate_revision`, `title` and `explanation`. A fresh UUID with expected revision
+`candidate_revision`, `notes`, `title` and `explanation`. A fresh UUID with expected revision
 zero creates a Solution. Later revisions require its current revision. The engine
 builds the snapshot; callers cannot submit snapshot JSON, host paths or evidence
 values. Normal transactional receipt/digest and optimistic conflict rules apply.
@@ -474,6 +474,20 @@ snapshot ceiling while collecting metadata. New saves require every contributing
 input, contract and retained output to be available; a failure rolls back the whole
 revision. Later missing upstream evidence produces a gap while preserving both
 the snapshot and any still-available selected result.
+
+The required `notes` array contains only `{note_id, revision}` references. It is
+bounded by the 16 retained Blocks per Stage and rejects duplicate Note IDs,
+nonpositive revisions and foreign Stage/Exploration references. The engine
+captures the exact saved Note content, origin and fixed target in `snapshot.notes`;
+callers cannot supply those values. Later edits and archive state do not rewrite
+this selection. Historical revisions without captured notes remain unchanged.
+The snapshot limit and Exploration byte quota include all selected Note content.
+
+Reads check captured Note revisions and target availability. Missing source Notes
+or targets produce explicit gaps without discarding captured text or a still
+available answer. A note may describe a missing result; that target's absence does
+not forbid preserving the saved reasoning in a further revision. A failed attempt
+is recorded evidence, not a fabricated successful output.
 
 There are at most 16 Solutions per Stage, 16 revisions per Solution and 32768
 UTF-8 bytes per generated snapshot. Titles allow 120 bytes, explanations 2048

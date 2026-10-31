@@ -11,17 +11,19 @@ import {
 } from "react";
 import limits from "../../desktop/protocol.json" with { type: "json" };
 import type {
+  NoteView,
   SolutionSummary,
   SolutionView,
   WorkspaceRequest,
 } from "../desktop/workspace-contract";
 import { CandidateEvidence, useCandidate } from "./Candidates";
 import { ContributingPath, SolutionLineage } from "./SolutionLineage";
+import { NotePicker, SavedSolutionNotes } from "./SolutionNotes";
 import { errorMessage } from "./useWorkspace";
 import VscodeButton from "./VscodeButton";
 
 type Intent = Extract<WorkspaceRequest, { kind: "save_solution" }>;
-function useSolutions() {
+function useSolutions(notes: NoteView[]) {
   const candidate = useCandidate();
   const owner = useRef(candidate?.context).current;
   const [items, setItems] = useState<SolutionSummary[]>();
@@ -82,6 +84,11 @@ function useSolutions() {
       key: crypto.randomUUID(),
       solution_id: existing?.id ?? crypto.randomUUID(),
       expected_revision: existing?.revision ?? 0,
+      notes:
+        existing?.snapshot.notes?.map((note) => ({
+          note_id: note.id,
+          revision: note.revision,
+        })) ?? [],
       candidate_revision:
         existing?.snapshot.candidate.revision ??
         candidate.value.selectedRevision,
@@ -100,7 +107,8 @@ function useSolutions() {
       previous &&
       previous.title === draft.title &&
       previous.explanation === draft.explanation &&
-      previous.candidate_revision === draft.candidate_revision
+      previous.candidate_revision === draft.candidate_revision &&
+      JSON.stringify(previous.notes) === JSON.stringify(draft.notes)
         ? previous
         : { ...draft, key: crypto.randomUUID() };
     intent.current = command;
@@ -151,6 +159,7 @@ function useSolutions() {
     }
   };
   return {
+    notes,
     expanded,
     setExpanded,
     candidate,
@@ -168,8 +177,14 @@ function useSolutions() {
 const SolutionsContext = createContext<ReturnType<typeof useSolutions> | null>(
   null,
 );
-export function SolutionsProvider({ children }: { children: ReactNode }) {
-  const state = useSolutions();
+export function SolutionsProvider({
+  children,
+  notes,
+}: {
+  children: ReactNode;
+  notes: NoteView[];
+}) {
+  const state = useSolutions(notes);
   return (
     <SolutionsContext.Provider value={state}>
       {children}
@@ -303,6 +318,7 @@ export function SolutionsPanel() {
               lineage={value.snapshot.lineage}
               openRun={candidate.openRun}
             />
+            <SavedSolutionNotes notes={value.snapshot.notes} />
             {value.gaps.length ? (
               <ul role="alert">
                 {value.gaps.map((gap) => (
@@ -379,6 +395,12 @@ export function SolutionsPanel() {
               Explain how the selected evidence supports your answer. This saves
               locally.
             </p>
+            <NotePicker
+              notes={state.notes}
+              selected={draft.notes}
+              disabled={busy}
+              onChange={(notes) => setDraft({ ...draft, notes })}
+            />
             <div className="solution-actions">
               <VscodeButton
                 disabled={

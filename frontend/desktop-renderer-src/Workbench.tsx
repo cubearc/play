@@ -248,7 +248,13 @@ export function Workbench() {
       disabled={state.busy}
       openRun={openSourceRun}
     >
-      <SolutionsProvider>
+      <SolutionsProvider
+        notes={[
+          ...(exploration?.stage.blocks ?? []),
+          ...(exploration?.stage.archivedBlocks.map((entry) => entry.block) ??
+            []),
+        ].flatMap((block) => (block.kind === "note" ? [block.note] : []))}
+      >
         <EvidenceNotesProvider
           context={exploration ? contextOf(exploration) : null}
           disabled={state.busy}

@@ -5044,6 +5044,7 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
       ).toContainText("output: First clue.");
       await back();
     }
+    await saveNote(page, "ROT13 connects these exact clues.");
     const solutions = () =>
       notebook(page).getByRole("region", {
         name: "Stage solutions",
@@ -5061,12 +5062,28 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
     await solutions()
       .getByLabel("Solution explanation", { exact: true })
       .fill("ROT13 reveals the selected clue. This is my local explanation.");
+    const reasoningChoice = solutions().getByRole("checkbox", {
+      name: "Reasoning · r2",
+      exact: true,
+    });
+    await reasoningChoice.focus();
+    await page.keyboard.press("Space");
+    await expect(reasoningChoice).toBeChecked();
     await solutions()
       .getByRole("button", { name: "Save solution", exact: true })
       .click();
     const saved = () =>
       solutions().getByRole("article", { name: "Saved solution", exact: true });
     await expect(saved()).toContainText("This is my local explanation.");
+    await expect(
+      saved().getByRole("region", {
+        name: "Included solution notes",
+        exact: true,
+      }),
+    ).toContainText("ROT13 connects these exact clues.");
+    await saveNote(page, "A later working interpretation.");
+    await expect(saved()).toContainText("ROT13 connects these exact clues.");
+    await expect(saved()).not.toContainText("A later working interpretation.");
     await expect(saved()).toContainText(
       nativeWorkers ? "First clue." : "Gur xrl.",
     );
@@ -5074,6 +5091,18 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
     await solutions()
       .getByRole("button", { name: "Revise explanation", exact: true })
       .click();
+    await expect(
+      solutions().getByRole("button", {
+        name: "Use Reasoning r3",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      solutions().getByRole("checkbox", {
+        name: "Reasoning · r2",
+        exact: true,
+      }),
+    ).toBeChecked();
     await solutions()
       .getByLabel("Solution explanation", { exact: true })
       .fill("A revised explanation that preserves the same evidence.");
@@ -5102,6 +5131,7 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
         key: crypto.randomUUID(),
         solution_id: item.id,
         expected_revision: 1,
+        notes: [],
         candidate_revision: detail.snapshot.candidate.revision,
         title: item.title,
         explanation: "An independently saved explanation.",
@@ -5129,6 +5159,10 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
       .selectOption("3");
     await solutions().evaluate((e) => e.scrollIntoView({ block: "start" }));
     await capture(application, "desktop-stage-solution", false);
+    await saved()
+      .getByRole("region", { name: "Included solution notes", exact: true })
+      .evaluate((element) => element.scrollIntoView({ block: "center" }));
+    await capture(application, "desktop-solution-notes", false);
     assert.deepEqual((await accessibility(page)).violations, []);
     await capture(application, "desktop-stage-candidate");
     for (const zoom of [1, 2]) {
@@ -5190,6 +5224,7 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
       .getByLabel("Solution revision", { exact: true })
       .selectOption("1");
     await expect(saved()).toContainText("This is my local explanation.");
+    await expect(saved()).toContainText("ROT13 connects these exact clues.");
   } finally {
     await application.close();
     await rm(profile, { recursive: true, force: true });
@@ -5513,7 +5548,34 @@ test("Solutions follow reused outputs across Runs and reopen exact source histor
               "Solution content reflows at 200% zoom in the supported window",
           },
         )
-        .toBe(true);
+        .toBe(true)
+        .catch(async (error) => {
+          console.error(
+            "solution_reflow",
+            await panel().evaluate((element) => ({
+              width: element.clientWidth,
+              scroll: element.scrollWidth,
+              overflowing: Array.from(element.querySelectorAll("*"))
+                .filter(
+                  (item) =>
+                    item.clientWidth > 0 &&
+                    item.scrollWidth > item.clientWidth + 1,
+                )
+                .map((item) => ({
+                  tag: item.tagName,
+                  className: String(item.className),
+                  width: item.clientWidth,
+                  scroll: item.scrollWidth,
+                })),
+            })),
+          );
+          await capture(
+            application,
+            `native-solution-reflow-${width}`,
+            false,
+          ).catch(() => {});
+          throw error;
+        });
     }
     assert.deepEqual((await accessibility(page)).violations, []);
   } finally {

@@ -33,7 +33,7 @@ fn setup(manager: &mut Manager) -> (Context, Value) {
     (context, view)
 }
 fn save(context: &Context, id: Uuid, expected: i64) -> Value {
-    json!({"kind":"save_solution","context":context,"key":Uuid::new_v4(),"solution_id":id,"expected_revision":expected,"candidate_revision":1,"title":"The hidden key","explanation":"The selected clue supports this answer."})
+    json!({"kind":"save_solution","context":context,"key":Uuid::new_v4(),"solution_id":id,"expected_revision":expected,"candidate_revision":1,"notes":[],"title":"The hidden key","explanation":"The selected clue supports this answer."})
 }
 fn read(manager: &mut Manager, context: &Context, id: Uuid, revision: Option<i64>) -> Value {
     command(
@@ -637,4 +637,218 @@ fn solution_deduplicates_an_asset_shared_by_multiple_pipeline_inputs() {
     );
     assert_eq!(saved["evidence"]["value"], "Gur xrl.Gur xrl.");
     assert_eq!(saved["gaps"], json!([]));
+}
+
+#[test]
+fn solution_freezes_only_chosen_note_revisions_and_their_exact_targets() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private");
+    let mut manager = Manager::new(root.clone()).unwrap();
+    let (context, view) = setup(&mut manager);
+    let asset = &view["trails"][0]["source"];
+    let linked = command(
+        &mut manager,
+        json!({"kind":"annotate_evidence","context":context,"key":Uuid::new_v4(),"title":"Decoding clue","text":"The original letters matter.","target":{"kind":"asset","asset_id":asset["id"],"revision":1}}),
+    );
+    command(
+        &mut manager,
+        json!({"kind":"add_annotation","context":context,"key":Uuid::new_v4(),"title":"Unrelated branch","text":"This alternative is not part of the explanation."}),
+    );
+    let view = open(&mut manager, &context);
+    let block = view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == linked["blockId"])
+        .unwrap();
+    let selected = json!({"note_id":block["note"]["id"],"revision":1});
+    let id = Uuid::new_v4();
+    let mut intent = save(&context, id, 0);
+    intent["notes"] = json!([selected]);
+    let receipt = command(&mut manager, intent.clone());
+    assert_eq!(command(&mut manager, intent), receipt);
+    let before = read(&mut manager, &context, id, None);
+    assert_eq!(before["snapshot"]["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        before["snapshot"]["notes"][0]["text"],
+        "The original letters matter."
+    );
+    assert_eq!(
+        before["snapshot"]["notes"][0]["target"]["reference"]["revision"],
+        1
+    );
+    assert!(!before["snapshot"].to_string().contains("Unrelated branch"));
+    command(
+        &mut manager,
+        json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":block["note"]["id"],"expected_revision":1,"text":"A later interpretation."}),
+    );
+    assert_eq!(read(&mut manager, &context, id, None), before);
+    let mut revise = save(&context, id, 1);
+    revise["notes"] = json!([selected]);
+    command(&mut manager, revise);
+    assert_eq!(
+        read(&mut manager, &context, id, Some(1))["snapshot"],
+        before["snapshot"]
+    );
+    drop(manager);
+    let mut manager = Manager::new(root).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":context.workspace_id}),
+    );
+    assert_eq!(
+        read(&mut manager, &context, id, Some(1))["snapshot"],
+        before["snapshot"]
+    );
+    for notes in [
+        json!([selected, selected]),
+        json!([{"note_id":Uuid::new_v4(),"revision":1}]),
+        json!([{"note_id":block["note"]["id"],"revision":0}]),
+    ] {
+        let mut invalid = save(&context, Uuid::new_v4(), 0);
+        invalid["notes"] = notes;
+        assert!(
+            manager
+                .handle(serde_json::from_value(invalid).unwrap())
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn solution_notes_keep_missing_targets_as_gaps_and_refuse_foreign_notes() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private");
+    let mut manager = Manager::new(root.clone()).unwrap();
+    let (context, view) = setup(&mut manager);
+    let run = execute(&mut manager, &context, &view["trails"][0]);
+    let added = command(
+        &mut manager,
+        json!({"kind":"annotate_evidence","context":context,"key":Uuid::new_v4(),"title":"Output observation","text":"This retained output supports the explanation.","target":{"kind":"run_output","run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":"output"}}),
+    );
+    let view = open(&mut manager, &context);
+    let note = &view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == added["blockId"])
+        .unwrap()["note"];
+    let id = Uuid::new_v4();
+    let mut intent = save(&context, id, 0);
+    intent["notes"] = json!([{"note_id":note["id"],"revision":1}]);
+    command(&mut manager, intent.clone());
+    let before = read(&mut manager, &context, id, None);
+    let other = command(
+        &mut manager,
+        json!({"kind":"create_exploration","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Independent"}),
+    );
+    let foreign = command(
+        &mut manager,
+        json!({"kind":"open_exploration","workspace_id":context.workspace_id,"exploration_id":other["explorationId"],"stage_id":other["stageId"]}),
+    );
+    let foreign_note = &foreign["stage"]["blocks"][0]["note"]["id"];
+    let mut invalid = save(&context, Uuid::new_v4(), 0);
+    invalid["notes"] = json!([{"note_id":foreign_note,"revision":1}]);
+    assert_eq!(
+        manager
+            .handle(serde_json::from_value(invalid).unwrap())
+            .unwrap_err(),
+        "not_found"
+    );
+    drop(manager);
+    remove_result(&root, &context, run["attempts"][0]["id"].as_str().unwrap());
+    let mut manager = Manager::new(root).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":context.workspace_id}),
+    );
+    let after = read(&mut manager, &context, id, None);
+    assert_eq!(after["snapshot"], before["snapshot"]);
+    assert_eq!(after["evidence"], before["evidence"]);
+    assert_eq!(after["gaps"].as_array().unwrap().len(), 1);
+    assert_eq!(after["gaps"][0]["code"], "result_not_available");
+    assert!(
+        after["gaps"][0]["reference"]
+            .as_str()
+            .unwrap()
+            .starts_with("note-target:")
+    );
+    intent["expected_revision"] = json!(1);
+    intent["key"] = json!(Uuid::new_v4());
+    command(&mut manager, intent);
+    assert_eq!(
+        read(&mut manager, &context, id, None)["gaps"],
+        after["gaps"]
+    );
+}
+
+#[test]
+fn two_imports_of_one_challenge_keep_candidate_solution_and_note_histories_separate() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private");
+    let mut manager = Manager::new(root.clone()).unwrap();
+    let workspace = command(
+        &mut manager,
+        json!({"kind":"create","key":Uuid::new_v4(),"title":"Independent solvers"}),
+    );
+    let package = json!({"format":"cubearc.play.challenge","version":1,"id":Uuid::new_v4(),"revision":1,"title":"One challenge","origin":null,"stages":[{"id":Uuid::new_v4(),"title":"The clue","blocks":[{"id":Uuid::new_v4(),"title":"Clue","content":{"kind":"text","text":"Gur xrl."}}]}]});
+    let encoded = STANDARD.encode(serde_json::to_vec(&package).unwrap());
+    let mut histories = Vec::new();
+    for text in ["First explanation", "Independent alternative"] {
+        let imported = command(
+            &mut manager,
+            json!({"kind":"import_challenge","workspace_id":workspace["id"],"key":Uuid::new_v4(),"package":encoded}),
+        );
+        let context:Context = serde_json::from_value(json!({"workspace_id":workspace["id"],"exploration_id":imported["explorationId"],"stage_id":imported["stageId"]})).unwrap();
+        let view = open(&mut manager, &context);
+        assert_eq!(view["origin"]["packageId"], package["id"]);
+        let asset = &view["trails"][0]["source"];
+        let note = &view["stage"]["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["note"]["kind"] == "reasoning")
+            .unwrap()["note"];
+        command(
+            &mut manager,
+            json!({"kind":"save_note","context":context,"key":Uuid::new_v4(),"note_id":note["id"],"expected_revision":1,"text":text}),
+        );
+        command(
+            &mut manager,
+            json!({"kind":"select_candidate","context":context,"key":Uuid::new_v4(),"expected_revision":0,"selection":{"kind":"asset","asset_id":asset["id"],"revision":1}}),
+        );
+        let id = Uuid::new_v4();
+        let mut intent = save(&context, id, 0);
+        intent["notes"] = json!([{"note_id":note["id"],"revision":2}]);
+        command(&mut manager, intent);
+        let value = read(&mut manager, &context, id, None);
+        assert_eq!(value["snapshot"]["notes"][0]["text"], text);
+        histories.push((context, id, value));
+    }
+    assert_ne!(histories[0].0.exploration_id, histories[1].0.exploration_id);
+    assert_ne!(
+        histories[0].2["snapshot"]["notes"][0]["id"],
+        histories[1].2["snapshot"]["notes"][0]["id"]
+    );
+    assert_eq!(manager.handle(serde_json::from_value(json!({"kind":"get_solution","context":histories[0].0,"solution_id":histories[1].1,"revision":null})).unwrap()).unwrap_err(), "not_found");
+    drop(manager);
+    let mut manager = Manager::new(root).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":workspace["id"]}),
+    );
+    for (context, id, value) in histories {
+        assert_eq!(read(&mut manager, &context, id, None), value);
+        assert_eq!(
+            command(
+                &mut manager,
+                json!({"kind":"list_solutions","context":context})
+            )["solutions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
 }

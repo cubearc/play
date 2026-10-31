@@ -81,6 +81,10 @@ export interface NoteTargetDetail extends NoteLink {
     | { kind: "attempt"; status: string; code: string | null };
   origin?: { runId: string; trailId: string } | null;
 }
+export interface NoteRevisionRef {
+  note_id: string;
+  revision: number;
+}
 export interface NoteView {
   id: string;
   kind: "reasoning" | "annotation";
@@ -228,6 +232,7 @@ export type WorkspaceRequest =
       solution_id: string;
       expected_revision: number;
       candidate_revision: number;
+      notes: NoteRevisionRef[];
       title: string;
       explanation: string;
     }
@@ -588,6 +593,7 @@ export interface SolutionView extends SolutionSummary {
     stageId: string;
     candidate: { id: string; revision: number };
     selection: CandidateSelection;
+    notes?: NoteView[];
     path: SolutionPath | null;
     lineage?: {
       assets: {
@@ -668,6 +674,7 @@ export function request(value: unknown): WorkspaceRequest {
       "solution_id",
       "expected_revision",
       "candidate_revision",
+      "notes",
       "title",
       "explanation",
     ],
@@ -755,7 +762,22 @@ export function request(value: unknown): WorkspaceRequest {
   keys(record, ["kind", ...expected]);
   for (const field of expected) {
     const value = record[field];
-    if (field === "target") {
+    if (field === "notes") {
+      if (!Array.isArray(value) || value.length > limits.retained_block_limit)
+        throw new Error("input_limit");
+      const selected = new Set<string>();
+      for (const item of value) {
+        const note = object(item);
+        keys(note, ["note_id", "revision"]);
+        if (
+          !id(note.note_id) ||
+          !revision(note.revision) ||
+          selected.has(note.note_id)
+        )
+          throw new Error("invalid_command");
+        selected.add(note.note_id);
+      }
+    } else if (field === "target") {
       noteTarget(value);
     } else if (field === "selection") {
       const selected = object(value);

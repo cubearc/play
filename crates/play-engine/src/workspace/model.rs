@@ -16,6 +16,13 @@ pub struct AssetRevision {
     pub revision: i64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoteRevision {
+    pub note_id: Uuid,
+    pub revision: i64,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BlockSource {
@@ -89,6 +96,7 @@ pub enum Command {
         solution_id: Uuid,
         expected_revision: i64,
         candidate_revision: i64,
+        notes: Vec<NoteRevision>,
         title: String,
         explanation: String,
     },

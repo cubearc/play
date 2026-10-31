@@ -1324,3 +1324,19 @@ h1 {
 .solution-panel > details > vscode-button {
   margin-top: 8px;
 }
+.solution-note-picker {
+  min-width: 0;
+  margin: 12px 0;
+  border: 1px solid var(--separator-border);
+}
+.solution-note-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-block: 8px;
+}
+.solution-note-picker vscode-checkbox {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
