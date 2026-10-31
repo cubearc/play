@@ -31,10 +31,10 @@ they do not require a Cloud account or service to complete local Play.
 | Challenge edition | An immutable published activity version identified by the remote service. |
 
 Exploration names the investigation container throughout Rust, TypeScript,
-storage and commands. The superseded graph called `Exploration` supplies the basis
-for Trail/Pipeline responsibilities; `Investigation` is excluded from the native
-model. The old implementation remains subject to the retirement inventory below;
-the native cutover does not translate old records or expose those names as aliases.
+storage and commands. Trail/Pipeline own hypothesis and graph responsibilities;
+`Investigation` is excluded from the model. The superseded implementation is
+removed, as recorded in the retirement inventory below. The native cutover does
+not translate old records or expose those names as aliases.
 
 ## Ownership and cardinality
 
