@@ -373,7 +373,7 @@ choosing a retained output, stale revision recovery, browsing selection history,
 opening the source Run, independent Explorations and application restart. It
 checks axe-core rules and shell/panel reflow at the supported small window size
 and 200% zoom. None of these checks establishes official answer correctness or
-completion of remaining note targeting, recursive evidence composition or old runtime retirement.
+completion of selected-note inclusion, walkthrough export or old runtime retirement.
 
 ### Native Solution walkthroughs
 
@@ -383,13 +383,19 @@ idempotency/conflicts, schema 14 upgrade, protected records and unsupported snap
 format refusal. Real Core graph
 execution verifies selected dependency paths excluding alternatives and downstream
 nodes. A controlled missing-output fixture preserves the snapshot and reports an
-availability gap. No old snapshot format reader is used.
+availability gap. Cross-Run cases execute real ROT13 operations, promote and reuse
+an output, exclude an unrelated Run, preserve edited-copy ancestry and reopen the
+same snapshot. A missing upstream result leaves the selected answer intact,
+reports a gap and refuses a partial new revision. No old snapshot format reader is used.
 
 The Electron Candidate/Solution journey saves and revises an explanation, handles
 an independently written revision without losing its draft, inspects history,
 reopens the app and checks independent Explorations. It also checks accessibility
 and notebook reflow at the supported small window and 200% zoom. These checks do
 not prove Cloud validation, signed distribution or retirement of the old runtime.
+The cross-Run Electron journey reuses a saved result through the notebook,
+inspects the contributing Run, reopens the source history and checks axe/reflow
+at 200% zoom.
 
 ### Evidence-linked annotations
 

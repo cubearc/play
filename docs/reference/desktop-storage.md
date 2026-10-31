@@ -456,8 +456,24 @@ node parameters and connections, contract digests, required output ports, actual
 attempts and pinned Trail/Pipeline/Run identity. The full Pipeline definition and
 unselected branches are not copied into the snapshot. Immutable Run plans retain
 the full pinned contracts; reads verify current availability against those exact
-contracts and policies. Asset selections have a null path and retain their exact
-revision/origin without inferred or recursive Run expansion.
+contracts and policies. Asset selections have a null root path.
+
+The optional `lineage` section captures `assets` with exact ID/revision, title,
+recorded origin and `editedSinceCopy`, and `paths` with exact Run-output selections
+and their contributing paths. New saves always capture this section, following
+only immutable Asset-copy and saved-result origins within the owning Exploration
+and Stage. Duplicate exact Asset revisions and Run/attempt/port references are
+visited once; cycles are refused as corrupt storage. Copies after revision 1 are
+marked as edited: their creation ancestry does not assert reproducibility of the
+edited bytes. Reads check captured references instead of rebuilding history from
+the working notebook. Historical revisions without a recorded section remain
+byte-identical and are shown as lacking source history; no ancestry is fabricated.
+
+Traversal admits at most 64 unique references and applies the same 32768-byte
+snapshot ceiling while collecting metadata. New saves require every contributing
+input, contract and retained output to be available; a failure rolls back the whole
+revision. Later missing upstream evidence produces a gap while preserving both
+the snapshot and any still-available selected result.
 
 There are at most 16 Solutions per Stage, 16 revisions per Solution and 32768
 UTF-8 bytes per generated snapshot. Titles allow 120 bytes, explanations 2048

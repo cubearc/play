@@ -107,7 +107,7 @@ pub async fn gaps(
         let value = solutions::available(result.map(|_| Value::Null))?;
         if value["kind"] == "unavailable" {
             gaps.push(
-                json!({"reference":format!("input:{slot}"),"source":slot,"code":value["code"]}),
+                json!({"reference":format!("asset:{}:{}",input["assetId"].as_str().ok_or("corrupt_store")?,input["revision"]),"source":slot,"code":value["code"]}),
             );
         }
     }

@@ -5379,3 +5379,126 @@ test("evidence annotations retain exact Asset revisions and source Runs in the n
     await rm(profile, { recursive: true, force: true });
   }
 });
+
+test("Solutions follow reused outputs across Runs and reopen exact source history", {
+  timeout: 90000,
+  skip: !nativeWorkers,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-solution-lineage-"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Evidence paths");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Follow the recorded sources");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Clue");
+    await dialog
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.");
+    await dialog.getByRole("button", { name: "Add text", exact: true }).click();
+    const clue = notebook(page).getByRole("article", {
+      name: "Clue block",
+      exact: true,
+    });
+    await clue.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(clue).toContainText("output: The key.");
+    await clue
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    const reused = notebook(page).getByRole("article", {
+      name: "ROT13 · output · Run 1 block",
+      exact: true,
+    });
+    await reused.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(reused).toContainText("output: Gur xrl.");
+    await reused
+      .getByRole("button", { name: "Choose output as candidate", exact: true })
+      .click();
+    const panel = () =>
+      notebook(page).getByRole("region", {
+        name: "Stage solutions",
+        exact: true,
+      });
+    await panel()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await panel()
+      .getByRole("button", { name: /New solution from Candidate/ })
+      .click();
+    await panel()
+      .getByLabel("Solution title", { exact: true })
+      .fill("A round trip through ROT13");
+    await panel()
+      .getByLabel("Solution explanation", { exact: true })
+      .fill(
+        "The first Run reveals The key. Reusing that saved output in a second Run restores the original clue.",
+      );
+    await panel()
+      .getByRole("button", { name: "Save solution", exact: true })
+      .click();
+    const history = () =>
+      panel().getByRole("region", {
+        name: "Recorded source history",
+        exact: true,
+      });
+    await expect(history()).toContainText("Clue · r1");
+    await expect(history()).toContainText("ROT13 · output · Run 1 · r1");
+    await expect(
+      history().getByRole("button", {
+        name: "Open contributing Run",
+        exact: true,
+      }),
+    ).toHaveCount(1);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await panel().evaluate((e) => e.scrollIntoView({ block: "start" }));
+    await capture(application, "desktop-solution-lineage", false);
+    await history()
+      .getByRole("button", { name: "Open contributing Run", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Trail canvas" }),
+    ).toContainText("output: The key.");
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    await panel()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await expect(history()).toContainText("Clue · r1");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(860, 640),
+    );
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.setZoomFactor(2),
+    );
+    assert.equal(
+      await panel().evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+      true,
+    );
+    assert.deepEqual((await accessibility(page)).violations, []);
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});

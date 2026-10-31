@@ -16,6 +16,7 @@ mod queries;
 mod results;
 mod run_plan;
 mod runs;
+mod solution_lineage;
 mod solution_path;
 mod solutions;
 mod storage;

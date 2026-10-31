@@ -1,5 +1,5 @@
 {
-  "protocol": 23,
+  "protocol": 24,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -45,5 +45,6 @@
   "solution_limit": 16,
   "solution_revision_limit": 16,
   "solution_snapshot_bytes": 32768,
+  "solution_lineage_limit": 64,
   "package_bytes": 131072
 }

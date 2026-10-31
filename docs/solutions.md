@@ -69,21 +69,36 @@ attempt identities. Selecting an intermediate output excludes downstream nodes.
 Unused alternatives remain available in their Trails and full Run history.
 **Open source Run** opens that full historical Run for inspection.
 
-An Asset selection preserves its exact revision and recorded origin. Play does
-not infer a pipeline path from that Asset or recursively expand its origin chain.
-To include the producing pipeline path, choose the retained Run output itself.
+**Recorded source history** follows exact saved-output and Asset-copy origins
+across Runs. For example, save a ROT13 output as a Block, run another Pipeline on
+that Block, and choose its output. The Solution includes both contributing Runs
+and their exact inputs. **Open contributing Run** opens an earlier Run for inspection.
+Shared source references appear once; unrelated Runs are excluded.
+
+![Solution showing exact Assets and the earlier Run behind a reused output](assets/desktop/solution-lineage.png)
+
+Choosing a saved output Asset also captures its producing path. A copied Asset
+keeps its source revision; **Edited after copying** distinguishes manual changes
+from the output of earlier Runs. That history describes where the copy began,
+not a claim that a pipeline reproduces its edited bytes. Plain Assets have no
+invented execution path. Earlier saved revisions that lack source history say so;
+saving another revision captures it without changing the earlier snapshot.
 
 Each Stage can save 16 Solutions, each with 16 immutable revisions. Titles allow
 120 UTF-8 bytes and explanations 2048 bytes. A conflict preserves your draft and
 shows the saved revision for review before another save. Drafts survive switching
 between that Stage's notebook and canvases; save before leaving the Stage or app.
-Unavailable input, contract or output evidence appears as a gap. Availability
+A save requires the recorded contributing evidence to be available and to fit
+within the snapshot limit. It fails without appending a partial revision if an
+upstream input or retained result is missing. If evidence later becomes unavailable,
+the saved references remain intact and the missing input, contract or output
+appears as a gap. Availability
 checks do not run the pipeline again or establish that an answer is correct.
 
 ## Official outcomes
 
-Walkthrough export, additional note-target selection and recursive evidence
-composition across Runs are not available in this preview.
+Walkthrough export and including selected annotations in a Solution are not available
+in this preview.
 
 Candidates and Solutions are private and unverified. Neither a successful Run, an integrity
 hash nor available evidence establishes that a Challenge answer is correct.

@@ -16,6 +16,7 @@ import type {
   WorkspaceRequest,
 } from "../desktop/workspace-contract";
 import { CandidateEvidence, useCandidate } from "./Candidates";
+import { ContributingPath, SolutionLineage } from "./SolutionLineage";
 import { errorMessage } from "./useWorkspace";
 import VscodeButton from "./VscodeButton";
 
@@ -280,22 +281,7 @@ export function SolutionsPanel() {
             {path ? (
               <>
                 <h4>Contributing path</h4>
-                <ol>
-                  {path.nodes.map((node) => (
-                    <li key={node.id}>
-                      {node.name} · {node.ports.join(", ")}
-                    </li>
-                  ))}
-                </ol>
-                <p>
-                  Pipeline r{path.pipeline.revision} · Trail r
-                  {path.trail.revision}
-                </p>
-                {path.trail.hypothesis ? (
-                  <p className="solution-explanation">
-                    {path.trail.hypothesis}
-                  </p>
-                ) : null}
+                <ContributingPath path={path} />
                 {value.evidence.kind === "unavailable" ? (
                   <VscodeButton
                     secondary
@@ -311,11 +297,12 @@ export function SolutionsPanel() {
                 ) : null}
               </>
             ) : (
-              <p className="muted">
-                Exact Asset revision. Its recorded origin is retained; no
-                pipeline path is inferred.
-              </p>
+              <p className="muted">Exact Asset revision.</p>
             )}
+            <SolutionLineage
+              lineage={value.snapshot.lineage}
+              openRun={candidate.openRun}
+            />
             {value.gaps.length ? (
               <ul role="alert">
                 {value.gaps.map((gap) => (

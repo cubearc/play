@@ -400,3 +400,241 @@ fn unsupported_solution_snapshots_are_refused_without_compatibility_readers() {
     );
     assert_eq!(manager.handle(serde_json::from_value(json!({"kind":"get_solution","context":context,"solution_id":id,"revision":null})).unwrap()).unwrap_err(),"unsupported_solution");
 }
+
+fn execute(manager: &mut Manager, context: &Context, trail: &Value) -> Value {
+    let request = serde_json::from_value(json!({"context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"trail_revision":trail["revision"],"target_node_id":trail["pipeline"]["outputNodeId"],"pipeline_id":trail["pipeline"]["id"],"pipeline_revision":trail["pipeline"]["revision"],"source_asset_id":trail["source"]["id"],"source_revision":trail["source"]["revision"],"operation":trail["pipeline"]["outputOperation"],"operation_version":trail["pipeline"]["operationVersion"],"retain_output":true})).unwrap();
+    let prepared = manager.prepare_run(&request).unwrap();
+    let identity = prepared.identity.clone();
+    let output = play_engine::worker::execute_pipeline(prepared.invocation, |event| {
+        let mut attempt = identity.clone();
+        attempt.node_id = serde_json::from_value(event["nodeId"].clone()).unwrap();
+        match event["type"].as_str().unwrap() {
+            "node_started" => manager.start_attempt(&attempt),
+            "node_finished" => manager.finish_attempt(&attempt, event),
+            _ => unreachable!(),
+        }
+    })
+    .unwrap();
+    manager
+        .finish_run(&identity, json!({"status":"completed","output":output}))
+        .unwrap()
+}
+fn open(manager: &mut Manager, context: &Context) -> Value {
+    command(
+        manager,
+        json!({"kind":"open_exploration","workspace_id":context.workspace_id,"exploration_id":context.exploration_id,"stage_id":context.stage_id}),
+    )
+}
+#[test]
+fn solution_follows_promoted_outputs_across_runs_without_unrelated_attempts() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private");
+    let mut manager = Manager::new(root.clone()).unwrap();
+    let (context, view) = setup(&mut manager);
+    let first = execute(&mut manager, &context, &view["trails"][0]);
+    let unrelated = execute(&mut manager, &context, &view["trails"][0]);
+    let pinned = command(
+        &mut manager,
+        json!({"kind":"pin_run_output","context":context,"key":Uuid::new_v4(),"expected_revision":view["stage"]["revision"],"run_id":first["id"],"attempt_id":first["attempts"][0]["id"],"port":"output"}),
+    );
+    let view = open(&mut manager, &context);
+    let block = view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == pinned["blockId"])
+        .unwrap();
+    let trail = view["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["id"] == block["asset"]["id"])
+        .unwrap();
+    let second = execute(&mut manager, &context, trail);
+    command(
+        &mut manager,
+        json!({"kind":"select_candidate","context":context,"key":Uuid::new_v4(),"expected_revision":1,"selection":{"kind":"run_output","run_id":second["id"],"attempt_id":second["attempts"][0]["id"],"port":"output"}}),
+    );
+    let id = Uuid::new_v4();
+    let mut intent = save(&context, id, 0);
+    intent["candidate_revision"] = json!(2);
+    command(&mut manager, intent);
+    let before = read(&mut manager, &context, id, None);
+    let lineage = &before["snapshot"]["lineage"];
+    assert_eq!(lineage["paths"][0]["path"]["runId"], first["id"]);
+    assert_eq!(lineage["paths"].as_array().unwrap().len(), 1);
+    assert_eq!(lineage["assets"].as_array().unwrap().len(), 2);
+    assert!(
+        !before["snapshot"]
+            .to_string()
+            .contains(unrelated["id"].as_str().unwrap())
+    );
+    assert_eq!(before["evidence"]["value"], "Gur xrl.");
+    assert_eq!(before["gaps"], json!([]));
+    drop(manager);
+    let mut manager = Manager::new(root.clone()).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":context.workspace_id}),
+    );
+    assert_eq!(read(&mut manager, &context, id, None), before);
+    drop(manager);
+    remove_result(
+        &root,
+        &context,
+        first["attempts"][0]["id"].as_str().unwrap(),
+    );
+    let mut manager = Manager::new(root.clone()).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":context.workspace_id}),
+    );
+    let after = read(&mut manager, &context, id, None);
+    assert_eq!(after["snapshot"], before["snapshot"]);
+    assert_eq!(after["evidence"], before["evidence"]);
+    assert_eq!(after["gaps"].as_array().unwrap().len(), 1);
+    assert_eq!(after["gaps"][0]["code"], "result_not_available");
+    assert!(
+        after["gaps"][0]["reference"]
+            .as_str()
+            .unwrap()
+            .contains(first["attempts"][0]["id"].as_str().unwrap())
+    );
+    let mut revised = save(&context, id, 1);
+    revised["candidate_revision"] = json!(2);
+    assert_eq!(
+        manager
+            .handle(serde_json::from_value(revised).unwrap())
+            .unwrap_err(),
+        "result_not_available"
+    );
+    assert_eq!(read(&mut manager, &context, id, None), after);
+}
+
+#[test]
+fn solution_records_copy_ancestry_without_claiming_edited_bytes_are_run_outputs() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut manager = Manager::new(temp.path().join("private")).unwrap();
+    let (context, view) = setup(&mut manager);
+    let original = view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["kind"] == "asset")
+        .unwrap();
+    let copy = command(
+        &mut manager,
+        json!({"kind":"duplicate_block","context":context,"key":Uuid::new_v4(),"expected_revision":view["stage"]["revision"],"block_id":original["id"],"source":{"kind":"asset","asset":{"asset_id":original["asset"]["id"],"revision":1},"caption":null}}),
+    );
+    let view = open(&mut manager, &context);
+    let copied = view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == copy["blockId"])
+        .unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"revise_text","context":context,"key":Uuid::new_v4(),"block_id":copied["id"],"asset_id":copied["asset"]["id"],"expected_revision":1,"text":"A manually edited interpretation"}),
+    );
+    command(
+        &mut manager,
+        json!({"kind":"select_candidate","context":context,"key":Uuid::new_v4(),"expected_revision":1,"selection":{"kind":"asset","asset_id":copied["asset"]["id"],"revision":2}}),
+    );
+    let id = Uuid::new_v4();
+    let mut intent = save(&context, id, 0);
+    intent["candidate_revision"] = json!(2);
+    command(&mut manager, intent);
+    let saved = read(&mut manager, &context, id, None);
+    assert_eq!(
+        saved["evidence"]["asset"]["content"]["text"],
+        "A manually edited interpretation"
+    );
+    assert_eq!(saved["snapshot"]["path"], Value::Null);
+    let lineage = &saved["snapshot"]["lineage"];
+    assert_eq!(lineage["paths"], json!([]));
+    assert_eq!(lineage["assets"].as_array().unwrap().len(), 2);
+    assert_eq!(lineage["assets"][0]["revision"], 2);
+    assert_eq!(lineage["assets"][0]["editedSinceCopy"], true);
+    assert_eq!(lineage["assets"][1]["assetId"], original["asset"]["id"]);
+    assert_eq!(lineage["assets"][1]["revision"], 1);
+    assert_eq!(lineage["assets"][1]["editedSinceCopy"], false);
+}
+
+fn remove_result(root: &std::path::Path, context: &Context, attempt: &str) {
+    use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut db = SqliteConnection::connect_with(
+                &SqliteConnectOptions::new().filename(
+                    root.join(context.workspace_id.to_string())
+                        .join("workspace.sqlite3"),
+                ),
+            )
+            .await
+            .unwrap();
+            sqlx::query("DROP TRIGGER immutable_node_result_delete")
+                .execute(&mut db)
+                .await
+                .unwrap();
+            sqlx::query("DELETE FROM node_results WHERE attempt_id=?")
+                .bind(attempt)
+                .execute(&mut db)
+                .await
+                .unwrap();
+            let trigger = include_str!("../src/workspace/graphs.sql")
+                .lines()
+                .find(|l| l.starts_with("CREATE TRIGGER immutable_node_result_delete "))
+                .unwrap();
+            sqlx::raw_sql(trigger).execute(&mut db).await.unwrap();
+            db.close().await.unwrap();
+        });
+}
+
+#[test]
+fn solution_deduplicates_an_asset_shared_by_multiple_pipeline_inputs() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut manager = Manager::new(temp.path().join("private")).unwrap();
+    let (context, view) = setup(&mut manager);
+    let node = Uuid::new_v4();
+    let definition = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"},{"name":"other","semanticType":"text"}],"nodes":[{"id":node,"operation":"text.concat","operationVersion":1,"parameters":{},"position":{"x":80,"y":80},"inputs":{"left":{"kind":"input","name":"source"},"right":{"kind":"input","name":"other"}}}],"output":node});
+    let pipeline = command(
+        &mut manager,
+        json!({"kind":"create_pipeline","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Shared clue","definition":definition}),
+    );
+    let trail = &view["trails"][0];
+    command(
+        &mut manager,
+        json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":1,"hypothesis":"Use the same evidence twice","pipeline":{"id":pipeline["pipelineId"],"revision":1},"bindings":{"other":{"asset_id":trail["source"]["id"],"revision":1}}}),
+    );
+    let view = open(&mut manager, &context);
+    let run = execute(&mut manager, &context, &view["trails"][0]);
+    command(
+        &mut manager,
+        json!({"kind":"select_candidate","context":context,"key":Uuid::new_v4(),"expected_revision":1,"selection":{"kind":"run_output","run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":"output"}}),
+    );
+    let id = Uuid::new_v4();
+    let mut intent = save(&context, id, 0);
+    intent["candidate_revision"] = json!(2);
+    command(&mut manager, intent);
+    let saved = read(&mut manager, &context, id, None);
+    assert_eq!(
+        saved["snapshot"]["path"]["inputs"]
+            .as_object()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        saved["snapshot"]["lineage"]["assets"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(saved["evidence"]["value"], "Gur xrl.Gur xrl.");
+    assert_eq!(saved["gaps"], json!([]));
+}

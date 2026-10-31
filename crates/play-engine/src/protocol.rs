@@ -8,6 +8,7 @@ pub struct Contract {
     pub solution_limit: usize,
     pub solution_revision_limit: usize,
     pub solution_snapshot_bytes: usize,
+    pub solution_lineage_limit: usize,
     pub package_bytes: usize,
     pub active_runs: usize,
     pub active_runs_per_exploration: usize,

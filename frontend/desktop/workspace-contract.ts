@@ -551,6 +551,31 @@ export interface SolutionSummary {
   title: string;
   revision: number;
 }
+export interface SolutionPath {
+  runId: string;
+  trail: { id: string; revision: number; hypothesis: string };
+  pipeline: { id: string; revision: number };
+  nodes: {
+    id: string;
+    name: string;
+    operation: string;
+    operationVersion: number;
+    parameters: JsonValue;
+    inputs: JsonValue;
+    contractDigest: string;
+    attemptId: string;
+    ports: string[];
+  }[];
+  inputs: Record<
+    string,
+    {
+      assetId: string;
+      revision: number;
+      semanticType: string;
+      used: boolean;
+    }
+  >;
+}
 export interface SolutionView extends SolutionSummary {
   selectedRevision: number;
   explanation: string;
@@ -563,30 +588,16 @@ export interface SolutionView extends SolutionSummary {
     stageId: string;
     candidate: { id: string; revision: number };
     selection: CandidateSelection;
-    path: null | {
-      runId: string;
-      trail: { id: string; revision: number; hypothesis: string };
-      pipeline: { id: string; revision: number };
-      nodes: {
-        id: string;
-        name: string;
-        operation: string;
-        operationVersion: number;
-        parameters: JsonValue;
-        inputs: JsonValue;
-        contractDigest: string;
-        attemptId: string;
-        ports: string[];
+    path: SolutionPath | null;
+    lineage?: {
+      assets: {
+        assetId: string;
+        revision: number;
+        title: string;
+        origin: AssetView["origin"] | null;
+        editedSinceCopy: boolean;
       }[];
-      inputs: Record<
-        string,
-        {
-          assetId: string;
-          revision: number;
-          semanticType: string;
-          used: boolean;
-        }
-      >;
+      paths: { selection: CandidateSelection; path: SolutionPath }[];
     };
   };
 }

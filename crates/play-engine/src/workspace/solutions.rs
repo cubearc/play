@@ -1,7 +1,7 @@
 use super::{
     candidates,
     model::{CandidateSelection, Command, Context},
-    mutations, solution_path, storage,
+    mutations, solution_lineage, solution_path, storage,
 };
 use crate::{Result, protocol};
 use serde_json::{Value, json};
@@ -72,7 +72,8 @@ pub async fn save(connection: &mut SqliteConnection, command: &Command) -> Resul
         serde_json::from_value(candidate["selection"].clone()).map_err(|_| "corrupt_store")?;
     candidates::evidence(connection, context, &selected).await?;
     let path = solution_path::build(connection, context, &selected).await?;
-    let snapshot = json!({"formatVersion":1,"stageId":context.stage_id,"candidate":{"id":candidate["id"],"revision":candidate_revision},"selection":selected,"path":path});
+    let lineage = solution_lineage::build(connection, context, &selected, &path).await?;
+    let snapshot = json!({"formatVersion":1,"stageId":context.stage_id,"candidate":{"id":candidate["id"],"revision":candidate_revision},"selection":selected,"path":path,"lineage":lineage});
     let encoded = snapshot.to_string();
     if encoded.len() > protocol::contract().solution_snapshot_bytes {
         return Err("output_limit");
@@ -135,7 +136,21 @@ pub async fn read(
     let selected =
         serde_json::from_value(snapshot["selection"].clone()).map_err(|_| "corrupt_store")?;
     let evidence = available(candidates::evidence(connection, context, &selected).await)?;
-    let gaps = solution_path::gaps(connection, context, &snapshot["path"]).await?;
+    let mut gaps = solution_path::gaps(connection, context, &snapshot["path"]).await?;
+    if let Some(lineage) = snapshot.get("lineage") {
+        gaps.extend(solution_lineage::gaps(connection, context, lineage).await?);
+    }
+    let gaps = gaps
+        .into_iter()
+        .map(|gap| {
+            Ok((
+                gap["reference"].as_str().ok_or("corrupt_store")?.to_owned(),
+                gap,
+            ))
+        })
+        .collect::<Result<std::collections::BTreeMap<_, _>>>()?
+        .into_values()
+        .collect::<Vec<_>>();
     Ok(
         json!({"id":id,"revision":latest,"selectedRevision":selected_revision,"title":row.get::<&str,_>("title"),"explanation":row.get::<&str,_>("explanation"),"status":"private_unverified","snapshot":snapshot,"evidence":evidence,"gaps":gaps,"history":rows.iter().map(|r|json!({"revision":r.get::<i64,_>("revision"),"title":r.get::<&str,_>("title")})).collect::<Vec<_>>()}),
     )
