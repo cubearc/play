@@ -4884,7 +4884,6 @@ test("native notebook queues another cell without disabling unrelated Trails", {
     await second.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(second.getByRole("status")).toHaveText("Queued…");
     await expect(first.getByRole("status")).toHaveText("Running…");
-    await capture(application, "native-run-queue", false);
     await second.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(second.getByRole("status")).toHaveText(
       "Cancelled: user_cancelled",
@@ -4897,6 +4896,9 @@ test("native notebook queues another cell without disabling unrelated Trails", {
     await expect(
       second.getByRole("button", { name: "Run cell", exact: true }),
     ).toBeEnabled();
+    // Image encoding must not consume the real worker's two-second Run budget
+    // between assertions about independent cancellation.
+    await capture(application, "native-run-queue-cancelled", false);
     assert.equal((await accessibility(page)).violations.length, 0);
   } catch (error) {
     console.error(
