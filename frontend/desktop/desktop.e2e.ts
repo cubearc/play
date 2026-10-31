@@ -39,31 +39,43 @@ const electron = {
   ) {
     const executable =
       fixtureExecutable ?? process.env.PLAY_PACKAGED_EXECUTABLE;
-    if (!executable) return electronRuntime.launch(options);
-    const [entry, ...args] = options?.args ?? [];
-    assert.ok(entry?.endsWith("/main.js"));
-    assert.ok(
-      entry === main || fixtureExecutable,
-      "Staged app requires its own packaged fixture",
-    );
+    let launchOptions = options;
+    if (executable) {
+      const [entry, ...args] = options?.args ?? [];
+      assert.ok(entry?.endsWith("/main.js"));
+      assert.ok(
+        entry === main || fixtureExecutable,
+        "Staged app requires its own packaged fixture",
+      );
+      launchOptions = {
+        ...options,
+        executablePath: executable,
+        args,
+        cwd: tmpdir(),
+        env: {
+          PATH:
+            process.platform === "win32"
+              ? (process.env.SystemRoot ?? "C:\\Windows")
+              : "/usr/bin:/bin",
+          ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
+        },
+      };
+    }
+    // Keep the UI test independent of shared-desktop occlusion. Chromium's
+    // actionability checks still require ordinary visible, stable controls.
     const application = await electronRuntime.launch({
-      ...options,
-      executablePath: executable,
-      args,
-      cwd: tmpdir(),
-      env: {
-        PATH:
-          process.platform === "win32"
-            ? (process.env.SystemRoot ?? "C:\\Windows")
-            : "/usr/bin:/bin",
-        ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
-      },
+      ...launchOptions,
+      args: [
+        ...(launchOptions?.args ?? []),
+        "--disable-backgrounding-occluded-windows",
+      ],
     });
     try {
-      assert.equal(
-        await application.evaluate(({ app }) => app.isPackaged),
-        true,
-      );
+      if (executable)
+        assert.equal(
+          await application.evaluate(({ app }) => app.isPackaged),
+          true,
+        );
       return application;
     } catch (error) {
       await application.close();
@@ -4776,6 +4788,31 @@ test("native notebook queues another cell without disabling unrelated Trails", {
       second.getByRole("button", { name: "Run cell", exact: true }),
     ).toBeEnabled();
     assert.equal((await accessibility(page)).violations.length, 0);
+  } catch (error) {
+    console.error(
+      "Queue window state",
+      await application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().map((window) => ({
+          visible: window.isVisible(),
+          focused: window.isFocused(),
+          minimized: window.isMinimized(),
+          bounds: window.getBounds(),
+          throttling: window.webContents.getBackgroundThrottling(),
+        })),
+      ),
+    );
+    const page = await application.firstWindow();
+    console.error(
+      "Queue page state",
+      await page.evaluate(() => ({
+        visibility: document.visibilityState,
+        focus: document.hasFocus(),
+        width: innerWidth,
+        height: innerHeight,
+      })),
+    );
+    await capture(application, "native-queue-failure", false);
+    throw error;
   } finally {
     await application.close();
     await rm(temporary, { recursive: true, force: true });
