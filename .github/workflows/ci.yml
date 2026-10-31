@@ -255,7 +255,7 @@ jobs:
       - name: Build and exercise the standalone preview bundle
         run: |
           npm run desktop:package --prefix frontend
-          package="$PWD/frontend/desktop-packages/Cube Play-linux-$(node -p process.arch)"
+          package="$PWD/frontend/desktop-packages/cube-play-linux-$(node -p process.arch)"
           sudo chown root:root "$package/chrome-sandbox"
           sudo chmod 4755 "$package/chrome-sandbox"
           cp "$package/resources/app/package-proof.json" frontend/playwright-report/native-package-proof.json
