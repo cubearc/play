@@ -2828,6 +2828,9 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
     await clue()
       .getByRole("button", { name: "Archive Clue", exact: true })
       .click();
+    // Opening source evidence is refused while the archive mutation is busy.
+    await expect(clue()).toHaveCount(0);
+    await expect(result()).toBeFocused();
     await result()
       .getByRole("button", { name: "Open source Run 1", exact: true })
       .click();
