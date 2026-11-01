@@ -2,32 +2,17 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef } from "react";
 import limits from "../../desktop/protocol.json";
+import type { Representation } from "../desktop/contract";
+import { parseExactJson } from "./exactJson";
 
 export interface LiteralDraft {
   raw: string;
   error: string;
 }
-function jsonLiteral(raw: string): unknown {
-  return JSON.parse(
-    raw,
-    (_key: string, value: unknown, context?: { source?: string }) => {
-      if (
-        typeof value === "number" &&
-        Number.isInteger(value) &&
-        (!Number.isSafeInteger(value) ||
-          (context?.source && !/^-?(0|[1-9][0-9]*)$/.test(context.source)))
-      )
-        throw new Error(
-          "Use exact integer values here. Use Parse JSON for decimal or exponent data.",
-        );
-      return value;
-    },
-  );
-}
 export function LiteralValue({
   id,
   value,
-  semanticType,
+  representation,
   schema,
   disabled,
   draft,
@@ -36,7 +21,7 @@ export function LiteralValue({
 }: {
   id: string;
   value: unknown;
-  semanticType: string;
+  representation: Representation;
   schema: unknown;
   disabled: boolean;
   draft: LiteralDraft | undefined;
@@ -46,21 +31,21 @@ export function LiteralValue({
   const area = useRef<HTMLElementTagNameMap["vscode-textarea"]>(null);
   const field = useRef<HTMLElementTagNameMap["vscode-textfield"]>(null);
   const integer =
-    semanticType === "json" &&
+    representation === "json" &&
     typeof schema === "object" &&
     schema !== null &&
     "type" in schema &&
     schema.type === "integer";
-  const text = semanticType === "text",
-    bytes = semanticType === "bytes",
-    json = semanticType === "json";
+  const text = representation === "text",
+    bytes = representation === "bytes",
+    json = representation === "json";
   const label = integer
     ? "Integer value"
     : text
       ? "Text value"
       : bytes
         ? "Bytes (Base64)"
-        : semanticType === "bytes.array"
+        : representation === "byte_array"
           ? "Byte values (JSON)"
           : "JSON value";
   const encoded =
@@ -99,7 +84,7 @@ export function LiteralValue({
           : text
             ? raw
             : json
-              ? jsonLiteral(raw)
+              ? parseExactJson(raw)
               : JSON.parse(raw);
       if (
         new TextEncoder().encode(JSON.stringify(parsed)).byteLength >

@@ -117,10 +117,14 @@ fn dispatch(
             }
         }
         Command::Hello { .. } => reject(output, id, "already_negotiated"),
-        Command::Catalog { .. } => protocol::write_frame(
-            output,
-            &json!({"type":"catalog", "id":id, "operations":crate::worker::catalog()?}),
-        ),
+        Command::Catalog { offset, .. } => match crate::worker::catalog_page(offset) {
+            Ok(mut page) => {
+                page["type"] = json!("catalog");
+                page["id"] = json!(id);
+                protocol::write_frame(output, &page)
+            }
+            Err(code) => reject(output, id, code),
+        },
         Command::Invoke { invocation, .. } => {
             if store.is_some() {
                 return reject(output, id, "scoped_invocation_required");

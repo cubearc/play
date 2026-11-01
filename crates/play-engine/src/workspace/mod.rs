@@ -4,6 +4,7 @@ mod blocks;
 mod candidates;
 mod challenges;
 mod cli;
+mod contract_snapshots;
 mod copies;
 mod files;
 mod model;
@@ -23,6 +24,7 @@ mod solutions;
 mod stage_copy;
 mod stages;
 mod storage;
+mod structured;
 
 use crate::{Result, protocol};
 pub use cli::Read;

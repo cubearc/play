@@ -55,6 +55,7 @@ pub async fn asset(
         },
         "image" if data.len() <= crate::protocol::contract().image_bytes => Content::Image,
         "file" => super::files::content(&data, row.get("digest"))?,
+        "structured" => super::structured::content(&data)?,
         _ => return Err("corrupt_store"),
     };
     let origin = sqlx::query("SELECT o.source_asset_id,o.source_revision,a.title FROM asset_origins o JOIN assets a ON (o.workspace_id,o.exploration_id,o.source_asset_id)=(a.workspace_id,a.exploration_id,a.id) WHERE o.workspace_id=? AND o.exploration_id=? AND o.asset_id=?")

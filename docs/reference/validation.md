@@ -60,7 +60,10 @@ runs use the ordinary bundle with no coverage collection or shipped source maps.
 Core's complete fixture matrix executes every installed operation ID and verifies
 its actual contract/result. The native registry independently discovers eligible
 executors and checks each through owned IPC and the enforced real worker against
-Core known answers. Catalog presence alone never implies native execution.
+Core known answers, grouped into independent bounded units as the catalog grows.
+Each unit retains the original test deadline and verifies whole Run equality after
+restart. The report lists unavailable capabilities separately; they never count as
+executed operations. Catalog presence alone never implies native execution.
 Keep the full catalog/fixture matrix and native capability checks; do not hardcode
 an operation count or replace actual results with shape-only mocks.
 

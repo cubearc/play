@@ -1,4 +1,5 @@
 import limits from "../../desktop/protocol.json" with { type: "json" };
+import type { Operation, Representation } from "./contract.ts";
 
 export interface Context {
   workspace_id: string;
@@ -18,14 +19,14 @@ export interface AssetView {
   content:
     | { kind: "image" }
     | { kind: "text" | "page"; text: string }
-    | FileContent;
+    | FileContent
+    | StructuredContent;
   origin?:
     | { kind: "asset"; assetId: string; revision: number; title: string }
     | RunOutputOrigin;
 }
-export function assetInputType(
-  asset: Pick<AssetView, "content">,
-): "text" | "image.samples" | "bytes" {
+export function assetInputType(asset: Pick<AssetView, "content">): string {
+  if (asset.content.kind === "structured") return asset.content.semanticType;
   const types = {
     text: "text",
     page: "text",
@@ -34,6 +35,48 @@ export function assetInputType(
   } as const;
   return types[asset.content.kind];
 }
+/** Lossless Asset views come from installed typed capabilities, never operation IDs. */
+export function assetInputTypes(
+  operations: Operation[],
+): Map<string, Representation> {
+  const representations = new Map<string, Representation>();
+  const ambiguous = new Set<string>();
+  for (const operation of operations) {
+    for (const port of operation.contract.inputs) {
+      const representation = operation.execution.inputs[port.name];
+      if (!representation) {
+        ambiguous.add(port.semantic_type);
+        continue;
+      }
+      const existing = representations.get(port.semantic_type);
+      if (existing && existing !== representation)
+        ambiguous.add(port.semantic_type);
+      representations.set(port.semantic_type, representation);
+    }
+  }
+  for (const semantic of ambiguous) representations.delete(semantic);
+  return representations;
+}
+export function assetAcceptsInputType(
+  asset: Pick<AssetView, "content">,
+  semanticType: string,
+  operations: Operation[],
+): boolean {
+  const representation = assetInputTypes(operations).get(semanticType);
+  switch (asset.content.kind) {
+    case "text":
+    case "page":
+      return representation === "text";
+    case "file":
+      return representation === "bytes" || representation === "byte_array";
+    case "image":
+      return representation === "image_samples";
+    case "structured":
+      return (
+        representation === "json" && asset.content.semanticType === semanticType
+      );
+  }
+}
 export interface RunOutputOrigin {
   kind: "run_output";
   runId: string;
@@ -41,9 +84,14 @@ export interface RunOutputOrigin {
   nodeId: string;
   trailId: string;
   port: string;
-  semanticType: "text" | "bytes";
+  semanticType: string;
   operationName: string;
   sequence: number;
+}
+export interface StructuredContent {
+  kind: "structured";
+  semanticType: string;
+  value: JsonValue;
 }
 export interface FileContent {
   kind: "file";
@@ -426,6 +474,14 @@ export type WorkspaceRequest =
       text: string;
     }
   | {
+      kind: "add_structured";
+      context: Context;
+      key: string;
+      title: string;
+      semantic_type: string;
+      value: JsonValue;
+    }
+  | {
       kind: "add_text";
       context: Context;
       key: string;
@@ -499,39 +555,46 @@ export type JsonValue =
   | string
   | JsonValue[]
   | { [key: string]: JsonValue };
+export interface ContractSnapshotRef {
+  kind: "snapshot";
+  digest: string;
+  operation: string;
+  operation_version: number;
+  inputs: {
+    name: string;
+    semantic_type: string;
+    representation: Representation;
+  }[];
+  outputs: {
+    name: string;
+    semantic_type: string;
+    representation: Representation;
+  }[];
+}
+export interface FrozenRunInput {
+  assetId: string;
+  revision: number;
+  semanticType: string;
+  used: boolean;
+}
 export interface RunDetail extends RunSummary {
   plan: {
     pipeline: { id: string; revision: number; definition: unknown };
-    executionOrder?: string[];
-    nodes?: {
+    formatVersion: 4;
+    adapterVersion: 3;
+    executionOrder: string[];
+    nodes: {
       id: string;
       operation: { name: string };
-      contractDigest?: string;
+      contractDigest: string;
     }[];
-    contracts?: Record<
-      string,
-      { outputs: { name: string; semantic_type: string }[] }
-    >;
-    contract: {
-      operation: string;
-      operation_version: number;
-      inputs: { name: string; semantic_type: string }[];
-      outputs: { name: string; semantic_type: string }[];
-    };
+    contracts: Record<string, ContractSnapshotRef>;
+    contract: ContractSnapshotRef;
     contractDigest: string;
     targetNodes: string[];
     reusePolicy: "none";
     reusedOutputs: unknown[];
-    inputs: Record<
-      string,
-      | {
-          assetId: string;
-          revision: number;
-          semanticType: string;
-          used?: boolean;
-        }
-      | { literal: unknown }
-    >;
+    inputs: { source: FrozenRunInput } & Record<string, FrozenRunInput>;
     parameters: unknown;
     limits: unknown;
   };
@@ -679,6 +742,7 @@ export interface Responses {
   create_stage: { explorationId: string; stageId: string };
   save_note: { noteId: string; revision: number };
   add_text: { blockId: string };
+  add_structured: { blockId: string };
   revise_text: { assetId: string; revision: number };
   reorder_blocks: { stageId: string; revision: number };
   duplicate_block: { blockId: string; stageId: string; revision: number };
@@ -694,6 +758,32 @@ export const isIdentity = (value: unknown): value is string =>
   typeof value === "string" && uuid.test(value);
 const revision = (value: unknown) =>
   Number.isSafeInteger(value) && typeof value === "number" && value > 0;
+function validateJsonValue(value: unknown, depth = 0): void {
+  if (depth > 64) throw new Error("input_limit");
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return;
+  if (typeof value === "number") {
+    if (
+      !Number.isFinite(value) ||
+      (Number.isInteger(value) && !Number.isSafeInteger(value))
+    )
+      throw new Error("invalid_command");
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) validateJsonValue(item, depth + 1);
+    return;
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(value))
+  ) {
+    for (const item of Object.values(value)) validateJsonValue(item, depth + 1);
+    return;
+  }
+  throw new Error("invalid_command");
+}
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("invalid_command");
@@ -786,6 +876,7 @@ export function request(value: unknown): WorkspaceRequest {
     create_stage: ["workspace_id", "exploration_id", "key", "title"],
     save_note: ["context", "key", "note_id", "expected_revision", "text"],
     add_text: ["context", "key", "title", "text"],
+    add_structured: ["context", "key", "title", "semantic_type", "value"],
     revise_text: [
       "context",
       "key",
@@ -895,6 +986,13 @@ export function request(value: unknown): WorkspaceRequest {
     } else if (field === "hypothesis") {
       if (!bytes(value, limits.hypothesis_bytes))
         throw new Error("input_limit");
+    } else if (field === "value") {
+      validateJsonValue(value);
+      if (!bytes(JSON.stringify(value), limits.output_bytes))
+        throw new Error("input_limit");
+    } else if (field === "semantic_type") {
+      if (typeof value !== "string" || !/^[a-zA-Z0-9_.-]{1,128}$/.test(value))
+        throw new Error("invalid_command");
     } else if (field === "operation") {
       if (!bytes(value, 128) || !value) throw new Error("invalid_command");
     } else if (field === "source") {
@@ -1082,7 +1180,8 @@ export function graphDefinition(value: unknown): PipelineDefinition {
       !/^[a-z][a-z0-9_]{0,31}$/.test(input.name) ||
       (index === 0 && input.name !== "source") ||
       names.has(input.name) ||
-      !["text", "image.samples", "bytes"].includes(String(input.semanticType))
+      typeof input.semanticType !== "string" ||
+      !/^[a-z][a-z0-9_.]{0,63}$/.test(input.semanticType)
     )
       throw new Error("invalid_command");
     names.add(input.name);

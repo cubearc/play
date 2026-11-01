@@ -2,7 +2,9 @@ use play_engine::workspace::{Context, Manager, RunRequest};
 use serde_json::{Value, json};
 use uuid::Uuid;
 fn call(m: &mut Manager, v: Value) -> Value {
-    m.handle(serde_json::from_value(v).unwrap()).unwrap()
+    let kind = v["kind"].as_str().unwrap().to_owned();
+    m.handle(serde_json::from_value(v).unwrap())
+        .unwrap_or_else(|e| panic!("{kind}: {e}"))
 }
 fn context(m: &mut Manager, workspace: Option<Uuid>, title: &str) -> Context {
     let w = workspace.unwrap_or_else(|| {
@@ -328,9 +330,10 @@ fn image_bytes_and_caption_join_in_explicit_order_and_preserve_every_actual_atte
     assert_eq!(run["plan"]["inputs"]["source"]["used"], true);
     assert_eq!(run["plan"]["inputs"]["caption"]["used"], true);
     assert_eq!(run["plan"]["pipeline"]["definition"], d);
-    assert_eq!(run["plan"]["formatVersion"], 3);
+    assert_eq!(run["plan"]["formatVersion"], 4);
     assert!(run["plan"].to_string().len() <= 16384);
     assert_eq!(run["plan"]["contracts"].as_object().unwrap().len(), 3);
+    let stored = stored_run_contracts(&root, &c, &run["id"]);
     for node in run["plan"]["nodes"].as_array().unwrap() {
         assert!(node.get("contract").is_none());
         let contract = if node["contractDigest"] == run["plan"]["contractDigest"] {
@@ -348,7 +351,12 @@ fn image_bytes_and_caption_join_in_explicit_order_and_preserve_every_actual_atte
             node["contractDigest"],
             cube_core::hashing::sha256(&serde_json::to_vec(&installed).unwrap())
         );
-        assert_eq!(*contract, serde_json::to_value(installed).unwrap());
+        assert_eq!(contract["kind"], "snapshot");
+        assert_eq!(contract["digest"], node["contractDigest"]);
+        assert_eq!(
+            stored[node["contractDigest"].as_str().unwrap()],
+            serde_json::to_value(installed).unwrap()
+        );
     }
     let attempts = run["attempts"].as_array().unwrap();
     assert!(attempts.iter().all(|a| a["status"] == "completed"));
@@ -854,4 +862,407 @@ fn file_byte_inputs_enforce_the_decoded_run_budget_before_admission() {
         check("Zg".into()).is_err(),
         "noncanonical bytes never enter a plan"
     );
+}
+
+#[test]
+fn file_source_ports_reuse_the_same_owned_exact_bytes_without_literal_copies() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use cube_core::operations::execution::{self, Representation};
+    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    let mut tested = std::collections::BTreeSet::new();
+    for executable in execution::catalog(Default::default()).unwrap() {
+        if play_engine::worker::parameters(executable.operation).is_err() {
+            continue;
+        }
+        for port in &executable.contract.inputs {
+            let representation = executable.inputs[&port.name];
+            if !matches!(
+                representation,
+                Representation::Bytes | Representation::ByteArray
+            ) || !tested.insert(port.semantic_type.clone())
+            {
+                continue;
+            }
+            let fixture = fixtures
+                .iter()
+                .find(|f| f["operation"] == executable.operation)
+                .unwrap();
+            let bytes: Vec<u8> = match representation {
+                Representation::Bytes => STANDARD
+                    .decode(fixture["inputs"][&port.name]["base64"].as_str().unwrap())
+                    .unwrap(),
+                Representation::ByteArray => {
+                    serde_json::from_value(fixture["inputs"][&port.name].clone()).unwrap()
+                }
+                _ => unreachable!(),
+            };
+            let root = tempfile::tempdir().unwrap();
+            let mut manager = Manager::new(root.path().join("private")).unwrap();
+            let context = context(&mut manager, None, "Exact file source");
+            call(
+                &mut manager,
+                json!({"kind":"add_file","context":context,"key":Uuid::new_v4(),"title":"source.bin","base64":STANDARD.encode(&bytes)}),
+            );
+            let initial = view(&mut manager, &context);
+            let trail = &initial["trails"][0];
+            let node = Uuid::new_v4();
+            let inputs = executable
+                .contract
+                .inputs
+                .iter()
+                .map(|p| {
+                    (
+                        p.name.clone(),
+                        if p.name == port.name {
+                            json!({"kind":"input","name":"source"})
+                        } else {
+                            json!({"kind":"literal","value":fixture["inputs"][&p.name]})
+                        },
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>();
+            let mut parameters = play_engine::worker::parameters(executable.operation).unwrap();
+            parameters
+                .as_object_mut()
+                .unwrap()
+                .extend(fixture["parameters"].as_object().unwrap().clone());
+            let definition = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":port.semantic_type}],"nodes":[{"id":node,"operation":executable.operation,"operationVersion":executable.contract.operation_version,"parameters":parameters,"position":{"x":80,"y":80},"inputs":inputs}],"output":node});
+            let pipeline = pipeline(&mut manager, &context, &definition);
+            call(
+                &mut manager,
+                json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":"Inspect the original file","pipeline":{"id":pipeline["pipelineId"],"revision":pipeline["revision"]},"bindings":{}}),
+            );
+            let selected = view(&mut manager, &context);
+            let run = execute(
+                &mut manager,
+                &request(&context, &selected["trails"][0], &definition["nodes"][0]),
+            );
+            assert_eq!(
+                run["result"]["outputs"], fixture["outputs"],
+                "{}",
+                executable.operation
+            );
+            assert_eq!(
+                run["plan"]["inputs"]["source"]["assetId"],
+                trail["source"]["id"]
+            );
+            assert_eq!(
+                run["plan"]["inputs"]["source"]["semanticType"],
+                port.semantic_type
+            );
+            let run_id = serde_json::from_value(run["id"].clone()).unwrap();
+            drop(manager);
+            let mut manager = Manager::new(root.path().join("private")).unwrap();
+            call(
+                &mut manager,
+                json!({"kind":"open","workspace_id":context.workspace_id}),
+            );
+            assert_eq!(manager.run_detail(&context, run_id).unwrap(), run);
+        }
+    }
+    assert!(
+        !tested.is_empty(),
+        "the installed registry must prove its File input views"
+    );
+}
+
+#[test]
+fn the_largest_installed_data_contract_keeps_a_compact_exact_run_snapshot() {
+    use cube_core::operations::execution::{self, Representation};
+    let executor = execution::catalog(Default::default())
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            play_engine::worker::parameters(e.operation).is_ok()
+                && !e
+                    .inputs
+                    .values()
+                    .any(|r| *r == Representation::ImageSamples)
+        })
+        .max_by_key(|e| serde_json::to_vec(&e.contract).unwrap().len())
+        .unwrap();
+    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    let fixture = fixtures
+        .iter()
+        .find(|f| f["operation"] == executor.operation)
+        .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let private = root.path().join("private");
+    let mut manager = Manager::new(private.clone()).unwrap();
+    let context = context(&mut manager, None, "Pinned operation contracts");
+    call(
+        &mut manager,
+        json!({"kind":"add_text","context":context,"key":Uuid::new_v4(),"title":"Anchor","text":"Unused source"}),
+    );
+    let initial = view(&mut manager, &context);
+    let trail = &initial["trails"][0];
+    let node = Uuid::new_v4();
+    let inputs = fixture["inputs"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(name, value)| (name.clone(), json!({"kind":"literal","value":value})))
+        .collect::<serde_json::Map<_, _>>();
+    let definition = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[{"id":node,"operation":executor.operation,"operationVersion":executor.contract.operation_version,"parameters":fixture["parameters"],"position":{"x":80,"y":80},"inputs":inputs}],"output":node});
+    let pipeline = pipeline(&mut manager, &context, &definition);
+    call(
+        &mut manager,
+        json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":"Keep the exact contract outside the bounded plan","pipeline":{"id":pipeline["pipelineId"],"revision":pipeline["revision"]},"bindings":{}}),
+    );
+    let selected = view(&mut manager, &context);
+    let run = execute(
+        &mut manager,
+        &request(&context, &selected["trails"][0], &definition["nodes"][0]),
+    );
+    assert!(run["plan"].to_string().len() <= 16384);
+    assert_eq!(run["plan"]["contract"]["kind"], "snapshot");
+    assert_eq!(run["plan"]["contractDigest"], fixture["contract_sha256"]);
+    assert_eq!(run["result"]["outputs"], fixture["outputs"]);
+    let repeated = execute(
+        &mut manager,
+        &request(&context, &selected["trails"][0], &definition["nodes"][0]),
+    );
+    assert_eq!(repeated["plan"]["contract"], run["plan"]["contract"]);
+    let id = serde_json::from_value(run["id"].clone()).unwrap();
+    drop(manager);
+    let mut manager = Manager::new(private).unwrap();
+    call(
+        &mut manager,
+        json!({"kind":"open","workspace_id":context.workspace_id}),
+    );
+    assert_eq!(manager.run_detail(&context, id).unwrap(), run);
+    drop(manager);
+    let database = root
+        .path()
+        .join("private")
+        .join(context.workspace_id.to_string())
+        .join("workspace.sqlite3");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
+        let mut db = SqliteConnection::connect_with(
+            &SqliteConnectOptions::new()
+                .filename(database)
+                .foreign_keys(true),
+        )
+        .await
+        .unwrap();
+        let documents: Vec<String> = sqlx::query_scalar(
+            "SELECT document FROM contract_snapshots WHERE workspace_id=? AND exploration_id=?",
+        )
+        .bind(context.workspace_id.to_string())
+        .bind(context.exploration_id.to_string())
+        .fetch_all(&mut db)
+        .await
+        .unwrap();
+        assert_eq!(
+            documents.len(),
+            1,
+            "two Runs share one exact immutable contract"
+        );
+        assert_eq!(
+            cube_core::hashing::sha256(documents[0].as_bytes()),
+            fixture["contract_sha256"]
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&documents[0]).unwrap(),
+            serde_json::to_value(&executor.contract).unwrap()
+        );
+        let links: i64 = sqlx::query_scalar("SELECT count(*) FROM run_contract_snapshots")
+            .fetch_one(&mut db)
+            .await
+            .unwrap();
+        assert_eq!(links, 2);
+        for sql in [
+            "UPDATE contract_snapshots SET document='{}'",
+            "DELETE FROM contract_snapshots",
+            "UPDATE run_contract_snapshots SET digest=digest",
+            "DELETE FROM run_contract_snapshots",
+        ] {
+            assert!(sqlx::query(sql).execute(&mut db).await.is_err());
+        }
+        assert!(
+            sqlx::query("PRAGMA foreign_key_check")
+                .fetch_optional(&mut db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    });
+}
+
+fn stored_run_contracts(
+    root: &std::path::Path,
+    context: &Context,
+    run: &Value,
+) -> std::collections::BTreeMap<String, Value> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
+        let mut db = SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(root.join(context.workspace_id.to_string()).join("workspace.sqlite3")).read_only(true)).await.unwrap();
+        let rows=sqlx::query("SELECT s.digest,s.document FROM contract_snapshots s JOIN run_contract_snapshots r ON (s.workspace_id,s.exploration_id,s.digest)=(r.workspace_id,r.exploration_id,r.digest) WHERE r.workspace_id=? AND r.exploration_id=? AND r.run_id=?").bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(run.as_str().unwrap()).fetch_all(&mut db).await.unwrap();
+        rows.into_iter().map(|row| {
+            let digest: String = row.get("digest"); let document: String = row.get("document");
+            assert_eq!(cube_core::hashing::sha256(document.as_bytes()),digest);
+            (digest,serde_json::from_str(&document).unwrap())
+        }).collect()
+    })
+}
+
+#[test]
+fn structured_assets_keep_typed_values_and_output_provenance_across_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Structured clues");
+    let contract = cube_core::operations::require("number.maximum")
+        .unwrap()
+        .contract()
+        .unwrap();
+    let semantic = &contract.inputs[0].semantic_type;
+    let input = json!([-7, 5, 3]);
+    let command = json!({"kind":"add_structured","context":c,"key":Uuid::new_v4(),"title":"Measurements","semantic_type":semantic,"value":input});
+    call(&mut m, command.clone());
+    let v = view(&mut m, &c);
+    assert_eq!(
+        v["trails"][0]["source"]["content"],
+        json!({"kind":"structured","semanticType":semantic,"value":input})
+    );
+    let d = play_engine::graph::Definition::single(Uuid::new_v4(), "number.maximum", 1, json!({}))
+        .unwrap();
+    let d = serde_json::to_value(d).unwrap();
+    let p = pipeline(&mut m, &c, &d);
+    let t = &v["trails"][0];
+    call(
+        &mut m,
+        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Find the largest measurement","pipeline":{"id":p["pipelineId"],"revision":1},"bindings":{}}),
+    );
+    let v = view(&mut m, &c);
+    let run = execute(&mut m, &request(&c, &v["trails"][0], &d["nodes"][0]));
+    assert_eq!(run["result"]["outputs"]["output"], 5);
+    call(
+        &mut m,
+        json!({"kind":"pin_run_output","context":c,"key":Uuid::new_v4(),"expected_revision":v["stage"]["revision"],"run_id":run["id"],"attempt_id":run["attempts"][0]["id"],"port":"output"}),
+    );
+    let v = view(&mut m, &c);
+    let output = v["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["origin"]["kind"] == "run_output")
+        .unwrap();
+    assert_eq!(
+        output["source"]["content"],
+        json!({"kind":"structured","semanticType":contract.outputs[0].semantic_type,"value":5})
+    );
+    assert_eq!(output["source"]["origin"]["runId"], run["id"]);
+    assert_eq!(output["source"]["origin"]["port"], "output");
+    // The exact result is a typed reusable input, not a JSON-looking text literal.
+    let node = Uuid::new_v4();
+    let add = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":contract.outputs[0].semantic_type}],"nodes":[{"id":node,"operation":"number.add","operationVersion":1,"parameters":{},"position":{"x":80,"y":80},"inputs":{"left":{"kind":"input","name":"source"},"right":{"kind":"literal","value":2}}}],"output":node});
+    let p = pipeline(&mut m, &c, &add);
+    call(
+        &mut m,
+        json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":output["id"],"expected_revision":output["revision"],"hypothesis":"Reuse the exact result","pipeline":{"id":p["pipelineId"],"revision":1},"bindings":{}}),
+    );
+    let v = view(&mut m, &c);
+    let t = v["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == output["id"])
+        .unwrap();
+    let second = execute(&mut m, &request(&c, t, &add["nodes"][0]));
+    assert_eq!(second["result"]["outputs"]["output"], 7);
+    assert_eq!(
+        second["plan"]["inputs"]["source"]["assetId"],
+        output["source"]["id"]
+    );
+    let expected = view(&mut m, &c);
+    let first_id = serde_json::from_value(run["id"].clone()).unwrap();
+    let second_id = serde_json::from_value(second["id"].clone()).unwrap();
+    drop(m);
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(view(&mut m, &c), expected);
+    assert_eq!(m.run_detail(&c, first_id).unwrap(), run);
+    assert_eq!(m.run_detail(&c, second_id).unwrap(), second);
+    // Mutation receipts preserve identity and reject changed data on retry.
+    call(&mut m, command.clone());
+    let mut changed = command;
+    changed["value"] = json!([99]);
+    assert_eq!(
+        m.handle(serde_json::from_value(changed).unwrap()),
+        Err("idempotency_conflict")
+    );
+}
+
+#[test]
+fn structured_inputs_enforce_exact_representations_and_the_combined_run_budget() {
+    use play_engine::worker::{InputValue, PipelineInvocation, validate_pipeline};
+    let definition = play_engine::graph::Definition::single(
+        Uuid::new_v4(),
+        "json.select",
+        1,
+        json!({"pointer":""}),
+    )
+    .unwrap();
+    let check = |value| {
+        validate_pipeline(&PipelineInvocation {
+            definition: definition.clone(),
+            inputs: std::collections::BTreeMap::from([(
+                "source".into(),
+                InputValue::Structured { value },
+            )]),
+        })
+    };
+    let maximum = play_engine::protocol::contract().input_bytes;
+    assert_eq!(check(json!("x".repeat(maximum - 2))), Ok(()));
+    assert_eq!(check(json!("x".repeat(maximum - 1))), Err("input_limit"));
+    assert_eq!(check(Value::Null), Ok(()));
+    let bytes = play_engine::graph::Definition::single(Uuid::new_v4(), "hash.sha256", 1, json!({}))
+        .unwrap();
+    assert_eq!(
+        validate_pipeline(&PipelineInvocation {
+            definition: bytes,
+            inputs: std::collections::BTreeMap::from([(
+                "source".into(),
+                InputValue::Structured {
+                    value: json!({"base64":""})
+                }
+            )])
+        }),
+        Err("contract_mismatch")
+    );
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Refused data");
+    let before = view(&mut m, &c);
+    for (semantic, value, expected) in [
+        ("missing.semantic", json!({}), "unsupported_asset_type"),
+        ("bytes", json!({"base64":""}), "invalid_asset_type"),
+        (
+            "json",
+            json!("x".repeat(play_engine::protocol::contract().output_bytes)),
+            "output_limit",
+        ),
+    ] {
+        let command = json!({"kind":"add_structured","context":c,"key":Uuid::new_v4(),"title":"Invalid content","semantic_type":semantic,"value":value});
+        assert_eq!(
+            m.handle(serde_json::from_value(command).unwrap()),
+            Err(expected)
+        );
+        assert_eq!(view(&mut m, &c), before);
+    }
 }

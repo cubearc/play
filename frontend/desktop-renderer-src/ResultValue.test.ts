@@ -34,12 +34,19 @@ it("uses each contributing node's declared output type and never guesses an unkn
       name: "Target",
     },
     plan: {
+      formatVersion: 4,
+      adapterVersion: 3,
+      executionOrder: ["upstream", "target"],
       pipeline: { id: "pipeline", revision: 1, definition: {} },
       contract: {
+        kind: "snapshot",
+        digest: "target-contract",
         operation: "test.target",
         operation_version: 1,
         inputs: [],
-        outputs: [{ name: "output", semantic_type: "text" }],
+        outputs: [
+          { name: "output", semantic_type: "text", representation: "text" },
+        ],
       },
       contractDigest: "target-contract",
       targetNodes: ["target"],
@@ -52,12 +59,26 @@ it("uses each contributing node's declared output type and never guesses an unkn
       ],
       contracts: {
         "upstream-contract": {
-          outputs: [{ name: "output", semantic_type: "json" }],
+          kind: "snapshot",
+          digest: "upstream-contract",
+          operation: "test.upstream",
+          operation_version: 1,
+          inputs: [],
+          outputs: [
+            { name: "output", semantic_type: "json", representation: "json" },
+          ],
         },
       },
       reusePolicy: "none",
       reusedOutputs: [],
-      inputs: {},
+      inputs: {
+        source: {
+          assetId: "asset",
+          revision: 1,
+          semanticType: "text",
+          used: false,
+        },
+      },
       parameters: {},
       limits: {},
     },
@@ -69,4 +90,10 @@ it("uses each contributing node's declared output type and never guesses an unkn
   expect(attemptOutputType(run, "upstream", "missing")).toBeUndefined();
   expect(attemptOutputType(run, "target", "missing")).toBeUndefined();
   expect(attemptOutputType(run, "unknown", "output")).toBeUndefined();
+  run.plan.nodes.push({
+    id: "shared",
+    operation: { name: "Shared" },
+    contractDigest: run.plan.contractDigest,
+  });
+  expect(attemptOutputType(run, "shared", "output")).toBe("text");
 });

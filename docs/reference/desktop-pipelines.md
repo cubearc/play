@@ -2,7 +2,7 @@
 
 A native Pipeline revision freezes a reusable operation definition. A Trail owns
 its hypothesis, exact source Asset binding and selected Pipeline revision inside
-one Exploration. [Explorations and Trails](../explorations.md#save-and-reuse-a-pipeline)
+one Exploration. [Explorations and Trails](../explorations.md#private-retention-consent)
 shows the editing workflow.
 
 The editor supports a typed graph with up to four named Asset inputs, up to eight
@@ -18,9 +18,14 @@ uses this same coordinator with a fixed, explicitly issued context.
 ## Execution capabilities
 
 Core owns executable registration beside each operation's descriptor and typed
-contract. The native engine admits only pure-data registrations whose input/output
-representations and retention policy it supports. A catalog entry, CLI command or
-linear Core Pipeline adapter alone grants no native execution.
+contract. The native engine admits only data registrations whose input/output
+representations, declared effects and retention policy it supports. Pure operations
+and explicit monotonic-clock measurements need no file or network authority.
+Discovery identifies unavailable capabilities and disables their selection with
+an explanation. Supported private-data operations additionally require explicit
+[local retention consent](../explorations.md#private-retention-consent) on each
+saved node; capability discovery alone does not authorize retention. A CLI command or linear Core Pipeline
+adapter alone grants no native execution.
 
 The host handles text, lossless Base64 bytes, byte arrays, structured JSON and
 materialized image inputs. It refuses generated image outputs until their retention
@@ -69,8 +74,11 @@ remain pinned until an explicit Trail edit selects another Asset revision.
 
 `source` is the first input and always resolves to the Trail's primary Asset.
 Additional input names match `[a-z][a-z0-9_]{0,31}` and are unique. Each declares
-`text`, `image.samples` or `bytes`. Text and inert Page Assets satisfy text slots;
-images satisfy image slots; immutable File Asset revisions satisfy byte slots.
+an installed Core semantic type with an unambiguous physical representation.
+Text and inert Page Assets satisfy text representations; images satisfy logical
+image representations; immutable File revisions provide exact Base64 bytes or
+numeric byte arrays, including file-source and byte-reader ports. The type choices
+come from Core capabilities, without operation-ID branches.
 Notes are evidence rather than executable inputs. Text and byte inputs share the
 8,192-byte decoded Run budget; image bytes have their separate ceiling.
 
@@ -101,9 +109,10 @@ The engine rejects duplicate/missing node IDs, missing/extra ports, cycles,
 unknown source slots, incompatible semantic types and unsupported versions before
 saving. Consumers validate resolved values against their full Core schema before
 execution. Matching semantic types do not bypass stricter value constraints.
-There is no implicit conversion: Brainfuck's `bytes.array` input takes a literal
-JSON byte array, while pixel and Brainfuck outputs are Core `bytes` objects with
-Base64 representation. Connecting those representations directly is rejected.
+There is no implicit connection conversion: a `bytes.array` input accepts an
+explicit numeric byte-array literal or a File Asset viewed as that declared type.
+Pixel and Brainfuck byte outputs use Core `bytes` objects; connecting those output
+ports directly to `bytes.array` is rejected.
 Text literals and byte arrays belong to the saved definition, so they must not
 contain credentials or other secrets.
 
@@ -113,7 +122,8 @@ encoding performs the reverse conversion. `text.concat` has required `left` and
 `bytes.concat` joins required left/right Core byte values without an implicit
 separator. The editor offers explicit Base64 literals for `bytes`; numeric byte
 arrays retain their separate `bytes.array` representation. File Assets provide
-Core `bytes` values from their full stored revision, never from the preview.
+the selected lossless byte representation from their full stored revision, never
+from the preview.
 The engine validates canonical Base64 and the combined decoded input budget
 before admitting the Run.
 
@@ -178,3 +188,20 @@ graph revisions for recognized earlier native definitions, preserving selected
 configurations, IDs, historical rows and accepted Run snapshots. Only format-4
 definitions are selectable/executable; historical formats remain immutable
 evidence. The command boundary accepts only complete `definition` payloads.
+
+## Structured content as a Pipeline input
+
+Use **Add data** in a Stage notebook to create a typed JSON Asset. Choose its
+Core data type and enter a value; invalid JSON remains a draft in the dialog.
+Open the Asset canvas and choose a compatible operation for a saved Pipeline.
+The receiver checks its complete contract before Run admission.
+
+**Save as block** preserves a retained structured output's exact value, semantic
+type and producing Run/attempt/port. The saved Asset can feed another Pipeline
+without copying JSON into a literal. JSON-looking file or text content remains
+file or text content until an explicit Core operation converts it.
+
+![A saved numeric output opened in its own Trail canvas and reused by another Pipeline](../assets/desktop/structured-asset-reuse.png)
+
+The native workbench keeps the source Run link beside the saved Asset. The new
+Pipeline consumes that exact revision; it does not relabel the source attempt.

@@ -1,5 +1,16 @@
 PRAGMA application_id=1129664590;
-PRAGMA user_version=17;
+PRAGMA user_version=18;
+CREATE TABLE contract_snapshots (
+ workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, digest TEXT NOT NULL CHECK(length(digest)=64 AND digest NOT GLOB '*[^0-9a-f]*'), document TEXT NOT NULL,
+ PRIMARY KEY(workspace_id,exploration_id,digest),
+ FOREIGN KEY(workspace_id,exploration_id) REFERENCES explorations(workspace_id,id)
+);
+CREATE TABLE run_contract_snapshots (
+ workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, run_id TEXT NOT NULL, digest TEXT NOT NULL,
+ PRIMARY KEY(workspace_id,exploration_id,run_id,digest),
+ FOREIGN KEY(workspace_id,exploration_id,run_id) REFERENCES pipeline_runs(workspace_id,exploration_id,id),
+ FOREIGN KEY(workspace_id,exploration_id,digest) REFERENCES contract_snapshots(workspace_id,exploration_id,digest)
+);
 CREATE TABLE asset_origins (
  workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, asset_id TEXT NOT NULL,
  source_asset_id TEXT NOT NULL, source_revision INTEGER NOT NULL CHECK(source_revision>0),
@@ -13,7 +24,7 @@ CREATE TABLE asset_revisions (
  PRIMARY KEY(workspace_id,exploration_id,asset_id,revision), FOREIGN KEY(workspace_id,exploration_id,asset_id) REFERENCES assets(workspace_id,exploration_id,id)
 );
 CREATE TABLE "assets" (
- workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('text','image','file','page')),
+ workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('text','image','file','page','structured')),
  PRIMARY KEY(workspace_id,exploration_id,id), UNIQUE(workspace_id,exploration_id,id,kind), FOREIGN KEY(workspace_id,exploration_id) REFERENCES explorations(workspace_id,id)
 );
 CREATE TABLE "blocks" (
@@ -132,7 +143,7 @@ CREATE TABLE receipts (
 CREATE TABLE result_origins (
  workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, asset_id TEXT NOT NULL,
  run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, port TEXT NOT NULL CHECK(length(port) BETWEEN 1 AND 64),
- semantic_type TEXT NOT NULL CHECK(semantic_type IN ('text','bytes')),
+ semantic_type TEXT NOT NULL CHECK(length(semantic_type) BETWEEN 1 AND 128),
  PRIMARY KEY(workspace_id,exploration_id,asset_id), UNIQUE(workspace_id,exploration_id,run_id,attempt_id,port),
  FOREIGN KEY(workspace_id,exploration_id,asset_id) REFERENCES assets(workspace_id,exploration_id,id),
  FOREIGN KEY(workspace_id,exploration_id,run_id,attempt_id) REFERENCES node_attempts(workspace_id,exploration_id,run_id,id)
@@ -181,7 +192,7 @@ CREATE TABLE view_state (
  workspace_id TEXT NOT NULL, slot TEXT NOT NULL CHECK(slot='primary'), exploration_id TEXT NOT NULL, stage_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),
  PRIMARY KEY(workspace_id,slot), FOREIGN KEY(workspace_id,exploration_id,stage_id) REFERENCES stages(workspace_id,exploration_id,id)
 );
-CREATE TABLE "workspace_meta" (id TEXT PRIMARY KEY,generation INTEGER NOT NULL CHECK(generation=2),schema_version INTEGER NOT NULL CHECK(schema_version=17));
+CREATE TABLE "workspace_meta" (id TEXT PRIMARY KEY,generation INTEGER NOT NULL CHECK(generation=2),schema_version INTEGER NOT NULL CHECK(schema_version=18));
 CREATE INDEX blocks_archive ON blocks(workspace_id,exploration_id,stage_id,archived_revision DESC,id);
 CREATE INDEX blocks_order ON blocks(workspace_id,exploration_id,stage_id,position,id);
 CREATE UNIQUE INDEX one_reasoning_note ON notes(workspace_id,exploration_id,stage_id) WHERE kind='reasoning';
@@ -231,7 +242,11 @@ CREATE TRIGGER result_origin_admission BEFORE INSERT ON result_origins WHEN NOT 
  JOIN assets a ON (a.workspace_id,a.exploration_id,a.id)=(NEW.workspace_id,NEW.exploration_id,NEW.asset_id)
  WHERE r.workspace_id=NEW.workspace_id AND r.exploration_id=NEW.exploration_id AND r.id=NEW.run_id AND n.id=NEW.attempt_id
  AND r.status='completed' AND r.retain_output=1 AND n.status='completed'
- AND a.kind=CASE NEW.semantic_type WHEN 'text' THEN 'text' ELSE 'file' END
+ AND n.node_id=json_extract(r.plan,'$.targetNodes[0]')
+ AND EXISTS(SELECT 1 FROM json_each(r.plan,'$.contract.outputs') p
+  WHERE json_extract(p.value,'$.name')=NEW.port
+  AND json_extract(p.value,'$.semantic_type')=NEW.semantic_type
+  AND a.kind=CASE json_extract(p.value,'$.representation') WHEN 'text' THEN 'text' WHEN 'bytes' THEN 'file' WHEN 'byte_array' THEN 'file' WHEN 'json' THEN 'structured' WHEN 'image_samples' THEN 'image' END)
 ) BEGIN SELECT RAISE(ABORT,'invalid_result_origin'); END;
 CREATE TRIGGER run_inputs_admission BEFORE INSERT ON run_inputs WHEN (SELECT status FROM pipeline_runs WHERE workspace_id=NEW.workspace_id AND exploration_id=NEW.exploration_id AND id=NEW.run_id)<>'queued' BEGIN SELECT RAISE(ABORT,'immutable_input'); END;
 CREATE TRIGGER run_state_transition BEFORE UPDATE OF status ON pipeline_runs WHEN NOT ((OLD.status='queued' AND NEW.status IN ('running','failed','cancelled','interrupted')) OR (OLD.status='running' AND NEW.status IN ('completed','failed','cancelled','interrupted'))) BEGIN SELECT RAISE(ABORT,'invalid_run_transition'); END;
@@ -244,3 +259,10 @@ CREATE TRIGGER trail_input_scope BEFORE INSERT ON trail_input_bindings WHEN NOT 
  SELECT 1 FROM trails t JOIN blocks b ON (t.workspace_id,t.exploration_id,t.stage_id)=(b.workspace_id,b.exploration_id,b.stage_id)
  WHERE t.workspace_id=NEW.workspace_id AND t.exploration_id=NEW.exploration_id AND t.id=NEW.trail_id AND b.archived_revision IS NULL AND (b.asset_id=NEW.asset_id OR b.caption_id=NEW.asset_id)
 ) BEGIN SELECT RAISE(ABORT,'invalid_binding'); END;
+CREATE TRIGGER contract_snapshots_immutable_update BEFORE UPDATE ON contract_snapshots BEGIN SELECT RAISE(ABORT,'immutable_contract_snapshot'); END;
+CREATE TRIGGER contract_snapshots_immutable_delete BEFORE DELETE ON contract_snapshots BEGIN SELECT RAISE(ABORT,'immutable_contract_snapshot'); END;
+CREATE TRIGGER run_contract_snapshots_immutable_update BEFORE UPDATE ON run_contract_snapshots BEGIN SELECT RAISE(ABORT,'immutable_contract_snapshot'); END;
+CREATE TRIGGER run_contract_snapshots_immutable_delete BEFORE DELETE ON run_contract_snapshots BEGIN SELECT RAISE(ABORT,'immutable_contract_snapshot'); END;
+CREATE TRIGGER run_contract_snapshot_admission BEFORE INSERT ON run_contract_snapshots WHEN NOT EXISTS(
+ SELECT 1 FROM pipeline_runs r,json_each(r.plan,'$.nodes') n WHERE r.workspace_id=NEW.workspace_id AND r.exploration_id=NEW.exploration_id AND r.id=NEW.run_id AND r.status='queued' AND json_extract(n.value,'$.contractDigest')=NEW.digest
+) BEGIN SELECT RAISE(ABORT,'immutable_contract_snapshot'); END;

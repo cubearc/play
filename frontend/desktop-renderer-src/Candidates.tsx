@@ -17,6 +17,7 @@ import type {
 import { AssetImage } from "./AssetImage";
 import { FilePreview } from "./FilePreview";
 import { formatResultValue } from "./ResultValue";
+import { StructuredPreview } from "./StructuredPreview";
 import { errorMessage } from "./useWorkspace";
 import VscodeButton from "./VscodeButton";
 
@@ -320,6 +321,8 @@ export function CandidateEvidence({
           </p>
           {evidence.asset.content.kind === "image" ? (
             <AssetImage asset={evidence.asset} context={context} />
+          ) : evidence.asset.content.kind === "structured" ? (
+            <StructuredPreview content={evidence.asset.content} details />
           ) : evidence.asset.content.kind === "file" ? (
             <FilePreview content={evidence.asset.content} details />
           ) : (

@@ -51,9 +51,9 @@ fn rejects_unscoped_execution_and_replayed_ids_without_exposing_input() {
         )["type"],
         "ready"
     );
-    let catalog = request(json!({"type":"catalog","id":2}));
+    let catalog = play_engine::worker::catalog().unwrap();
     assert!(
-        catalog["operations"]
+        catalog
             .as_array()
             .unwrap()
             .iter()
@@ -77,10 +77,13 @@ fn rejects_unscoped_execution_and_replayed_ids_without_exposing_input() {
         "not_running"
     );
     assert_eq!(
-        request(json!({"type":"catalog","id":6}))["code"],
+        request(json!({"type":"catalog","offset":0,"id":6}))["code"],
         "invalid_request_id"
     );
-    assert_eq!(request(json!({"type":"catalog","id":7}))["type"], "catalog");
+    assert_eq!(
+        request(json!({"type":"catalog","offset":0,"id":7}))["type"],
+        "catalog"
+    );
     drop(request);
     drop(input);
     assert!(child.wait().unwrap().success());

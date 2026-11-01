@@ -72,9 +72,19 @@ input bindings. **Fork Pipeline** copies a chosen definition with its origin
 recorded; **Edit Pipeline** revises the existing definition.
 
 Choose **New Pipeline** to name a reusable graph. Select an operation by its Core
-name, review its typed inputs and parameters and choose **Create Pipeline**.
-The Trail selects the saved revision. Choose **Run cell** to execute it against
-this Trail's bound Asset.
+name and review its typed inputs and parameters.
+
+<a id="private-retention-consent"></a>
+
+For operations such as VIC that mark their inputs, keys or outputs private,
+select **Retain private data in this workspace** before saving. This keeps the
+keys in the saved Pipeline and permits Runs to retain their inputs and results
+locally. Leave it unchecked to decline; the Pipeline cannot be saved or run.
+Changing the operation resets this choice. Each saved revision keeps its own
+consent, including when reused or forked.
+
+Choose **Create Pipeline** to save the definition. The Trail selects the saved
+revision. Choose **Run cell** to execute it against this Trail's bound Asset.
 
 **Edit Pipeline** opens the current head for editing. Choose **Add node** to add
 an operation, select a node in the canvas and bind each input to the source, a
@@ -220,13 +230,6 @@ Use **Field path** and the named input controls to connect the graph. [Open full
 ![Image Trail canvas showing the numeric result 8 and its five-node graph.](assets/desktop/numeric-canvas.png)
 
 Inspect numeric results as numbers beside their producing graph. [Open full size](assets/desktop/numeric-canvas.png).
-
-For operations such as VIC that mark their inputs, keys or outputs private,
-select **Retain private data in this workspace** before saving. This keeps the
-keys in the saved Pipeline and permits Runs to retain their inputs and results
-locally. Leave it unchecked to decline; the Pipeline cannot be saved or run.
-Changing the operation resets this choice. Each saved revision keeps its own
-consent, including when reused or forked.
 
 Operation parameters have labeled controls. **Advanced parameters** exposes the
 complete saved JSON when needed. Integer literals reject fractions and unsafe

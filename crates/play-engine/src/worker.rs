@@ -1,4 +1,4 @@
-//! Native transport for the Core-owned pure-data execution registry.
+//! Native transport for Core-owned data execution and explicit host availability.
 mod parallel;
 
 use crate::{
@@ -21,19 +21,24 @@ fn budget() -> Budget {
 fn failure(error: core::Failure) -> &'static str {
     error.0
 }
-fn supported(operation: &str) -> Result<core::Executable> {
-    let e = core::describe(operation, budget()).map_err(failure)?;
+fn availability(e: &core::Executable, retain_private: bool) -> Result<()> {
     if e.effects != Effects::Pure {
-        return Err("unsupported_operation");
+        return Err("unsupported_effect");
     }
-    // The native host can materialize images as inputs; it does not yet retain
-    // generated rasters. Unsupported representations never gain execution.
+    if requires_private_retention(&e.contract) && !retain_private {
+        return Err("retention_policy_unavailable");
+    }
     if e.outputs
         .values()
         .any(|r| matches!(r, Representation::ImageSamples))
     {
         return Err("unsupported_representation");
     }
+    Ok(())
+}
+fn executable(operation: &str) -> Result<core::Executable> {
+    let e = core::describe(operation, budget()).map_err(failure)?;
+    availability(&e, false)?;
     Ok(e)
 }
 pub(crate) fn requires_private_retention(
@@ -43,11 +48,9 @@ pub(crate) fn requires_private_retention(
         || contract.policy.private_output
         || !contract.policy.sensitive_parameters.is_empty()
 }
-fn executable(operation: &str) -> Result<core::Executable> {
-    let e = supported(operation)?;
-    if requires_private_retention(&e.contract) {
-        return Err("retention_policy_unavailable");
-    }
+fn supported(operation: &str) -> Result<core::Executable> {
+    let e = core::describe(operation, budget()).map_err(failure)?;
+    availability(&e, true)?;
     Ok(e)
 }
 pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
@@ -59,10 +62,8 @@ pub(crate) fn validate_configuration_with_retention(
     parameters: &Value,
     retain_private: bool,
 ) -> Result<()> {
-    let e = supported(operation)?;
-    if requires_private_retention(&e.contract) && !retain_private {
-        return Err("retention_policy_unavailable");
-    }
+    let e = core::describe(operation, budget()).map_err(failure)?;
+    availability(&e, retain_private)?;
     core::validate_parameters(operation, version, parameters, budget()).map_err(failure)
 }
 pub fn parameters(operation: &str) -> Result<Value> {
@@ -90,7 +91,11 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
         .contract
         .inputs
         .iter()
-        .find(|p| crate::graph::ASSET_INPUT_TYPES.contains(&p.semantic_type.as_str()))
+        .find(|p| {
+            e.inputs
+                .get(&p.name)
+                .is_some_and(|r| *r != Representation::Json)
+        })
         .ok_or("contract_mismatch")?;
     let mut inputs = serde_json::Map::new();
     for port in &e.contract.inputs {
@@ -190,25 +195,89 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
     }
     Ok(named)
 }
-pub fn catalog() -> Result<Value> {
-    let mut entries = Vec::new();
-    for registration in core::catalog(budget()).map_err(failure)? {
-        let e = match supported(registration.operation) {
-            Ok(e) => e,
-            Err("unsupported_representation") => continue,
-            Err(e) => return Err(e),
-        };
-        let d = cube_core::operations::require(e.operation).map_err(|_| "contract_mismatch")?;
-        let mut entry = json!({"operation":e.operation,"operation_version":e.contract.operation_version,
-            "name":d.metadata().map_or(d.command,|m|m.canonical_name),"description":d.description,
-            "input_type":e.contract.inputs.first().ok_or("contract_mismatch")?.semantic_type,
-            "parameters":e.parameters,"execution":{"effects":e.effects,"inputs":e.inputs,"outputs":e.outputs},"contract":e.contract});
-        if requires_private_retention(&e.contract) {
-            entry["requires_private_retention"] = json!(true);
+fn installed_executors() -> Result<&'static Vec<core::Executable>> {
+    static EXECUTORS: std::sync::OnceLock<Result<Vec<core::Executable>>> =
+        std::sync::OnceLock::new();
+    EXECUTORS
+        .get_or_init(|| core::catalog(budget()).map_err(failure))
+        .as_ref()
+        .map_err(|code| *code)
+}
+/// Resolve a semantic input's physical representation from installed Core contracts.
+/// Ambiguous types cannot acquire Asset authority through a label.
+pub fn asset_representation(semantic: &str) -> Result<Representation> {
+    let mut selected = None;
+    for executable in installed_executors()? {
+        for port in executable
+            .contract
+            .inputs
+            .iter()
+            .filter(|p| p.semantic_type == semantic)
+        {
+            let representation = *executable
+                .inputs
+                .get(&port.name)
+                .ok_or("contract_mismatch")?;
+            if selected.is_some_and(|old| old != representation) {
+                return Err("unsupported_asset_type");
+            }
+            selected = Some(representation);
         }
+    }
+    selected.ok_or("unsupported_asset_type")
+}
+fn installed_catalog() -> Result<&'static Vec<Value>> {
+    static CATALOG: std::sync::OnceLock<Result<Vec<Value>>> = std::sync::OnceLock::new();
+    CATALOG.get_or_init(|| {
+        installed_executors()?.iter().map(|e| {
+            let d = cube_core::operations::require(e.operation).map_err(|_| "contract_mismatch")?;
+            // Capability discovery exposes the consent requirement; node validation
+            // still refuses private retention unless its saved flag is explicit.
+            let availability = match availability(e, true) {
+                Ok(()) => json!({"state":"available"}),
+                Err(reason) => json!({"state":"unavailable","reason":reason}),
+            };
+            let mut entry = json!({"operation":e.operation,"operation_version":e.contract.operation_version,
+                "name":d.metadata().map_or(d.command,|m|m.canonical_name),"description":d.description,
+                "input_type":e.contract.inputs.first().map_or("none",|p|p.semantic_type.as_str()),
+                "parameters":e.parameters,"availability":availability,
+                "execution":{"effects":e.effects,"inputs":e.inputs,"outputs":e.outputs},"contract":e.contract});
+            if requires_private_retention(&e.contract) { entry["requires_private_retention"] = json!(true); }
+            Ok(entry)
+        }).collect()
+    }).as_ref().map_err(|code| *code)
+}
+pub fn catalog() -> Result<Value> {
+    Ok(json!(installed_catalog()?))
+}
+/// Page immutable installed metadata without increasing the private frame ceiling.
+pub fn catalog_page(offset: usize) -> Result<Value> {
+    let catalog = installed_catalog()?;
+    if offset >= catalog.len() && !(offset == 0 && catalog.is_empty()) {
+        return Err("invalid_catalog_offset");
+    }
+    let mut entries = Vec::new();
+    // Reserve the envelope including the largest request ID and continuation fields.
+    let maximum = protocol::contract().frame_bytes.saturating_sub(256);
+    let mut bytes = 0usize;
+    for entry in catalog.iter().skip(offset).take(8) {
+        let size = serde_json::to_vec(entry)
+            .map_err(|_| "contract_mismatch")?
+            .len()
+            + 1;
+        if bytes + size > maximum {
+            if entries.is_empty() {
+                return Err("catalog_entry_limit");
+            }
+            break;
+        }
+        bytes += size;
         entries.push(entry);
     }
-    Ok(json!(entries))
+    let next = offset + entries.len();
+    Ok(
+        json!({"offset":offset,"total":catalog.len(),"nextOffset":(next < catalog.len()).then_some(next),"operations":entries}),
+    )
 }
 fn execute(invocation: Invocation) -> Result<Value> {
     validate(&invocation)?;
@@ -419,12 +488,22 @@ pub enum InputValue {
     Text { text: String },
     Image { png: String },
     Bytes { base64: String },
+    Structured { value: Value },
 }
 impl InputValue {
-    fn canonical(&self) -> Result<Value> {
+    fn canonical(&self, representation: Representation) -> Result<Value> {
         match self {
             Self::Text { text } => Ok(json!(text)),
-            Self::Bytes { base64 } => Ok(json!({"base64":base64})),
+            Self::Structured { value } => Ok(value.clone()),
+            Self::Bytes { base64 } => {
+                if representation == Representation::ByteArray {
+                    Ok(json!(
+                        STANDARD.decode(base64).map_err(|_| "invalid_binding")?
+                    ))
+                } else {
+                    Ok(json!({"base64":base64}))
+                }
+            }
             Self::Image { png } => Ok(json!(
                 cube_core::operations::contracts::values::Image::from(&image(png)?)
             )),
@@ -432,7 +511,7 @@ impl InputValue {
     }
 }
 pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
-    invocation.definition.validate()?;
+    invocation.definition.validate_execution()?;
     let required = invocation.definition.required_inputs();
     if invocation
         .inputs
@@ -446,12 +525,17 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
     let mut input_bytes = 0usize;
     let mut image_bytes = 0usize;
     for (name, value) in &invocation.inputs {
-        let kind = &invocation.definition.input(name)?.semantic_type;
+        let representation = invocation.definition.input_representation(name)?;
         match value {
-            InputValue::Text { text } if kind == "text" => {
+            InputValue::Text { text } if representation == Representation::Text => {
                 input_bytes = input_bytes.checked_add(text.len()).ok_or("input_limit")?;
             }
-            InputValue::Bytes { base64 } if kind == "bytes" => {
+            InputValue::Bytes { base64 }
+                if matches!(
+                    representation,
+                    Representation::Bytes | Representation::ByteArray
+                ) =>
+            {
                 if base64.len() > protocol::contract().input_bytes.div_ceil(3) * 4 {
                     return Err("input_limit");
                 }
@@ -461,7 +545,16 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                 }
                 input_bytes = input_bytes.checked_add(bytes.len()).ok_or("input_limit")?;
             }
-            InputValue::Image { png } if kind == "image.samples" => {
+            InputValue::Structured { value } if representation == Representation::Json => {
+                input_bytes = input_bytes
+                    .checked_add(
+                        serde_json::to_vec(value)
+                            .map_err(|_| "invalid_binding")?
+                            .len(),
+                    )
+                    .ok_or("input_limit")?;
+            }
+            InputValue::Image { png } if representation == Representation::ImageSamples => {
                 if png.len() > protocol::contract().image_bytes.div_ceil(3) * 4 {
                     return Err("input_limit");
                 }
@@ -487,7 +580,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                     .inputs
                     .get(name)
                     .ok_or("invalid_binding")?
-                    .canonical()?,
+                    .canonical(invocation.definition.input_representation(name)?)?,
                 crate::graph::Source::Literal { value } => value.clone(),
                 crate::graph::Source::Output { .. } => continue,
             };
@@ -634,7 +727,7 @@ fn pipeline_inputs(
                 .inputs
                 .get(name)
                 .ok_or("invalid_binding")?
-                .canonical()?,
+                .canonical(invocation.definition.input_representation(name)?)?,
             Source::Literal { value } => value.clone(),
             Source::Output { node_id, port } => outputs
                 .get(node_id)
@@ -651,7 +744,7 @@ fn pipeline_inputs(
 mod registry_tests {
     use super::*;
     #[test]
-    fn native_catalog_discovers_all_core_pure_executors_without_an_operation_allowlist() {
+    fn native_catalog_discovers_core_executors_and_declares_host_availability() {
         let native = catalog().unwrap();
         let installed = cube_core::operations::execution::catalog(Default::default()).unwrap();
         let ids = native
@@ -663,7 +756,19 @@ mod registry_tests {
         assert_eq!(ids, installed.iter().map(|e| e.operation).collect());
         assert!(ids.contains("text.reverse"));
         assert!(ids.contains("image.pixels.export"));
-        assert!(!ids.contains("file.info.inspect"));
+        for entry in native.as_array().unwrap() {
+            let result = validate_configuration(
+                entry["operation"].as_str().unwrap(),
+                entry["operation_version"].as_u64().unwrap() as u32,
+                &entry["parameters"],
+            );
+            if entry["availability"]["state"] == "unavailable" {
+                assert_eq!(
+                    result.unwrap_err(),
+                    entry["availability"]["reason"].as_str().unwrap()
+                );
+            }
+        }
     }
     #[test]
     fn discovers_text_reverse_and_preserves_both_spiral_output_ports() {

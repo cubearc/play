@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -277,6 +278,13 @@ pub enum Command {
         caption: String,
         png: String,
     },
+    AddStructured {
+        context: Context,
+        key: Uuid,
+        title: String,
+        semantic_type: String,
+        value: Value,
+    },
     AddFile {
         context: Context,
         key: Uuid,
@@ -331,6 +339,7 @@ impl Command {
             | Self::ArchiveBlock { key, .. }
             | Self::RestoreBlock { key, .. }
             | Self::AddText { key, .. }
+            | Self::AddStructured { key, .. }
             | Self::AddFile { key, .. }
             | Self::AddImage { key, .. } => Some(*key),
             _ => None,
@@ -367,6 +376,10 @@ pub enum Content {
         text: String,
     },
     Image,
+    Structured {
+        semantic_type: String,
+        value: Value,
+    },
     Page {
         text: String,
     },

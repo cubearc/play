@@ -23,9 +23,12 @@ export function attemptOutputType(
   if (run.plan.targetNodes.includes(nodeId))
     return run.plan.contract.outputs.find((p) => p.name === port)
       ?.semantic_type;
-  const digest = run.plan.nodes?.find((n) => n.id === nodeId)?.contractDigest;
-  return digest
-    ? run.plan.contracts?.[digest]?.outputs.find((p) => p.name === port)
-        ?.semantic_type
-    : undefined;
+  const digest = run.plan.nodes.find((n) => n.id === nodeId)?.contractDigest;
+  const contract =
+    digest === run.plan.contractDigest
+      ? run.plan.contract
+      : digest
+        ? run.plan.contracts[digest]
+        : undefined;
+  return contract?.outputs.find((p) => p.name === port)?.semantic_type;
 }

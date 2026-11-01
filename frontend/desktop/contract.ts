@@ -10,8 +10,22 @@ export interface Invocation {
   input: string;
 }
 
+export type Representation =
+  | "text"
+  | "bytes"
+  | "byte_array"
+  | "json"
+  | "image_samples";
 export interface Operation {
   requires_private_retention?: boolean;
+  execution: {
+    effects: "pure" | "monotonic_clock";
+    inputs: Record<string, Representation>;
+    outputs: Record<string, Representation>;
+  };
+  availability:
+    | { state: "available" }
+    | { state: "unavailable"; reason: string };
   contract: {
     inputs: { name: string; semantic_type: string; schema: unknown }[];
     outputs: { name: string; semantic_type: string; schema: unknown }[];

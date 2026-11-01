@@ -6,8 +6,6 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
-pub(crate) const ASSET_INPUT_TYPES: &[&str] = &["text", "image.samples", "bytes"];
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Input {
@@ -107,12 +105,68 @@ impl Definition {
             .find(|n| n.id == id)
             .ok_or("invalid_connection")
     }
+    /// Validate stored declarations using the coordinator's installed catalog.
     pub fn validate(&self) -> Result<()> {
+        self.validate_nodes()?;
+        for (index, input) in self.inputs.iter().enumerate() {
+            worker::asset_representation(&input.semantic_type).map_err(|_| {
+                if index == 0 {
+                    "unsupported_pipeline"
+                } else {
+                    "invalid_pipeline"
+                }
+            })?;
+        }
+        Ok(())
+    }
+    /// Workers resolve only used ports against their owning Core contracts.
+    /// Unused declarations carry no data and grant no execution capability.
+    pub(crate) fn validate_execution(&self) -> Result<()> {
+        self.validate_nodes()?;
+        for name in self.required_inputs() {
+            self.input_representation(name)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn input_representation(
+        &self,
+        name: &str,
+    ) -> Result<cube_core::operations::execution::Representation> {
+        use cube_core::operations::execution;
+        let input = self.input(name)?;
+        let mut selected = None;
+        for node in &self.nodes {
+            for (port, source) in &node.inputs {
+                if !matches!(source, Source::Input { name: slot } if slot == name) {
+                    continue;
+                }
+                let executable =
+                    execution::describe(&node.operation, Default::default()).map_err(|e| e.0)?;
+                if executable.contract.operation_version != node.operation_version {
+                    return Err("contract_mismatch");
+                }
+                let contract = executable
+                    .contract
+                    .inputs
+                    .iter()
+                    .find(|p| p.name == *port)
+                    .ok_or("contract_mismatch")?;
+                let representation = *executable.inputs.get(port).ok_or("contract_mismatch")?;
+                if contract.semantic_type != input.semantic_type
+                    || selected.is_some_and(|old| old != representation)
+                {
+                    return Err("contract_mismatch");
+                }
+                selected = Some(representation);
+            }
+        }
+        selected.ok_or("invalid_binding")
+    }
+    fn validate_nodes(&self) -> Result<()> {
         if self.format_version != 4
             || self.inputs.is_empty()
             || self.inputs.len() > crate::protocol::contract().pipeline_input_limit
             || self.inputs[0].name != "source"
-            || !ASSET_INPUT_TYPES.contains(&self.inputs[0].semantic_type.as_str())
             || self.nodes.is_empty()
             || self.nodes.len() > crate::protocol::contract().pipeline_node_limit
         {
@@ -128,7 +182,12 @@ impl Definition {
                     .iter()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
                 || !names.insert(&input.name)
-                || !ASSET_INPUT_TYPES.contains(&input.semantic_type.as_str())
+                || input.semantic_type.is_empty()
+                || input.semantic_type.len() > 64
+                || !input
+                    .semantic_type
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'.')
             {
                 return Err("invalid_pipeline");
             }
@@ -233,19 +292,15 @@ impl Definition {
             .map_err(|_| "unsupported_operation")?
             .contract()
             .map_err(|_| "contract_mismatch")?;
-        let primary = c
-            .inputs
-            .iter()
-            .find(|p| ASSET_INPUT_TYPES.contains(&p.semantic_type.as_str()))
-            .ok_or("contract_mismatch")?;
+        let executable = cube_core::operations::execution::describe(operation, Default::default())
+            .map_err(|e| e.0)?;
+        let primary = c.inputs.first().ok_or("contract_mismatch")?;
         let mut inputs = BTreeMap::from([(
             primary.name.clone(),
             Source::Input {
                 name: "source".into(),
             },
         )]);
-        let executable = cube_core::operations::execution::describe(operation, Default::default())
-            .map_err(|e| e.0)?;
         for (name, representation) in executable.inputs {
             if let std::collections::btree_map::Entry::Vacant(entry) = inputs.entry(name) {
                 entry.insert(Source::Literal {

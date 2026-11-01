@@ -1,7 +1,7 @@
 import VscodeOption from "@vscode-elements/react-elements/dist/components/VscodeOption.js";
 import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/VscodeSingleSelect.js";
 import { useEffect, useRef, useState } from "react";
-import type { Operation } from "../desktop/contract";
+import type { Operation, Representation } from "../desktop/contract";
 import type {
   GraphNode,
   GraphSource,
@@ -20,7 +20,7 @@ export function Select({
   label: string;
   value: string;
   disabled: boolean;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   onChange: (value: string) => void;
 }) {
   const ref = useRef<HTMLElementTagNameMap["vscode-single-select"]>(null);
@@ -49,7 +49,11 @@ export function Select({
         onChange={() => onChange(ref.current?.value ?? "")}
       >
         {options.map((o) => (
-          <VscodeOption key={o.value} value={o.value}>
+          <VscodeOption
+            key={o.value}
+            value={o.value}
+            disabled={o.disabled ?? false}
+          >
             {o.label}
           </VscodeOption>
         ))}
@@ -57,7 +61,10 @@ export function Select({
     </>
   );
 }
-function emptyLiteral(semanticType: string, schema?: unknown): unknown {
+function emptyLiteral(
+  representation: Representation,
+  schema?: unknown,
+): unknown {
   if (
     schema !== null &&
     typeof schema === "object" &&
@@ -65,16 +72,16 @@ function emptyLiteral(semanticType: string, schema?: unknown): unknown {
     schema.type === "array"
   )
     return [];
-  if (semanticType === "json")
+  if (representation === "json")
     return schema !== null &&
       typeof schema === "object" &&
       "type" in schema &&
       schema.type === "integer"
       ? 0
       : null;
-  return semanticType === "bytes"
+  return representation === "bytes"
     ? { base64: "" }
-    : semanticType === "bytes.array"
+    : representation === "byte_array"
       ? []
       : "";
 }
@@ -83,20 +90,24 @@ export function initialInputs(
   slots: PipelineDefinition["inputs"],
 ): GraphNode["inputs"] {
   return Object.fromEntries(
-    operation.contract.inputs.map((p) => [
-      p.name,
-      slots.some((s) => s.semanticType === p.semantic_type)
-        ? {
-            kind: "input",
-            name:
-              slots.find((s) => s.semanticType === p.semantic_type)?.name ??
-              "source",
-          }
-        : {
-            kind: "literal",
-            value: emptyLiteral(p.semantic_type, p.schema),
-          },
-    ]),
+    operation.contract.inputs.map((p) => {
+      const representation = operation.execution.inputs[p.name];
+      if (!representation) throw new Error("catalog_unavailable");
+      return [
+        p.name,
+        slots.some((s) => s.semanticType === p.semantic_type)
+          ? {
+              kind: "input",
+              name:
+                slots.find((s) => s.semanticType === p.semantic_type)?.name ??
+                "source",
+            }
+          : {
+              kind: "literal",
+              value: emptyLiteral(representation, p.schema),
+            },
+      ];
+    }),
   );
 }
 export function GraphInputs({
@@ -145,6 +156,13 @@ export function GraphInputs({
   return (
     <>
       {op?.contract.inputs.map((port) => {
+        const representation = op.execution.inputs[port.name];
+        if (!representation)
+          return (
+            <p role="alert" key={port.name}>
+              This input representation is unavailable.
+            </p>
+          );
         const source = node.inputs[port.name];
         const value =
           source?.kind === "output"
@@ -159,7 +177,7 @@ export function GraphInputs({
               value: `input:${s.name}`,
               label: `${s.name} · ${s.semanticType}`,
             })),
-          ...(port.semantic_type !== "image.samples"
+          ...(representation !== "image_samples"
             ? [{ value: "literal", label: `Literal · ${port.semantic_type}` }]
             : []),
           ...definition.nodes
@@ -193,7 +211,7 @@ export function GraphInputs({
                 else if (v === "literal")
                   update({
                     kind: "literal",
-                    value: emptyLiteral(port.semantic_type, port.schema),
+                    value: emptyLiteral(representation, port.schema),
                   });
                 else {
                   const [nodeId, port] = v.split(":");
@@ -211,7 +229,7 @@ export function GraphInputs({
                 schema={port.schema}
                 id={`literal-${node.id}-${port.name}`}
                 value={source.value}
-                semanticType={port.semantic_type}
+                representation={representation}
                 disabled={disabled}
                 onChange={(v) => update({ kind: "literal", value: v })}
               />

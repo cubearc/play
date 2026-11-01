@@ -3,13 +3,14 @@ import VscodeSingleSelect from "@vscode-elements/react-elements/dist/components/
 import VscodeTextarea from "@vscode-elements/react-elements/dist/components/VscodeTextarea.js";
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
+import type { Operation } from "../desktop/contract";
 import type {
   AssetView,
   PipelineRef,
   PipelineView,
   TrailView,
 } from "../desktop/workspace-contract";
-import { assetInputType } from "../desktop/workspace-contract";
+import { assetAcceptsInputType } from "../desktop/workspace-contract";
 import {
   type Bindings,
   BindingsEditor,
@@ -20,6 +21,7 @@ import {
 import VscodeButton from "./VscodeButton";
 
 export function TrailEditor({
+  operations,
   trail,
   pipelines,
   assets,
@@ -28,6 +30,7 @@ export function TrailEditor({
   onClose,
   onDirty,
 }: {
+  operations: Operation[];
   trail: TrailView;
   pipelines: PipelineView[];
   assets: AssetView[];
@@ -88,9 +91,10 @@ export function TrailEditor({
   const slots = selected && ready && loaded ? loaded.definition.inputs : [];
   const valid = ready && completeBindings(slots, bindings);
   const key = useRef(crypto.randomUUID());
-  const input = assetInputType(trail.source);
   const choices = pipelines.filter(
-    (p) => p.inputType === input || p.id === trail.pipelineId,
+    (p) =>
+      assetAcceptsInputType(trail.source, p.inputType, operations) ||
+      p.id === trail.pipelineId,
   );
   const pipeline = choices.find((p) => p.id === selected);
   const length = new TextEncoder().encode(hypothesis).byteLength;
@@ -206,6 +210,7 @@ export function TrailEditor({
       ) : null}
       {ready ? (
         <BindingsEditor
+          operations={operations}
           inputs={slots}
           assets={assets}
           pinned={trail.bindings}

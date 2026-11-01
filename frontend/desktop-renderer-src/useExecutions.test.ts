@@ -36,8 +36,17 @@ const running: RunDetail = {
   retainOutput: true,
   operation: { operation: "cipher.rot13", operationVersion: 1, name: "ROT13" },
   plan: {
+    formatVersion: 4,
+    adapterVersion: 3,
+    executionOrder: ["node"],
+    nodes: [
+      { id: "node", operation: { name: "ROT13" }, contractDigest: "digest" },
+    ],
+    contracts: {},
     pipeline: { id: "pipeline", revision: 1, definition: {} },
     contract: {
+      kind: "snapshot",
+      digest: "digest",
       operation: "cipher.rot13",
       operation_version: 1,
       inputs: [],
@@ -47,7 +56,14 @@ const running: RunDetail = {
     targetNodes: ["node"],
     reusePolicy: "none",
     reusedOutputs: [],
-    inputs: {},
+    inputs: {
+      source: {
+        assetId: "asset",
+        revision: 1,
+        semanticType: "text",
+        used: true,
+      },
+    },
     parameters: {},
     limits: {},
   },

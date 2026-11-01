@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 pub const APPLICATION_ID: u32 = 0x4355_504e;
 pub const GENERATION: u32 = 2;
-pub const SCHEMA_VERSION: u32 = 17;
+pub const SCHEMA_VERSION: u32 = 18;
 pub type Schema = Vec<(String, String, String)>;
 pub const SCHEMA: &str = include_str!("schema.sql");
 

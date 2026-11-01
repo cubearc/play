@@ -5,6 +5,7 @@ import type {
   BlockView,
   Context,
   ExplorationView,
+  JsonValue,
   NoteTarget,
   NoteView,
   PipelineRef,
@@ -889,6 +890,25 @@ export function useWorkspace() {
       addContent("add_text", title, text, key),
     addPage: (title: string, text: string, key?: string) =>
       addContent("add_page", title, text, key),
+    addStructured: (
+      title: string,
+      semanticType: string,
+      value: JsonValue,
+      key: string,
+    ) =>
+      execute(async () => {
+        if (!exploration) return false;
+        const context = contextOf(exploration);
+        await window.play.workspace({
+          kind: "add_structured",
+          context,
+          key,
+          title,
+          semantic_type: semanticType,
+          value,
+        });
+        await refresh(context);
+      }),
     importImage,
     importFile,
     reviseText,

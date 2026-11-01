@@ -26,10 +26,12 @@ container fallback. This is not a release-supported desktop
 distribution. The complete application still requires the remaining shell, storage, worker and
 packaging deliveries. The interactive native PTY below supports macOS and Linux development builds.
 
-Graph execution discovers the pure executors registered in Core. Descriptors
+Graph execution discovers the data executors registered in Core. Descriptors
 supply operation names, typed ports, parameters and representations; Play has no
 per-operation execution switch. The registered capability must support the host's
-bounded representations and retention policy before it is offered. The separate
+bounded representations and retention policy before it can execute. Unavailable
+capabilities remain identified in discovery; supported private-data nodes require
+explicit local retention consent in their saved Pipeline revision. The separate
 unbound development probe uses ROT13 and Brainfuck; it is not the managed
 Workspace execution API. See [execution capabilities](desktop-pipelines.md#execution-capabilities).
 
@@ -131,10 +133,15 @@ nesting/nodes, unknown fields and unknown command tags before dispatch. Request
 IDs are positive, increasing session-local `u32` values. Main assigns them; the
 renderer cannot target another invocation by guessing an ID.
 
+Installed Core capabilities are immutable for the process and cached once. Each
+catalog page also fits the unchanged frame ceiling, even for large schemas. The
+client rejects duplicate identities, changing totals, missing pages and invalid
+continuations before exposing operation choices.
+
 | Command | Required fields in addition to `type` and `id` | Response |
 | --- | --- | --- |
 | `hello` | `protocol`, exact `engine` version, 32-hex-character `nonce` | `ready` echoes all three values. |
-| `catalog` | None | `catalog` with adapter `operations` from Core descriptors. |
+| `catalog` | `offset` | Up to eight `operations`, exact `offset`/`total`, and `nextOffset` or `null`. |
 | `workspace` | Closed `command` intent | `workspace` with scoped domain data. |
 | `cli_read` | Exact `context` and closed Asset/Pipeline `command` | `workspace` with scoped read data. |
 | `start_cli_run` | Closed Run `request` | `run` from the same coordinator with the CLI caller. |
@@ -144,7 +151,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **26** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **27** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,

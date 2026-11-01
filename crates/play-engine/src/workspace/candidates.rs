@@ -240,14 +240,13 @@ pub(super) fn output_contract(
         .contract()
         .map_err(|_| "contract_mismatch")?;
     let digest = node["contractDigest"].as_str().ok_or("corrupt_store")?;
-    let pinned = if node.get("contract").is_some() {
-        &node["contract"]
-    } else if plan["contractDigest"] == digest {
+    let pinned = if plan["contractDigest"] == digest {
         &plan["contract"]
     } else {
         &plan["contracts"][digest]
     };
-    if *pinned != serde_json::to_value(&contract).map_err(|_| "invalid_state")?
+    if plan["formatVersion"] != 4
+        || *pinned != super::contract_snapshots::reference(&contract)?
         || cube_core::hashing::sha256(&serde_json::to_vec(&contract).map_err(|_| "invalid_state")?)
             != digest
         || node["operation"]["operationVersion"] != contract.operation_version

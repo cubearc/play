@@ -191,19 +191,17 @@ test("invokes Core through a signed sandboxed worker", {
 }, async () => {
   const engine = await Engine.connect(binary, worker);
   try {
-    assert.deepEqual(
-      await engine.run({
-        operation: "cipher.rot13",
-        operation_version: 1,
-        input: "Hello, ação!",
-      }),
-      {
-        status: "completed",
-        type: "finished",
-        id: 3,
-        output: { text: "Uryyb, nçãb!" },
-      },
-    );
+    const { id, ...completed } = await engine.run({
+      operation: "cipher.rot13",
+      operation_version: 1,
+      input: "Hello, ação!",
+    });
+    assert.ok(Number.isSafeInteger(id) && id > 0);
+    assert.deepEqual(completed, {
+      status: "completed",
+      type: "finished",
+      output: { text: "Uryyb, nçãb!" },
+    });
     await assert.rejects(
       engine.run({
         operation: "cipher.rot13",
@@ -216,6 +214,7 @@ test("invokes Core through a signed sandboxed worker", {
       operation_version: 2,
       input: "++++++++[>++++++++<-]>+.",
     });
+    assert.notEqual(result.id, id);
     assert.equal(result.status, "completed");
     if (result.status === "completed")
       assert.deepEqual(result.output, { bytes: [65] });

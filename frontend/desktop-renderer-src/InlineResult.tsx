@@ -49,10 +49,9 @@ export function InlineResult({
   const history = executions.history[trail.id];
   if (!history) return null;
   const run = history.detail?.id === history.selected ? history.detail : null;
-  const input = run ? (run.plan.inputs.source ?? run.plan.inputs.input) : null;
+  const input = run?.plan.inputs.source;
   const earlier =
-    input &&
-    "assetId" in input &&
+    input?.used &&
     (input.assetId !== trail.source.id ||
       input.revision !== trail.source.revision);
   return (
@@ -115,7 +114,7 @@ export function InlineResult({
                   run.plan.contract.outputs.some(
                     (output) =>
                       output.name === port &&
-                      ["text", "bytes"].includes(output.semantic_type),
+                      output.representation !== "image_samples",
                   ),
                 )
                 .map((port) => {
@@ -180,9 +179,7 @@ export function InlineResult({
                   <div key={port}>
                     <code>
                       {port} ←{" "}
-                      {"assetId" in input
-                        ? `${input.assetId} @ r${input.revision}${input.used === false ? " (not consumed)" : ""}`
-                        : JSON.stringify(input.literal)}
+                      {`${input.assetId} @ r${input.revision}${input.used ? "" : " (not consumed)"}`}
                     </code>
                   </div>
                 ))}
@@ -193,12 +190,12 @@ export function InlineResult({
                 <ol>
                   {run.attempts.map((a) => (
                     <li key={a.id}>
-                      {run.plan.nodes?.find((n) => n.id === a.nodeId)?.operation
+                      {run.plan.nodes.find((n) => n.id === a.nodeId)?.operation
                         .name ?? run.operation.name}{" "}
                       · {a.status}
                       {a.status !== "running" ? (
                         <AnnotateButton
-                          label={`${run.plan.nodes?.find((n) => n.id === a.nodeId)?.operation.name ?? run.operation.name} attempt in Run ${run.sequence}`}
+                          label={`${run.plan.nodes.find((n) => n.id === a.nodeId)?.operation.name ?? run.operation.name} attempt in Run ${run.sequence}`}
                           target={{
                             kind: "attempt",
                             run_id: run.id,

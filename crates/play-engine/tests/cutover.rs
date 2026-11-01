@@ -27,7 +27,7 @@ fn files(path: &Path) -> Vec<(String, Vec<u8>)> {
 }
 #[test]
 fn unsupported_schema_versions_are_rejected_without_touching_any_archived_bytes() {
-    for version in 1u32..17 {
+    for version in 1u32..18 {
         let t = tempfile::tempdir().unwrap();
         let root = t.path().join("private");
         let mut m = Manager::new(root.clone()).unwrap();
