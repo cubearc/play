@@ -30,8 +30,8 @@ the last successfully opened Workspace. An OS-held exclusive lock on `owner.lock
 protects the writable connection. Another engine receives `workspace_busy` while
 that owner lives; killing it releases the OS lock. The lock file remains in place.
 Connection shutdown precedes lock release. The development app has one active
-Workspace and one trusted window; multiwindow and external contextual CLI attachment are
-separate deliveries.
+Workspace shared by registered workbench windows and explicitly attached contextual
+CLI commands. The engine remains the sole database owner.
 
 On Unix, private directories require the current user and mode 0700; files require
 that user, mode 0600 and a single hard link. Symlinks and nonregular files are
@@ -40,14 +40,14 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store accepts generation **2**, schema version **16**, SQLite
+The native store accepts generation **2**, schema version **17**, SQLite
 application ID `0x4355504e` and 4096-byte pages. One complete baseline lives in
 `crates/play-engine/src/workspace/schema.sql`. Fresh stores initialize it directly;
 current stores reopen with the same schema, identities and evidence.
 
 The engine checks the identity marker, raw header, complete schema signature and
 stored identity through a read-only immutable connection before writable recovery
-under the owner lock. Schemas 1–15, newer versions, conversion markers and
+under the owner lock. Schemas 1–16, newer versions, conversion markers and
 WAL/SHM stores are unsupported. Rejection preserves database, journals, markers,
 archival copies and source bytes; there is no migration chain or converter.
 The current baseline uses rollback journaling and checks foreign-key integrity.

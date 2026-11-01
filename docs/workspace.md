@@ -68,9 +68,9 @@ Files sit beside other notebook content and open their own canvas. [Open full si
 The canvas identifies the preserved file content. [Open full size](assets/desktop/file-canvas.png).
 
 HTML, scripts and links remain plain content; they never open a page, run a
-program or fetch remote content. File operations and editing are not available
-in this preview. Text imported as a file remains a File Asset and does not
-silently become a runnable text cell.
+program or fetch remote content. A Pipeline can explicitly consume the original
+bytes; file editing is unavailable. Text imported as a file remains a File Asset
+and does not silently become a text cell. See [use imported bytes](#use-imported-bytes-in-a-pipeline).
 
 Use the heading controls to [reorder](notebook.md#reorder-the-notebook),
 [duplicate](notebook.md#duplicate-a-clue), or
@@ -87,3 +87,22 @@ an active slot while retaining content and evidence;
 historical revisions and retained Runs also consume the Exploration's budget.
 A rejected import preserves existing content and the source. Exact limits and
 ownership rules are in [native storage](reference/desktop-storage.md).
+
+## Use imported bytes in a Pipeline
+
+Open a file's Trail canvas and choose **New Pipeline**. Compatible registered
+operations receive the exact immutable file revision as `bytes`, rather than its
+text/hex preview. For example, choose SHA-256 to hash the original file, or UTF-8
+decoding for a file known to contain encoded text. Invalid UTF-8 is reported by
+the decoder; Play does not silently replace bytes or infer an encoding.
+
+Named Pipeline inputs can also use **File bytes** and bind another file Asset
+from the same Stage. Saved result files keep their original Run/port provenance
+when used again. A Run's combined text/byte inputs remain limited to 8,192 decoded
+bytes, independently of the larger file-import limit. Larger files can still be
+stored and inspected; execution refuses excess input before dispatch.
+
+
+![A file Pipeline using SHA-256 on the original bytes, with matching desktop and Cube CLI Run history.](assets/desktop/file-pipeline.png)
+
+[Open the file Pipeline capture full size](assets/desktop/file-pipeline.png).

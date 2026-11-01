@@ -73,8 +73,38 @@ replies show a truncation notice; inspect the saved Run in Play for retained dat
 The [runtime reference](reference/desktop-runtime.md#interactive-native-pty)
 contains exact limits and transport details.
 
-Native PTY execution requires macOS or Linux with Landlock and seccomp. Windows enforcement,
-external terminal attachment and release packaging remain in
+Native PTY execution requires macOS or Linux with Landlock and seccomp. Windows
+enforcement and release packaging remain in
 [#48](https://github.com/cubearc/play/issues/48) and the platform tasks. The separate
 [Run with Cube CLI](explorations.md#run-a-cell-with-cube-cli) action remains available
 for a single attached command.
+
+## Use an external terminal
+
+Choose **Use external terminal** in the Cube terminal panel. Play displays a
+command prefix containing an explicit private context-file path. Paste that
+prefix into your terminal and append a contextual command, for example:
+
+```text
+cube play --context '/absolute/private/context.json' asset show ASSET_ID --revision 1
+cube play --context '/absolute/private/context.json' selected
+```
+
+![External terminal connection issued by the Stage notebook, beside the contextual Cube terminal.](assets/desktop/external-terminal.png)
+
+This capture uses a disposable test context that is revoked after the check.
+[Open the terminal capture full size](assets/desktop/external-terminal.png).
+
+Use the prefix actually issued by your window: it selects the CLI bundled with
+Play, so a global Cube installation is not required. It expires after ten minutes and
+pins the Stage and optional selected Run configuration. Switching tabs or closing
+that window does not retarget the lease. **Disconnect external terminal** revokes
+it; **File → Disconnect External Terminals** revokes all leases. Quitting Play
+revokes them too. A fresh lease is required after restart.
+
+The context file authorizes bounded local control commands through a private
+socket. It contains a temporary credential: keep it private and do not publish
+it with a walkthrough. Cube checks its ownership, permissions and expiry before
+connecting. No ambient socket discovery, database access or source-folder grant
+is provided. The external terminal itself is your system terminal; Pipeline work
+still runs in Play's restricted worker. This attachment requires macOS or Linux.

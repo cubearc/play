@@ -15,7 +15,8 @@ uses this boundary for managed notebooks. The engine persists Workspace content
 and reasoning in [native storage](desktop-storage.md), and resolves exact owned
 text Asset revisions for Core execution in a separate worker. Graph
 [PipelineRuns](desktop-runs.md) preserve accepted configuration, actual attempts
-and the chosen private output retention. Credential storage is not implemented.
+and the chosen private output retention. Persistent account credentials and Cloud
+authentication are not implemented.
 
 The Electron proof executes on macOS with a locally ad-hoc-signed App Sandbox
 helper and on Linux x64/ARM64 with mandatory Landlock and seccomp. Both use the
@@ -37,10 +38,13 @@ Workspace execution API. See [execution capabilities](desktop-pipelines.md#execu
 The target desktop topology has one Electron main process per user application
 instance, with one Rust engine per open Workspace identity. Multiple windows
 must attach to the same owner engine, never independent writable SQLite
-connections. The implemented preview has one trusted window and one active
-Workspace; multiwindow and external CLI attachment remain separate deliveries.
-The engine owns domain authorization, its private store and assets. In the target
-topology, workers and native PTYs belong to its execution supervisor. Algorithms
+connections. The implemented preview shares one engine and one active Workspace
+across up to eight registered windows. Each window owns its selected context,
+image grants and unsaved-change confirmation. Changing Workspaces requires
+closing the other windows. Reload restores that window's Exploration/Stage from
+validated session state; app restart resumes the engine's last selection.
+The engine owns domain authorization, its private store and assets. Workers and
+native PTYs belong to its execution supervisor. Algorithms
 and operation metadata belong to Core.
 
 Main starts the exact bundled engine through inherited private stdin/stdout
@@ -55,15 +59,25 @@ second process contacts that owner or rejects opening the store. A PID or lock
 file is not ownership: after a crash, only acquiring the OS lock permits recovery.
 Never remove a live lock because of an elapsed timeout or a reused PID.
 
-The target external CLI discovers a per-Workspace native endpoint through a private
-per-user registry. Unix sockets require a user-owned private directory; Windows
-named pipes require a DACL for that user's SID and rejection of remote clients.
-Peer authentication, a session credential and exact Workspace/generation binding
-are mandatory before contextual commands. Do not place credentials in terminal
-arguments, command logs, source roots or readable URL parameters. There is no
-localhost HTTP discovery fallback. External CLI attachment is not implemented by
-this development slice. Workspace locking
-and crash release are exercised through real engine processes.
+External CLI attachment uses an explicitly issued, revocable context file rather
+than ambient endpoint discovery. On macOS/Linux its private Unix socket and
+credential file belong to the current user, inside a mode-0700 directory, with
+mode-0600 entries and a ten-minute expiry. Cube refuses symlinks, shared hard
+links, broad permissions, oversized or expired credentials. The client exchanges
+a session token, fresh nonce and exact Workspace/Exploration/Stage/generation
+binding before one bounded typed command. A lease freezes its optional Run
+selection; every accepted invocation gets a fresh intent key. Main permits at
+most eight leases and one connection per lease. Disconnect or Quit destroys the
+socket, credential and active connections. No database, source path authority,
+general shell command or localhost HTTP discovery is provided. Windows
+attachment refuses unavailable policy. [Use an external terminal](../terminal.md#use-an-external-terminal)
+describes the actual workflow.
+
+Native folder/file/URI intents are serialized and scoped to their issuing
+window's captured context. JSON packages are validated before provisioning an
+empty Workspace. UUID-only `cube-play-open` links select existing local content
+after confirmation, without Run or file grants. The source-folder association is
+a bounded private native registry, separate from domain stores.
 
 ## Renderer authority and resources
 
@@ -75,7 +89,8 @@ does not grant authority. Navigation does not preserve authorization.
 The renderer has sandboxing and context isolation enabled, Node integration and
 webviews disabled. The preload exposes `catalog()`, scoped `workspace(intent)`,
 `importImage(intent)`, `image(assetRef)`, `startRun(intent)`,
-`cancelRun(context, runId)` as one typed object, `terminal(intent)` and `dirty(boolean)`. Closed request shapes and UTF-8
+`cancelRun(context, runId)` as one typed object, `terminal(intent)`,
+`attachment(intent)`, a one-shot initial `location()` and `dirty(boolean)`. Closed request shapes and UTF-8
 limits are checked in preload before forwarding across IPC; main and Rust check
 their own boundaries again. No raw `ipcRenderer`, arbitrary channel, path, Node,
 filesystem, database or shell API crosses the bridge.
@@ -129,7 +144,7 @@ renderer cannot target another invocation by guessing an ID.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **25** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **26** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -362,11 +377,11 @@ or execution authority. Official submissions/publication enumerate the selected
 revision and evidence; local Candidates/Solutions remain private and unverified
 until a separate official record says otherwise.
 
-The final application removes every superseded runtime listed in the
+The application removes every superseded runtime listed in the
 [retirement inventory](desktop-domain.md#interface-retirement-inventory).
 The proof adds no old-store reader, model alias, schema converter or Docker/HTTP
-execution fallback. The current application paths remain until their validated
-replacements land; this development proof does not claim that retirement is done.
+execution fallback. Only the native Electron renderer and Rust engine remain;
+unsupported historical stores are refused without mutation.
 
 ## Attached Cube CLI commands
 
@@ -467,9 +482,9 @@ exits on control-channel EOF or failure even while waiting for terminal input;
 a real engine SIGKILL test verifies the CLI disappears and unrelated processes
 survive. Unsupported hosts reject session creation with `native_policy_unavailable`.
 
-This proof does not establish external discovery, shell job control, grandchildren,
-Windows PTYs or signed distribution support. The [terminal guide](../terminal.md)
-owns the interactive workflow.
+The interactive PTY does not provide shell job control, grandchildren, Windows
+PTYs or signed distribution support. External terminals use the separate explicit
+connection described in the [terminal guide](../terminal.md).
 
 ## Local Challenge import boundary
 

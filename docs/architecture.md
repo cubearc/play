@@ -19,10 +19,19 @@ Algorithms, operation metadata and input/output contracts belong to `cube-core`.
 | Bundled Cube CLI | Attached commands and macOS/Linux contextual PTY; private control channel, no domain database |
 | Native worker | Bounded Core operation execution under the platform policy |
 
-The preview has one trusted window and one active managed Workspace. The full
-domain permits multiple independent Explorations in that Workspace. Multiwindow
-attachment and external contextual CLI discovery are not implemented. The native
-terminal uses a Rust-owned PTY and the same scoped Run coordinator.
+The preview shares one engine and one active managed Workspace across up to eight
+registered workbench windows. Each window selects its own Exploration and Stage,
+keeps its own drafts and image grants, and restores that selection on reload.
+**File → New Window** opens another authorized window. Close the other windows
+before switching Workspaces. Closing a window leaves accepted Runs under engine
+supervision; application Quit follows the shutdown policy.
+
+Native folder/file intents are handled by main. A source folder is associated
+with a separately managed private Workspace; its files and adjacent databases
+are never adopted as the store. Canonical local links select UUID identities
+only, after confirmation, and grant no execution or file authority. Explicit,
+revocable context files connect external Cube CLI commands to the same scoped
+coordinator. The embedded terminal uses a Rust-owned PTY.
 
 ## Domain and persistence
 
@@ -74,8 +83,8 @@ executor and supervisor. Native-host checks validate their boundary; Electron
 journeys exercise actual dispatch and retained evidence. Windows worker enforcement
 remains incomplete; no unrestricted fallback is available.
 
-External CLI attachment, Windows PTYs,
-publisher-signed packages and verified updates remain incomplete. Local build digests and
+Windows workers and PTYs, publisher-signed packages and verified updates remain
+incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. A
 [standalone preview bundle](installation.md#build-a-standalone-preview-bundle)
 stages compiled runtime files and exact native components; its receipt records

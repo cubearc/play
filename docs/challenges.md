@@ -38,4 +38,6 @@ For package authors, see the [package format and limits](reference/challenge-pac
 
 Online cloning, progressive unlocking, submissions and official evaluation belong
 to the separate Cloud project. Private [Stage Candidates](solutions.md) are
-available locally. Solution snapshots remain a separate local delivery; imported content and successful Runs do not imply a saved solution.
+available locally, together with immutable Solution snapshots. Imported content
+and successful Runs do not create a Solution automatically; explicitly save the
+chosen result and explanation.

@@ -17,6 +17,29 @@ Stages, Blocks, Assets, reasoning and Trail history. Use **New Exploration** to
 start another investigation, and select its Stages in the Explorer. Its content
 and selected Stage remain separate when you switch or reopen the Workspace.
 
+## Organize local Stages
+
+Choose **New Stage** to divide a puzzle into notebooks without importing a Challenge.
+Open **Organize Stages** in the Explorer to rename a Stage, move it with **Up** or
+**Down**, and set **Local progress**. Completion is a private annotation, not an
+official Challenge evaluation. Imported copies keep independent progress.
+
+**Archive Stage** preserves its Blocks, Trails, Candidates and Solutions. Archived
+Stages remain available in **Organize Stages** for inspection and restoration;
+content changes and new Runs require **Restore Stage**. Archiving does not erase
+accepted Run evidence. Changes from another window report a revision conflict;
+select the Stage again to load its current revision while keeping your title draft.
+
+**Duplicate Stage** copies visible notebook content into fresh local Assets and
+Trails, preserving notebook order. Asset and Note origins retain their source
+revisions; annotation target evidence stays in its source Stage. Archived Blocks, selected
+Candidates, Solutions, completion and Run history stay in the source Stage. Choose
+a saved Workspace Pipeline for a copied Trail when reusing a graph definition.
+
+![Stage organization with ordered notebooks, the selected Stage, local progress and archive/duplicate actions.](assets/desktop/stage-organization.png)
+
+[Open the Stage organization capture full size](assets/desktop/stage-organization.png).
+
 ## Open an Asset canvas
 
 Click a text Asset, image, caption, file or Page in a Stage notebook. Play opens a **Trail
@@ -247,8 +270,10 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General structured-result promotion and external contextual CLI
-attachment remain unfinished. Their implementation status lives in the [milestone](https://github.com/cubearc/play/milestone/3).
+General structured-result promotion remains unfinished. Use an explicit
+[external terminal connection](terminal.md#use-an-external-terminal) to inspect
+Assets and run the selected Pipeline from your own terminal.
+
 ## Read an image in a spiral
 
 Open the image's Trail canvas and choose **New Pipeline**. Select **image pixels**,

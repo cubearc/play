@@ -12,7 +12,8 @@ ancestor closure. One bounded worker executes up to two dependency-ready nodes c
 the Run resource limits. See [parallel branches](desktop-runs.md#bounded-parallel-branches)
 for grouping, join and failure behavior.
 Runs share the [bounded Exploration queue](desktop-runs.md#concurrent-runs-and-queue).
-Output caching and external contextual CLI attachment remain separate deliveries.
+Output caching remains a separate delivery. The [external terminal connection](../terminal.md#use-an-external-terminal)
+uses this same coordinator with a fixed, explicitly issued context.
 
 ## Execution capabilities
 
@@ -68,8 +69,10 @@ remain pinned until an explicit Trail edit selects another Asset revision.
 
 `source` is the first input and always resolves to the Trail's primary Asset.
 Additional input names match `[a-z][a-z0-9_]{0,31}` and are unique. Each declares
-`text` or `image.samples`. Text and inert Page Assets can satisfy a text slot;
-images satisfy image slots. Notes and File Assets are not executable inputs.
+`text`, `image.samples` or `bytes`. Text and inert Page Assets satisfy text slots;
+images satisfy image slots; immutable File Asset revisions satisfy byte slots.
+Notes are evidence rather than executable inputs. Text and byte inputs share the
+8,192-byte decoded Run budget; image bytes have their separate ceiling.
 
 `save_trail.bindings` is a complete map of additional slot names to
 `{asset_id, revision}`. Every extra slot needs a reference. The reserved source
@@ -109,8 +112,10 @@ encoding performs the reverse conversion. `text.concat` has required `left` and
 `right` text ports and an optional `separator` defaulting to empty text.
 `bytes.concat` joins required left/right Core byte values without an implicit
 separator. The editor offers explicit Base64 literals for `bytes`; numeric byte
-arrays retain their separate `bytes.array` representation. File Assets are not
-direct executable byte inputs in this adapter set.
+arrays retain their separate `bytes.array` representation. File Assets provide
+Core `bytes` values from their full stored revision, never from the preview.
+The engine validates canonical Base64 and the combined decoded input budget
+before admitting the Run.
 
 The JSON adapters parse a text document, select a field by JSON Pointer and
 extract an actual string explicitly. Numeric adapters parse canonical integer
