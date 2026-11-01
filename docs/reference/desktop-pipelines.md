@@ -226,3 +226,21 @@ structured report to preserve those distinctions and its definition identity.
 Triliteral token output can connect directly to the matching token input without
 joining strings or dropping leading zero trits. Native runs retain the exact
 contract, parameters, named values and immutable evidence as for other operations.
+
+### Classical constraint and family reports
+
+Use **Exact bounded substitution constraints** with an explicit alphabet, ciphertext and
+optional caller dictionary or cribs. The `analysis.report` output preserves each
+plaintext class, its exact number of possible full keys and the search stop.
+Inspect `status.complete` before treating an absent candidate as a contradiction;
+an interrupted search can leave uniqueness unresolved.
+
+**Evidence-linked classical family suggestions** reports observations, compatible families
+and alternative explanations under its explicit ASCII profile. A count-based
+suggestion cannot distinguish plaintext, substitution and transposition; it does
+not prove a cipher identity. Both operations require explicit private-retention
+consent when saved in a Pipeline. Keep the structured report when saving a result
+as a Block so that key multiplicity, assumptions and incomplete status survive.
+See the [Core classical analysis reference](https://github.com/cubearc/cube/blob/main/docs/reference/topics/cryptanalysis.md)
+for exact request fields and operation ceilings. Native Run admission can impose
+smaller transport and resource limits than a direct Core call.

@@ -71,3 +71,28 @@ fn dated_alphabet_profiles_preserve_digraphs_and_every_source_assignment() {
         assert_eq!(actual["provenance"]["profile_id"], row["profile"]);
     }
 }
+
+#[test]
+fn bounded_classical_reports_remain_typed_private_native_graph_outputs() {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    for operation in ["analysis.substitution.solve", "analysis.family.suggest"] {
+        let row = rows.iter().find(|r| r["operation"] == operation).unwrap();
+        let id = Uuid::new_v4();
+        let definition=Definition::parse(json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[
+            {"id":id,"operation":operation,"operationVersion":1,"parameters":{},"retainPrivate":true,"position":{"x":0,"y":0},"inputs":{"request":{"kind":"literal","value":row["inputs"]["request"]}}}
+        ],"output":id})).unwrap();
+        let invocation = PipelineInvocation {
+            definition,
+            inputs: BTreeMap::new(),
+        };
+        worker::validate_pipeline(&invocation).unwrap();
+        let output = worker::execute_pipeline(invocation, |_| Ok(())).unwrap();
+        assert_eq!(
+            worker::named_outputs(operation, &output).unwrap(),
+            row["outputs"]
+        );
+    }
+}
