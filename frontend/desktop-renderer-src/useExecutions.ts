@@ -7,7 +7,7 @@ import type {
   RunRequest,
   TrailView,
 } from "../desktop/workspace-contract";
-import { assetInputType } from "../desktop/workspace-contract";
+import { assetAcceptsInputType } from "../desktop/workspace-contract";
 
 import { runSelection } from "./runSelection";
 
@@ -218,7 +218,9 @@ export function useExecutions(
   }, [exploration, load]);
   const operationsFor = (trail: TrailView) =>
     operations.filter(
-      (operation) => operation.input_type === assetInputType(trail.source),
+      (operation) =>
+        operation.availability.state === "available" &&
+        assetAcceptsInputType(trail.source, operation.input_type, operations),
     );
   const operationFor = (trail: TrailView) =>
     operations.find(

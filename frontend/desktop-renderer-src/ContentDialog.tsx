@@ -2,6 +2,8 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
+import { parseExactJson } from "./exactJson";
+import { Select } from "./GraphInputs";
 import VscodeButton from "./VscodeButton";
 
 export type DialogKind =
@@ -10,7 +12,8 @@ export type DialogKind =
   | "text"
   | "image"
   | "annotation"
-  | "page";
+  | "page"
+  | "structured";
 const titles: Record<DialogKind, string> = {
   exploration: "New Exploration",
   stage: "New Stage",
@@ -18,6 +21,7 @@ const titles: Record<DialogKind, string> = {
   image: "Add image with caption",
   annotation: "Add annotation",
   page: "Add page",
+  structured: "Add structured data",
 };
 export function ContentDialog({
   kind,
@@ -26,10 +30,17 @@ export function ContentDialog({
   error,
   description,
   onDirty,
+  structuredTypes = [],
 }: {
   kind: DialogKind;
   onClose: () => void;
-  onSubmit: (title: string, text: string, key: string) => Promise<boolean>;
+  onSubmit: (
+    title: string,
+    text: string,
+    key: string,
+    semanticType?: string,
+  ) => Promise<boolean>;
+  structuredTypes?: string[];
   error: string;
   description?: string;
   onDirty?: (dirty: boolean) => void;
@@ -41,14 +52,31 @@ export function ContentDialog({
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [semanticType, setSemanticType] = useState(structuredTypes[0] ?? "");
+  const [jsonError, setJsonError] = useState("");
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
-  const valid = kind === "image" || Boolean(title.trim());
+  const valid =
+    kind === "image" ||
+    (Boolean(title.trim()) && (kind !== "structured" || Boolean(semanticType)));
   const submit = async () => {
     if (!valid || submitting) return;
+    if (kind === "structured") {
+      try {
+        parseExactJson(text);
+        if (new TextEncoder().encode(text).byteLength > limits.output_bytes)
+          throw new Error("This value exceeds the supported data limit.");
+        setJsonError("");
+      } catch (error) {
+        setJsonError(
+          error instanceof Error ? error.message : "Enter a valid JSON value.",
+        );
+        return;
+      }
+    }
     setSubmitting(true);
-    const accepted = await onSubmit(title, text, key.current);
+    const accepted = await onSubmit(title, text, key.current, semanticType);
     setSubmitting(false);
     if (accepted) onClose();
   };
@@ -63,7 +91,21 @@ export function ContentDialog({
       {description ? (
         <p className="linked-target-label">{description}</p>
       ) : null}
-      {error ? <p role="alert">{error}</p> : null}
+      {error || jsonError ? <p role="alert">{jsonError || error}</p> : null}
+      {kind === "structured" ? (
+        <Select
+          id="content-type"
+          label="Data type"
+          value={semanticType}
+          disabled={submitting}
+          options={structuredTypes.map((value) => ({ value, label: value }))}
+          onChange={(value) => {
+            setSemanticType(value);
+            key.current = crypto.randomUUID();
+            onDirty?.(true);
+          }}
+        />
+      ) : null}
       {kind !== "image" ? (
         <>
           <label htmlFor="content-title">Title</label>
@@ -84,14 +126,17 @@ export function ContentDialog({
       {kind === "text" ||
       kind === "image" ||
       kind === "annotation" ||
-      kind === "page" ? (
+      kind === "page" ||
+      kind === "structured" ? (
         <>
           <label htmlFor="content-text">
             {kind === "image"
               ? "Caption"
               : kind === "page"
                 ? "Page source"
-                : "Text"}
+                : kind === "structured"
+                  ? "JSON value"
+                  : "Text"}
           </label>
           <VscodeTextarea
             ref={textField}
@@ -101,7 +146,9 @@ export function ContentDialog({
                 ? "Caption"
                 : kind === "page"
                   ? "Page source"
-                  : "Text"
+                  : kind === "structured"
+                    ? "JSON value"
+                    : "Text"
             }
             value={text}
             rows={4}
@@ -115,7 +162,9 @@ export function ContentDialog({
             Up to{" "}
             {(kind === "annotation"
               ? limits.note_bytes
-              : limits.text_bytes
+              : kind === "structured"
+                ? limits.output_bytes
+                : limits.text_bytes
             ).toLocaleString()}{" "}
             UTF-8 bytes
             {kind === "image" ? " · PNG images up to 128 KiB" : ""}.
@@ -138,7 +187,9 @@ export function ContentDialog({
                 ? "Add page"
                 : kind === "annotation"
                   ? "Add annotation"
-                  : "Create"}
+                  : kind === "structured"
+                    ? "Add data"
+                    : "Create"}
         </VscodeButton>
       </div>
     </dialog>

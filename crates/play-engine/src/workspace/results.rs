@@ -53,7 +53,7 @@ fn contract(plan: &Value) -> Result<cube_core::operations::contracts::Contract> 
         .map_err(|_| "contract_mismatch")?
         .contract()
         .map_err(|_| "contract_mismatch")?;
-    if plan["contract"] != serde_json::to_value(&contract).map_err(|_| "invalid_state")?
+    if plan["contract"] != super::contract_snapshots::reference(&contract)?
         || plan["contractDigest"]
             != cube_core::hashing::sha256(
                 &serde_json::to_vec(&contract).map_err(|_| "invalid_state")?,
@@ -74,7 +74,7 @@ fn contract(plan: &Value) -> Result<cube_core::operations::contracts::Contract> 
 fn resolve(plan: &Value, result: &Value, node: &str, sequence: i64, port: &str) -> Result<Output> {
     if plan["targetNodes"] != json!([node])
         || plan["adapterVersion"] != 3
-        || plan["formatVersion"] != 3
+        || plan["formatVersion"] != 4
     {
         return Err("unsupported_pipeline");
     }
@@ -91,7 +91,11 @@ fn resolve(plan: &Value, result: &Value, node: &str, sequence: i64, port: &str) 
         .find(|p| p.name == port)
         .ok_or("not_found")?;
     let value = &result["outputs"][port];
-    let (kind, data) = representation(&definition.semantic_type, value)?;
+    let executable =
+        cube_core::operations::execution::describe(&contract.operation, Default::default())
+            .map_err(|_| "contract_mismatch")?;
+    let representation = *executable.outputs.get(port).ok_or("contract_mismatch")?;
+    let (kind, data) = representation_data(representation, &definition.semantic_type, value)?;
     let name = plan["operation"]["name"].as_str().ok_or("corrupt_store")?;
     Ok(Output {
         kind,
@@ -101,16 +105,21 @@ fn resolve(plan: &Value, result: &Value, node: &str, sequence: i64, port: &str) 
     })
 }
 
-fn representation(semantic_type: &str, value: &Value) -> Result<(&'static str, Vec<u8>)> {
-    match semantic_type {
-        "text" => {
+fn representation_data(
+    representation: cube_core::operations::execution::Representation,
+    semantic_type: &str,
+    value: &Value,
+) -> Result<(&'static str, Vec<u8>)> {
+    use cube_core::operations::execution::Representation;
+    match representation {
+        Representation::Text => {
             let text = value.as_str().ok_or("corrupt_store")?;
             if text.len() > protocol::contract().text_bytes {
                 return Err("output_limit");
             }
             Ok(("text", text.as_bytes().to_vec()))
         }
-        "bytes" => {
+        Representation::Bytes => {
             let encoded = value["base64"].as_str().ok_or("corrupt_store")?;
             if encoded.len() > protocol::contract().file_bytes.div_ceil(3) * 4 {
                 return Err("output_limit");
@@ -121,7 +130,19 @@ fn representation(semantic_type: &str, value: &Value) -> Result<(&'static str, V
             }
             Ok(("file", data))
         }
-        _ => Err("unsupported_output_type"),
+        Representation::ByteArray => {
+            let bytes: Vec<u8> =
+                serde_json::from_value(value.clone()).map_err(|_| "corrupt_store")?;
+            if bytes.len() > protocol::contract().file_bytes {
+                return Err("output_limit");
+            }
+            Ok(("file", bytes))
+        }
+        Representation::Json => Ok((
+            "structured",
+            super::structured::encode(semantic_type, value)?,
+        )),
+        Representation::ImageSamples => Err("unsupported_output_type"),
     }
 }
 
@@ -214,7 +235,7 @@ mod tests {
             .unwrap()
             .contract()
             .unwrap();
-        let mut plan = json!({"formatVersion":3,"adapterVersion":3,"targetNodes":["node"],"operation":{"operation":"cipher.rot13","operationVersion":contract.operation_version,"name":"ROT13"},"contract":contract,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&contract).unwrap())});
+        let mut plan = json!({"formatVersion":4,"adapterVersion":3,"targetNodes":["node"],"operation":{"operation":"cipher.rot13","operationVersion":contract.operation_version,"name":"ROT13"},"contract":super::super::contract_snapshots::reference(&contract).unwrap(),"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&contract).unwrap())});
         let result = json!({"status":"completed","outputs":{"output":"Hello"}});
         assert_eq!(
             resolve(&plan, &result, "node", 1, "output").unwrap().data,

@@ -1,14 +1,20 @@
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
-import type { PipelineDefinition } from "../desktop/workspace-contract";
+import type { Operation } from "../desktop/contract";
+import {
+  assetInputTypes,
+  type PipelineDefinition,
+} from "../desktop/workspace-contract";
 import { Select } from "./GraphInputs";
 import VscodeButton from "./VscodeButton";
 export function PipelineInputs({
+  operations,
   definition,
   disabled,
   onChange,
 }: {
+  operations: Operation[];
   definition: PipelineDefinition;
   disabled: boolean;
   onChange: (d: PipelineDefinition) => void;
@@ -66,11 +72,12 @@ export function PipelineInputs({
         label="Input type"
         value={kind}
         disabled={disabled}
-        options={[
-          { value: "text", label: "Text" },
-          { value: "image.samples", label: "Image" },
-          { value: "bytes", label: "File bytes" },
-        ]}
+        options={[...assetInputTypes(operations)].map(
+          ([semanticType, representation]) => ({
+            value: semanticType,
+            label: `${representation === "text" ? "Text" : representation === "image_samples" ? "Image" : representation === "json" ? "Structured data" : "File bytes"} · ${semanticType}`,
+          }),
+        )}
         onChange={setKind}
       />
       <VscodeButton

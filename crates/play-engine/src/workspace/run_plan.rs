@@ -1,5 +1,5 @@
 use super::{
-    bindings, blocks,
+    bindings, blocks, contract_snapshots,
     model::{Content, RunRequest},
     queries, storage,
 };
@@ -93,8 +93,8 @@ pub async fn build(
     for slot in &graph.inputs {
         let asset = assets.get(&slot.name).ok_or("invalid_binding")?;
         blocks::source_active(connection, context, &asset.id).await?;
-        let kind = bindings::semantic_type(asset)?;
-        if kind != slot.semantic_type {
+        let kind = slot.semantic_type.as_str();
+        if !bindings::accepts(asset, kind)? {
             return Err("invalid_asset_type");
         }
         let used = required.contains(slot.name.as_str());
@@ -114,6 +114,9 @@ pub async fn build(
                 Content::Text { text } | Content::Page { text } => {
                     InputValue::Text { text: text.clone() }
                 }
+                Content::Structured { value, .. } => InputValue::Structured {
+                    value: value.clone(),
+                },
                 Content::Image => {
                     let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset.id).bind(asset.revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
                     InputValue::Image {
@@ -135,7 +138,7 @@ pub async fn build(
         inputs: input_data,
     };
     crate::worker::validate_pipeline(&invocation)?;
-    let contract = target.contract()?;
+    let contract = contract_snapshots::reference(&target.contract()?)?;
     let pipeline_id = request.pipeline_id.to_string();
     let pipeline_revision = request.pipeline_revision;
     let node_id = *schedule.first().ok_or("invalid_pipeline")?;
@@ -144,8 +147,8 @@ pub async fn build(
         .map(|id| node_plan(graph.node(*id)?))
         .collect::<Result<Vec<_>>>()?;
     let target_plan = node_plan(target)?;
-    let contracts = compact_contracts(&mut nodes, &target_plan)?;
-    let value = json!({"formatVersion":3,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":caller.as_str(),"adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"activeRuns":crate::protocol::contract().active_runs,"activeRunsPerExploration":crate::protocol::contract().active_runs_per_exploration,"queuedRuns":crate::protocol::contract().queued_runs,"queuedRunsPerExploration":crate::protocol::contract().queued_runs_per_exploration,"parallelNodes":crate::protocol::contract().parallel_nodes,"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let contracts = compact_contracts(connection, context, &mut nodes, &target_plan).await?;
+    let value = json!({"formatVersion":4,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":caller.as_str(),"adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"activeRuns":crate::protocol::contract().active_runs,"activeRunsPerExploration":crate::protocol::contract().active_runs_per_exploration,"queuedRuns":crate::protocol::contract().queued_runs,"queuedRunsPerExploration":crate::protocol::contract().queued_runs_per_exploration,"parallelNodes":crate::protocol::contract().parallel_nodes,"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }
@@ -164,13 +167,26 @@ pub fn node_plan(node: &crate::graph::Node) -> Result<Value> {
     let c = node.contract()?;
     let name = d.metadata().map_or(d.command, |m| m.canonical_name);
     Ok(
-        json!({"id":node.id,"operation":{"operation":node.operation,"operationVersion":node.operation_version,"name":name},"contract":c,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&c).map_err(|_|"invalid_state")?),"parameters":node.parameters,"inputs":node.inputs}),
+        json!({"id":node.id,"operation":{"operation":node.operation,"operationVersion":node.operation_version,"name":name},"contract":contract_snapshots::reference(&c)?,"contractDigest":contract_snapshots::digest(&c)?,"parameters":node.parameters,"inputs":node.inputs}),
     )
 }
 
-fn compact_contracts(nodes: &mut [Value], target: &Value) -> Result<Value> {
+async fn compact_contracts(
+    connection: &mut SqliteConnection,
+    context: &super::model::Context,
+    nodes: &mut [Value],
+    target: &Value,
+) -> Result<Value> {
     let mut contracts = serde_json::Map::new();
     for node in nodes {
+        let operation = node["operation"]["operation"]
+            .as_str()
+            .ok_or("invalid_state")?;
+        let contract = cube_core::operations::require(operation)
+            .map_err(|_| "contract_mismatch")?
+            .contract()
+            .map_err(|_| "contract_mismatch")?;
+        contract_snapshots::retain(connection, context, &contract).await?;
         let digest = node["contractDigest"]
             .as_str()
             .ok_or("invalid_state")?

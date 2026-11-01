@@ -50,8 +50,8 @@ pub(super) async fn bytes(
     exploration: &str,
     additional: usize,
 ) -> Result<()> {
-    let total: i64 = sqlx::query_scalar("SELECT (SELECT COALESCE(SUM(length(data)),0) FROM asset_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(text AS BLOB))),0) FROM note_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(plan AS BLOB))+COALESCE(length(CAST(result AS BLOB)),0)+length(reservation)),0) FROM pipeline_runs WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(hypothesis AS BLOB))),0) FROM trails WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(result AS BLOB))),0) FROM node_results WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(title AS BLOB))+length(CAST(explanation AS BLOB))+length(CAST(snapshot AS BLOB))),0) FROM solution_revisions WHERE workspace_id=? AND exploration_id=?)")
-        .bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).fetch_one(connection).await.map_err(storage::failure)?;
+    let total: i64 = sqlx::query_scalar("SELECT (SELECT COALESCE(SUM(length(data)),0) FROM asset_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(text AS BLOB))),0) FROM note_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(plan AS BLOB))+COALESCE(length(CAST(result AS BLOB)),0)+length(reservation)),0) FROM pipeline_runs WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(hypothesis AS BLOB))),0) FROM trails WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(result AS BLOB))),0) FROM node_results WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(title AS BLOB))+length(CAST(explanation AS BLOB))+length(CAST(snapshot AS BLOB))),0) FROM solution_revisions WHERE workspace_id=? AND exploration_id=?)+(SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM contract_snapshots WHERE workspace_id=? AND exploration_id=?)")
+        .bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).bind(workspace).bind(exploration).fetch_one(connection).await.map_err(storage::failure)?;
     if total < 0 || total as usize + additional > protocol::contract().exploration_bytes {
         return Err("storage_quota");
     }
@@ -582,6 +582,16 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         } => {
             queries::context(connection, owner, context).await?;
             add(connection, context, title, text, None).await?
+        }
+        Command::AddStructured {
+            context,
+            title,
+            semantic_type,
+            value,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            super::structured::add(connection, context, title, semantic_type, value).await?
         }
         Command::AddFile {
             context,

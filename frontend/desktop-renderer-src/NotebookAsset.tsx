@@ -8,6 +8,7 @@ import type {
 import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
 import { FilePreview } from "./FilePreview";
+import { StructuredPreview } from "./StructuredPreview";
 
 export function NotebookAsset({
   block,
@@ -33,6 +34,8 @@ export function NotebookAsset({
           <AssetImage asset={block.asset} context={context} />
         ) : block.asset.content.kind === "file" ? (
           <FilePreview content={block.asset.content} />
+        ) : block.asset.content.kind === "structured" ? (
+          <StructuredPreview content={block.asset.content} />
         ) : block.asset.content.kind === "page" ? (
           <div className="page-source">
             <span>Page source · inert</span>

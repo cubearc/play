@@ -1082,26 +1082,34 @@ test("typed composition joins image/caption branches and keeps binary and failed
     );
     assert.ok(trail);
     const details = async () =>
-      page.evaluate(async (t) => {
-        const context = {
-          workspace_id: t.workspaceId,
-          exploration_id: t.explorationId,
-          stage_id: t.stageId,
-        };
-        const runs = await window.play.workspace({
-          kind: "list_runs",
-          context,
-          trail_id: t.id,
-          before: null,
-        });
-        const latest = runs.runs[0];
-        if (!latest) throw new Error("run_missing");
-        return window.play.workspace({
-          kind: "run_detail",
-          context,
-          run_id: latest.id,
-        });
-      }, trail);
+      page.evaluate(
+        async (t) => {
+          const context = {
+            workspace_id: t.workspaceId,
+            exploration_id: t.explorationId,
+            stage_id: t.stageId,
+          };
+          const runs = await window.play.workspace({
+            kind: "list_runs",
+            context,
+            trail_id: t.id,
+            before: null,
+          });
+          const latest = runs.runs[0];
+          if (!latest) throw new Error("run_missing");
+          return window.play.workspace({
+            kind: "run_detail",
+            context,
+            run_id: latest.id,
+          });
+        },
+        {
+          id: trail.id,
+          workspaceId: trail.workspaceId,
+          explorationId: trail.explorationId,
+          stageId: trail.stageId,
+        },
+      );
     const joined = await details();
     assert.equal(joined.attempts.length, 5);
     assert.ok(joined.attempts.every((a) => a.status === "completed"));
@@ -1199,7 +1207,14 @@ test("typed composition joins image/caption branches and keeps binary and failed
           },
           run_id: id,
         }),
-      { t: trail, id: joined.id },
+      {
+        t: {
+          workspaceId: trail.workspaceId,
+          explorationId: trail.explorationId,
+          stageId: trail.stageId,
+        },
+        id: joined.id,
+      },
     );
     assert.deepEqual(restored, joined);
   } finally {
@@ -1341,7 +1356,12 @@ test("named assets keep figures grouped and share a graph without sharing bindin
           trail_id: id,
           before: null,
         }),
-      t,
+      {
+        id: t.id,
+        workspaceId: t.workspaceId,
+        explorationId: t.explorationId,
+        stageId: t.stageId,
+      },
     );
     assert.equal(runs.runs.length, 2);
     assert.equal(runs.runs[0]?.operation.operation, "image.pixels.read");
@@ -1733,9 +1753,12 @@ test("explicit Pipeline revisions preserve separate Trail hypotheses and accepte
     await editor
       .getByRole("combobox", { name: "Operation", exact: true })
       .click();
+    const brainfuck = (await page.evaluate(() => window.play.catalog())).find(
+      (operation) => operation.operation === "esolang.brainfuck.execute",
+    );
+    assert.ok(brainfuck);
     await editor
-      .getByRole("option")
-      .filter({ hasText: /brainfuck/i })
+      .getByRole("option", { name: brainfuck.name, exact: true })
       .click();
     await expect(
       editor.getByRole("textbox", { name: "Max instructions", exact: true }),
@@ -2139,7 +2162,12 @@ test("complete notebook keeps Pages inert and runs the selected image through it
           trail_id: t.id,
           before: null,
         }),
-      imageTrail,
+      {
+        id: imageTrail.id,
+        workspaceId: imageTrail.workspaceId,
+        explorationId: imageTrail.explorationId,
+        stageId: imageTrail.stageId,
+      },
     );
     assert.equal(runs.runs.length, 1);
     const firstRun = runs.runs[0];
@@ -2155,7 +2183,14 @@ test("complete notebook keeps Pages inert and runs the selected image through it
           },
           run_id: id,
         }),
-      { t: imageTrail, id: firstRun.id },
+      {
+        t: {
+          workspaceId: imageTrail.workspaceId,
+          explorationId: imageTrail.explorationId,
+          stageId: imageTrail.stageId,
+        },
+        id: firstRun.id,
+      },
     );
     const input = detail.plan.inputs.source;
     assert.ok(input && "assetId" in input);
@@ -2352,7 +2387,14 @@ test("annotation Blocks save independently, preserve drafts and restore their No
           expected_revision: note.revision,
           text: "A concurrently saved observation",
         }),
-      { exploration: concurrent, note: alternative.note },
+      {
+        exploration: {
+          workspaceId: concurrent.workspaceId,
+          id: concurrent.id,
+          stage: { id: concurrent.stage.id },
+        },
+        note: { id: alternative.note.id, revision: alternative.note.revision },
+      },
     );
     await alternativeText.focus();
     await page.keyboard.press("ControlOrMeta+s");
@@ -2500,19 +2542,34 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
       .getByLabel("Stage note", { exact: true })
       .fill("Keep this selected result as evidence.");
     const stale = await current(page);
-    await page.evaluate(async ({ workspace, exploration }) => {
-      await window.play.workspace({
-        kind: "reorder_blocks",
-        context: {
-          workspace_id: workspace.id,
-          exploration_id: exploration.id,
-          stage_id: exploration.stage.id,
+    await page.evaluate(
+      async ({ workspace, exploration }) => {
+        await window.play.workspace({
+          kind: "reorder_blocks",
+          context: {
+            workspace_id: workspace.id,
+            exploration_id: exploration.id,
+            stage_id: exploration.stage.id,
+          },
+          key: crypto.randomUUID(),
+          expected_revision: exploration.stage.revision,
+          block_ids: exploration.stage.blocks
+            .map((block) => block.id)
+            .reverse(),
+        });
+      },
+      {
+        workspace: { id: stale.workspace.id },
+        exploration: {
+          id: stale.exploration.id,
+          stage: {
+            id: stale.exploration.stage.id,
+            revision: stale.exploration.stage.revision,
+            blocks: stale.exploration.stage.blocks.map((b) => ({ id: b.id })),
+          },
         },
-        key: crypto.randomUUID(),
-        expected_revision: exploration.stage.revision,
-        block_ids: exploration.stage.blocks.map((block) => block.id).reverse(),
-      });
-    }, stale);
+      },
+    );
     await clue()
       .getByRole("button", { name: "Save output as block", exact: true })
       .click();
@@ -2694,6 +2751,165 @@ test("saved output Blocks preserve the original Run and can feed a new text oper
       })
       .catch(() => {});
     await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("structured Assets reuse exact outputs through the notebook and canvas after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-structured-assets-"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Typed results");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Reusable measurements");
+    const catalog = await page.evaluate(() => window.play.catalog());
+    const maximum = catalog.find((o) => o.operation === "number.maximum");
+    const addition = catalog.find((o) => o.operation === "number.add");
+    assert.ok(maximum && addition);
+    await notebook(page)
+      .getByRole("button", { name: "Add data", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add structured data",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Measurements");
+    await dialog
+      .getByRole("combobox", { name: "Data type", exact: true })
+      .click();
+    await dialog
+      .getByRole("option", { name: maximum.input_type, exact: true })
+      .click();
+    await dialog
+      .getByRole("textbox", { name: "JSON value", exact: true })
+      .fill("[1,");
+    await dialog.getByRole("button", { name: "Add data", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    await dialog
+      .getByRole("textbox", { name: "JSON value", exact: true })
+      .fill("[-7,5,3]");
+    await dialog.getByRole("button", { name: "Add data", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const cell = notebook(page).getByRole("article", {
+      name: "Measurements block",
+      exact: true,
+    });
+    await expect(cell).toContainText("Structured data");
+    await cell
+      .getByRole("button", { name: "Explore Measurements", exact: true })
+      .click();
+    const canvas = () =>
+      page.getByRole("region", { name: "Trail canvas", exact: true });
+    await expect(
+      canvas().getByRole("textbox", { name: "Structured data", exact: true }),
+    ).toHaveValue("[\n  -7,\n  5,\n  3\n]");
+    const configure = async (name: string, operation: string) => {
+      await canvas()
+        .getByRole("button", { name: "New Pipeline", exact: true })
+        .click();
+      dialog = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+      await dialog
+        .getByRole("textbox", { name: "Pipeline name", exact: true })
+        .fill(name);
+      await dialog
+        .getByRole("combobox", { name: "Operation", exact: true })
+        .click();
+      await dialog
+        .getByRole("option", { name: operation, exact: true })
+        .click();
+      await dialog
+        .getByRole("button", { name: "Create Pipeline", exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+    };
+    await configure("Largest measurement", maximum.name);
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    if (!nativeWorkers) return;
+    await expect(
+      canvas().getByRole("region", { name: "Cell result" }),
+    ).toContainText("output: 5");
+    const first = await latestRun(page, "Measurements");
+    await canvas()
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    const title = `${maximum.name} · output · Run ${first.detail.sequence}`;
+    const saved = notebook(page).getByRole("article", {
+      name: `${title} block`,
+      exact: true,
+    });
+    await expect(saved).toContainText(`Saved from ${maximum.name}`);
+    await saved
+      .getByRole("button", { name: `Explore ${title}`, exact: true })
+      .click();
+    await expect(
+      canvas().getByRole("textbox", { name: "Structured data", exact: true }),
+    ).toHaveValue("5");
+    await configure("Double the selected result", addition.name);
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    await expect(
+      canvas().getByRole("region", { name: "Cell result" }),
+    ).toContainText("output: 10");
+    const second = await latestRun(page, title);
+    const before = await current(page);
+    const resultTrail = before.exploration.trails.find(
+      (t) => t.source.title === title,
+    );
+    assert.ok(resultTrail);
+    assert.equal(
+      second.detail.plan.inputs.source.assetId,
+      resultTrail.source.id,
+    );
+    assert.equal(resultTrail.source.origin?.kind, "run_output");
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await capture(application, "native-structured-asset-reuse");
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual(await current(page), before);
+    assert.deepEqual(
+      await frozenRun(page, first.context, first.detail.id),
+      first.detail,
+    );
+    assert.deepEqual(
+      await frozenRun(page, second.context, second.detail.id),
+      second.detail,
+    );
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
     await rm(profile, { recursive: true, force: true });
   }
 });
@@ -4127,21 +4343,29 @@ test("native text and caption revisions preserve historical Runs and drafts acro
       .getByRole("textbox", { name: "Text", exact: true })
       .fill("Frpbaq pyhr.");
     const runCount = () =>
-      page.evaluate(async (exploration) => {
-        const trail = exploration.trails[0];
-        if (!trail) throw new Error("trail_missing");
-        const page = await window.play.workspace({
-          kind: "list_runs",
-          context: {
-            workspace_id: exploration.workspaceId,
-            exploration_id: exploration.id,
-            stage_id: exploration.stage.id,
-          },
-          trail_id: trail.id,
-          before: null,
-        });
-        return page.runs.length;
-      }, original.exploration);
+      page.evaluate(
+        async (exploration) => {
+          const trail = exploration.trails[0];
+          if (!trail) throw new Error("trail_missing");
+          const page = await window.play.workspace({
+            kind: "list_runs",
+            context: {
+              workspace_id: exploration.workspaceId,
+              exploration_id: exploration.id,
+              stage_id: exploration.stage.id,
+            },
+            trail_id: trail.id,
+            before: null,
+          });
+          return page.runs.length;
+        },
+        {
+          workspaceId: original.exploration.workspaceId,
+          id: original.exploration.id,
+          stage: { id: original.exploration.stage.id },
+          trails: original.exploration.trails.map((t) => ({ id: t.id })),
+        },
+      );
     const beforeShortcut = await runCount();
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(dialog).toBeVisible();
@@ -4198,7 +4422,7 @@ test("native text and caption revisions preserve historical Runs and drafts acro
         });
       },
       {
-        block,
+        block: { id: block.id, asset: { id: block.asset.id } },
         context: {
           workspace_id: original.workspace.id,
           exploration_id: original.exploration.id,
@@ -4638,7 +4862,10 @@ test("ordered notebook Blocks preserve drafts, evidence and keyboard context aft
             }
             return count;
           },
-          { context: originalContext, trails: allTrails },
+          {
+            context: originalContext,
+            trails: allTrails.map((t) => ({ id: t.id })),
+          },
         );
       const count = await runCount();
       await page.getByLabel("Stage note", { exact: true }).focus();
@@ -5281,21 +5508,33 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
         .click();
       await expect(cell()).toContainText("output: First clue.");
       const snapshot = await current(page);
-      await page.evaluate(async ({ workspace, exploration }) => {
-        const asset = exploration.trails[0]?.source;
-        if (!asset) throw new Error("missing_asset");
-        await window.play.workspace({
-          kind: "select_candidate",
-          context: {
-            workspace_id: workspace.id,
-            exploration_id: exploration.id,
-            stage_id: exploration.stage.id,
+      await page.evaluate(
+        async ({ workspace, exploration }) => {
+          const asset = exploration.trails[0]?.source;
+          if (!asset) throw new Error("missing_asset");
+          await window.play.workspace({
+            kind: "select_candidate",
+            context: {
+              workspace_id: workspace.id,
+              exploration_id: exploration.id,
+              stage_id: exploration.stage.id,
+            },
+            key: crypto.randomUUID(),
+            expected_revision: 1,
+            selection: { kind: "asset", asset_id: asset.id, revision: 1 },
+          });
+        },
+        {
+          workspace: { id: snapshot.workspace.id },
+          exploration: {
+            id: snapshot.exploration.id,
+            stage: { id: snapshot.exploration.stage.id },
+            trails: snapshot.exploration.trails.map((t) => ({
+              source: { id: t.source.id },
+            })),
           },
-          key: crypto.randomUUID(),
-          expected_revision: 1,
-          selection: { kind: "asset", asset_id: asset.id, revision: 1 },
-        });
-      }, snapshot);
+        },
+      );
       await cell()
         .getByRole("button", {
           name: "Choose output as candidate",
@@ -5392,36 +5631,45 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
       .getByLabel("Solution explanation", { exact: true })
       .fill("A revised explanation that preserves the same evidence.");
     const owner = await current(page);
-    await page.evaluate(async ({ workspace, exploration }) => {
-      const context = {
-        workspace_id: workspace.id,
-        exploration_id: exploration.id,
-        stage_id: exploration.stage.id,
-      };
-      const list = await window.play.workspace({
-        kind: "list_solutions",
-        context,
-      });
-      const item = list.solutions[0];
-      if (!item) throw new Error("missing_solution");
-      const detail = await window.play.workspace({
-        kind: "get_solution",
-        context,
-        solution_id: item.id,
-        revision: null,
-      });
-      await window.play.workspace({
-        kind: "save_solution",
-        context,
-        key: crypto.randomUUID(),
-        solution_id: item.id,
-        expected_revision: 1,
-        notes: [],
-        candidate_revision: detail.snapshot.candidate.revision,
-        title: item.title,
-        explanation: "An independently saved explanation.",
-      });
-    }, owner);
+    await page.evaluate(
+      async ({ workspace, exploration }) => {
+        const context = {
+          workspace_id: workspace.id,
+          exploration_id: exploration.id,
+          stage_id: exploration.stage.id,
+        };
+        const list = await window.play.workspace({
+          kind: "list_solutions",
+          context,
+        });
+        const item = list.solutions[0];
+        if (!item) throw new Error("missing_solution");
+        const detail = await window.play.workspace({
+          kind: "get_solution",
+          context,
+          solution_id: item.id,
+          revision: null,
+        });
+        await window.play.workspace({
+          kind: "save_solution",
+          context,
+          key: crypto.randomUUID(),
+          solution_id: item.id,
+          expected_revision: 1,
+          notes: [],
+          candidate_revision: detail.snapshot.candidate.revision,
+          title: item.title,
+          explanation: "An independently saved explanation.",
+        });
+      },
+      {
+        workspace: { id: owner.workspace.id },
+        exploration: {
+          id: owner.exploration.id,
+          stage: { id: owner.exploration.stage.id },
+        },
+      },
+    );
     await solutions()
       .getByRole("button", { name: "Save solution", exact: true })
       .click();

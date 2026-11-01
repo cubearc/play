@@ -69,9 +69,14 @@ export function PipelineEditor({
     const op =
       operations.find(
         (o) =>
+          o.availability.state === "available" &&
           o.operation === trail.pipeline?.outputOperation &&
           o.input_type === inputType,
-      ) ?? operations.find((o) => o.input_type === inputType);
+      ) ??
+      operations.find(
+        (o) =>
+          o.availability.state === "available" && o.input_type === inputType,
+      );
     if (!op) throw new Error("catalog_unavailable");
     const id = crypto.randomUUID();
     return {
@@ -215,11 +220,13 @@ export function PipelineEditor({
         in Rust.
       </p>
       <PipelineInputs
+        operations={operations}
         definition={definition}
         disabled={readonly}
         onChange={change}
       />
       <BindingsEditor
+        operations={operations}
         inputs={definition.inputs}
         assets={assets}
         pinned={trail.bindings}
@@ -318,11 +325,15 @@ export function PipelineEditor({
               disabled={readonly || invalid}
               options={operations.map((o) => ({
                 value: o.operation,
-                label: o.name,
+                label:
+                  o.availability.state === "available"
+                    ? o.name
+                    : `${o.name} (${o.availability.reason === "retention_policy_unavailable" ? "private inputs unavailable" : "image output unavailable"})`,
+                disabled: o.availability.state === "unavailable",
               }))}
               onChange={(id) => {
                 const op = operations.find((o) => o.operation === id);
-                if (!op) return;
+                if (op?.availability.state !== "available") return;
                 update({
                   ...node,
                   operation: id,

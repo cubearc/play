@@ -58,6 +58,13 @@ async fn fork_asset(
     let (kind, data) = match original.content {
         Content::Text { text } => ("text", text.into_bytes()),
         Content::Page { text } => ("page", text.into_bytes()),
+        Content::Structured {
+            semantic_type,
+            value,
+        } => (
+            "structured",
+            super::structured::encode(&semantic_type, &value)?,
+        ),
         Content::Image | Content::File { .. } => {
             let data: Vec<u8> = sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?")
                 .bind(&workspace).bind(&exploration).bind(source.asset_id.to_string()).bind(source.revision)

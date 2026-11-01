@@ -9,12 +9,26 @@ use sqlx::{Row, SqliteConnection};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
-pub fn semantic_type(asset: &Asset) -> Result<&'static str> {
-    match asset.content {
-        Content::Text { .. } | Content::Page { .. } => Ok("text"),
-        Content::Image => Ok("image.samples"),
-        Content::File { .. } => Ok("bytes"),
+/// Bind only lossless physical views declared by the installed Core contracts.
+pub fn accepts(asset: &Asset, semantic: &str) -> Result<bool> {
+    use cube_core::operations::execution::Representation;
+    if let Content::Structured { semantic_type, .. } = &asset.content {
+        return Ok(semantic_type == semantic
+            && crate::worker::asset_representation(semantic)? == Representation::Json);
     }
+    Ok(matches!(
+        (
+            &asset.content,
+            crate::worker::asset_representation(semantic)?
+        ),
+        (
+            Content::Text { .. } | Content::Page { .. },
+            Representation::Text
+        ) | (
+            Content::File { .. },
+            Representation::Bytes | Representation::ByteArray
+        ) | (Content::Image, Representation::ImageSamples)
+    ))
 }
 pub async fn read(
     c: &mut SqliteConnection,
@@ -69,7 +83,7 @@ pub async fn validate(
             reference.revision,
         )
         .await?;
-        if semantic_type(&asset)? != input.semantic_type {
+        if !accepts(&asset, &input.semantic_type)? {
             return Err("invalid_asset_type");
         }
     }

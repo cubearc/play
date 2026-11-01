@@ -78,6 +78,7 @@ pub enum Command {
     },
     Catalog {
         id: u32,
+        offset: usize,
     },
     Workspace {
         id: u32,
@@ -113,7 +114,7 @@ impl Command {
             Self::Terminal { id, .. } => *id,
             Self::Hello { id, .. }
             | Self::Invoke { id, .. }
-            | Self::Catalog { id }
+            | Self::Catalog { id, .. }
             | Self::Cancel { id, .. }
             | Self::Workspace { id, .. }
             | Self::StartRun { id, .. }

@@ -40,14 +40,14 @@ or proof of the Windows/Linux release security boundary.
 
 ## Single baseline and refusal
 
-The native store accepts generation **2**, schema version **17**, SQLite
+The native store accepts generation **2**, schema version **18**, SQLite
 application ID `0x4355504e` and 4096-byte pages. One complete baseline lives in
 `crates/play-engine/src/workspace/schema.sql`. Fresh stores initialize it directly;
 current stores reopen with the same schema, identities and evidence.
 
 The engine checks the identity marker, raw header, complete schema signature and
 stored identity through a read-only immutable connection before writable recovery
-under the owner lock. Schemas 1–16, newer versions, conversion markers and
+under the owner lock. Schemas 1–17, newer versions, conversion markers and
 WAL/SHM stores are unsupported. Rejection preserves database, journals, markers,
 archival copies and source bytes; there is no migration chain or converter.
 The current baseline uses rollback journaling and checks foreign-key integrity.
@@ -334,6 +334,33 @@ prior content and evidence intact. A running worker keeps its already frozen
 input. New Run admission separately checks its explicit expected Asset identity
 and revision; reading a newer notebook never rewrites a completed Run.
 
+## Typed structured Assets and contract snapshots
+
+`add_structured` takes `context`, `key`, `title`, `semantic_type` and a JSON
+`value`. The engine accepts an unambiguous installed Core JSON representation.
+The stored canonical document preserves the semantic type and exact parsed value,
+with an immutable revision and digest. Files and text never parse implicitly.
+A receiver must declare that exact semantic type and validates its full schema.
+
+The notebook previews structured content and opens its Trail canvas for complete
+inspection. A retained JSON result can be saved as a Block with the original
+Run, attempt and named-port provenance; later Pipelines bind that Asset revision.
+Copying, archiving, Candidates, Notes and Solutions use the same scoped identities.
+Values are inert data. A preview never becomes an input in place of the full value.
+
+One structured value is bounded by the existing 16384-byte output ceiling. Its
+canonical document, including type metadata, consumes the Exploration byte quota.
+All consumed JSON, text and decoded byte inputs share the existing 8192-byte Run
+input ceiling. Retaining a value does not imply it fits every later receiver.
+
+Plan format 4 stores compact, typed contract references and the exact contract
+digest. Full Core contracts live in immutable `contract_snapshots` rows keyed by
+Workspace, Exploration and digest; `run_contract_snapshots` foreign keys bind
+each Run to its exact schemas. Repeated contracts share one stored document.
+Those documents consume the unchanged Exploration quota, rechecked together with
+Run admission. Plans retain their 16384-byte ceiling and reject unsupported formats.
+There is no inline-schema compatibility reader or conversion path.
+
 ## Development ceilings
 
 [`desktop/protocol.json`](https://github.com/cubearc/play/blob/main/desktop/protocol.json)
@@ -431,9 +458,9 @@ Snapshot format 1 freezes Stage/Candidate/selection references. For a Run output
 `path` freezes the selected node's dependency closure, used input Asset revisions,
 node parameters and connections, contract digests, required output ports, actual
 attempts and pinned Trail/Pipeline/Run identity. The full Pipeline definition and
-unselected branches are not copied into the snapshot. Immutable Run plans retain
-the full pinned contracts; reads verify current availability against those exact
-contracts and policies. Asset selections have a null root path.
+unselected branches are not copied into the snapshot. Run plans retain compact contract references. Immutable `contract_snapshots` rows
+retain the full pinned schemas once per Exploration, with digest-checked Run
+foreign keys; reads verify availability against those exact contracts and policies. Asset selections have a null root path.
 
 The optional `lineage` section captures `assets` with exact ID/revision, title,
 recorded origin and `editedSinceCopy`, and `paths` with exact Run-output selections

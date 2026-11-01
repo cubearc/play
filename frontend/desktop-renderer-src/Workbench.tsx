@@ -6,6 +6,7 @@ import type { PipelineView } from "../desktop/workspace-contract";
 import {
   type AssetBlockView,
   assetInputType,
+  assetInputTypes,
   type Context,
   contextOf,
   type EditableAssetView,
@@ -19,6 +20,7 @@ import { ContentDialog, type DialogKind } from "./ContentDialog";
 import { ContextTerminal } from "./ContextTerminal";
 import { EvidenceNotesProvider } from "./EvidenceNotes";
 import { Explorer } from "./Explorer";
+import { parseExactJson } from "./exactJson";
 import { Notebook } from "./Notebook";
 import { PipelineEditor, type PipelineMode } from "./PipelineEditor";
 import { runSelection } from "./runSelection";
@@ -554,6 +556,7 @@ export function Workbench() {
                           }}
                           busy={state.busy}
                           addText={() => setDialog("text")}
+                          addStructured={() => setDialog("structured")}
                           addImage={() => setDialog("image")}
                           addFile={() => void state.importFile()}
                           addAnnotation={() => setDialog("annotation")}
@@ -638,6 +641,7 @@ export function Workbench() {
             </footer>
             {editingTrail && workspace ? (
               <TrailEditor
+                operations={executions.operations}
                 trail={editingTrail}
                 pipelines={workspace.pipelines}
                 assets={
@@ -693,7 +697,18 @@ export function Workbench() {
                 kind={dialog}
                 error={state.error}
                 onClose={() => setDialog(null)}
-                onSubmit={async (title, text, key) => {
+                structuredTypes={[...assetInputTypes(executions.operations)]
+                  .filter(([, representation]) => representation === "json")
+                  .map(([semantic]) => semantic)
+                  .sort()}
+                onSubmit={async (title, text, key, semanticType) => {
+                  if (dialog === "structured" && semanticType)
+                    return state.addStructured(
+                      title,
+                      semanticType,
+                      parseExactJson(text),
+                      key,
+                    );
                   if (dialog === "exploration")
                     return state.createExploration(title, key);
                   if (dialog === "stage") return state.createStage(title, key);

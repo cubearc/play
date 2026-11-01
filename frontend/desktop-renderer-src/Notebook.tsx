@@ -29,6 +29,7 @@ export function Notebook({
   notes,
   openTrail,
   addText,
+  addStructured,
   addImage,
   addFile,
   addPage,
@@ -48,6 +49,7 @@ export function Notebook({
   busy: boolean;
   editText: (block: AssetBlockView, asset: EditableAssetView) => void;
   addText: () => void;
+  addStructured: () => void;
   addImage: () => void;
   addFile: () => void;
   addPage: () => void;
@@ -228,6 +230,16 @@ export function Notebook({
             onClick={addFile}
           >
             Add file
+          </VscodeButton>
+          <VscodeButton
+            secondary
+            icon="symbol-object"
+            disabled={busy || !canAdd}
+            aria-disabled={busy || !canAdd ? "true" : "false"}
+            title={canAdd ? undefined : limitMessage}
+            onClick={addStructured}
+          >
+            Add data
           </VscodeButton>
           <VscodeButton
             secondary

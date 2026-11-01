@@ -7,6 +7,7 @@ import { CandidateButton } from "./Candidates";
 import { AnnotateButton } from "./EvidenceNotes";
 import { FilePreview } from "./FilePreview";
 import { PipelineGraph } from "./PipelineGraph";
+import { StructuredPreview } from "./StructuredPreview";
 import { TrailCell } from "./TrailCell";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -78,7 +79,9 @@ export function AssetCanvas({
                   ? "No Pipeline selected"
                   : page
                     ? "Page source · inert"
-                    : "File inspection"}
+                    : trail.source.content.kind === "structured"
+                      ? "Structured data"
+                      : "File inspection"}
           </span>
         </div>
         <CandidateButton
@@ -150,6 +153,8 @@ export function AssetCanvas({
                 />
               </div>
             </div>
+          ) : trail.source.content.kind === "structured" ? (
+            <StructuredPreview content={trail.source.content} details />
           ) : trail.source.content.kind === "file" ? (
             <FilePreview content={trail.source.content} details />
           ) : (
@@ -190,6 +195,8 @@ export function AssetCanvas({
                 ) : asset.content.kind === "text" ||
                   asset.content.kind === "page" ? (
                   <pre>{asset.content.text}</pre>
+                ) : asset.content.kind === "structured" ? (
+                  <StructuredPreview content={asset.content} details />
                 ) : asset.content.kind === "file" ? (
                   <FilePreview content={asset.content} />
                 ) : null}

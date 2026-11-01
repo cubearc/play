@@ -3,6 +3,8 @@ import type { Operation } from "../../desktop/contract";
 import { parameterTypesValid } from "../ParameterFields";
 
 const operation: Operation = {
+  execution: { effects: "pure", inputs: {}, outputs: {} },
+  availability: { state: "available" },
   operation: "test.contract",
   operation_version: 1,
   name: "Contract",
@@ -113,5 +115,29 @@ describe("native contract-driven parameters", () => {
     };
     expect(parameterTypesValid(empty, {})).toBe(true);
     expect(parameterTypesValid(empty, { hidden: true })).toBe(false);
+  });
+});
+
+it("uses declared byte representations for literals with a new semantic type", async () => {
+  const { initialInputs } = await import("../GraphInputs");
+  const alias: Operation = {
+    ...operation,
+    execution: { effects: "pure", inputs: { payload: "bytes" }, outputs: {} },
+    contract: {
+      ...operation.contract,
+      inputs: [
+        {
+          name: "payload",
+          semantic_type: "custom.binary",
+          schema: {
+            type: "object",
+            properties: { base64: { type: "string" } },
+          },
+        },
+      ],
+    },
+  };
+  expect(initialInputs(alias, [])).toEqual({
+    payload: { kind: "literal", value: { base64: "" } },
   });
 });

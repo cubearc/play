@@ -1,10 +1,11 @@
+import type { Operation } from "../desktop/contract";
 import type {
   AssetRevisionRef,
   AssetView,
   PipelineDefinition,
   TrailView,
 } from "../desktop/workspace-contract";
-import { assetInputType } from "../desktop/workspace-contract";
+import { assetAcceptsInputType } from "../desktop/workspace-contract";
 import { Select } from "./GraphInputs";
 export type Bindings = Record<string, AssetRevisionRef>;
 export function bindingRefs(trail: TrailView): Bindings {
@@ -33,6 +34,7 @@ export function completeBindings(
   return inputs.slice(1).every((s) => bindings[s.name]);
 }
 export function BindingsEditor({
+  operations,
   inputs,
   assets,
   pinned,
@@ -40,6 +42,7 @@ export function BindingsEditor({
   disabled,
   onChange,
 }: {
+  operations: Operation[];
   inputs: PipelineDefinition["inputs"];
   assets: AssetView[];
   pinned: Record<string, AssetView>;
@@ -56,8 +59,8 @@ export function BindingsEditor({
         until you rebind it.
       </p>
       {inputs.slice(1).map((slot) => {
-        const candidates = assets.filter(
-          (a) => assetInputType(a) === slot.semanticType,
+        const candidates = assets.filter((a) =>
+          assetAcceptsInputType(a, slot.semanticType, operations),
         );
         const old = pinned[slot.name];
         const current = old && candidates.find((a) => a.id === old.id);

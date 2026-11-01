@@ -112,6 +112,14 @@ pub async fn prepare(
     )
     .await?;
     let plan = run_plan::build(&mut tx, request, caller).await?;
+    // Schema snapshots added by planning count before reserving the Run itself.
+    mutations::bytes(
+        &mut tx,
+        &workspace,
+        &exploration,
+        protocol::contract().run_reserve_bytes + 16384,
+    )
+    .await?;
     let identity = RunIdentity {
         context: context.clone(),
         id: Uuid::new_v4(),
@@ -119,6 +127,22 @@ pub async fn prepare(
     };
     sqlx::query("INSERT INTO pipeline_runs(workspace_id,exploration_id,stage_id,id,trail_id,pipeline_id,pipeline_revision,intent_key,intent_digest,caller,status,created_ms,retain_output,plan,reservation) VALUES(?,?,?,?,?,?,?,?,?,?,'queued',?,?,?,zeroblob(?))")
   .bind(&workspace).bind(&exploration).bind(context.stage_id.to_string()).bind(identity.id.to_string()).bind(request.trail_id.to_string()).bind(plan.pipeline_id).bind(plan.pipeline_revision).bind(request.key.to_string()).bind(digest(request)?).bind(caller.as_str()).bind(now()?).bind(request.retain_output).bind(plan.value.to_string()).bind(protocol::contract().run_reserve_bytes as i64).execute(&mut *tx).await.map_err(storage::failure)?;
+    let digests = plan.value["nodes"]
+        .as_array()
+        .ok_or("invalid_state")?
+        .iter()
+        .map(|node| node["contractDigest"].as_str().ok_or("invalid_state"))
+        .collect::<Result<std::collections::BTreeSet<_>>>()?;
+    for digest in digests {
+        sqlx::query("INSERT INTO run_contract_snapshots VALUES(?,?,?,?)")
+            .bind(&workspace)
+            .bind(&exploration)
+            .bind(identity.id.to_string())
+            .bind(digest)
+            .execute(&mut *tx)
+            .await
+            .map_err(storage::failure)?;
+    }
     for (slot, asset) in plan.inputs {
         sqlx::query("INSERT INTO run_inputs VALUES(?,?,?,?,?,?)")
             .bind(&workspace)

@@ -6,6 +6,7 @@ import {
   type Operation,
   type RunResult,
 } from "./contract.ts";
+import { loadCatalog } from "./operation-catalog.ts";
 
 interface Pending {
   resolve: (value: Record<string, unknown>) => void;
@@ -80,7 +81,9 @@ export class Engine {
     }
   }
 
-  run(invocation: Invocation): Promise<RunResult> {
+  run(
+    invocation: Invocation,
+  ): Promise<RunResult & { type: "finished"; id: number }> {
     if (this.active !== undefined) return Promise.reject(new Error("busy"));
     const operation = this.operations.find(
       (entry) =>
@@ -96,7 +99,7 @@ export class Engine {
     })
       .then((reply) => {
         if (reply.type !== "finished") throw new Error("invalid_response");
-        return reply as unknown as RunResult;
+        return reply as unknown as RunResult & { type: "finished"; id: number };
       })
       .finally(() => {
         if (this.active === id) this.active = undefined;
@@ -104,10 +107,7 @@ export class Engine {
   }
 
   async catalog(): Promise<Operation[]> {
-    const reply = await this.request({ type: "catalog" });
-    if (reply.type !== "catalog" || !Array.isArray(reply.operations))
-      throw new Error("invalid_response");
-    return reply.operations as Operation[];
+    return loadCatalog((offset) => this.request({ type: "catalog", offset }));
   }
 
   workspace<
