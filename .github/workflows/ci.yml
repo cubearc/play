@@ -114,6 +114,12 @@ jobs:
     # Measured Intel cold build: 14m20s; source and packaged journeys: about 10m each.
     # Keep enough job time for both proofs; worker and test deadlines are unchanged.
     timeout-minutes: 45
+    # Match the compact profile used by Core CI and the local native proof.
+    # Rust debug assertions and every runtime/test deadline remain enabled.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
