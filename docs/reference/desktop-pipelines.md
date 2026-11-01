@@ -209,3 +209,20 @@ file or text content until an explicit Core operation converts it.
 
 The native workbench keeps the source Run link beside the saved Asset. The new
 Pipeline consumes that exact revision; it does not relabel the source attempt.
+
+### Puzzle-code values and ambiguity
+
+Numbered Key, Headlines, Key Phrase, paginated Arnold word codes, the finite
+Gajewski Solresol lexicon and explicit numeric puzzle profiles use the installed
+Core contracts and native executors. Select the exact profile and required
+parameters from that contract. Named token arrays and structured reports remain
+typed JSON; text that resembles an array is not automatically converted.
+
+Key Phrase decoding can return multiple candidate letters and nullable text.
+Inspect its ordered readings; the nullable JSON output cannot silently connect
+to a required text port. Prime-product decoding returns multiplicities and text
+in alphabet order, which cannot recover the original letter order. Save the
+structured report to preserve those distinctions and its definition identity.
+Triliteral token output can connect directly to the matching token input without
+joining strings or dropping leading zero trits. Native runs retain the exact
+contract, parameters, named values and immutable evidence as for other operations.
