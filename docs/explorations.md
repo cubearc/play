@@ -221,6 +221,13 @@ Use **Field path** and the named input controls to connect the graph. [Open full
 
 Inspect numeric results as numbers beside their producing graph. [Open full size](assets/desktop/numeric-canvas.png).
 
+For operations such as VIC that mark their inputs, keys or outputs private,
+select **Retain private data in this workspace** before saving. This keeps the
+keys in the saved Pipeline and permits Runs to retain their inputs and results
+locally. Leave it unchecked to decline; the Pipeline cannot be saved or run.
+Changing the operation resets this choice. Each saved revision keeps its own
+consent, including when reused or forked.
+
 Operation parameters have labeled controls. **Advanced parameters** exposes the
 complete saved JSON when needed. Integer literals reject fractions and unsafe
 integers before saving, preserving an invalid draft when switching nodes. Input

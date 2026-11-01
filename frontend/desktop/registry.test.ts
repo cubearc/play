@@ -264,6 +264,9 @@ test("every discovered native executor runs its Core known answer through owned 
             operation: operation.operation,
             operationVersion: operation.operation_version,
             parameters,
+            ...(operation.requires_private_retention
+              ? { retainPrivate: true }
+              : {}),
             position: { x: 80, y: 80 },
             inputs: Object.fromEntries(
               Object.entries(fixture.inputs).map(([name, value]) => [
@@ -277,6 +280,20 @@ test("every discovered native executor runs its Core known answer through owned 
         ],
         output: node,
       };
+      if (operation.requires_private_retention) {
+        const unconsented = structuredClone(definition);
+        delete unconsented.nodes[0]?.retainPrivate;
+        await assert.rejects(
+          engine.workspace({
+            kind: "create_pipeline",
+            workspace_id: workspace.id,
+            key: randomUUID(),
+            title: operation.name,
+            definition: unconsented,
+          }),
+          /retention_policy_unavailable/,
+        );
+      }
       const pipeline = (await engine.workspace({
         kind: "create_pipeline",
         workspace_id: workspace.id,

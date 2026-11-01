@@ -21,16 +21,10 @@ fn budget() -> Budget {
 fn failure(error: core::Failure) -> &'static str {
     error.0
 }
-fn executable(operation: &str) -> Result<core::Executable> {
+fn supported(operation: &str) -> Result<core::Executable> {
     let e = core::describe(operation, budget()).map_err(failure)?;
     if e.effects != Effects::Pure {
         return Err("unsupported_operation");
-    }
-    if e.contract.policy.private_input
-        || e.contract.policy.private_output
-        || !e.contract.policy.sensitive_parameters.is_empty()
-    {
-        return Err("retention_policy_unavailable");
     }
     // The native host can materialize images as inputs; it does not yet retain
     // generated rasters. Unsupported representations never gain execution.
@@ -42,8 +36,33 @@ fn executable(operation: &str) -> Result<core::Executable> {
     }
     Ok(e)
 }
+pub(crate) fn requires_private_retention(
+    contract: &cube_core::operations::contracts::Contract,
+) -> bool {
+    contract.policy.private_input
+        || contract.policy.private_output
+        || !contract.policy.sensitive_parameters.is_empty()
+}
+fn executable(operation: &str) -> Result<core::Executable> {
+    let e = supported(operation)?;
+    if requires_private_retention(&e.contract) {
+        return Err("retention_policy_unavailable");
+    }
+    Ok(e)
+}
 pub fn validate_configuration(operation: &str, version: u32, parameters: &Value) -> Result<()> {
-    executable(operation)?;
+    validate_configuration_with_retention(operation, version, parameters, false)
+}
+pub(crate) fn validate_configuration_with_retention(
+    operation: &str,
+    version: u32,
+    parameters: &Value,
+    retain_private: bool,
+) -> Result<()> {
+    let e = supported(operation)?;
+    if requires_private_retention(&e.contract) && !retain_private {
+        return Err("retention_policy_unavailable");
+    }
     core::validate_parameters(operation, version, parameters, budget()).map_err(failure)
 }
 pub fn parameters(operation: &str) -> Result<Value> {
@@ -125,7 +144,7 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
 // Worker transport keeps compact single values and complete named maps for
 // multiple outputs. This choice depends only on representation and port count.
 fn raw_outputs(operation: &str, named: &Value) -> Result<Value> {
-    let e = executable(operation)?;
+    let e = supported(operation)?;
     if e.outputs.len() != 1 {
         return Ok(json!({"ports":named}));
     }
@@ -142,7 +161,7 @@ fn raw_outputs(operation: &str, named: &Value) -> Result<Value> {
     }
 }
 pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
-    let e = executable(operation)?;
+    let e = supported(operation)?;
     let named = if let Some(ports) = output.get("ports") {
         ports.clone()
     } else {
@@ -174,16 +193,20 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
 pub fn catalog() -> Result<Value> {
     let mut entries = Vec::new();
     for registration in core::catalog(budget()).map_err(failure)? {
-        let e = match executable(registration.operation) {
+        let e = match supported(registration.operation) {
             Ok(e) => e,
-            Err("unsupported_representation" | "retention_policy_unavailable") => continue,
+            Err("unsupported_representation") => continue,
             Err(e) => return Err(e),
         };
         let d = cube_core::operations::require(e.operation).map_err(|_| "contract_mismatch")?;
-        entries.push(json!({"operation":e.operation,"operation_version":e.contract.operation_version,
+        let mut entry = json!({"operation":e.operation,"operation_version":e.contract.operation_version,
             "name":d.metadata().map_or(d.command,|m|m.canonical_name),"description":d.description,
             "input_type":e.contract.inputs.first().ok_or("contract_mismatch")?.semantic_type,
-            "parameters":e.parameters,"execution":{"effects":e.effects,"inputs":e.inputs,"outputs":e.outputs},"contract":e.contract}));
+            "parameters":e.parameters,"execution":{"effects":e.effects,"inputs":e.inputs,"outputs":e.outputs},"contract":e.contract});
+        if requires_private_retention(&e.contract) {
+            entry["requires_private_retention"] = json!(true);
+        }
+        entries.push(entry);
     }
     Ok(json!(entries))
 }

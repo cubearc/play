@@ -331,6 +331,155 @@ test("native terminal connects on supported platforms and refuses unavailable po
   }
 });
 
+test("private VIC retention is explicit, revisioned and survives native execution and restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-private-vic-"));
+  const fixtures = JSON.parse(
+    await readFile(
+      new URL(
+        "../../../cube/crates/cube-core/src/operations/contracts/conformance.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as {
+    operation: string;
+    inputs: { text: string };
+    parameters: Record<string, unknown>;
+    outputs: { text: string };
+  }[];
+  const fixture = fixtures.find((f) => f.operation === "cipher.vic.encode");
+  assert.ok(fixture);
+  let application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Private cipher study");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Source example");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const text = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await text
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("VIC source");
+    await text
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill(fixture.inputs.text);
+    await text.getByRole("button", { name: "Add text", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore VIC source", exact: true })
+      .click();
+    const canvas = page.getByRole("region", {
+      name: "Trail canvas",
+      exact: true,
+    });
+    await canvas
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    let editor = page.getByRole("dialog", {
+      name: "New Pipeline",
+      exact: true,
+    });
+    const choose = async (id: string) => {
+      await editor
+        .getByRole("combobox", { name: "Operation", exact: true })
+        .click();
+      await editor.locator(`vscode-option[value="${id}"]`).click();
+    };
+    await choose("cipher.vic.encode");
+    await editor
+      .locator("summary")
+      .filter({ hasText: "Advanced parameters" })
+      .click();
+    await editor
+      .getByRole("textbox", { name: "Parameters (JSON)", exact: true })
+      .fill(JSON.stringify(fixture.parameters));
+    const consent = editor.getByRole("checkbox", {
+      name: "Retain private data in this workspace",
+      exact: true,
+    });
+    await expect(consent).not.toBeChecked();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeDisabled();
+    await consent.focus();
+    await page.keyboard.press("Space");
+    await expect(consent).toBeChecked();
+    await expect(
+      editor.getByRole("button", { name: "Create Pipeline", exact: true }),
+    ).toBeEnabled();
+    await capture(application, "native-private-retention");
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await editor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    const saved = await current(page);
+    assert.equal(
+      saved.exploration.trails[0]?.pipeline?.definition.nodes[0]?.retainPrivate,
+      true,
+    );
+    await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
+    await expect(
+      canvas.getByRole("region", { name: "Cell result" }),
+    ).toContainText(
+      nativeWorkers ? fixture.outputs.text : "Execution rejected",
+    );
+    const run = nativeWorkers ? await latestRun(page, "VIC source") : null;
+    if (run) assert.deepEqual(run.detail.result?.outputs, fixture.outputs);
+    await canvas
+      .getByRole("button", { name: "Edit Pipeline", exact: true })
+      .click();
+    editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
+    await choose("cipher.rot13");
+    await choose("cipher.vic.encode");
+    await expect(
+      editor.getByRole("checkbox", {
+        name: "Retain private data in this workspace",
+        exact: true,
+      }),
+    ).not.toBeChecked();
+    await expect(
+      editor.getByRole("button", { name: "Save revision", exact: true }),
+    ).toBeDisabled();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await application.close();
+    application = await electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    await expect(notebook(page)).toBeVisible();
+    const reopened = await current(page);
+    assert.equal(
+      reopened.exploration.trails[0]?.pipeline?.definition.nodes[0]
+        ?.retainPrivate,
+      true,
+    );
+    if (run)
+      assert.deepEqual(
+        await frozenRun(page, run.context, run.detail.id),
+        run.detail,
+      );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("Core registrations drive spiral controls, named outputs and unrelated text execution", {
   timeout: 90000,
 }, async () => {

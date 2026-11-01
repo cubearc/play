@@ -155,6 +155,7 @@ export type GraphSource =
   | { kind: "output"; nodeId: string; port: string }
   | { kind: "literal"; value: unknown };
 export interface GraphNode {
+  retainPrivate?: boolean;
   id: string;
   operation: string;
   operationVersion: number;
@@ -1095,7 +1096,13 @@ export function graphDefinition(value: unknown): PipelineDefinition {
       "parameters",
       "position",
       "inputs",
+      ...(Object.hasOwn(n, "retainPrivate") ? ["retainPrivate"] : []),
     ]);
+    if (
+      Object.hasOwn(n, "retainPrivate") &&
+      typeof n.retainPrivate !== "boolean"
+    )
+      throw new Error("invalid_command");
     if (
       !isIdentity(n.id) ||
       !bytes(n.operation, 128) ||

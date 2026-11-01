@@ -11,6 +11,7 @@ export interface Invocation {
 }
 
 export interface Operation {
+  requires_private_retention?: boolean;
   contract: {
     inputs: { name: string; semantic_type: string; schema: unknown }[];
     outputs: { name: string; semantic_type: string; schema: unknown }[];

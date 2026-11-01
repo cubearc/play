@@ -39,6 +39,8 @@ pub struct Node {
     pub operation: String,
     pub operation_version: u32,
     pub parameters: Value,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub retain_private: bool,
     pub position: Position,
     pub inputs: BTreeMap<String, Source>,
 }
@@ -50,6 +52,9 @@ pub struct Definition {
     pub nodes: Vec<Node>,
     pub output: Uuid,
 }
+fn is_false(value: &bool) -> bool {
+    !value
+}
 impl Node {
     pub fn dependencies(&self) -> impl Iterator<Item = Uuid> + '_ {
         self.inputs.values().filter_map(|source| match source {
@@ -59,7 +64,12 @@ impl Node {
     }
 
     pub fn contract(&self) -> Result<Contract> {
-        worker::validate_configuration(&self.operation, self.operation_version, &self.parameters)?;
+        worker::validate_configuration_with_retention(
+            &self.operation,
+            self.operation_version,
+            &self.parameters,
+            self.retain_private,
+        )?;
         cube_core::operations::require(&self.operation)
             .map_err(|_| "unsupported_operation")?
             .contract()
@@ -254,6 +264,7 @@ impl Definition {
                 operation: operation.into(),
                 operation_version: version,
                 parameters,
+                retain_private: false,
                 position: Position { x: 80, y: 120 },
                 inputs,
             }],

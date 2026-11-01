@@ -8,6 +8,7 @@ import {
   challengeImport,
   context,
   fileImport,
+  graphDefinition,
   imageImport,
   request,
   runRequest,
@@ -625,4 +626,31 @@ test("evidence annotations accept only exact scoped Note targets", () => {
     note_id: randomUUID(),
   };
   assert.deepEqual(request(inspect), inspect);
+});
+
+test("private retention consent is an explicit boolean on a versioned graph node", () => {
+  const definition = singleGraph({
+    operation: "cipher.rot13",
+    operation_version: 1,
+    parameters: {},
+    input_type: "text",
+    contract: {
+      inputs: [{ name: "text", semantic_type: "text", schema: {} }],
+      outputs: [],
+      parameters: {},
+    },
+  });
+  const node = definition.nodes[0];
+  const consented = {
+    ...definition,
+    nodes: [{ ...node, retainPrivate: true }],
+  };
+  assert.deepEqual(graphDefinition(consented), consented);
+  assert.deepEqual(graphDefinition(definition), definition);
+  for (const retainPrivate of ["true", 1, null, {}, []])
+    assert.throws(
+      () =>
+        graphDefinition({ ...definition, nodes: [{ ...node, retainPrivate }] }),
+      /invalid_command/,
+    );
 });

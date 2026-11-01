@@ -22,6 +22,7 @@ import { ParameterFields, parameterTypesValid } from "./ParameterFields";
 import { PipelineGraph } from "./PipelineGraph";
 import { PipelineInputs } from "./PipelineInputs";
 import VscodeButton from "./VscodeButton";
+import VscodeCheckbox from "./VscodeCheckbox";
 export type PipelineMode = "create" | "revise" | "fork";
 export interface PipelineDraft {
   title: string;
@@ -145,7 +146,11 @@ export function PipelineEditor({
     !invalidLiterals &&
     definition.nodes.every((n) => {
       const op = operations.find((o) => o.operation === n.operation);
-      return op && parameterTypesValid(op, n.parameters);
+      return (
+        op &&
+        (!op.requires_private_retention || n.retainPrivate === true) &&
+        parameterTypesValid(op, n.parameters)
+      );
     }) &&
     completeBindings(definition.inputs, bindings) &&
     title.trim() &&
@@ -326,6 +331,7 @@ export function PipelineEditor({
                 update({
                   ...node,
                   operation: id,
+                  retainPrivate: false,
                   operationVersion: op.operation_version,
                   parameters: op.parameters,
                   inputs: initialInputs(op, definition.inputs),
@@ -334,6 +340,23 @@ export function PipelineEditor({
               }}
             />
             <p>{operation?.description}</p>
+            {operation?.requires_private_retention ? (
+              <div className="private-retention">
+                <VscodeCheckbox
+                  checked={node.retainPrivate === true}
+                  disabled={readonly}
+                  onChange={(event) =>
+                    update({ ...node, retainPrivate: event.target.checked })
+                  }
+                >
+                  Retain private data in this workspace
+                </VscodeCheckbox>
+                <p>
+                  Saving this Pipeline and running it will retain its key
+                  parameters, inputs and results.
+                </p>
+              </div>
+            ) : null}
             <GraphInputs
               node={node}
               onInvalidChange={setInvalidLiterals}

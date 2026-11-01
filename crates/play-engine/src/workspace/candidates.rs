@@ -254,11 +254,6 @@ pub(super) fn output_contract(
     {
         return Err("contract_mismatch");
     }
-    if contract.policy.private_input
-        || contract.policy.private_output
-        || !contract.policy.sensitive_parameters.is_empty()
-    {
-        return Err("retention_policy_unavailable");
-    }
+    super::run_plan::validate_retention(plan, node, &contract)?;
     Ok(contract)
 }

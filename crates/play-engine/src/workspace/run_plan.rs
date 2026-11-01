@@ -185,3 +185,31 @@ fn compact_contracts(nodes: &mut [Value], target: &Value) -> Result<Value> {
     }
     Ok(Value::Object(contracts))
 }
+
+/// Retained private outputs require consent from the exact frozen Pipeline node.
+/// Later Pipeline revisions and renderer-supplied result fields cannot authorize it.
+pub(super) fn validate_retention(
+    plan: &Value,
+    node: &Value,
+    contract: &cube_core::operations::contracts::Contract,
+) -> Result<()> {
+    if !crate::worker::requires_private_retention(contract) {
+        return Ok(());
+    }
+    let frozen = crate::graph::Definition::parse(plan["pipeline"]["definition"].clone())
+        .map_err(|_| "retention_policy_unavailable")?;
+    let id = node["id"]
+        .as_str()
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .ok_or("retention_policy_unavailable")?;
+    let saved = frozen
+        .node(id)
+        .map_err(|_| "retention_policy_unavailable")?;
+    if !saved.retain_private
+        || node["operation"]["operation"] != saved.operation
+        || node["operation"]["operationVersion"] != saved.operation_version
+    {
+        return Err("retention_policy_unavailable");
+    }
+    Ok(())
+}

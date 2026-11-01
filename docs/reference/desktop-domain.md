@@ -68,7 +68,8 @@ or filesystem path does not grant authority.
 ### Explicit reuse
 
 A reusable Pipeline contains operation IDs/versions, named ports, ordinary
-non-sensitive parameters/constants, layout and input declarations. A Trail or
+parameters/constants, layout and input declarations. Private fields require
+explicit local retention consent on each affected node; the default is refusal. A Trail or
 Run binds those declarations to its own Assets. Editing another Trail's binding
 cannot alter the definition or an earlier invocation.
 
@@ -123,9 +124,15 @@ identify semantic type and representation; selecting a field or converting
 text/bytes/numbers is explicit. Keep every installed current operation covered by
 real contract/fixture conformance, including direct-only operations.
 
-Honor Core's sensitive-input/parameter/output policy. Per-run secrets do not
-enter reusable definitions, persisted evidence or logs; do not retain prohibited
-fingerprints. Private output retention is an explicit choice. User-authored notes
+Honor Core's sensitive-input/parameter/output policy. Private nodes require an
+explicit `retainPrivate: true` in their saved definition before validation,
+persistence or execution. The Pipeline editor labels that choice and explains
+that keys, inputs and results will remain in the local Workspace. Consent is
+frozen with the Pipeline revision and Run plan; a later revision cannot authorize
+an earlier result. Output promotion and Candidate evidence verify that exact
+frozen node. Direct probes keep refusing private operations. Ephemeral per-run
+secrets and prohibited fingerprints remain unsupported; do not log private data.
+Private output retention is an explicit choice. User-authored notes
 and explanations remain private local content until a chosen submission or
 publication enumerates what will leave the machine.
 

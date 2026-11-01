@@ -62,12 +62,11 @@ fn contract(plan: &Value) -> Result<cube_core::operations::contracts::Contract> 
     {
         return Err("contract_mismatch");
     }
-    if contract.policy.private_input
-        || contract.policy.private_output
-        || !contract.policy.sensitive_parameters.is_empty()
-    {
-        return Err("retention_policy_unavailable");
-    }
+    super::run_plan::validate_retention(
+        plan,
+        &json!({"id":plan["targetNodes"][0], "operation":plan["operation"]}),
+        &contract,
+    )?;
     Ok(contract)
 }
 
@@ -230,5 +229,50 @@ mod tests {
                 "adapter {version}"
             );
         }
+    }
+    #[test]
+    fn private_output_promotion_uses_consent_from_the_exact_frozen_node() {
+        let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+            "../../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+        ))
+        .unwrap();
+        let fixture = fixtures
+            .iter()
+            .find(|f| f["operation"] == "cipher.vic.encode")
+            .unwrap();
+        let contract = cube_core::operations::require("cipher.vic.encode")
+            .unwrap()
+            .contract()
+            .unwrap();
+        let id = Uuid::new_v4();
+        let definition = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[{"id":id,"operation":"cipher.vic.encode","operationVersion":1,"parameters":fixture["parameters"],"inputs":{"text":{"kind":"literal","value":fixture["inputs"]["text"]}},"retainPrivate":true,"position":{"x":0,"y":0}}],"output":id});
+        let mut plan = json!({"formatVersion":3,"adapterVersion":3,"targetNodes":[id],"pipeline":{"definition":definition},"operation":{"operation":"cipher.vic.encode","operationVersion":1,"name":"VIC"},"contract":contract,"contractDigest":cube_core::hashing::sha256(&serde_json::to_vec(&contract).unwrap())});
+        let result = json!({"status":"completed","outputs":fixture["outputs"]});
+        assert_eq!(
+            resolve(&plan, &result, &id.to_string(), 1, "text")
+                .unwrap()
+                .data,
+            fixture["outputs"]["text"].as_str().unwrap().as_bytes()
+        );
+        let node =
+            json!({"id":id,"operation":plan["operation"],"contractDigest":plan["contractDigest"]});
+        super::super::candidates::output_contract(&plan, &node).unwrap();
+        for replacement in [Value::Null, json!(false)] {
+            plan["pipeline"]["definition"]["nodes"][0]["retainPrivate"] = replacement;
+            assert!(matches!(
+                resolve(&plan, &result, &id.to_string(), 1, "text"),
+                Err("retention_policy_unavailable")
+            ));
+            assert!(matches!(
+                super::super::candidates::output_contract(&plan, &node),
+                Err("retention_policy_unavailable")
+            ));
+        }
+        plan["pipeline"]["definition"]["nodes"][0]["retainPrivate"] = json!(true);
+        plan["pipeline"]["definition"]["nodes"][0]["id"] = json!(Uuid::new_v4());
+        assert!(matches!(
+            resolve(&plan, &result, &id.to_string(), 1, "text"),
+            Err("retention_policy_unavailable")
+        ));
     }
 }
