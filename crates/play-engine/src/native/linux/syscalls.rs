@@ -106,9 +106,23 @@ pub(super) fn filters(terminal: bool) -> Result<[BpfProgram; 2]> {
         SYS_tgkill,
         rule(vec![condition(0, Op::Eq, std::process::id() as u64)?])?,
     );
+    let mut prctl = rule(vec![condition(0, Op::Eq, PR_SET_NAME as u64)?])?;
+    prctl.extend(rule(vec![
+        condition(0, Op::Eq, PR_SET_NO_NEW_PRIVS as u64)?,
+        condition(1, Op::Eq, 1)?,
+        condition(2, Op::Eq, 0)?,
+        condition(3, Op::Eq, 0)?,
+        condition(4, Op::Eq, 0)?,
+    ])?);
+    allowed.insert(SYS_prctl, prctl);
+    // A later filter can only narrow this policy. TSYNC seals the initialized
+    // thread set and the final filter denies further seccomp installations.
     allowed.insert(
-        SYS_prctl,
-        rule(vec![condition(0, Op::Eq, PR_SET_NAME as u64)?])?,
+        SYS_seccomp,
+        rule(vec![
+            condition(0, Op::Eq, SECCOMP_SET_MODE_FILTER as u64)?,
+            condition(1, Op::Eq, SECCOMP_FILTER_FLAG_TSYNC as u64)?,
+        ])?,
     );
     if terminal {
         terminal_channels(&mut allowed)?;
@@ -140,4 +154,19 @@ fn terminal_channels(allowed: &mut BTreeMap<i64, Vec<Rule>>) -> Result<()> {
     }
     allowed.insert(SYS_ioctl, queries);
     Ok(())
+}
+
+/// Intersect the existing boundary on every initialized thread; no new thread
+/// or subsequent filter installation can widen the sealed execution set.
+pub(super) fn thread_seal() -> Result<BpfProgram> {
+    use libc::*;
+    compile(
+        BTreeMap::from([
+            (SYS_clone, vec![]),
+            (SYS_clone3, vec![]),
+            (SYS_seccomp, vec![]),
+        ]),
+        Action::Allow,
+        Action::Errno(EPERM as u32),
+    )
 }

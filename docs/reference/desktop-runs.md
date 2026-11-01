@@ -109,7 +109,8 @@ claim about native descendant/PTY cleanup on every platform.
 ## Bounded parallel branches
 
 The worker selects at most two ready nodes in the frozen plan order. Each runs on
-its own thread inside the same sandboxed process. It collects the group's results
+one of the worker's two fixed node threads inside the same sandboxed process.
+Dependency waves reuse the pool. It collects the group's results
 in plan order before selecting the next group. This keeps joins and output-budget
 accounting deterministic; a fast branch does not dispatch its next node while its
 current sibling is still running.

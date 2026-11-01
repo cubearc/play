@@ -20,7 +20,7 @@ fn main() -> play_engine::Result<()> {
         .min(protocol::contract().parallel_nodes);
     let mut started = 0;
     let mut output = io::stdout().lock();
-    let outcome = worker::execute_pipeline(invocation, |event| {
+    let outcome = worker::execute_pipeline_in_worker(invocation, |event| {
         protocol::write_frame(&mut output, &event)?;
         if event["type"] == "node_started" {
             started += 1;

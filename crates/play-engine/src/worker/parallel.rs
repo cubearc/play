@@ -1,50 +1,103 @@
-//! A bounded wave shares its enclosing worker's CPU, VM and owner lifetime.
+//! One bounded node pool shares its enclosing worker's CPU, VM and owner lifetime.
 use crate::{Result, protocol};
-use std::{sync::mpsc, thread};
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::mpsc,
+    thread,
+};
 use uuid::Uuid;
 
-/// Start every admitted task before collecting results in stable plan order.
-/// Closed gates release unstarted threads if admission, spawn or transport fails.
-pub(super) fn batch<T: Send, R: Send>(
-    tasks: Vec<(Uuid, T)>,
-    execute: impl Fn(T) -> Result<R> + Sync,
-    mut admit: impl FnMut(Uuid) -> Result<()>,
-) -> Result<Vec<Result<R>>> {
-    if tasks.is_empty() || tasks.len() > protocol::contract().parallel_nodes {
-        return Err("invalid_state");
-    }
-    thread::scope(|scope| {
-        let mut handles = Vec::new();
-        let mut gates = Vec::new();
-        for (id, task) in tasks {
-            let (gate, ready) = mpsc::channel();
-            let execute = &execute;
-            let handle = thread::Builder::new()
-                .name("pipeline-node".into())
-                .spawn_scoped(scope, move || {
-                    ready.recv().map_err(|_| "operation_stopped")?;
-                    execute(task)
-                })
-                .map_err(|_| "worker_failed")?;
-            handles.push(handle);
-            gates.push((id, gate));
+struct Slot<T, R> {
+    input: mpsc::SyncSender<T>,
+    output: mpsc::Receiver<Result<R>>,
+}
+pub(super) struct Pool<T, R> {
+    slots: Vec<Slot<T, R>>,
+    failed: bool,
+}
+impl<T, R> Pool<T, R> {
+    /// Admit every node before dispatch; collect its actual result in plan order.
+    pub(super) fn batch(
+        &mut self,
+        tasks: Vec<(Uuid, T)>,
+        mut admit: impl FnMut(Uuid) -> Result<()>,
+    ) -> Result<Vec<Result<R>>> {
+        if self.failed || tasks.is_empty() || tasks.len() > self.slots.len() {
+            return Err("invalid_state");
         }
-        for (id, _) in &gates {
+        for (id, _) in &tasks {
             admit(*id)?;
         }
-        for (_, gate) in gates {
-            gate.send(()).map_err(|_| "worker_failed")?;
+        let count = tasks.len();
+        for (slot, (_, task)) in self.slots.iter().zip(tasks) {
+            if slot.input.send(task).is_err() {
+                self.failed = true;
+                return Err("worker_failed");
+            }
         }
-        Ok(handles
-            .into_iter()
-            .map(|h| h.join().unwrap_or(Err("worker_failed")))
-            .collect())
+        let mut results = Vec::with_capacity(count);
+        for slot in self.slots.iter().take(count) {
+            match slot.output.recv() {
+                Ok(value) => results.push(value),
+                Err(_) => {
+                    self.failed = true;
+                    return Err("worker_failed");
+                }
+            }
+        }
+        Ok(results)
+    }
+}
+
+/// Prestart the fixed pool, apply the host policy, then permit bounded work.
+/// Dropping all senders releases idle threads on every return path before join.
+pub(super) fn with_pool<T: Send, R: Send, O>(
+    execute: impl Fn(T) -> Result<R> + Sync,
+    seal: impl FnOnce() -> Result<()>,
+    body: impl FnOnce(&mut Pool<T, R>) -> Result<O>,
+) -> Result<O> {
+    thread::scope(|scope| {
+        let mut slots = Vec::new();
+        for _ in 0..protocol::contract().parallel_nodes {
+            let (input, tasks) = mpsc::sync_channel(0);
+            let (output, results) = mpsc::sync_channel(1);
+            let execute = &execute;
+            thread::Builder::new()
+                .name("pipeline-node".into())
+                .spawn_scoped(scope, move || {
+                    while let Ok(task) = tasks.recv() {
+                        let value = catch_unwind(AssertUnwindSafe(|| execute(task)))
+                            .unwrap_or(Err("worker_failed"));
+                        if output.send(value).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .map_err(|_| "worker_failed")?;
+            slots.push(Slot {
+                input,
+                output: results,
+            });
+        }
+        let mut pool = Pool {
+            slots,
+            failed: false,
+        };
+        seal()?;
+        body(&mut pool)
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn batch<T: Send, R: Send>(
+        tasks: Vec<(Uuid, T)>,
+        execute: impl Fn(T) -> Result<R> + Sync,
+        admit: impl FnMut(Uuid) -> Result<()>,
+    ) -> Result<Vec<Result<R>>> {
+        with_pool(execute, || Ok(()), |pool| pool.batch(tasks, admit))
+    }
     use std::sync::{Condvar, Mutex};
     use std::time::Duration;
 
@@ -116,5 +169,52 @@ mod tests {
             batch(vec![(Uuid::new_v4(), ()); 3], |_| Ok(()), |_| Ok(())),
             Err("invalid_state")
         );
+    }
+    #[test]
+    fn one_worker_reuses_the_same_bounded_threads_across_dependency_waves() {
+        let ids = with_pool(
+            |_: ()| Ok(std::thread::current().id()),
+            || Ok(()),
+            |pool| {
+                let mut ids = std::collections::HashSet::new();
+                for _ in 0..4 {
+                    for result in pool.batch(
+                        vec![(Uuid::new_v4(), ()); protocol::contract().parallel_nodes],
+                        |_| Ok(()),
+                    )? {
+                        ids.insert(result?);
+                    }
+                }
+                Ok(ids)
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            ids.len(),
+            protocol::contract().parallel_nodes,
+            "a worker must create its bounded threads once, before sealing further creation"
+        );
+    }
+    #[test]
+    fn rejected_startup_policy_joins_idle_threads_without_executing_or_admitting_work() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let invoked = AtomicBool::new(false);
+        let admitted = AtomicBool::new(false);
+        let result = with_pool(
+            |_: ()| {
+                invoked.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            || Err("thread_policy_failed"),
+            |pool| {
+                pool.batch(vec![(Uuid::new_v4(), ())], |_| {
+                    admitted.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+            },
+        );
+        assert_eq!(result, Err("thread_policy_failed"));
+        assert!(!invoked.load(Ordering::SeqCst));
+        assert!(!admitted.load(Ordering::SeqCst));
     }
 }

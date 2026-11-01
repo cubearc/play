@@ -305,28 +305,32 @@ silently ignored. Core's own Brainfuck work/memory/output limits also apply.
 The native worker proof runs directly on Ubuntu 24.04 x64 and ARM64 hosts. It
 requires an enabled Landlock LSM with ABI 3 or newer, seccomp filter support and
 readable `/proc/self/status` at startup. Kernel version alone does not establish
-that these facilities are enabled. Unsupported architectures or a failed policy
-refuse execution before reading a task; there is no weaker fallback.
+that these facilities are enabled. Unsupported architectures or a failed base
+policy refuse task input. Failure to seal the initialized thread set refuses
+execution; there is no weaker fallback.
 
 The single-threaded worker measures its initial virtual address space, imposes
 hard resource limits, then installs a Landlock ruleset with no filesystem grants
 and a default-deny seccomp allowlist. It creates the owner watcher and operation
-threads only after both policies succeed. Inputs arrive on inherited pipes; the
+threads only after both policies succeed. The Pipeline worker starts its fixed
+two-node pool once, then applies a synchronized seccomp filter to every thread
+before dispatching work. Dependency waves reuse those threads. Inputs arrive on inherited pipes; the
 worker has no database handle, source path, scratch directory or export grant.
 
 | Resource or authority | Linux worker policy |
 | --- | --- |
 | Files and metadata | No pathname access; Landlock handles all ABI-3 filesystem rights and seccomp denies path syscalls. |
 | Network and IPC sockets | Socket creation and socket syscalls are denied, including TCP, UDP and Unix sockets. |
-| Processes | Fork, exec and process-form clone are denied. Only thread-form clone flags are admitted; clone3 returns ENOSYS so libc can use the inspected clone form. |
+| Processes | Fork, exec and process-form clone are denied. Bounded startup permits inspected thread-form clone; clone3 returns ENOSYS for libc's fallback. Final sealing denies both clone forms and any later seccomp installation. |
 | Other owners | Process signalling is denied; tgkill is restricted to the worker's own thread group. RLIMIT_NPROC is not changed because it counts the shared host UID. |
 | CPU and memory | One second of process CPU; RLIMIT_AS bounds initial virtual mappings plus 128 MiB. This is not an RSS ceiling. |
 | Files and handles | Zero core dump size, 32 descriptors and 16384-byte file-size limit. No writable file grant is provided. |
-| Threads and Runs | The common executor admits two node threads plus its owner watcher per worker. CPU/VM limits cover the whole process; this is not a kernel thread-count quota. The engine bounds active/queued Runs and enforces the two-second deadline. |
-| Enforcement failure | `filesystem_policy_failed`, `syscall_policy_failed` or the corresponding resource-policy error terminates the worker without executing Core. The supervisor records failed work. |
+| Threads and Runs | The kernel seals the initialized set: four threads for a Pipeline (main, owner watcher and two nodes), two for a direct probe or contextual terminal. No further thread creation is permitted. CPU/VM limits cover the whole process. The engine bounds active/queued Runs and enforces the two-second deadline. |
+| Enforcement failure | `filesystem_policy_failed`, `syscall_policy_failed`, `thread_policy_failed` or the corresponding resource-policy error refuses Core work. The supervisor records failed work. |
 
-The adversarial fixture verifies inherited denial inside a real thread, unchanged
-host-UID process limits, refusal when the Landlock syscall is unavailable and
+The adversarial fixture verifies that both the main and an initialized child
+thread cannot create another thread, inherited filesystem/socket denial, unchanged
+host-UID process limits, refusal when Landlock, seccomp or final thread sealing is unavailable, and
 survival of an unrelated process. The common native matrix executes every eligible
 Core operation and verifies retained outputs after restart. Worker crash,
 cancellation, deadline, queue and owner-death tests use the common supervisor.
@@ -495,6 +499,11 @@ session. A lost renderer lease closes it within ten seconds. A CLI reader thread
 exits on control-channel EOF or failure even while waiting for terminal input;
 a real engine SIGKILL test verifies the CLI disappears and unrelated processes
 survive. Unsupported hosts reject session creation with `native_policy_unavailable`.
+
+The Linux helper starts its canonical CLI owner reader before applying the final
+thread seal. No interactive command is read until that policy succeeds. The
+macOS helper retains its separate App Sandbox boundary and the fixed software
+execution pool; it does not claim Linux's kernel thread-set enforcement.
 
 The interactive PTY does not provide shell job control, grandchildren, Windows
 PTYs or signed distribution support. External terminals use the separate explicit

@@ -95,7 +95,11 @@ for (const policy of [[], ["terminal"]]) {
   test(`Linux ${policy.length ? "terminal" : "worker"} policies refuse unavailable mandatory kernel enforcement`, {
     skip: !linux,
   }, () => {
-    for (const mode of ["unavailable", "seccomp-unavailable"]) {
+    for (const mode of [
+      "unavailable",
+      "seccomp-unavailable",
+      "thread-seal-unavailable",
+    ]) {
       const result = spawnSync(
         fileURLToPath(
           new URL("../desktop-native/linux-boundary-probe", import.meta.url),

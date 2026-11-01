@@ -15,6 +15,11 @@ pub(super) fn restrict_terminal() -> Result<()> {
     apply(syscalls::filters(true)?)
 }
 
+pub(super) fn seal_threads() -> Result<()> {
+    let filter = syscalls::thread_seal()?;
+    seccompiler::apply_filter_all_threads(&filter).map_err(|_| "thread_policy_failed")
+}
+
 fn apply(filters: [seccompiler::BpfProgram; 2]) -> Result<()> {
     // Prepare filters and measure runtime mappings while still single-threaded.
     let memory = memory_limit()?;
@@ -52,7 +57,7 @@ fn memory_limit() -> Result<u64> {
 fn limits(memory: u64) -> Result<()> {
     let contract = crate::protocol::contract();
     // RLIMIT_NPROC counts the host UID, not this worker. Process creation is
-    // denied by seccomp; the existing scheduler bounds workers and node threads.
+    // denied by seccomp; final TSYNC sealing fixes each initialized thread set.
     for (resource, limit, code) in [
         (Resource::Core, 0, "core_policy_failed"),
         (Resource::Cpu, contract.cpu_seconds, "cpu_policy_failed"),

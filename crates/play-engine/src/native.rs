@@ -1,4 +1,4 @@
-//! Worker policies apply before task parsing or thread creation.
+//! Native worker policies bound task parsing and fixed thread startup.
 use crate::Result;
 
 /// Fix allocator reservation policy before startup, without inheriting host settings.
@@ -38,6 +38,27 @@ pub fn restrict() -> Result<()> {
         any(target_arch = "x86_64", target_arch = "aarch64")
     ))]
     return linux::restrict();
+    #[cfg(not(any(
+        target_os = "macos",
+        all(
+            target_os = "linux",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        )
+    )))]
+    Err("native_policy_unavailable")
+}
+
+/// Finish bounded startup before dispatching any Core work. Linux seals the
+/// current thread set in the kernel; macOS keeps its fixed software pool under
+/// the already-applied native boundary and does not claim a kernel thread quota.
+pub fn seal_threads() -> Result<()> {
+    #[cfg(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    return linux::seal_threads();
+    #[cfg(target_os = "macos")]
+    return Ok(());
     #[cfg(not(any(
         target_os = "macos",
         all(

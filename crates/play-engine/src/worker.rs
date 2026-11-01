@@ -325,9 +325,11 @@ pub fn run() -> Result<()> {
     let task = receive_task()?;
     let mut stdout = io::stdout().lock();
     let outcome = match task {
-        Task::Probe { invocation } => execute(invocation),
+        Task::Probe { invocation } => {
+            crate::native::seal_threads().and_then(|()| execute(invocation))
+        }
         Task::Pipeline { invocation } => {
-            execute_pipeline(invocation, |v| protocol::write_frame(&mut stdout, &v))
+            execute_pipeline_in_worker(invocation, |v| protocol::write_frame(&mut stdout, &v))
         }
     };
     let result = match outcome {
@@ -604,10 +606,46 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
 }
 pub fn execute_pipeline(
     invocation: PipelineInvocation,
+    emit: impl FnMut(Value) -> Result<()>,
+) -> Result<Value> {
+    execute_pipeline_with_policy(invocation, emit, || Ok(()))
+}
+/// Continue a received task after the fresh worker's base policy has been applied.
+/// Production and supervisor probes share the final native thread seal.
+pub fn execute_pipeline_in_worker(
+    invocation: PipelineInvocation,
+    emit: impl FnMut(Value) -> Result<()>,
+) -> Result<Value> {
+    execute_pipeline_with_policy(invocation, emit, crate::native::seal_threads)
+}
+
+fn execute_pipeline_with_policy(
+    invocation: PipelineInvocation,
     mut emit: impl FnMut(Value) -> Result<()>,
+    policy: impl FnOnce() -> Result<()>,
+) -> Result<Value> {
+    parallel::with_pool(execute_node, policy, |pool| {
+        execute_graph(&invocation, &mut emit, pool)
+    })
+}
+fn execute_node((node, values): (crate::graph::Node, Value)) -> Result<Value> {
+    let named = core::execute(
+        &node.operation,
+        node.operation_version,
+        &values,
+        &canonical_value(node.parameters.clone()),
+        budget(),
+    )
+    .map_err(failure)?;
+    raw_outputs(&node.operation, &named)
+}
+fn execute_graph(
+    invocation: &PipelineInvocation,
+    emit: &mut impl FnMut(Value) -> Result<()>,
+    pool: &mut parallel::Pool<(crate::graph::Node, Value), Value>,
 ) -> Result<Value> {
     use std::collections::BTreeMap;
-    validate_pipeline(&invocation)?;
+    validate_pipeline(invocation)?;
     let mut outputs: BTreeMap<uuid::Uuid, Value> = BTreeMap::new();
     let mut pending = invocation.definition.schedule()?;
     let mut used = 0usize;
@@ -631,7 +669,7 @@ pub fn execute_pipeline(
             .iter()
             .map(|id| {
                 let node = invocation.definition.node(*id)?;
-                let values = pipeline_inputs(&invocation, node, &outputs)?;
+                let values = pipeline_inputs(invocation, node, &outputs)?;
                 core::validate(
                     &node.operation,
                     node.operation_version,
@@ -640,30 +678,16 @@ pub fn execute_pipeline(
                     budget(),
                 )
                 .map_err(failure)?;
-                Ok((*id, (node, values)))
+                Ok((*id, (node.clone(), values)))
             })
             .collect::<Result<Vec<_>>>()?;
-        let results = parallel::batch(
-            tasks,
-            |(node, values)| {
-                let named = core::execute(
-                    &node.operation,
-                    node.operation_version,
-                    &values,
-                    &canonical_value(node.parameters.clone()),
-                    budget(),
-                )
-                .map_err(failure)?;
-                raw_outputs(&node.operation, &named)
-            },
-            |id| emit(json!({"type":"node_started","nodeId":id})),
-        )?;
+        let results = pool.batch(tasks, |id| emit(json!({"type":"node_started","nodeId":id})))?;
         if let Some(output) = finish_wave(
             &invocation.definition,
             ready.iter().copied().zip(results),
             &mut outputs,
             &mut used,
-            &mut emit,
+            emit,
         )? {
             final_output = output;
         }

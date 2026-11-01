@@ -133,7 +133,12 @@ pub fn worker() -> Result<()> {
         // Run the canonical Cube CLI adapter after isolation, without granting
         // filesystem access to exec a second image or load its libraries.
         crate::native::restrict_terminal()?;
-        cube_cli::play::run(&cube_cli::play::Command::Session).map_err(|_| "terminal_failed")
+        cube_cli::play::run_session_with_policy(|| {
+            crate::native::seal_threads().map_err(|code| {
+                cube_core::errors::OperationError::new(cube_core::errors::ErrorCode::Io, code)
+            })
+        })
+        .map_err(|_| "terminal_failed")
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     Err("native_policy_unavailable")
