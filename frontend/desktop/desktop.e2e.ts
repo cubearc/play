@@ -3207,7 +3207,7 @@ test("64-bit Assets and results stay exact through the UI, contextual CLI and re
       .click();
     await input.press("Enter");
     await expect(terminal.locator(".xterm-rows")).toContainText(
-      '"kind": "run_output"',
+      `"title": "${title}"`,
     );
     await input.press("Shift+PageUp");
     await expect(terminal.locator(".xterm-rows")).toContainText(
