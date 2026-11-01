@@ -20,7 +20,9 @@ Captured from the actual Mac preview using disposable example content.
 
 In **Solutions**, choose the saved Solution and its revision, then **Export
 walkthrough**. The JSON document includes that revision’s title, explanation,
-selected evidence payload, saved Note snapshots and contributing references.
+selected evidence payload, saved Note snapshots and contributing Pipeline
+parameters, literal inputs and references. These can contain private values,
+including keys.
 A later explanation or unselected private Note is not included. Inspect the
 selection before handing the file to someone else.
 

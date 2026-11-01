@@ -5823,7 +5823,8 @@ test("canonical Challenge import creates editable grouped content and rejects pa
 test("Stage candidates and Solutions preserve chosen evidence, handle conflicts and reopen independently", {
   timeout: 90000,
 }, async () => {
-  const profile = await mkdtemp(join(tmpdir(), "play-candidates-"));
+  const root = await mkdtemp(join(tmpdir(), "play-candidates-"));
+  const profile = join(root, "private");
   const launch = () =>
     electron.launch({
       chromiumSandbox: true,
@@ -6080,6 +6081,43 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
       .getByLabel("Solution revision", { exact: true })
       .selectOption("1");
     await expect(saved()).toContainText("This is my local explanation.");
+    const exportedWalkthrough = join(root, "chosen-walkthrough.json");
+    await application.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, exportedWalkthrough);
+    await saved()
+      .getByRole("button", { name: "Export walkthrough", exact: true })
+      .click();
+    const exporting = page.getByRole("dialog", {
+      name: "Export walkthrough",
+      exact: true,
+    });
+    await expect(exporting).toContainText("Selected revision 1");
+    await exporting
+      .getByRole("button", { name: "Choose destination", exact: true })
+      .click();
+    await expect(exporting).toBeHidden();
+    const walkthrough = JSON.parse(await readFile(exportedWalkthrough, "utf8"));
+    assert.equal(walkthrough.format, "cube-play.walkthrough");
+    assert.equal(walkthrough.solution.revision, 1);
+    assert.equal(
+      walkthrough.solution.explanation,
+      "ROT13 reveals the selected clue. This is my local explanation.",
+    );
+    assert.equal(
+      JSON.stringify(walkthrough).includes("A later working interpretation."),
+      false,
+    );
+    assert.equal(
+      JSON.stringify(walkthrough).includes(
+        "An independently saved explanation.",
+      ),
+      false,
+    );
+    assert.equal(
+      JSON.stringify(walkthrough).includes("ROT13 connects these exact clues."),
+      true,
+    );
     await saved()
       .getByLabel("Solution revision", { exact: true })
       .selectOption("3");
@@ -6153,7 +6191,7 @@ test("Stage candidates and Solutions preserve chosen evidence, handle conflicts 
     await expect(saved()).toContainText("ROT13 connects these exact clues.");
   } finally {
     await application.close();
-    await rm(profile, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
 });
 

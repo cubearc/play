@@ -141,9 +141,10 @@ function ExportDialog({
       </p>
       {intent.source.kind === "solution" ? (
         <p>
-          The walkthrough includes this revision’s explanation, selected
-          evidence and saved references. It stays private and unverified. This
-          is not a Workspace backup.
+          Includes this revision’s explanation, selected evidence, saved Notes,
+          Pipeline parameters and literal inputs. These can contain private
+          values, including keys. Exporting does not submit or verify the
+          Solution. This is not a Workspace backup.
         </p>
       ) : (
         <Select
