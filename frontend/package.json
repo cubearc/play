@@ -10,7 +10,7 @@
     "desktop:build": "node node_modules/electron/install.js && tsc -p tsconfig.desktop.json && vite build --config vite.desktop.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.main.config.ts && node desktop-dist/prepare.js",
     "desktop:proof": "electron desktop-dist/main.js",
     "desktop:test": "node --test --test-concurrency=1 desktop-dist/*.test.js",
-    "desktop:smoke": "node --test desktop-dist/desktop.e2e.js",
+    "desktop:smoke": "node --test --test-reporter=tap desktop-dist/desktop.e2e.js",
     "build": "npm run desktop:build",
     "typecheck": "tsc --noEmit",
     "check": "biome check .",

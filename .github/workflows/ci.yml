@@ -111,9 +111,9 @@ jobs:
       matrix:
         os: [macos-26, macos-26-intel]
     runs-on: ${{ matrix.os }}
-    # Cold Intel builds plus the complete Electron suite exceed 20 minutes.
-    # Product worker budgets and individual test deadlines remain unchanged.
-    timeout-minutes: 30
+    # Measured Intel cold build: 14m20s; source and packaged journeys: about 10m each.
+    # Keep enough job time for both proofs; worker and test deadlines are unchanged.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
