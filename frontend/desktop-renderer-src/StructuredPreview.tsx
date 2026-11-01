@@ -1,3 +1,4 @@
+import { stringifyJson } from "../desktop/json-codec";
 import type { StructuredContent } from "../desktop/workspace-contract";
 
 /** A bounded notebook preview never substitutes for the exact typed input. */
@@ -8,7 +9,7 @@ export function StructuredPreview({
   content: StructuredContent;
   details?: boolean;
 }) {
-  const serialized = JSON.stringify(content.value, null, 2);
+  const serialized = stringifyJson(content.value, null, 2);
   const preview = serialized.slice(0, 1024);
   return (
     <div className="file-preview">

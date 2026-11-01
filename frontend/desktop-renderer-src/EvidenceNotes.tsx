@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { stringifyJson } from "../desktop/json-codec";
 import type {
   Context,
   NoteLink,
@@ -219,7 +220,7 @@ export function LinkedEvidence({
       ) : null}
       <details>
         <summary>Target reference</summary>
-        <pre>{JSON.stringify(link.reference, null, 2)}</pre>
+        <pre>{stringifyJson(link.reference, null, 2)}</pre>
       </details>
     </details>
   );

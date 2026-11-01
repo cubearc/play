@@ -1266,3 +1266,50 @@ fn structured_inputs_enforce_exact_representations_and_the_combined_run_budget()
         assert_eq!(view(&mut m, &c), before);
     }
 }
+
+#[test]
+fn exact_wide_assets_use_core_canonical_inputs_without_rewriting_the_source() {
+    let root = tempfile::tempdir().unwrap();
+    let mut m = Manager::new(root.path().join("private")).unwrap();
+    let c = context(&mut m, None, "Exact integer inputs");
+    let contract = cube_core::operations::require("number.gcd")
+        .unwrap()
+        .contract()
+        .unwrap();
+    let maximum = u64::MAX;
+    call(
+        &mut m,
+        json!({"kind":"add_structured","context":c,"key":Uuid::new_v4(),"title":"Original u64","semantic_type":contract.inputs[0].semantic_type,"value":maximum}),
+    );
+    let original = view(&mut m, &c);
+    let source = &original["trails"][0];
+    for literal in [false, true] {
+        let node = Uuid::new_v4();
+        let input = json!({"kind":"input","name":"source"});
+        let b = if literal {
+            json!({"kind":"literal","value":maximum})
+        } else {
+            input.clone()
+        };
+        let d = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":contract.inputs[0].semantic_type}],"nodes":[{"id":node,"operation":"number.gcd","operationVersion":1,"parameters":{},"position":{"x":80,"y":80},"inputs":{"a":input,"b":b}}],"output":node});
+        let p = pipeline(&mut m, &c, &d);
+        let current = view(&mut m, &c);
+        let t = &current["trails"][0];
+        call(
+            &mut m,
+            json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Preserve every digit through Core's declared wire format","pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":{}}),
+        );
+        let selected = view(&mut m, &c);
+        let completed = execute(&mut m, &request(&c, &selected["trails"][0], &d["nodes"][0]));
+        assert_eq!(
+            completed["result"]["outputs"],
+            cube_core::operations::contracts::canonical_value(json!({"output":maximum}))
+        );
+        assert_eq!(view(&mut m, &c)["trails"][0]["source"], source["source"]);
+        let id = serde_json::from_value(completed["id"].clone()).unwrap();
+        drop(m);
+        m = Manager::new(root.path().join("private")).unwrap();
+        call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+        assert_eq!(m.run_detail(&c, id).unwrap(), completed);
+    }
+}

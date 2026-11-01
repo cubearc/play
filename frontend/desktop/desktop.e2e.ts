@@ -3097,6 +3097,174 @@ test("structured Assets reuse exact outputs through the notebook and canvas afte
   }
 });
 
+test("64-bit Assets and results stay exact through the UI, contextual CLI and restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-u64-evidence-"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  const maximum = 18446744073709551615n;
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    assert.equal(await page.evaluate(() => typeof JSON.rawJSON), "function");
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Exact numeric evidence");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Keep every digit");
+    const operation = (await page.evaluate(() => window.play.catalog())).find(
+      (o) => o.operation === "number.gcd",
+    );
+    assert.ok(operation);
+    await notebook(page)
+      .getByRole("button", { name: "Add data", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "Add structured data",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Exact u64");
+    await dialog
+      .getByRole("combobox", { name: "Data type", exact: true })
+      .click();
+    await dialog
+      .getByRole("option", { name: operation.input_type, exact: true })
+      .click();
+    await dialog
+      .getByRole("textbox", { name: "JSON value", exact: true })
+      .fill(maximum.toString());
+    await dialog.getByRole("button", { name: "Add data", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Exact u64", exact: true })
+      .click();
+    const canvas = () =>
+      page.getByRole("region", { name: "Trail canvas", exact: true });
+    const configure = async (title: string) => {
+      await canvas()
+        .getByRole("button", { name: "New Pipeline", exact: true })
+        .click();
+      dialog = page.getByRole("dialog", { name: "New Pipeline", exact: true });
+      await dialog
+        .getByRole("textbox", { name: "Pipeline name", exact: true })
+        .fill(title);
+      await dialog
+        .getByRole("combobox", { name: "Operation", exact: true })
+        .click();
+      await dialog
+        .getByRole("option", { name: operation.name, exact: true })
+        .click();
+      await dialog
+        .getByRole("button", { name: "Create Pipeline", exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+    };
+    await expect(
+      canvas().getByRole("textbox", { name: "Structured data", exact: true }),
+    ).toHaveValue(maximum.toString());
+    await configure("An exact greatest common divisor");
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    if (!nativeWorkers) return;
+    await expect(
+      canvas().getByRole("region", { name: "Cell result" }),
+    ).toContainText(`output: "${maximum}"`);
+    const first = await latestRun(page, "Exact u64");
+    assert.equal(first.detail.result?.outputs?.output, maximum.toString());
+    await canvas()
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    const title = `${operation.name} · output · Run ${first.detail.sequence}`;
+    await notebook(page)
+      .getByRole("button", { name: `Explore ${title}`, exact: true })
+      .click();
+    await expect(
+      canvas().getByRole("textbox", { name: "Structured data", exact: true }),
+    ).toHaveValue(`"${maximum}"`);
+    await configure("Reuse the exact u64 result");
+    await page
+      .getByRole("button", { name: "Toggle Cube terminal", exact: true })
+      .click();
+    const terminal = page.getByRole("region", {
+      name: "Cube terminal",
+      exact: true,
+    });
+    await expect(terminal.getByRole("status")).toHaveText("Connected");
+    const input = terminal.locator(".xterm-helper-textarea");
+    await terminal
+      .getByRole("button", { name: "Insert Asset", exact: true })
+      .click();
+    await input.press("Enter");
+    await expect(terminal.locator(".xterm-rows")).toContainText(
+      '"kind": "run_output"',
+    );
+    await input.press("Shift+PageUp");
+    await expect(terminal.locator(".xterm-rows")).toContainText(
+      maximum.toString(),
+    );
+    await terminal
+      .getByRole("button", { name: "Insert selected Run", exact: true })
+      .click();
+    await input.press("Enter");
+    await expect(
+      canvas().getByRole("region", { name: "Cell result" }),
+    ).toContainText(`output: "${maximum}"`);
+    const second = await latestRun(page, title);
+    assert.equal(second.detail.caller, "cli");
+    assert.equal(second.detail.result?.outputs?.output, maximum.toString());
+    assert.notEqual(second.detail.id, first.detail.id);
+    await terminal
+      .getByRole("button", { name: "Close terminal", exact: true })
+      .click();
+    await canvas()
+      .getByRole("region", { name: "Cell result" })
+      .scrollIntoViewIfNeeded();
+    await capture(application, "native-u64-asset-evidence", false);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    const before = await current(page);
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(notebook(page)).toBeVisible();
+    assert.deepEqual(await current(page), before);
+    assert.deepEqual(
+      await frozenRun(page, first.context, first.detail.id),
+      first.detail,
+    );
+    assert.deepEqual(
+      await frozenRun(page, second.context, second.detail.id),
+      second.detail,
+    );
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
 test("File Blocks import inert content and preserve scoped copies, order and archive after restart", {
   timeout: 90000,
 }, async () => {

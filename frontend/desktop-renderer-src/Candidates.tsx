@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import limits from "../../desktop/protocol.json" with { type: "json" };
+import { stringifyJson } from "../desktop/json-codec";
 import type {
   CandidateSelection,
   CandidateView,
@@ -269,7 +270,7 @@ export function CandidatePanel() {
           ) : null}
           <details>
             <summary>Selected evidence reference</summary>
-            <pre>{JSON.stringify(candidate.selection, null, 2)}</pre>
+            <pre>{stringifyJson(candidate.selection, null, 2)}</pre>
           </details>
         </>
       )}

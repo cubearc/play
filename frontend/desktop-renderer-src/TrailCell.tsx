@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { stringifyJson } from "../desktop/json-codec";
 import type { TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
 import type { Executions } from "./useExecutions";
@@ -105,7 +106,7 @@ export function TrailCell({
           <p className="binding">
             Saved parameters:{" "}
             <code>
-              {JSON.stringify(
+              {stringifyJson(
                 pipeline.definition.nodes.find(
                   (n) => n.id === pipeline.outputNodeId,
                 )?.parameters,

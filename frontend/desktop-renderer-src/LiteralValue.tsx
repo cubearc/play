@@ -3,6 +3,7 @@ import VscodeTextfield from "@vscode-elements/react-elements/dist/components/Vsc
 import { useRef } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Representation } from "../desktop/contract";
+import { parseInteger, parseJson, stringifyJson } from "../desktop/json-codec";
 import { parseExactJson } from "./exactJson";
 
 export interface LiteralDraft {
@@ -57,10 +58,10 @@ export function LiteralValue({
     (bytes
       ? encoded
       : json
-        ? JSON.stringify(value)
+        ? stringifyJson(value)
         : typeof value === "string"
           ? value
-          : JSON.stringify(value));
+          : stringifyJson(value));
   const input = () => {
     const raw = (integer ? field.current?.value : area.current?.value) ?? "";
     try {
@@ -70,14 +71,21 @@ export function LiteralValue({
         throw new Error("This literal is too long for the Pipeline.");
       let parsed: unknown;
       if (integer) {
-        if (
-          !/^-?(0|[1-9][0-9]*)$/.test(raw) ||
-          !Number.isSafeInteger(Number(raw))
-        )
-          throw new Error(
-            "Enter an exact integer from -9007199254740991 to 9007199254740991.",
-          );
-        parsed = Number(raw);
+        const value = parseInteger(raw);
+        if (schema && typeof schema === "object") {
+          const minimum = "minimum" in schema ? schema.minimum : undefined;
+          const maximum = "maximum" in schema ? schema.maximum : undefined;
+          if (
+            ((typeof minimum === "number" || typeof minimum === "bigint") &&
+              value < minimum) ||
+            ((typeof maximum === "number" || typeof maximum === "bigint") &&
+              value > maximum)
+          )
+            throw new Error(
+              "Enter an exact integer within this input's declared range.",
+            );
+        }
+        parsed = value;
       } else
         parsed = bytes
           ? { base64: raw }
@@ -85,9 +93,9 @@ export function LiteralValue({
             ? raw
             : json
               ? parseExactJson(raw)
-              : JSON.parse(raw);
+              : parseJson(raw);
       if (
-        new TextEncoder().encode(JSON.stringify(parsed)).byteLength >
+        new TextEncoder().encode(stringifyJson(parsed)).byteLength >
         limits.pipeline_literal_bytes
       )
         throw new Error("This literal is too long for the Pipeline.");

@@ -232,8 +232,9 @@ Use **Field path** and the named input controls to connect the graph. [Open full
 Inspect numeric results as numbers beside their producing graph. [Open full size](assets/desktop/numeric-canvas.png).
 
 Operation parameters have labeled controls. **Advanced parameters** exposes the
-complete saved JSON when needed. Integer literals reject fractions and unsafe
-integers before saving, preserving an invalid draft when switching nodes. Input
+complete saved JSON when needed. Integer literals preserve exact decimal values
+within their declared bounds and reject fractions before saving, preserving an
+invalid draft when switching nodes. Input
 schemas are checked again by the engine before a consumer executes.
 
 For JSON text, connect **Parse JSON → Select field → Use text value** before a
@@ -280,9 +281,21 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-General structured-result promotion remains unfinished. Use an explicit
-[external terminal connection](terminal.md#use-an-external-terminal) to inspect
-Assets and run the selected Pipeline from your own terminal.
+Choose **Save output as block** to reuse a named text, byte or structured output
+without executing it again. The new Asset keeps its source Run, node attempt and
+output port. Structured values retain their Core semantic type, so a compatible
+operation can consume the result directly. Use **Add data** in the notebook to
+create a structured Asset yourself.
+
+The notebook, canvas and contextual terminal preserve exact 64-bit JSON integers.
+Operations use Core's canonical wire format: an integer outside JavaScript's
+exact numeric range is a decimal string when its contract declares that format.
+For example, a retained greatest-common-divisor result can be
+`"18446744073709551615"`. This does not widen an operation's own numeric limits;
+the composition operations above retain their documented bounds.
+
+Use an explicit [external terminal connection](terminal.md#use-an-external-terminal)
+to inspect Assets and run the selected Pipeline from your own terminal.
 
 ## Read an image in a spiral
 

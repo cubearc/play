@@ -233,7 +233,7 @@ impl Definition {
                         let mut literal_contract = c.clone();
                         literal_contract.inputs.retain(|p| p.name == port.name);
                         literal_contract
-                            .validate_inputs(&json!({port.name.clone():value}))
+                            .validate_inputs(&json!({port.name.clone():cube_core::operations::contracts::canonical_value(value.clone())}))
                             .map_err(|_| "contract_mismatch")?;
                         if value.to_string().len()
                             > crate::protocol::contract().pipeline_literal_bytes

@@ -8,6 +8,7 @@ import {
 } from "./cli-contract.ts";
 import { contract } from "./contract.ts";
 import type { Engine } from "./engine.ts";
+import { parseJson, stringifyJson } from "./json-codec.ts";
 
 export function contextCommand(executable: string, credential: string): string {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -123,7 +124,7 @@ export class Cli {
           contract.handshake_ms + contract.run_ms,
         );
         const write = (frame: object) => {
-          const bytes = Buffer.from(`${JSON.stringify(frame)}\n`);
+          const bytes = Buffer.from(`${stringifyJson(frame)}\n`);
           if (bytes.length > contract.frame_bytes) return fail("output_limit");
           child.stdin.write(bytes);
         };
@@ -144,7 +145,7 @@ export class Cli {
             if (end + 1 > contract.frame_bytes) return fail("output_limit");
             let frame: unknown;
             try {
-              frame = JSON.parse(
+              frame = parseJson(
                 new TextDecoder("utf8", { fatal: true }).decode(line),
               );
             } catch {

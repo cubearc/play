@@ -6,6 +6,7 @@ import {
   type Operation,
   type RunResult,
 } from "./contract.ts";
+import { parseJson, stringifyJson } from "./json-codec.ts";
 import { loadCatalog } from "./operation-catalog.ts";
 
 interface Pending {
@@ -191,7 +192,7 @@ export class Engine {
     if (this.pending.size >= contract.queue_commands)
       return Promise.reject(new Error("busy"));
     const id = ++this.nextId;
-    const bytes = Buffer.from(`${JSON.stringify({ ...command, id })}\n`);
+    const bytes = Buffer.from(`${stringifyJson({ ...command, id })}\n`);
     if (bytes.length > contract.frame_bytes)
       return Promise.reject(new Error("input_limit"));
     return new Promise((resolve, reject) => {
@@ -215,7 +216,7 @@ export class Engine {
       this.buffer = this.buffer.subarray(end + 1);
       try {
         const text = new TextDecoder("utf8", { fatal: true }).decode(line);
-        const reply = JSON.parse(text) as Record<string, unknown>;
+        const reply = parseJson(text) as Record<string, unknown>;
         if (
           !reply ||
           !Number.isSafeInteger(reply.id) ||

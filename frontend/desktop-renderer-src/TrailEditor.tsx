@@ -4,6 +4,7 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation } from "../desktop/contract";
+import { stringifyJson } from "../desktop/json-codec";
 import type {
   AssetView,
   PipelineRef,
@@ -99,7 +100,7 @@ export function TrailEditor({
   const pipeline = choices.find((p) => p.id === selected);
   const length = new TextEncoder().encode(hypothesis).byteLength;
   const dirty =
-    JSON.stringify(bindings) !== JSON.stringify(bindingRefs(trail)) ||
+    stringifyJson(bindings) !== stringifyJson(bindingRefs(trail)) ||
     hypothesis !== trail.hypothesis ||
     selected !== (trail.pipeline?.id ?? "") ||
     revision !== (trail.pipeline?.revision ?? 1);

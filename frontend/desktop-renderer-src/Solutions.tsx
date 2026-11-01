@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import limits from "../../desktop/protocol.json" with { type: "json" };
+import { stringifyJson } from "../desktop/json-codec";
 import type {
   NoteView,
   SolutionSummary,
@@ -108,7 +109,7 @@ function useSolutions(notes: NoteView[]) {
       previous.title === draft.title &&
       previous.explanation === draft.explanation &&
       previous.candidate_revision === draft.candidate_revision &&
-      JSON.stringify(previous.notes) === JSON.stringify(draft.notes)
+      stringifyJson(previous.notes) === stringifyJson(draft.notes)
         ? previous
         : { ...draft, key: crypto.randomUUID() };
     intent.current = command;
@@ -330,7 +331,7 @@ export function SolutionsPanel() {
             ) : null}
             <details>
               <summary>Snapshot references</summary>
-              <pre>{JSON.stringify(value.snapshot, null, 2)}</pre>
+              <pre>{stringifyJson(value.snapshot, null, 2)}</pre>
             </details>
             {!draft ? (
               <VscodeButton

@@ -1,3 +1,4 @@
+import { stringifyJson } from "../desktop/json-codec";
 import type { JsonValue, RunDetail } from "../desktop/workspace-contract";
 
 export function formatResultValue(
@@ -13,7 +14,7 @@ export function formatResultValue(
   )
     return `Base64 ${value.base64}`;
   if (semanticType === "text" && typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
+  return stringifyJson(value, null, 2);
 }
 export function attemptOutputType(
   run: RunDetail,

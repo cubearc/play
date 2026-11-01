@@ -20,6 +20,7 @@ const command = (value: unknown) => ({
 test("structured requests preserve explicit null, scalars and nested inert values", () => {
   for (const value of [
     null,
+    18446744073709551615n,
     false,
     0,
     1.5,
@@ -36,6 +37,7 @@ test("non-JSON, unsafe, excessive and open-ended structured requests are rejecte
   cycle.push(cycle);
   for (const value of [
     undefined,
+    18446744073709551616n,
     Number.NaN,
     Number.POSITIVE_INFINITY,
     Number.MAX_SAFE_INTEGER + 1,

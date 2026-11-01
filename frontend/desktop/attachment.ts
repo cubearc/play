@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { type CliIntent, cliIntent } from "./cli-contract.ts";
 import { contract } from "./contract.ts";
+import { parseJson, stringifyJson } from "./json-codec.ts";
 import {
   type Context,
   context as parseContext,
@@ -61,7 +62,7 @@ export class Attachment {
       const expires = Date.now() + 10 * 60_000;
       await writeFile(
         attachment.path,
-        `${JSON.stringify({ format: "cubearc.play.context", version: 1, socket: socketPath, token, expires })}\n`,
+        `${stringifyJson({ format: "cubearc.play.context", version: 1, socket: socketPath, token, expires })}\n`,
         { flag: "wx", mode: 0o600 },
       );
       attachment.timer = setTimeout(
@@ -96,7 +97,7 @@ export class Attachment {
     const selected = selection ? { ...selection, key: randomUUID() } : null;
     const scope = { ...context, generation: contract.storage_generation };
     const send = (value: unknown) => {
-      const bytes = Buffer.from(`${JSON.stringify(value)}\n`);
+      const bytes = Buffer.from(`${stringifyJson(value)}\n`);
       if (bytes.length > contract.frame_bytes) socket.destroy();
       else socket.write(bytes);
     };
@@ -114,9 +115,12 @@ export class Attachment {
       }
       let frame: Record<string, unknown>;
       try {
-        frame = JSON.parse(
+        const parsed = parseJson(
           new TextDecoder("utf8", { fatal: true }).decode(buffer),
         );
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          throw new Error("invalid_command");
+        frame = parsed;
       } catch {
         socket.destroy();
         return;

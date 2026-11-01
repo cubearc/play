@@ -3,6 +3,7 @@ import VscodeTextfield from "@vscode-elements/react-elements/dist/components/Vsc
 import { useEffect, useRef, useState } from "react";
 import limits from "../../desktop/protocol.json";
 import type { Operation } from "../desktop/contract";
+import { parseJson, stringifyJson } from "../desktop/json-codec";
 import type {
   AssetView,
   GraphNode,
@@ -102,8 +103,8 @@ export function PipelineEditor({
   const [bindings, setBindings] = useState<Bindings>(() =>
     mode === "create" ? {} : bindingRefs(trail),
   );
-  const initialBindings = useRef(JSON.stringify(bindings));
-  const initial = useRef(JSON.stringify(definition));
+  const initialBindings = useRef(stringifyJson(bindings));
+  const initial = useRef(stringifyJson(definition));
   const [selected, setSelected] = useState(definition.output);
   const [saving, setSaving] = useState(false);
   const [invalid, setInvalid] = useState(false);
@@ -113,14 +114,14 @@ export function PipelineEditor({
   const node = definition.nodes.find((n) => n.id === selected);
   const operation = operations.find((o) => o.operation === node?.operation);
   const [parameters, setParameters] = useState(
-    JSON.stringify(node?.parameters ?? {}, null, 2),
+    stringifyJson(node?.parameters ?? {}, null, 2),
   );
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
   const changed =
-    JSON.stringify(definition) !== initial.current ||
-    JSON.stringify(bindings) !== initialBindings.current ||
+    stringifyJson(definition) !== initial.current ||
+    stringifyJson(bindings) !== initialBindings.current ||
     mode !== "revise" ||
     invalid ||
     invalidLiterals;
@@ -138,7 +139,7 @@ export function PipelineEditor({
   const select = (id: string) => {
     setSelected(id);
     setParameters(
-      JSON.stringify(
+      stringifyJson(
         definition.nodes.find((n) => n.id === id)?.parameters ?? {},
         null,
         2,
@@ -161,7 +162,7 @@ export function PipelineEditor({
     completeBindings(definition.inputs, bindings) &&
     title.trim() &&
     new TextEncoder().encode(title).byteLength <= 120 &&
-    new TextEncoder().encode(JSON.stringify(definition)).byteLength <=
+    new TextEncoder().encode(stringifyJson(definition)).byteLength <=
       limits.pipeline_definition_bytes;
   const save = async () => {
     if (!valid || saving) return;
@@ -311,7 +312,7 @@ export function PipelineEditor({
                 output: id,
               });
               setSelected(id);
-              setParameters(JSON.stringify(next.parameters, null, 2));
+              setParameters(stringifyJson(next.parameters, null, 2));
             }}
           >
             Add node
@@ -348,7 +349,7 @@ export function PipelineEditor({
                   parameters: op.parameters,
                   inputs: initialInputs(op, definition.inputs),
                 });
-                setParameters(JSON.stringify(op.parameters, null, 2));
+                setParameters(stringifyJson(op.parameters, null, 2));
               }}
             />
             <p>{operation?.description}</p>
@@ -384,11 +385,11 @@ export function PipelineEditor({
                 disabled={readonly}
                 onChange={(next) => {
                   update({ ...node, parameters: next });
-                  setParameters(JSON.stringify(next, null, 2));
+                  setParameters(stringifyJson(next, null, 2));
                   setInvalid(
                     !parameterTypesValid(operation, next) ||
-                      new TextEncoder().encode(JSON.stringify(next))
-                        .byteLength > limits.pipeline_parameter_bytes,
+                      new TextEncoder().encode(stringifyJson(next)).byteLength >
+                        limits.pipeline_parameter_bytes,
                   );
                 }}
               />
@@ -407,12 +408,12 @@ export function PipelineEditor({
                   const raw = paramsField.current?.value ?? "";
                   setParameters(raw);
                   try {
-                    const value: unknown = JSON.parse(raw);
+                    const value: unknown = parseJson(raw);
                     if (
                       !value ||
                       typeof value !== "object" ||
                       Array.isArray(value) ||
-                      new TextEncoder().encode(JSON.stringify(value))
+                      new TextEncoder().encode(stringifyJson(value))
                         .byteLength > limits.pipeline_parameter_bytes
                     )
                       throw new Error("invalid_parameters");

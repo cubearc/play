@@ -70,7 +70,9 @@ checks, resource accounting and adversarial validation.
 ## Native execution and delivery scope
 
 The macOS proof uses a locally ad-hoc-signed App Sandbox helper with filesystem,
-network, CPU/time, output and process controls. Typed graphs discover pure executors registered by their owning Core modules.
+network, CPU/time, output and process controls. Typed graphs discover executors
+registered by their owning Core modules, including an explicitly declared
+monotonic clock effect for profiling.
 The host negotiates representations and retention policy; it contains no operation-ID
 execution dispatcher. See [Pipeline execution capabilities](reference/desktop-pipelines.md#execution-capabilities).
 Independent branches execute in groups of at most two within the same sandboxed

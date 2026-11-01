@@ -1,3 +1,4 @@
+import { parseJson } from "../desktop/json-codec";
 import type { JsonValue } from "../desktop/workspace-contract";
 
 export function parseExactJson(raw: string): JsonValue {
@@ -7,13 +8,15 @@ export function parseExactJson(raw: string): JsonValue {
       if (
         typeof value === "number" &&
         Number.isInteger(value) &&
-        (!Number.isSafeInteger(value) ||
-          (context?.source && !/^-?(0|[1-9][0-9]*)$/.test(context.source)))
+        context?.source &&
+        !/^-?(0|[1-9][0-9]*)$/.test(context.source)
       )
         throw new Error(
           "Use exact integer values here. Use Parse JSON for decimal or exponent data.",
         );
-      return value;
+      return typeof value === "number" && context?.source
+        ? parseJson(context.source)
+        : value;
     },
   );
 }

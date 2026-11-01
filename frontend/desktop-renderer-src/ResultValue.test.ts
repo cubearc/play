@@ -97,3 +97,12 @@ it("uses each contributing node's declared output type and never guesses an unkn
   });
   expect(attemptOutputType(run, "shared", "output")).toBe("text");
 });
+
+it("renders exact 64-bit structured evidence without changing its value", () => {
+  expect(formatResultValue(18446744073709551615n, "number.u64")).toBe(
+    "18446744073709551615",
+  );
+  expect(formatResultValue({ count: 18446744073709551615n }, "json")).toBe(
+    '{\n  "count": 18446744073709551615\n}',
+  );
+});

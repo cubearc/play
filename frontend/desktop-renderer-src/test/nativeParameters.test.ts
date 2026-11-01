@@ -141,3 +141,41 @@ it("uses declared byte representations for literals with a new semantic type", a
     payload: { kind: "literal", value: { base64: "" } },
   });
 });
+
+it("validates exact 64-bit integer parameters against their declared Core bounds", () => {
+  const wide: Operation = {
+    ...operation,
+    contract: {
+      ...operation.contract,
+      parameters: {
+        type: "object",
+        required: ["count"],
+        properties: {
+          count: {
+            type: "integer",
+            minimum: 0,
+            maximum: 18446744073709551615n,
+          },
+        },
+      },
+    },
+  };
+  expect(parameterTypesValid(wide, { count: 18446744073709551615n })).toBe(
+    true,
+  );
+  expect(parameterTypesValid(wide, { count: -1n })).toBe(false);
+  expect(parameterTypesValid(wide, { count: 18446744073709551616n })).toBe(
+    false,
+  );
+  expect(
+    parameterTypesValid(wide, { count: Number.MAX_SAFE_INTEGER + 1 }),
+  ).toBe(false);
+});
+
+it("parses exact wide integer drafts without accepting exponent shorthand or overflow", async () => {
+  const { parseExactJson } = await import("../exactJson");
+  expect(parseExactJson("18446744073709551615")).toBe(18446744073709551615n);
+  expect(parseExactJson("1.5")).toBe(1.5);
+  expect(() => parseExactJson("1e3")).toThrow();
+  expect(() => parseExactJson("18446744073709551616")).toThrow();
+});

@@ -1,5 +1,6 @@
 import limits from "../../desktop/protocol.json" with { type: "json" };
 import type { Operation, Representation } from "./contract.ts";
+import { isExactInteger, stringifyJson } from "./json-codec.ts";
 
 export interface Context {
   workspace_id: string;
@@ -549,6 +550,7 @@ export interface RunSummary {
   operation: { operation: string; operationVersion: number; name: string };
 }
 export type JsonValue =
+  | bigint
   | null
   | boolean
   | number
@@ -762,6 +764,10 @@ function validateJsonValue(value: unknown, depth = 0): void {
   if (depth > 64) throw new Error("input_limit");
   if (value === null || typeof value === "string" || typeof value === "boolean")
     return;
+  if (typeof value === "bigint") {
+    if (!isExactInteger(value)) throw new Error("invalid_command");
+    return;
+  }
   if (typeof value === "number") {
     if (
       !Number.isFinite(value) ||
@@ -981,14 +987,14 @@ export function request(value: unknown): WorkspaceRequest {
       graphDefinition(value);
     } else if (field === "parameters") {
       object(value);
-      if (!bytes(JSON.stringify(value), limits.pipeline_parameter_bytes))
+      if (!bytes(stringifyJson(value), limits.pipeline_parameter_bytes))
         throw new Error("input_limit");
     } else if (field === "hypothesis") {
       if (!bytes(value, limits.hypothesis_bytes))
         throw new Error("input_limit");
     } else if (field === "value") {
       validateJsonValue(value);
-      if (!bytes(JSON.stringify(value), limits.output_bytes))
+      if (!bytes(stringifyJson(value), limits.output_bytes))
         throw new Error("input_limit");
     } else if (field === "semantic_type") {
       if (typeof value !== "string" || !/^[a-zA-Z0-9_.-]{1,128}$/.test(value))
@@ -1158,7 +1164,7 @@ export function contextOf(exploration: ExplorationView): Context {
 export function graphDefinition(value: unknown): PipelineDefinition {
   const d = object(value);
   keys(d, ["formatVersion", "inputs", "nodes", "output"]);
-  if (!bytes(JSON.stringify(d), limits.pipeline_definition_bytes))
+  if (!bytes(stringifyJson(d), limits.pipeline_definition_bytes))
     throw new Error("input_limit");
   if (
     d.formatVersion !== 4 ||
@@ -1211,7 +1217,7 @@ export function graphDefinition(value: unknown): PipelineDefinition {
     )
       throw new Error("invalid_command");
     object(n.parameters);
-    if (!bytes(JSON.stringify(n.parameters), limits.pipeline_parameter_bytes))
+    if (!bytes(stringifyJson(n.parameters), limits.pipeline_parameter_bytes))
       throw new Error("input_limit");
     const p = object(n.position);
     keys(p, ["x", "y"]);
@@ -1243,7 +1249,7 @@ export function graphDefinition(value: unknown): PipelineDefinition {
           throw new Error("invalid_command");
       } else if (source.kind === "literal") {
         keys(source, ["kind", "value"]);
-        if (!bytes(JSON.stringify(source.value), limits.pipeline_literal_bytes))
+        if (!bytes(stringifyJson(source.value), limits.pipeline_literal_bytes))
           throw new Error("input_limit");
       } else throw new Error("invalid_command");
     }

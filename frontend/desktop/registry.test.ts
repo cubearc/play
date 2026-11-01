@@ -8,22 +8,24 @@ import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { contract, type Operation } from "./contract.js";
 import { Engine } from "./engine.js";
+import { parseJson, stringifyJson } from "./json-codec.ts";
 import {
   type Context,
   contextOf,
   type ExplorationView,
+  type JsonValue,
   type PipelineDefinition,
   type RunDetail,
 } from "./workspace-contract.js";
 
-interface Fixture {
+type Fixture = {
   operation: string;
   operation_version: number;
   contract_sha256: string;
-  inputs: Record<string, unknown>;
-  parameters: Record<string, unknown>;
-  outputs: Record<string, unknown>;
-}
+  inputs: Record<string, JsonValue>;
+  parameters: Record<string, JsonValue>;
+  outputs: Record<string, JsonValue>;
+};
 // Substitute only canonical defaults with the host's effective defaults. This
 // keeps interpreter ceilings bounded; every explicit fixture choice is retained.
 function hostParameters(
@@ -40,8 +42,7 @@ function hostParameters(
         name,
         Object.hasOwn(operation.parameters, name) &&
         Object.hasOwn(schema.properties[name] ?? {}, "default") &&
-        JSON.stringify(schema.properties[name]?.default) ===
-          JSON.stringify(value)
+        stringifyJson(schema.properties[name]?.default) === stringifyJson(value)
           ? operation.parameters[name]
           : value,
       ]),
@@ -160,7 +161,7 @@ for (
     let phase = "load fixtures";
     let currentOperation = "catalog";
     try {
-      const vectors = JSON.parse(
+      const vectors = parseJson(
         await readFile(
           new URL(
             "../../../cube/crates/cube-core/src/operations/contracts/conformance.json",
@@ -416,7 +417,7 @@ for (
         assert.equal(
           run.status,
           "completed",
-          `${operation.operation}: ${JSON.stringify(run.result)}`,
+          `${operation.operation}: ${stringifyJson(run.result)}`,
         );
         assert.equal(
           run.plan.contractDigest,
@@ -463,7 +464,7 @@ after(async () => {
   await mkdir("playwright-report", { recursive: true });
   await writeFile(
     "playwright-report/native-operation-conformance.json",
-    JSON.stringify(
+    stringifyJson(
       {
         operations: qualified,
         unavailable: discovered

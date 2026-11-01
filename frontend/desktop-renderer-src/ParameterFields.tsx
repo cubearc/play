@@ -2,6 +2,12 @@ import VscodeTextarea from "@vscode-elements/react-elements/dist/components/Vsco
 import VscodeTextfield from "@vscode-elements/react-elements/dist/components/VscodeTextfield.js";
 import { useRef } from "react";
 import type { Operation } from "../desktop/contract";
+import {
+  isExactInteger,
+  parseInteger,
+  parseJson,
+  stringifyJson,
+} from "../desktop/json-codec";
 import { Select } from "./GraphInputs";
 import VscodeCheckbox from "./VscodeCheckbox";
 
@@ -9,8 +15,8 @@ interface FieldSchema {
   type?: string;
   description?: string;
   enum?: unknown[];
-  minimum?: number;
-  maximum?: number;
+  minimum?: number | bigint;
+  maximum?: number | bigint;
   minItems?: number;
   maxItems?: number;
   uniqueItems?: boolean;
@@ -40,8 +46,7 @@ function valid(schema: FieldSchema, value: unknown): boolean {
   switch (schema.type) {
     case "integer":
       return (
-        typeof value === "number" &&
-        Number.isSafeInteger(value) &&
+        isExactInteger(value) &&
         (schema.minimum === undefined || value >= schema.minimum) &&
         (schema.maximum === undefined || value <= schema.maximum)
       );
@@ -62,7 +67,7 @@ function valid(schema: FieldSchema, value: unknown): boolean {
         (schema.minItems === undefined || value.length >= schema.minItems) &&
         (schema.maxItems === undefined || value.length <= schema.maxItems) &&
         (!schema.uniqueItems ||
-          new Set(value.map((v) => JSON.stringify(v))).size === value.length) &&
+          new Set(value.map((v) => stringifyJson(v))).size === value.length) &&
         value.every((v) => !schema.items || valid(schema.items, v))
       );
     case "object":
@@ -119,13 +124,13 @@ function Field({
         <Select
           id={id}
           label={label}
-          value={JSON.stringify(value) ?? ""}
+          value={value === undefined ? "" : stringifyJson(value)}
           disabled={disabled}
           options={schema.enum.map((v) => ({
-            value: JSON.stringify(v),
+            value: stringifyJson(v),
             label: readable(String(v)),
           }))}
-          onChange={(raw) => onChange(JSON.parse(raw))}
+          onChange={(raw) => onChange(parseJson(raw))}
         />
         {schema.description ? <p>{schema.description}</p> : null}
       </div>
@@ -139,13 +144,19 @@ function Field({
           id={id}
           label={`${label} (JSON)`}
           rows={2}
-          value={typeof value === "string" ? value : JSON.stringify(value)}
+          value={
+            value === undefined
+              ? ""
+              : typeof value === "string"
+                ? value
+                : stringifyJson(value)
+          }
           disabled={disabled}
           aria-invalid={valid(schema, value) ? "false" : "true"}
           onInput={() => {
             const raw = area.current?.value ?? "";
             try {
-              onChange(JSON.parse(raw));
+              onChange(parseJson(raw));
             } catch {
               onChange(raw);
             }
@@ -192,15 +203,18 @@ function Field({
           disabled={disabled}
           onInput={() => {
             const raw = field.current?.value ?? "";
+            if (schema.type === "integer") {
+              try {
+                onChange(parseInteger(raw));
+              } catch {
+                onChange(raw);
+              }
+              return;
+            }
             onChange(
-              (schema.type === "integer" &&
-                /^-?(0|[1-9][0-9]*)$/.test(raw) &&
-                Number.isSafeInteger(Number(raw))) ||
-                (schema.type === "number" &&
-                  /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(
-                    raw,
-                  ) &&
-                  Number.isFinite(Number(raw)))
+              schema.type === "number" &&
+                /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(raw) &&
+                Number.isFinite(Number(raw))
                 ? Number(raw)
                 : raw,
             );

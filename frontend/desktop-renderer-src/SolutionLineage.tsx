@@ -1,3 +1,4 @@
+import { stringifyJson } from "../desktop/json-codec";
 import type { SolutionPath, SolutionView } from "../desktop/workspace-contract";
 import VscodeButton from "./VscodeButton";
 
@@ -63,7 +64,7 @@ export function SolutionLineage({
             asset.origin.port === selection.port,
         )?.origin;
         return (
-          <div key={JSON.stringify(selection)}>
+          <div key={stringifyJson(selection)}>
             <h5>
               {origin?.kind === "run_output"
                 ? `Run ${origin.sequence} · ${origin.operationName} · ${origin.port}`

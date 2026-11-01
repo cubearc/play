@@ -6,6 +6,7 @@ use crate::{
     protocol::{self, Invocation},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use cube_core::operations::contracts::canonical_value;
 use cube_core::operations::execution::{self as core, Budget, Effects, Representation};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -22,8 +23,8 @@ fn failure(error: core::Failure) -> &'static str {
     error.0
 }
 fn availability(e: &core::Executable, retain_private: bool) -> Result<()> {
-    if e.effects != Effects::Pure {
-        return Err("unsupported_effect");
+    match e.effects {
+        Effects::Pure | Effects::MonotonicClock => (),
     }
     if requires_private_retention(&e.contract) && !retain_private {
         return Err("retention_policy_unavailable");
@@ -64,7 +65,13 @@ pub(crate) fn validate_configuration_with_retention(
 ) -> Result<()> {
     let e = core::describe(operation, budget()).map_err(failure)?;
     availability(&e, retain_private)?;
-    core::validate_parameters(operation, version, parameters, budget()).map_err(failure)
+    core::validate_parameters(
+        operation,
+        version,
+        &canonical_value(parameters.clone()),
+        budget(),
+    )
+    .map_err(failure)
 }
 pub fn parameters(operation: &str) -> Result<Value> {
     Ok(executable(operation)?.parameters)
@@ -141,7 +148,7 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
         &invocation.operation,
         invocation.operation_version,
         &named_inputs(invocation)?,
-        &invocation.parameters,
+        &canonical_value(invocation.parameters.clone()),
         budget(),
     )
     .map_err(failure)
@@ -285,7 +292,7 @@ fn execute(invocation: Invocation) -> Result<Value> {
         &invocation.operation,
         invocation.operation_version,
         &named_inputs(&invocation)?,
-        &invocation.parameters,
+        &canonical_value(invocation.parameters.clone()),
         budget(),
     )
     .map_err(failure)?;
@@ -494,7 +501,7 @@ impl InputValue {
     fn canonical(&self, representation: Representation) -> Result<Value> {
         match self {
             Self::Text { text } => Ok(json!(text)),
-            Self::Structured { value } => Ok(value.clone()),
+            Self::Structured { value } => Ok(canonical_value(value.clone())),
             Self::Bytes { base64 } => {
                 if representation == Representation::ByteArray {
                     Ok(json!(
@@ -581,7 +588,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                     .get(name)
                     .ok_or("invalid_binding")?
                     .canonical(invocation.definition.input_representation(name)?)?,
-                crate::graph::Source::Literal { value } => value.clone(),
+                crate::graph::Source::Literal { value } => canonical_value(value.clone()),
                 crate::graph::Source::Output { .. } => continue,
             };
             values.insert(port.clone(), value);
@@ -591,7 +598,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                 &node.operation,
                 node.operation_version,
                 &Value::Object(values),
-                &node.parameters,
+                &canonical_value(node.parameters.clone()),
                 budget(),
             )
             .map_err(failure)?;
@@ -633,7 +640,7 @@ pub fn execute_pipeline(
                     &node.operation,
                     node.operation_version,
                     &values,
-                    &node.parameters,
+                    &canonical_value(node.parameters.clone()),
                     budget(),
                 )
                 .map_err(failure)?;
@@ -647,7 +654,7 @@ pub fn execute_pipeline(
                     &node.operation,
                     node.operation_version,
                     &values,
-                    &node.parameters,
+                    &canonical_value(node.parameters.clone()),
                     budget(),
                 )
                 .map_err(failure)?;
@@ -728,7 +735,7 @@ fn pipeline_inputs(
                 .get(name)
                 .ok_or("invalid_binding")?
                 .canonical(invocation.definition.input_representation(name)?)?,
-            Source::Literal { value } => value.clone(),
+            Source::Literal { value } => canonical_value(value.clone()),
             Source::Output { node_id, port } => outputs
                 .get(node_id)
                 .and_then(|v| v.get(port))
