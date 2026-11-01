@@ -74,7 +74,9 @@ export class Engine {
       ) {
         throw new Error("binary_mismatch");
       }
-      engine.operations = await engine.catalog();
+      engine.operations = await loadCatalog((offset) =>
+        engine.request({ type: "catalog", offset }),
+      );
       return engine;
     } catch (error) {
       await engine.close();
@@ -108,7 +110,8 @@ export class Engine {
   }
 
   async catalog(): Promise<Operation[]> {
-    return loadCatalog((offset) => this.request({ type: "catalog", offset }));
+    if (this.closed) throw new Error("engine_stopped");
+    return structuredClone(this.operations);
   }
 
   workspace<
