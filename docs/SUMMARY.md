@@ -22,6 +22,7 @@
     - [PipelineRuns](reference/desktop-runs.md)
     - [Scoped Exploration commands](reference/explorations.md)
     - [App lifecycle](reference/launcher.md)
+    - [Mac delivery qualification](reference/desktop-delivery.md)
     - [Asset limits](reference/workspace.md)
     - [Persistence and recovery](reference/persistence.md)
     - [Terminal boundary](reference/terminal.md)

@@ -142,6 +142,8 @@ jobs:
       - name: Build and exercise the standalone preview bundle
         run: |
           npm run desktop:package --prefix frontend
+          npm run desktop:delivery-test --prefix frontend
+          cp "frontend/desktop-packages/Cube-Play-$(node -p 'require("./frontend/package.json").version')-darwin-$(node -p process.arch).dmg.proof.json" frontend/playwright-report/native-installer-proof.json
           cp "frontend/desktop-packages/Cube Play-darwin-$(node -p process.arch)/Cube Play.app/Contents/Resources/app/package-proof.json" frontend/playwright-report/native-package-proof.json
           PLAY_PACKAGED_EXECUTABLE="$PWD/frontend/desktop-packages/Cube Play-darwin-$(node -p process.arch)/Cube Play.app/Contents/MacOS/cube-play" npm run desktop:smoke --prefix frontend
       - name: Preserve native conformance and Electron screenshots
@@ -153,6 +155,7 @@ jobs:
             play/frontend/playwright-report/*.png
             play/frontend/playwright-report/native-operation-conformance.json
             play/frontend/playwright-report/native-package-proof.json
+            play/frontend/playwright-report/native-installer-proof.json
             play/frontend/coverage/lcov.info
             play/frontend/coverage/coverage-summary.json
           if-no-files-found: error

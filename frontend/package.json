@@ -1,6 +1,6 @@
 {
   "name": "@cubearc/play-ui",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -18,7 +18,10 @@
     "test": "vitest run",
     "test:coverage": "node scripts/coverage.mjs",
     "test:e2e": "npm run desktop:smoke",
-    "desktop:package": "node desktop-dist/package.js"
+    "desktop:package": "node desktop-dist/package.js",
+    "desktop:delivery": "node desktop-dist/delivery-cli.js",
+    "desktop:delivery-test": "node --test desktop-dist/delivery.e2e.js",
+    "desktop:install-test": "node --test desktop-dist/mac-install.e2e.js"
   },
   "dependencies": {
     "@vscode-elements/elements": "2.5.1",

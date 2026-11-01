@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { packager } from "@electron/packager";
 import { contract } from "./contract.ts";
+import { createDiskImage } from "./disk-image.ts";
 import { verifyNative } from "./integrity.ts";
 import { nativeFiles } from "./native-files.ts";
 
@@ -101,6 +102,8 @@ try {
     electronVersion: metadata.devDependencies.electron,
     engineVersion: contract.engine,
     protocol: contract.protocol,
+    storageGeneration: contract.storage_generation,
+    schemaVersion: contract.schema_version,
     sourceRevision: git(["rev-parse", "HEAD"]),
     sourceDirty: git(["status", "--porcelain"]) !== "",
     cliVersion: execFileSync(join(native, files.cli), ["--version"], {
@@ -133,9 +136,17 @@ try {
     prune: false,
     overwrite: false,
   });
-  if (paths.length !== 1)
+  const packaged = paths[0];
+  if (!packaged || paths.length !== 1)
     throw new Error("package_not_created_choose_empty_destination");
-  console.log(JSON.stringify({ ...proof, packages: paths }, null, 2));
+  const application =
+    platform === "darwin" ? join(packaged, "Cube Play.app") : undefined;
+  const installers = application
+    ? [await createDiskImage(application, output, metadata.version)]
+    : [];
+  console.log(
+    JSON.stringify({ ...proof, packages: paths, installers }, null, 2),
+  );
 } finally {
   await rm(stage, { recursive: true, force: true });
 }

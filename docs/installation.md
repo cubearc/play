@@ -56,7 +56,7 @@ npm run desktop:package --prefix frontend
 ```
 
 The command places **Cube Play** under `frontend/desktop-packages/`. macOS produces
-an application bundle; Linux produces a directory containing `cube-play`. Copy the
+an application bundle, a read-only `.dmg` and its SHA-256 identity receipt; Linux produces a directory containing `cube-play`. Copy the
 whole bundle/directory together. The package contains Electron, the Rust engine,
 Cube CLI and the verified native helpers. Running it does not require Cargo, npm,
 Docker or the source checkout. Linux still needs the OS libraries and Chromium
@@ -82,9 +82,24 @@ the source revision/dirty state, exact component versions and native binary dige
 Only compiled runtime files are staged; build tooling, test probes and private
 Workspace data are excluded. Private data stays in the normal app profile.
 
-This is a local qualification bundle with no publisher signing or notarization.
-It does not establish a release installer, Windows worker support or verified
-updates. Save work before quitting or replacing an application bundle.
+## Install, replace or remove the Mac preview
+
+Open the `.dmg` and copy **Cube Play.app** to Applications. Quit Cube Play before
+replacing an installed copy; closing its window can leave the engine running.
+After copying, eject the disk image and open the app from Applications.
+
+To replace the preview, quit it and keep the previous app until the replacement
+opens your saved work. If the replacement fails, quit it and restore that copy.
+Private Workspaces remain in the normal profile, outside the application bundle.
+Removing **Cube Play.app** removes the application; it does not delete this profile
+or your authorized source folders. Reinstalling the same compatible preview
+reopens retained work. Unsupported stores are refused without conversion.
+
+This is a local qualification installer with no Apple publisher signing or
+notarization. It does not establish a signed public release, Windows worker
+support or automatic updates. For an offline signed test-channel check before
+manual replacement, see [Mac delivery qualification](reference/desktop-delivery.md).
+
 
 Use **Quit** to end the app. Closing a window on macOS can leave the app and its
 engine alive; closing a canvas does not cancel its Run. Save reasoning before
