@@ -220,6 +220,9 @@ export function SolutionsPanel() {
     items !== undefined &&
     items.length < limits.solution_limit;
   const path = value?.snapshot.path;
+  const sourceRun = value?.sourceRuns.find(
+    (source) => source.runId === path?.runId,
+  );
   return (
     <section
       className="candidate-panel solution-panel"
@@ -301,12 +304,8 @@ export function SolutionsPanel() {
                 {value.evidence.kind === "unavailable" ? (
                   <VscodeButton
                     secondary
-                    onClick={() =>
-                      candidate.openRun({
-                        trailId: path.trail.id,
-                        runId: path.runId,
-                      })
-                    }
+                    disabled={!sourceRun}
+                    onClick={() => sourceRun && candidate.openRun(sourceRun)}
                   >
                     Open source Run
                   </VscodeButton>
@@ -317,6 +316,7 @@ export function SolutionsPanel() {
             )}
             <SolutionLineage
               lineage={value.snapshot.lineage}
+              locations={value.sourceRuns}
               openRun={candidate.openRun}
             />
             <SavedSolutionNotes notes={value.snapshot.notes} />

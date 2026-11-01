@@ -78,6 +78,14 @@ export function assetAcceptsInputType(
       );
   }
 }
+export interface RunLink {
+  runId: string;
+  trailId: string;
+  stageId?: string;
+}
+export interface RunLocation extends RunLink {
+  stageId: string;
+}
 export interface RunOutputOrigin {
   kind: "run_output";
   runId: string;
@@ -703,6 +711,7 @@ export interface SolutionPath {
   >;
 }
 export interface SolutionView extends SolutionSummary {
+  sourceRuns: RunLocation[];
   selectedRevision: number;
   explanation: string;
   status: "private_unverified";

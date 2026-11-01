@@ -75,7 +75,10 @@ Unused alternatives remain available in their Trails and full Run history.
 across Runs. For example, save a ROT13 output as a Block, run another Pipeline on
 that Block, and choose its output. The Solution includes both contributing Runs
 and their exact inputs. **Open contributing Run** opens an earlier Run for inspection.
-Shared source references appear once; unrelated Runs are excluded.
+Shared source references appear once; unrelated Runs are excluded. If you
+**Duplicate Stage**, a copied result retains this recorded ancestry. **Open
+contributing Run** selects its original Stage and historical Run; the copied
+Stage keeps its own Candidate, Solution and local progress.
 
 ![Solution showing exact Assets and the earlier Run behind a reused output](assets/desktop/solution-lineage.png)
 
@@ -83,8 +86,8 @@ Choosing a saved output Asset also captures its producing path. A copied Asset
 keeps its source revision; **Edited after copying** distinguishes manual changes
 from the output of earlier Runs. That history describes where the copy began,
 not a claim that a pipeline reproduces its edited bytes. Plain Assets have no
-invented execution path. Earlier saved revisions that lack source history say so;
-saving another revision captures it without changing the earlier snapshot.
+invented execution path. Saving another explanation revision preserves the
+earlier snapshot.
 
 **Included notes** preserves the selected text, revision and any fixed evidence
 link. Editing or archiving that notebook Note leaves the Solution intact. Revising
@@ -121,5 +124,3 @@ project and are not performed by **Choose as candidate** or **Save solution**.
 The [storage reference](reference/desktop-storage.md#stage-candidates) documents
 exact ownership, revision and IPC rules. Use [Run history](reference/desktop-runs.md)
 to inspect execution evidence and [the notebook](notebook.md) to keep reasoning.
-The remaining note/evidence workflow and old runtime retirement are tracked in
-[#50](https://github.com/cubearc/play/issues/50).

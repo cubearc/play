@@ -13,6 +13,7 @@ import type {
   CandidateSelection,
   CandidateView,
   Context,
+  RunLink,
   WorkspaceRequest,
 } from "../desktop/workspace-contract";
 import { AssetImage, ImagePreview } from "./AssetImage";
@@ -45,7 +46,7 @@ interface Candidates {
   error: string;
   read: (revision: number | null) => Promise<void>;
   select: (selection: CandidateSelection) => Promise<string>;
-  openRun: (origin: { trailId: string; runId: string }) => void;
+  openRun: (origin: RunLink) => void;
 }
 const CandidateContext = createContext<Candidates | null>(null);
 export function useCandidate() {

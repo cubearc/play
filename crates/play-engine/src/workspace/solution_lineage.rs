@@ -1,7 +1,7 @@
 //! Capture recorded creation ancestry; edited copies remain distinct from Run outputs.
 use super::{
     model::{AssetOrigin, CandidateSelection, Context},
-    queries, solution_path, solutions,
+    queries, solution_path, solutions, storage,
 };
 use crate::{Result, protocol};
 use serde_json::{Value, json};
@@ -97,6 +97,72 @@ pub async fn build(
     Ok(json!({"assets":assets,"paths":paths}))
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct RunLocation {
+    run_id: Uuid,
+    trail_id: Uuid,
+    stage_id: Uuid,
+}
+impl RunLocation {
+    fn context(&self, owner: &Context) -> Context {
+        Context {
+            stage_id: self.stage_id,
+            ..owner.clone()
+        }
+    }
+}
+// Only recorded ancestry reaches this lookup. Direct selections remain Stage-scoped.
+async fn source_run(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    run_id: Uuid,
+) -> Result<RunLocation> {
+    let (stage, trail): (String, String) = sqlx::query_as(
+        "SELECT stage_id,trail_id FROM pipeline_runs WHERE workspace_id=? AND exploration_id=? AND id=?",
+    )
+    .bind(context.workspace_id.to_string())
+    .bind(context.exploration_id.to_string())
+    .bind(run_id.to_string())
+    .fetch_optional(connection)
+    .await
+    .map_err(storage::failure)?
+    .ok_or("not_found")?;
+    Ok(RunLocation {
+        run_id,
+        trail_id: uuid(&trail)?,
+        stage_id: uuid(&stage)?,
+    })
+}
+
+/// Resolve navigation from immutable recorded paths without rewriting snapshots.
+pub(super) async fn locations(
+    connection: &mut SqliteConnection,
+    context: &Context,
+    snapshot: &Value,
+) -> Result<Vec<RunLocation>> {
+    let paths = snapshot["lineage"]["paths"]
+        .as_array()
+        .ok_or("corrupt_store")?;
+    let mut seen = BTreeSet::new();
+    let mut locations = Vec::new();
+    for path in std::iter::once(&snapshot["path"]).chain(paths.iter().map(|entry| &entry["path"])) {
+        if path.is_null() {
+            continue;
+        }
+        let id = uuid(path["runId"].as_str().ok_or("corrupt_store")?)?;
+        if !seen.insert(id) {
+            continue;
+        }
+        match source_run(connection, context, id).await {
+            Ok(location) => locations.push(location),
+            Err("not_found") => (), // Missing evidence is reported by the gap resolver.
+            Err(code) => return Err(code),
+        }
+    }
+    Ok(locations)
+}
+
 async fn capture(
     connection: &mut SqliteConnection,
     context: &Context,
@@ -126,8 +192,10 @@ async fn capture(
             assets.push(json!({"assetId":asset_id,"revision":revision,"title":asset.title,"origin":asset.origin,"editedSinceCopy":edited}));
             children
         }
-        CandidateSelection::RunOutput { .. } => {
-            let path = solution_path::build(connection, context, reference).await?;
+        CandidateSelection::RunOutput { run_id, .. } => {
+            let source = source_run(connection, context, *run_id).await?;
+            let path =
+                solution_path::build(connection, &source.context(context), reference).await?;
             let children = inputs(&path)?;
             paths.push(json!({"selection":reference,"path":path}));
             children
@@ -159,7 +227,12 @@ pub async fn gaps(
         }
     }
     for entry in lineage["paths"].as_array().ok_or("corrupt_store")? {
-        gaps.extend(solution_path::gaps(connection, context, &entry["path"]).await?);
+        let run_id = uuid(entry["path"]["runId"].as_str().ok_or("corrupt_store")?)?;
+        match source_run(connection, context, run_id).await {
+            Ok(source) => gaps.extend(solution_path::gaps(connection, &source.context(context), &entry["path"]).await?),
+            Err("not_found") => gaps.push(json!({"reference":format!("run:{run_id}"),"source":"Contributing Run","code":"not_found"})),
+            Err(code) => return Err(code),
+        }
     }
     Ok(gaps)
 }

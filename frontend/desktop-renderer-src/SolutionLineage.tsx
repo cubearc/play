@@ -1,5 +1,10 @@
 import { stringifyJson } from "../desktop/json-codec";
-import type { SolutionPath, SolutionView } from "../desktop/workspace-contract";
+import type {
+  RunLink,
+  RunLocation,
+  SolutionPath,
+  SolutionView,
+} from "../desktop/workspace-contract";
 import VscodeButton from "./VscodeButton";
 
 export function ContributingPath({ path }: { path: SolutionPath }) {
@@ -23,10 +28,12 @@ export function ContributingPath({ path }: { path: SolutionPath }) {
 }
 export function SolutionLineage({
   lineage,
+  locations,
   openRun,
 }: {
   lineage: SolutionView["snapshot"]["lineage"];
-  openRun: (origin: { trailId: string; runId: string }) => void;
+  locations: RunLocation[];
+  openRun: (origin: RunLink) => void;
 }) {
   if (!lineage.assets.length && !lineage.paths.length) return null;
   return (
@@ -55,6 +62,7 @@ export function SolutionLineage({
         ))}
       </ul>
       {lineage.paths.map(({ selection, path }) => {
+        const location = locations.find((entry) => entry.runId === path.runId);
         const origin = lineage.assets.find(
           (asset) =>
             asset.origin?.kind === "run_output" &&
@@ -73,9 +81,8 @@ export function SolutionLineage({
             <ContributingPath path={path} />
             <VscodeButton
               secondary
-              onClick={() =>
-                openRun({ trailId: path.trail.id, runId: path.runId })
-              }
+              disabled={!location}
+              onClick={() => location && openRun(location)}
             >
               Open contributing Run
             </VscodeButton>

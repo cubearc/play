@@ -10,7 +10,8 @@ import {
   type Context,
   contextOf,
   type EditableAssetView,
-  type RunOutputOrigin,
+  type RunLink,
+  type RunLocation,
   type TrailView,
 } from "../desktop/workspace-contract";
 import { AssetCanvas } from "./AssetCanvas";
@@ -140,9 +141,26 @@ export function Workbench() {
     }));
     setSelection((previous) => ({ ...previous, [contextKey]: trail.id }));
   };
-  const openSourceRun = (
-    origin: Pick<RunOutputOrigin, "trailId" | "runId">,
-  ) => {
+  const pendingSourceRun = useRef<{
+    workspaceId: string;
+    explorationId: string;
+    location: RunLocation;
+  } | null>(null);
+  const openSourceRun = (origin: RunLink) => {
+    if (!exploration || state.busy) return;
+    if (origin.stageId && origin.stageId !== exploration.stage.id) {
+      const pending = {
+        workspaceId: exploration.workspaceId,
+        explorationId: exploration.id,
+        location: { ...origin, stageId: origin.stageId },
+      };
+      pendingSourceRun.current = pending;
+      void state.selectStage(origin.stageId).then((accepted) => {
+        if (!accepted && pendingSourceRun.current === pending)
+          pendingSourceRun.current = null;
+      });
+      return;
+    }
     const trail = exploration?.trails.find(
       (trail) => trail.id === origin.trailId,
     );
@@ -151,6 +169,27 @@ export function Workbench() {
       void executions.show(trail, origin.runId);
     }
   };
+  useEffect(() => {
+    const pending = pendingSourceRun.current;
+    if (!pending) return;
+    if (
+      !exploration ||
+      pending.workspaceId !== exploration.workspaceId ||
+      pending.explorationId !== exploration.id
+    ) {
+      pendingSourceRun.current = null;
+      return;
+    }
+    if (pending.location.stageId !== exploration.stage.id) return;
+    pendingSourceRun.current = null;
+    const trail = exploration.trails.find(
+      (trail) => trail.id === pending.location.trailId,
+    );
+    if (trail) {
+      openTrail(trail);
+      void executions.show(trail, pending.location.runId);
+    }
+  });
   const run = () => {
     if (!runnableTrail?.pipelineId || runnableTrail.archived) return;
     const operation = executions.operationFor(runnableTrail);

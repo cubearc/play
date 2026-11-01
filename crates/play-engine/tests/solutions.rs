@@ -801,3 +801,89 @@ fn two_imports_of_one_challenge_keep_candidate_solution_and_note_histories_separ
         );
     }
 }
+
+#[test]
+fn copied_stage_solution_follows_retained_result_ancestry_without_direct_foreign_stage_access() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private");
+    let mut manager = Manager::new(root.clone()).unwrap();
+    let (source, view) = setup(&mut manager);
+    let first = execute(&mut manager, &source, &view["trails"][0]);
+    let output = json!({"kind":"run_output","run_id":first["id"],"attempt_id":first["attempts"][0]["id"],"port":"output"});
+    let pinned = command(
+        &mut manager,
+        json!({"kind":"pin_run_output","context":source,"key":Uuid::new_v4(),"expected_revision":view["stage"]["revision"],"run_id":first["id"],"attempt_id":first["attempts"][0]["id"],"port":"output"}),
+    );
+    let original = open(&mut manager, &source);
+    let copied = command(
+        &mut manager,
+        json!({"kind":"duplicate_stage","context":source,"key":Uuid::new_v4(),"expected_revision":original["stage"]["revision"],"title":"Independent interpretation"}),
+    );
+    let target = Context {
+        stage_id: serde_json::from_value(copied["stageId"].clone()).unwrap(),
+        ..source.clone()
+    };
+    let view = open(&mut manager, &target);
+    assert_eq!(
+        command(
+            &mut manager,
+            json!({"kind":"get_candidate","context":target})
+        )["candidate"],
+        Value::Null
+    );
+    let foreign = json!({"kind":"select_candidate","context":target,"key":Uuid::new_v4(),"expected_revision":0,"selection":output});
+    assert_eq!(
+        manager
+            .handle(serde_json::from_value(foreign).unwrap())
+            .unwrap_err(),
+        "not_found"
+    );
+    let original_asset = original["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == pinned["blockId"])
+        .unwrap();
+    let asset = view["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["asset"]["origin"]["assetId"] == original_asset["asset"]["id"])
+        .unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"select_candidate","context":target,"key":Uuid::new_v4(),"expected_revision":0,"selection":{"kind":"asset","asset_id":asset["asset"]["id"],"revision":1}}),
+    );
+    let id = Uuid::new_v4();
+    manager
+        .handle(serde_json::from_value(save(&target, id, 0)).unwrap())
+        .expect("a copied result must preserve its source Run in the Solution");
+    let saved = read(&mut manager, &target, id, None);
+    assert_eq!(saved["gaps"], json!([]));
+    assert_eq!(
+        saved["sourceRuns"],
+        json!([{"runId":first["id"],"trailId":first["plan"]["trail"]["id"],"stageId":source.stage_id}])
+    );
+    assert_eq!(saved["evidence"]["asset"]["content"]["text"], "The key.");
+    assert_eq!(saved["snapshot"]["path"], Value::Null);
+    assert_eq!(
+        saved["snapshot"]["lineage"]["paths"][0]["path"]["runId"],
+        first["id"]
+    );
+    assert_eq!(
+        manager
+            .run_detail(
+                &source,
+                serde_json::from_value(first["id"].clone()).unwrap()
+            )
+            .unwrap(),
+        first
+    );
+    drop(manager);
+    let mut manager = Manager::new(root).unwrap();
+    command(
+        &mut manager,
+        json!({"kind":"open","workspace_id":target.workspace_id}),
+    );
+    assert_eq!(read(&mut manager, &target, id, None), saved);
+}

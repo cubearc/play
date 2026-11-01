@@ -453,7 +453,10 @@ values. Normal transactional receipt/digest and optimistic conflict rules apply.
 `list_solutions` returns `{solutions: [{id, title, revision}]}` for the Stage.
 `get_solution` takes `context`, `solution_id` and `revision` (null for latest),
 returning one selected revision, reference-only history, resolved selected
-`evidence` and explicit `gaps`. Its status is always `private_unverified`.
+`evidence` and explicit `gaps`. `sourceRuns` resolves each recorded contributing
+Run to its actual `runId`, `trailId` and `stageId` within the owning Exploration.
+This navigation metadata does not rewrite the saved snapshot or broaden direct
+Stage-scoped Candidate/Run reads. Its status is always `private_unverified`.
 
 Snapshot format 1 freezes Stage/Candidate/selection references. For a Run output,
 `path` freezes the selected node's dependency closure, used input Asset revisions,
@@ -463,16 +466,17 @@ unselected branches are not copied into the snapshot. Run plans retain compact c
 retain the full pinned schemas once per Exploration, with digest-checked Run
 foreign keys; reads verify availability against those exact contracts and policies. Asset selections have a null root path.
 
-The optional `lineage` section captures `assets` with exact ID/revision, title,
+The required `lineage` section captures `assets` with exact ID/revision, title,
 recorded origin and `editedSinceCopy`, and `paths` with exact Run-output selections
-and their contributing paths. New saves always capture this section, following
-only immutable Asset-copy and saved-result origins within the owning Exploration
-and Stage. Duplicate exact Asset revisions and Run/attempt/port references are
-visited once; cycles are refused as corrupt storage. Copies after revision 1 are
+and their contributing paths. Saves follow only immutable Asset-copy and
+saved-result origins within the owning Exploration. Stage copies can lead to an
+ancestral Run in another Stage; the engine resolves that Run's recorded owner,
+while the selected Candidate and Solution stay in their destination Stage.
+Duplicate exact Asset revisions and Run/attempt/port references are visited once; cycles are refused as corrupt storage. Copies after revision 1 are
 marked as edited: their creation ancestry does not assert reproducibility of the
 edited bytes. Reads check captured references instead of rebuilding history from
-the working notebook. Historical revisions without a recorded section remain
-byte-identical and are shown as lacking source history; no ancestry is fabricated.
+the working notebook. Unsupported snapshots or missing required sections are
+refused without changing their stored bytes; no ancestry is fabricated.
 
 Traversal admits at most 64 unique references and applies the same 32768-byte
 snapshot ceiling while collecting metadata. New saves require every contributing

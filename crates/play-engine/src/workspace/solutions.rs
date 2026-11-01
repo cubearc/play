@@ -144,6 +144,7 @@ pub async fn read(
     let mut gaps = solution_path::gaps(connection, context, &snapshot["path"]).await?;
     gaps.extend(solution_lineage::gaps(connection, context, &snapshot["lineage"]).await?);
     gaps.extend(solution_notes::gaps(connection, context, &snapshot["notes"]).await?);
+    let source_runs = solution_lineage::locations(connection, context, &snapshot).await?;
     let gaps = gaps
         .into_iter()
         .map(|gap| {
@@ -156,7 +157,7 @@ pub async fn read(
         .into_values()
         .collect::<Vec<_>>();
     Ok(
-        json!({"id":id,"revision":latest,"selectedRevision":selected_revision,"title":row.get::<&str,_>("title"),"explanation":row.get::<&str,_>("explanation"),"status":"private_unverified","snapshot":snapshot,"evidence":evidence,"gaps":gaps,"history":rows.iter().map(|r|json!({"revision":r.get::<i64,_>("revision"),"title":r.get::<&str,_>("title")})).collect::<Vec<_>>()}),
+        json!({"id":id,"revision":latest,"selectedRevision":selected_revision,"title":row.get::<&str,_>("title"),"explanation":row.get::<&str,_>("explanation"),"status":"private_unverified","snapshot":snapshot,"sourceRuns":source_runs,"evidence":evidence,"gaps":gaps,"history":rows.iter().map(|r|json!({"revision":r.get::<i64,_>("revision"),"title":r.get::<&str,_>("title")})).collect::<Vec<_>>()}),
     )
 }
 pub(super) fn available(result: Result<Value>) -> Result<Value> {

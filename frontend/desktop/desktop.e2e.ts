@@ -6447,6 +6447,84 @@ test("Solutions follow reused outputs across Runs and reopen exact source histor
       .getByRole("heading", { name: "Solutions", exact: true })
       .click();
     await expect(history()).toContainText("Clue · r1");
+    const originalStage = (await current(page)).exploration.stage.id;
+    await page
+      .getByRole("button", { name: "Organize Stages", exact: true })
+      .click();
+    const stages = page.getByRole("dialog", {
+      name: "Organize Stages",
+      exact: true,
+    });
+    await stages
+      .getByRole("button", { name: "Duplicate Stage", exact: true })
+      .click();
+    await expect(
+      stages.getByRole("textbox", { name: "Stage title", exact: true }),
+    ).toHaveValue("Stage 1 (copy)");
+    await stages.getByRole("button", { name: "Done", exact: true }).click();
+    const copiedStage = (await current(page)).exploration.stage;
+    assert.notEqual(copiedStage.id, originalStage);
+    await notebook(page)
+      .getByRole("article", {
+        name: "ROT13 · output · Run 1 block",
+        exact: true,
+      })
+      .getByRole("button", {
+        name: "Explore ROT13 · output · Run 1",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("region", { name: "Trail canvas", exact: true })
+      .getByRole("button", {
+        name: "Choose ROT13 · output · Run 1 as candidate",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("tab", { name: copiedStage.title, exact: true })
+      .click();
+    await panel()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await panel()
+      .getByRole("button", { name: /New solution from Candidate/ })
+      .click();
+    await panel()
+      .getByLabel("Solution title", { exact: true })
+      .fill("A copied result keeps its evidence");
+    await panel()
+      .getByLabel("Solution explanation", { exact: true })
+      .fill(
+        "The local copy retains the original result and its contributing Run in the source Stage.",
+      );
+    await panel()
+      .getByRole("button", { name: "Save solution", exact: true })
+      .click();
+    await expect(history()).toContainText("Clue · r1");
+    await history()
+      .getByRole("button", { name: "Open contributing Run", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await current(page)).exploration.stage.id)
+      .toBe(originalStage);
+    await expect(
+      page.getByRole("region", { name: "Trail canvas", exact: true }),
+    ).toContainText("output: The key.");
+    await page
+      .getByRole("button", { name: "Organize Stages", exact: true })
+      .click();
+    await stages
+      .getByRole("button", { name: copiedStage.title, exact: true })
+      .click();
+    await stages.getByRole("button", { name: "Done", exact: true }).click();
+    await page
+      .getByRole("tab", { name: copiedStage.title, exact: true })
+      .click();
+    await panel()
+      .getByRole("heading", { name: "Solutions", exact: true })
+      .click();
+    await expect(history()).toContainText("Clue · r1");
     for (const width of [860, 800]) {
       const contentWidth = await application.evaluate(
         ({ BrowserWindow }, width) => {
