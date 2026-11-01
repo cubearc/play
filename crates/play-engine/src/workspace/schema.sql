@@ -1,5 +1,5 @@
 PRAGMA application_id=1129664590;
-PRAGMA user_version=16;
+PRAGMA user_version=17;
 CREATE TABLE asset_origins (
  workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, asset_id TEXT NOT NULL,
  source_asset_id TEXT NOT NULL, source_revision INTEGER NOT NULL CHECK(source_revision>0),
@@ -95,7 +95,7 @@ CREATE TABLE "notes" (
  PRIMARY KEY(workspace_id,exploration_id,id), UNIQUE(workspace_id,exploration_id,stage_id,id),
  FOREIGN KEY(workspace_id,exploration_id,stage_id) REFERENCES stages(workspace_id,exploration_id,id),
  FOREIGN KEY(workspace_id,exploration_id,source_note_id,source_revision) REFERENCES note_revisions(workspace_id,exploration_id,note_id,revision),
- CHECK((source_note_id IS NULL AND source_revision IS NULL) OR (kind='annotation' AND source_note_id IS NOT NULL AND source_revision>0 AND source_note_id<>id))
+ CHECK((source_note_id IS NULL AND source_revision IS NULL) OR (source_note_id IS NOT NULL AND source_revision>0 AND source_note_id<>id))
 );
 CREATE TABLE pipeline_origins (
  workspace_id TEXT NOT NULL, pipeline_id TEXT NOT NULL, source_pipeline_id TEXT NOT NULL, source_revision INTEGER NOT NULL,
@@ -159,6 +159,7 @@ CREATE TABLE solutions (
 );
 CREATE TABLE stages (
  workspace_id TEXT NOT NULL, exploration_id TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), position INTEGER NOT NULL,
+ progress TEXT NOT NULL DEFAULT 'not_started' CHECK(progress IN ('not_started','in_progress','completed')), archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)),
  PRIMARY KEY(workspace_id,exploration_id,id), FOREIGN KEY(workspace_id,exploration_id) REFERENCES explorations(workspace_id,id)
 );
 CREATE TABLE trail_input_bindings (
@@ -180,7 +181,7 @@ CREATE TABLE view_state (
  workspace_id TEXT NOT NULL, slot TEXT NOT NULL CHECK(slot='primary'), exploration_id TEXT NOT NULL, stage_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),
  PRIMARY KEY(workspace_id,slot), FOREIGN KEY(workspace_id,exploration_id,stage_id) REFERENCES stages(workspace_id,exploration_id,id)
 );
-CREATE TABLE "workspace_meta" (id TEXT PRIMARY KEY,generation INTEGER NOT NULL CHECK(generation=2),schema_version INTEGER NOT NULL CHECK(schema_version=16));
+CREATE TABLE "workspace_meta" (id TEXT PRIMARY KEY,generation INTEGER NOT NULL CHECK(generation=2),schema_version INTEGER NOT NULL CHECK(schema_version=17));
 CREATE INDEX blocks_archive ON blocks(workspace_id,exploration_id,stage_id,archived_revision DESC,id);
 CREATE INDEX blocks_order ON blocks(workspace_id,exploration_id,stage_id,position,id);
 CREATE UNIQUE INDEX one_reasoning_note ON notes(workspace_id,exploration_id,stage_id) WHERE kind='reasoning';

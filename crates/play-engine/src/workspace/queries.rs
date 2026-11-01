@@ -200,9 +200,9 @@ pub async fn exploration(
             .await
             .map_err(storage::failure)?
             .ok_or("not_found")?;
-    let stages = sqlx::query("SELECT id,title,revision FROM stages WHERE workspace_id=? AND exploration_id=? ORDER BY position,id")
+    let stages = sqlx::query("SELECT id,title,revision,progress,archived FROM stages WHERE workspace_id=? AND exploration_id=? ORDER BY position,id")
         .bind(&workspace).bind(&exploration).fetch_all(&mut *connection).await.map_err(storage::failure)?
-        .into_iter().map(|row| Summary {id:row.get(0),title:row.get(1),revision:row.get(2)}).collect::<Vec<_>>();
+        .into_iter().map(|row| super::stages::summary(&row)).collect::<Result<Vec<_>>>()?;
     let previous: Option<String> = sqlx::query_scalar(
         "SELECT stage_id FROM exploration_view_state WHERE workspace_id=? AND exploration_id=?",
     )
@@ -286,7 +286,7 @@ pub async fn exploration(
             bindings: super::bindings::read(connection, &workspace, &exploration, row.get("id"))
                 .await?,
             revision: row.get("revision"),
-            archived: row.get("archived"),
+            archived: stage_summary.archived || row.get::<bool, _>("archived"),
             id: row.get("id"),
             workspace_id: workspace.clone(),
             exploration_id: exploration.clone(),
@@ -306,6 +306,8 @@ pub async fn exploration(
         });
     }
     let stage = Stage {
+        progress: stage_summary.progress,
+        archived: stage_summary.archived,
         id: selected.clone(),
         title: stage_summary.title.clone(),
         revision: stage_summary.revision,
@@ -320,7 +322,18 @@ pub async fn exploration(
         workspace_id: workspace,
         title: record.get(0),
         revision: record.get(1),
-        stages,
+        archived_stages: stages
+            .iter()
+            .filter(|s| s.archived)
+            .map(|s| StageSummary {
+                id: s.id.clone(),
+                title: s.title.clone(),
+                revision: s.revision,
+                progress: s.progress,
+                archived: true,
+            })
+            .collect(),
+        stages: stages.into_iter().filter(|s| !s.archived).collect(),
         stage,
         trails,
     })

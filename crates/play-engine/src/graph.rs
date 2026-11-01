@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
+pub(crate) const ASSET_INPUT_TYPES: &[&str] = &["text", "image.samples", "bytes"];
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Input {
@@ -100,7 +102,7 @@ impl Definition {
             || self.inputs.is_empty()
             || self.inputs.len() > crate::protocol::contract().pipeline_input_limit
             || self.inputs[0].name != "source"
-            || !["text", "image.samples"].contains(&self.inputs[0].semantic_type.as_str())
+            || !ASSET_INPUT_TYPES.contains(&self.inputs[0].semantic_type.as_str())
             || self.nodes.is_empty()
             || self.nodes.len() > crate::protocol::contract().pipeline_node_limit
         {
@@ -116,7 +118,7 @@ impl Definition {
                     .iter()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
                 || !names.insert(&input.name)
-                || !["text", "image.samples"].contains(&input.semantic_type.as_str())
+                || !ASSET_INPUT_TYPES.contains(&input.semantic_type.as_str())
             {
                 return Err("invalid_pipeline");
             }
@@ -224,7 +226,7 @@ impl Definition {
         let primary = c
             .inputs
             .iter()
-            .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
+            .find(|p| ASSET_INPUT_TYPES.contains(&p.semantic_type.as_str()))
             .ok_or("contract_mismatch")?;
         let mut inputs = BTreeMap::from([(
             primary.name.clone(),

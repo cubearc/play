@@ -101,6 +101,11 @@ fn decode(encoded: &str, maximum: usize) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+pub(super) fn validate(encoded: &str) -> Result<Value> {
+    let (package, digest) = parse(encoded)?;
+    Ok(json!({"title":package.title,"stageCount":package.stages.len(),"sha256":digest}))
+}
+
 fn parse(encoded: &str) -> Result<(Package, String)> {
     let limits = protocol::contract();
     let bytes = decode(encoded, limits.package_bytes)?;
@@ -170,7 +175,9 @@ impl Block {
                 integrity(base64, sha256, protocol::contract().file_bytes)?;
                 files::add(connection, context, title, base64).await?
             }
-            Content::Annotation { text } => notes::add(connection, context, title, text).await?,
+            Content::Annotation { text } => {
+                notes::add(connection, context, title, text, None).await?
+            }
             Content::Page { text } => {
                 if text.len() > protocol::contract().text_bytes {
                     return Err("input_limit");
@@ -224,6 +231,7 @@ pub(super) async fn import(
                     &workspace.to_string(),
                     &exploration.to_string(),
                     &source.title,
+                    None,
                 )
                 .await?,
             )

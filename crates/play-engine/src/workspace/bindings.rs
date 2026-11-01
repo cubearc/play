@@ -13,7 +13,7 @@ pub fn semantic_type(asset: &Asset) -> Result<&'static str> {
     match asset.content {
         Content::Text { .. } | Content::Page { .. } => Ok("text"),
         Content::Image => Ok("image.samples"),
-        _ => Err("invalid_asset_type"),
+        Content::File { .. } => Ok("bytes"),
     }
 }
 pub async fn read(

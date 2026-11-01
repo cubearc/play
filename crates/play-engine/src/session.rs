@@ -204,10 +204,9 @@ fn dispatch(
             protocol::write_frame(output, &json!({"type":"run","id":id,"data":detail}))
         }
         Command::Workspace { command, .. } => {
-            let switching = matches!(
-                command,
-                crate::workspace::Command::Open { .. } | crate::workspace::Command::Create { .. }
-            );
+            let switching = store
+                .as_ref()
+                .is_some_and(|store| store.changes_workspace(&command));
             if switching && !active.is_empty() {
                 return reject(output, id, "busy");
             }

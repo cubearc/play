@@ -219,11 +219,7 @@ pub async fn save_trail(
         let source =
             super::queries::asset(c, &w, &e, row.get("source_id"), row.get("source_revision"))
                 .await?;
-        let input = match source.content {
-            super::model::Content::Text { .. } | super::model::Content::Page { .. } => "text",
-            super::model::Content::Image => "image.samples",
-            _ => return Err("invalid_asset_type"),
-        };
+        let input = super::bindings::semantic_type(&source)?;
         if d.input_type != input {
             return Err("invalid_asset_type");
         }

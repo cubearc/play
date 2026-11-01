@@ -146,9 +146,10 @@ pub(super) async fn add(
     context: &Context,
     title: &str,
     text: &str,
+    source: Option<(&str, i64)>,
 ) -> Result<Value> {
     blocks::admit_new(connection, context).await?;
-    let note = store(connection, context, title, text, None).await?;
+    let note = store(connection, context, title, text, source).await?;
     let position = order::append_position(connection, context).await?;
     let id = block(connection, context, &note, position).await?;
     let expected = order::revision(connection, context).await?;

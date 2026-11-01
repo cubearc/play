@@ -204,6 +204,9 @@ pub enum Command {
     Open {
         workspace_id: Uuid,
     },
+    ValidateChallenge {
+        package: String,
+    },
     ImportChallenge {
         workspace_id: Uuid,
         key: Uuid,
@@ -218,6 +221,27 @@ pub enum Command {
         workspace_id: Uuid,
         exploration_id: Uuid,
         stage_id: Option<Uuid>,
+    },
+    DuplicateStage {
+        context: Context,
+        key: Uuid,
+        expected_revision: i64,
+        title: Option<String>,
+    },
+    EditStage {
+        context: Context,
+        key: Uuid,
+        expected_revision: i64,
+        title: String,
+        progress: StageProgress,
+        archived: bool,
+    },
+    ReorderStages {
+        workspace_id: Uuid,
+        exploration_id: Uuid,
+        key: Uuid,
+        expected_revision: i64,
+        stage_ids: Vec<Uuid>,
     },
     CreateStage {
         workspace_id: Uuid,
@@ -284,7 +308,10 @@ pub enum Command {
 impl Command {
     pub fn mutation_key(&self) -> Option<Uuid> {
         match self {
-            Self::AnnotateEvidence { key, .. }
+            Self::DuplicateStage { key, .. }
+            | Self::EditStage { key, .. }
+            | Self::ReorderStages { key, .. }
+            | Self::AnnotateEvidence { key, .. }
             | Self::SaveSolution { key, .. }
             | Self::SelectCandidate { key, .. }
             | Self::CreatePipeline { key, .. }
@@ -492,9 +519,29 @@ pub struct Trail {
     pub archived: bool,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StageProgress {
+    NotStarted,
+    InProgress,
+    Completed,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageSummary {
+    pub id: String,
+    pub title: String,
+    pub revision: i64,
+    pub progress: StageProgress,
+    pub archived: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stage {
+    pub progress: StageProgress,
+    pub archived: bool,
     pub id: String,
     pub title: String,
     pub revision: i64,
@@ -512,7 +559,8 @@ pub struct Exploration {
     pub workspace_id: String,
     pub title: String,
     pub revision: i64,
-    pub stages: Vec<Summary>,
+    pub stages: Vec<StageSummary>,
+    pub archived_stages: Vec<StageSummary>,
     pub stage: Stage,
     pub trails: Vec<Trail>,
 }

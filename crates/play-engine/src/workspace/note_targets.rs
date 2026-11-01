@@ -72,7 +72,7 @@ pub async fn annotate(
 ) -> Result<Value> {
     let resolved = resolve(connection, context, target).await?;
     let label = resolved["label"].as_str().ok_or("invalid_state")?;
-    let result = notes::add(connection, context, title, text).await?;
+    let result = notes::add(connection, context, title, text, None).await?;
     let block = result["blockId"].as_str().ok_or("invalid_state")?;
     let note:String=sqlx::query_scalar("SELECT note_id FROM blocks WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?").bind(context.workspace_id.to_string()).bind(context.exploration_id.to_string()).bind(context.stage_id.to_string()).bind(block).fetch_one(&mut *connection).await.map_err(storage::failure)?;
     let (kind, block, asset, revision, run, attempt, port) = match target {

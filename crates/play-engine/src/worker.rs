@@ -71,7 +71,7 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
         .contract
         .inputs
         .iter()
-        .find(|p| ["text", "image.samples"].contains(&p.semantic_type.as_str()))
+        .find(|p| crate::graph::ASSET_INPUT_TYPES.contains(&p.semantic_type.as_str()))
         .ok_or("contract_mismatch")?;
     let mut inputs = serde_json::Map::new();
     for port in &e.contract.inputs {
@@ -79,6 +79,7 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
         let value = if port.name == primary.name {
             match representation {
                 Representation::Text => json!(invocation.input),
+                Representation::Bytes => json!({"base64":invocation.input}),
                 Representation::ImageSamples => {
                     json!(cube_core::operations::contracts::values::Image::from(
                         &image(&invocation.input)?
@@ -98,7 +99,7 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
     let maximum = if e
         .inputs
         .values()
-        .any(|r| *r == Representation::ImageSamples)
+        .any(|r| matches!(r, Representation::ImageSamples | Representation::Bytes))
     {
         protocol::contract().image_bytes.div_ceil(3) * 4
     } else {
@@ -394,11 +395,13 @@ pub enum Task {
 pub enum InputValue {
     Text { text: String },
     Image { png: String },
+    Bytes { base64: String },
 }
 impl InputValue {
     fn canonical(&self) -> Result<Value> {
         match self {
             Self::Text { text } => Ok(json!(text)),
+            Self::Bytes { base64 } => Ok(json!({"base64":base64})),
             Self::Image { png } => Ok(json!(
                 cube_core::operations::contracts::values::Image::from(&image(png)?)
             )),
@@ -417,13 +420,23 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
     {
         return Err("invalid_binding");
     }
-    let mut text_bytes = 0usize;
+    let mut input_bytes = 0usize;
     let mut image_bytes = 0usize;
     for (name, value) in &invocation.inputs {
         let kind = &invocation.definition.input(name)?.semantic_type;
         match value {
             InputValue::Text { text } if kind == "text" => {
-                text_bytes = text_bytes.checked_add(text.len()).ok_or("input_limit")?;
+                input_bytes = input_bytes.checked_add(text.len()).ok_or("input_limit")?;
+            }
+            InputValue::Bytes { base64 } if kind == "bytes" => {
+                if base64.len() > protocol::contract().input_bytes.div_ceil(3) * 4 {
+                    return Err("input_limit");
+                }
+                let bytes = STANDARD.decode(base64).map_err(|_| "invalid_binding")?;
+                if STANDARD.encode(&bytes) != *base64 {
+                    return Err("invalid_binding");
+                }
+                input_bytes = input_bytes.checked_add(bytes.len()).ok_or("input_limit")?;
             }
             InputValue::Image { png } if kind == "image.samples" => {
                 if png.len() > protocol::contract().image_bytes.div_ceil(3) * 4 {
@@ -436,7 +449,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
             _ => return Err("contract_mismatch"),
         }
     }
-    if text_bytes > protocol::contract().input_bytes
+    if input_bytes > protocol::contract().input_bytes
         || image_bytes > protocol::contract().image_bytes
     {
         return Err("input_limit");

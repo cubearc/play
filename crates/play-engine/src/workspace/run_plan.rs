@@ -28,6 +28,7 @@ pub async fn build(
     caller: super::runs::Caller,
 ) -> Result<Plan> {
     let context = &request.context;
+    super::stages::writable(connection, context).await?;
     let workspace = context.workspace_id.to_string();
     let exploration = context.exploration_id.to_string();
     let row=sqlx::query("SELECT source_id,source_revision,pipeline_id,pipeline_revision,revision,hypothesis FROM trails WHERE workspace_id=? AND exploration_id=? AND stage_id=? AND id=?")
@@ -119,7 +120,12 @@ pub async fn build(
                         png: STANDARD.encode(bytes),
                     }
                 }
-                _ => return Err("invalid_asset_type"),
+                Content::File { .. } => {
+                    let bytes:Vec<u8>=sqlx::query_scalar("SELECT data FROM asset_revisions WHERE workspace_id=? AND exploration_id=? AND asset_id=? AND revision=?").bind(&workspace).bind(&exploration).bind(&asset.id).bind(asset.revision).fetch_one(&mut *connection).await.map_err(storage::failure)?;
+                    InputValue::Bytes {
+                        base64: STANDARD.encode(bytes),
+                    }
+                }
             };
             input_data.insert(slot.name.clone(), data);
         }

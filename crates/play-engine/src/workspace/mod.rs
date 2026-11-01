@@ -20,6 +20,8 @@ mod solution_lineage;
 mod solution_notes;
 mod solution_path;
 mod solutions;
+mod stage_copy;
+mod stages;
 mod storage;
 
 use crate::{Result, protocol};
@@ -189,9 +191,24 @@ impl Manager {
         self.activate(id)
     }
 
+    /// Reattaching a client to the current owner does not switch or stop its Runs/PTYs.
+    pub fn changes_workspace(&self, command: &Command) -> bool {
+        match command {
+            Command::Open { workspace_id } => !self
+                .active
+                .as_ref()
+                .is_some_and(|s| s.identity.workspace_id == *workspace_id),
+            Command::Create { key, .. } => !self
+                .active
+                .as_ref()
+                .is_some_and(|s| s.identity.creation_key == *key),
+            _ => false,
+        }
+    }
     pub fn handle(&mut self, command: Command) -> Result<Value> {
         match command {
             Command::List => self.list(),
+            Command::ValidateChallenge { package } => challenges::validate(&package),
             Command::View { workspace_id } => {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;
                 if store.identity.workspace_id != workspace_id {

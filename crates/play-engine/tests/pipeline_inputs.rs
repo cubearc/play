@@ -775,3 +775,83 @@ fn contextual_cli_reads_only_assets_in_its_stage_and_workspace_pipelines() {
     assert!(m.cli_read(&other_workspace, read_pipeline()).is_err());
     assert!(m.cli_read(&c, read(&f["caption"])).is_err());
 }
+
+#[test]
+fn file_assets_supply_exact_bytes_to_registered_decoders_and_hashes_without_text_coercion() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    for (data, operation, expected) in [
+        (
+            b"Gur xrl.".as_slice(),
+            "text.utf8.decode",
+            json!("Gur xrl."),
+        ),
+        (
+            [0, 255, 128, 1].as_slice(),
+            "hash.sha256",
+            json!(cube_core::hashing::sha256(&[0, 255, 128, 1])),
+        ),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut m = Manager::new(root.path().join("private")).unwrap();
+        let c = context(&mut m, None, "File inputs");
+        call(
+            &mut m,
+            json!({"kind":"add_file","context":c,"key":Uuid::new_v4(),"title":"clue.bin","base64":STANDARD.encode(data)}),
+        );
+        let v = view(&mut m, &c);
+        let t = &v["trails"][0];
+        let definition =
+            play_engine::graph::Definition::single(Uuid::new_v4(), operation, 1, json!({}))
+                .unwrap();
+        let definition = serde_json::to_value(definition).unwrap();
+        let p = pipeline(&mut m, &c, &definition);
+        call(
+            &mut m,
+            json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Use the original bytes","pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":{}}),
+        );
+        let v = view(&mut m, &c);
+        let completed = execute(
+            &mut m,
+            &request(&c, &v["trails"][0], &definition["nodes"][0]),
+        );
+        assert_eq!(completed["result"]["outputs"]["output"], expected);
+        assert_eq!(
+            completed["plan"]["inputs"]["source"]["semanticType"],
+            "bytes"
+        );
+        let id = serde_json::from_value(completed["id"].clone()).unwrap();
+        drop(m);
+        let mut m = Manager::new(root.path().join("private")).unwrap();
+        call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+        assert_eq!(m.run_detail(&c, id).unwrap(), completed);
+    }
+}
+
+#[test]
+fn file_byte_inputs_enforce_the_decoded_run_budget_before_admission() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use play_engine::worker::{InputValue, PipelineInvocation, validate_pipeline};
+    let definition =
+        play_engine::graph::Definition::single(Uuid::new_v4(), "hash.sha256", 1, json!({}))
+            .unwrap();
+    let check = |base64| {
+        validate_pipeline(&PipelineInvocation {
+            definition: definition.clone(),
+            inputs: std::collections::BTreeMap::from([(
+                "source".into(),
+                InputValue::Bytes { base64 },
+            )]),
+        })
+    };
+    let maximum = play_engine::protocol::contract().input_bytes;
+    assert_eq!(check(STANDARD.encode(vec![255; maximum])), Ok(()));
+    assert_eq!(
+        check(STANDARD.encode(vec![255; maximum + 1])),
+        Err("input_limit")
+    );
+    assert_eq!(check("====".into()), Err("invalid_binding"));
+    assert!(
+        check("Zg".into()).is_err(),
+        "noncanonical bytes never enter a plan"
+    );
+}

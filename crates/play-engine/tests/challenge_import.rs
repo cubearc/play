@@ -110,8 +110,21 @@ fn grouped_assets_pages_notes_and_provenance_survive_edits_and_restart() {
         &mut manager,
         json!({"kind":"revise_text","context":context,"key":Uuid::new_v4(),"block_id":blocks[0]["id"],"asset_id":blocks[0]["caption"]["id"],"expected_revision":1,"text":"Changed caption"}),
     );
+    let edited = open(&mut manager, &workspace, &imported);
+    command(
+        &mut manager,
+        json!({"kind":"edit_stage","context":context,"key":Uuid::new_v4(),"expected_revision":edited["stage"]["revision"],"title":"My local clue","progress":"completed","archived":false}),
+    );
     let separate = command(&mut manager, request(&workspace, &p));
     assert_ne!(separate, imported);
+    assert_eq!(
+        open(&mut manager, &workspace, &separate)["stage"]["progress"],
+        "not_started"
+    );
+    assert_eq!(
+        open(&mut manager, &workspace, &imported)["stage"]["progress"],
+        "completed"
+    );
     assert_eq!(
         open(&mut manager, &workspace, &separate)["stage"]["blocks"][0]["caption"]["content"]["text"],
         "Uryyb"
@@ -308,4 +321,21 @@ fn package_budgets_and_workspace_authority_are_enforced_at_the_boundary() {
     assert_eq!(view["stages"].as_array().unwrap().len(), 16);
     assert_eq!(view["stage"]["blocks"].as_array().unwrap().len(), 8);
     assert_eq!(view["origin"]["sha256"], cube_core::hashing::sha256(&bytes));
+}
+
+#[test]
+fn package_validation_needs_no_workspace_and_creates_no_import_records() {
+    let temporary = tempfile::tempdir().unwrap();
+    let mut manager = Manager::new(temporary.path().join("private")).unwrap();
+    let package = package();
+    let validated = command(
+        &mut manager,
+        json!({"kind":"validate_challenge","package":STANDARD.encode(serde_json::to_vec(&package).unwrap())}),
+    );
+    assert_eq!(validated["title"], package["title"]);
+    assert_eq!(validated["stageCount"], 1);
+    assert_eq!(
+        command(&mut manager, json!({"kind":"list"}))["workspaces"],
+        json!([])
+    );
 }

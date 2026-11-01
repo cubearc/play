@@ -63,6 +63,7 @@ pub(super) async fn stage(
     workspace: &str,
     exploration: &str,
     name: &str,
+    origin: Option<&super::model::Note>,
 ) -> Result<String> {
     count(
         connection,
@@ -73,27 +74,37 @@ pub(super) async fn stage(
         protocol::contract().stage_limit,
     )
     .await?;
+    if let Some(note) = origin {
+        if note.kind != super::model::NoteKind::Reasoning {
+            return Err("invalid_state");
+        }
+        bytes(connection, workspace, exploration, note.text.len()).await?;
+    }
     let id = Uuid::new_v4().to_string();
     let note = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO stages(workspace_id,exploration_id,id,title,revision,position) VALUES(?,?,?,?,1,(SELECT count(*) FROM stages WHERE workspace_id=? AND exploration_id=?))")
         .bind(workspace).bind(exploration).bind(&id).bind(title(name)?).bind(workspace).bind(exploration).execute(&mut *connection).await.map_err(storage::failure)?;
-    sqlx::query("INSERT INTO notes VALUES(?,?,?,?,1,'reasoning','Reasoning',NULL,NULL)")
+    sqlx::query("INSERT INTO notes VALUES(?,?,?,?,1,'reasoning','Reasoning',?,?)")
         .bind(workspace)
         .bind(exploration)
         .bind(&id)
         .bind(&note)
+        .bind(origin.map(|n| n.id.as_str()))
+        .bind(origin.map(|n| n.revision))
         .execute(&mut *connection)
         .await
         .map_err(storage::failure)?;
-    sqlx::query("INSERT INTO note_revisions VALUES(?,?,?,1,'')")
+    sqlx::query("INSERT INTO note_revisions VALUES(?,?,?,1,?)")
         .bind(workspace)
         .bind(exploration)
         .bind(&note)
+        .bind(origin.map_or("", |n| n.text.as_str()))
         .execute(&mut *connection)
         .await
         .map_err(storage::failure)?;
     sqlx::query("INSERT INTO blocks(workspace_id,exploration_id,stage_id,id,position,kind,note_id) VALUES(?,?,?,?,0,'note',?)")
         .bind(workspace).bind(exploration).bind(&id).bind(Uuid::new_v4().to_string()).bind(note).execute(&mut *connection).await.map_err(storage::failure)?;
+    super::stages::advance(connection, workspace, exploration).await?;
     queries::select(connection, workspace, exploration, &id).await?;
     Ok(id)
 }
@@ -120,7 +131,7 @@ pub(super) async fn new_exploration(
         .execute(&mut *connection)
         .await
         .map_err(storage::failure)?;
-    let stage = stage(connection, workspace, &id, "Stage 1").await?;
+    let stage = stage(connection, workspace, &id, "Stage 1", None).await?;
     Ok(json!({"explorationId":id,"stageId":stage}))
 }
 
@@ -320,7 +331,62 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
         }
         return serde_json::from_str(previous.get::<&str, _>(1)).map_err(|_| "corrupt_store");
     }
+    if !matches!(command, Command::EditStage { .. })
+        && let Some(context) = value.get("context")
+    {
+        let context: Context =
+            serde_json::from_value(context.clone()).map_err(|_| "invalid_command")?;
+        queries::context(connection, owner, &context).await?;
+        super::stages::writable(connection, &context).await?;
+    }
     let result = match command {
+        Command::DuplicateStage {
+            context,
+            expected_revision,
+            title,
+            ..
+        } => {
+            super::stage_copy::duplicate(connection, context, *expected_revision, title.as_deref())
+                .await?
+        }
+        Command::EditStage {
+            context,
+            expected_revision,
+            title,
+            progress,
+            archived,
+            ..
+        } => {
+            queries::context(connection, owner, context).await?;
+            super::stages::edit(
+                connection,
+                context,
+                *expected_revision,
+                title,
+                *progress,
+                *archived,
+            )
+            .await?
+        }
+        Command::ReorderStages {
+            workspace_id,
+            exploration_id,
+            expected_revision,
+            stage_ids,
+            ..
+        } => {
+            if *workspace_id != owner {
+                return Err("workspace_mismatch");
+            }
+            super::stages::reorder(
+                connection,
+                *workspace_id,
+                *exploration_id,
+                *expected_revision,
+                stage_ids,
+            )
+            .await?
+        }
         Command::CreatePipeline {
             workspace_id,
             title,
@@ -422,7 +488,7 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
             ..
         } => {
             queries::context(connection, owner, context).await?;
-            notes::add(connection, context, title, text).await?
+            notes::add(connection, context, title, text, None).await?
         }
         Command::SaveSolution { context, .. } => {
             queries::context(connection, owner, context).await?;
@@ -496,7 +562,7 @@ pub async fn apply(store: &mut Owned, command: &Command) -> Result<Value> {
             if exists != 1 {
                 return Err("not_found");
             }
-            json!({"explorationId":exploration_id,"stageId":stage(connection,&workspace,&exploration_id.to_string(),title).await?})
+            json!({"explorationId":exploration_id,"stageId":stage(connection,&workspace,&exploration_id.to_string(),title,None).await?})
         }
         Command::SaveNote {
             context,
