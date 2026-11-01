@@ -39,3 +39,35 @@ fn nullable_key_phrase_readings_cannot_silently_feed_a_text_port() {
     );
     assert_eq!(definition.err(), Some("contract_mismatch"));
 }
+
+#[test]
+fn dated_alphabet_profiles_preserve_digraphs_and_every_source_assignment() {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/symbols/alphabet/vectors.json"
+    ))
+    .unwrap();
+    for row in rows {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let p = json!({"profile":row["profile"]});
+        let definition = Definition::parse(json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"}],"nodes":[
+            {"id":a,"operation":"symbol.alphabet.encode","operationVersion":1,"parameters":p,"position":{"x":0,"y":0},"inputs":{"units":{"kind":"literal","value":row["units"]}}},
+            {"id":b,"operation":"symbol.alphabet.decode","operationVersion":1,"parameters":p,"position":{"x":300,"y":0},"inputs":{"tokens":{"kind":"output","nodeId":a,"port":"tokens"}}}
+        ],"output":b})).unwrap();
+        let invocation = PipelineInvocation {
+            definition,
+            inputs: BTreeMap::new(),
+        };
+        worker::validate_pipeline(&invocation).unwrap();
+        let output = worker::execute_pipeline(invocation, |_| Ok(())).unwrap();
+        let actual = worker::named_outputs("symbol.alphabet.decode", &output).unwrap();
+        assert_eq!(actual["tokens"], row["tokens"]);
+        for (index, unit) in row["units"].as_array().unwrap().iter().enumerate() {
+            assert_eq!(
+                actual["readings"][index],
+                json!({"token_index":index,"alternatives":row.get("alternatives").and_then(|a|a.get(index)).cloned().unwrap_or_else(||json!([unit]))})
+            );
+        }
+        assert_eq!(actual["provenance"]["profile_id"], row["profile"]);
+    }
+}
