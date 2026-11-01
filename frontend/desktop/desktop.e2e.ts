@@ -355,9 +355,11 @@ test("private VIC retention is explicit, revisioned and survives native executio
     chromiumSandbox: true,
     args: [main, `--user-data-dir=${profile}`],
   });
+  let phase = "create Workspace and source";
   try {
     let page = await application.firstWindow();
     page.setDefaultTimeout(5000);
+    await page.bringToFront();
     await page
       .getByRole("textbox", { name: "Workspace name", exact: true })
       .fill("Private cipher study");
@@ -393,13 +395,14 @@ test("private VIC retention is explicit, revisioned and survives native executio
       name: "New Pipeline",
       exact: true,
     });
-    const choose = async (id: string) => {
+    const choose = async (name: string) => {
       await editor
         .getByRole("combobox", { name: "Operation", exact: true })
         .click();
-      await editor.locator(`vscode-option[value="${id}"]`).click();
+      await editor.getByRole("option", { name, exact: true }).click();
     };
-    await choose("cipher.vic.encode");
+    phase = "select and configure private operation";
+    await choose("Encode VIC (English 2010)");
     await editor
       .locator("summary")
       .filter({ hasText: "Advanced parameters" })
@@ -421,6 +424,7 @@ test("private VIC retention is explicit, revisioned and survives native executio
     await expect(
       editor.getByRole("button", { name: "Create Pipeline", exact: true }),
     ).toBeEnabled();
+    phase = "review consent and save";
     await capture(application, "native-private-retention");
     assert.deepEqual((await accessibility(page)).violations, []);
     await editor
@@ -432,6 +436,7 @@ test("private VIC retention is explicit, revisioned and survives native executio
       saved.exploration.trails[0]?.pipeline?.definition.nodes[0]?.retainPrivate,
       true,
     );
+    phase = "execute source answer";
     await canvas.getByRole("button", { name: "Run cell", exact: true }).click();
     await expect(
       canvas.getByRole("region", { name: "Cell result" }),
@@ -444,8 +449,9 @@ test("private VIC retention is explicit, revisioned and survives native executio
       .getByRole("button", { name: "Edit Pipeline", exact: true })
       .click();
     editor = page.getByRole("dialog", { name: "Edit Pipeline", exact: true });
-    await choose("cipher.rot13");
-    await choose("cipher.vic.encode");
+    phase = "reset consent on operation change";
+    await choose("ROT13");
+    await choose("Encode VIC (English 2010)");
     await expect(
       editor.getByRole("checkbox", {
         name: "Retain private data in this workspace",
@@ -456,6 +462,21 @@ test("private VIC retention is explicit, revisioned and survives native executio
       editor.getByRole("button", { name: "Save revision", exact: true }),
     ).toBeDisabled();
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(editor).toBeHidden();
+    assert.deepEqual(
+      (await current(page)).exploration.trails[0]?.pipeline,
+      saved.exploration.trails[0]?.pipeline,
+    );
+    await expect
+      .poll(() =>
+        application.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().some((window) =>
+            window.isDocumentEdited(),
+          ),
+        ),
+      )
+      .toBe(false);
+    phase = "restart with saved consent";
     await application.close();
     application = await electron.launch({
       chromiumSandbox: true,
@@ -474,8 +495,21 @@ test("private VIC retention is explicit, revisioned and survives native executio
         await frozenRun(page, run.context, run.detail.id),
         run.detail,
       );
+  } catch (error) {
+    console.error("private_retention_journey", phase, error);
+    throw error;
   } finally {
-    await application.close();
+    if (application.process().exitCode === null) {
+      // Teardown only: an assertion inside a dirty editor must not leave a
+      // native discard dialog holding the test process and worker owner open.
+      await application.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      await application.close();
+    }
     await rm(profile, { recursive: true, force: true });
   }
 });

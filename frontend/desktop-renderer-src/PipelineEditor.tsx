@@ -18,6 +18,7 @@ import {
   selectedBindings,
 } from "./BindingsEditor";
 import { GraphInputs, initialInputs, Select } from "./GraphInputs";
+import { operationLabel } from "./operationLabel";
 import { ParameterFields, parameterTypesValid } from "./ParameterFields";
 import { PipelineGraph } from "./PipelineGraph";
 import { PipelineInputs } from "./PipelineInputs";
@@ -332,8 +333,8 @@ export function PipelineEditor({
                 value: o.operation,
                 label:
                   o.availability.state === "available"
-                    ? o.name
-                    : `${o.name} (${o.availability.reason === "retention_policy_unavailable" ? "private inputs unavailable" : "image output unavailable"})`,
+                    ? operationLabel(o, operations)
+                    : `${operationLabel(o, operations)} (${o.availability.reason === "retention_policy_unavailable" ? "private inputs unavailable" : "image output unavailable"})`,
                 disabled: o.availability.state === "unavailable",
               }))}
               onChange={(id) => {
