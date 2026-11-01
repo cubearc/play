@@ -42,6 +42,7 @@ async function finalizeCoverage(application: ElectronApplication) {
 }
 
 import { packagedWorkerFixture } from "./package-fixture.ts";
+import { exerciseQueueControls } from "./queue-ui-fixture.ts";
 import { type Context, reasoningOf } from "./workspace-contract.ts";
 
 const electron = {
@@ -5547,21 +5548,24 @@ test("native notebook queues another cell without disabling unrelated Trails", {
       name: "Second clue block",
       exact: true,
     });
-    await first.getByRole("button", { name: "Run cell", exact: true }).click();
-    await expect(first.getByRole("status")).toHaveText("Running…");
+    await expect(
+      first.getByRole("button", { name: "Run cell", exact: true }),
+    ).toBeEnabled();
     await expect(
       second.getByRole("button", { name: "Run cell", exact: true }),
     ).toBeEnabled();
-    await second.getByRole("button", { name: "Run cell", exact: true }).click();
-    await expect(second.getByRole("status")).toHaveText("Queued…");
-    await expect(first.getByRole("status")).toHaveText("Running…");
-    await second.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(second.getByRole("status")).toHaveText(
+    assert.deepEqual(await exerciseQueueControls(page), [
+      "Running…",
+      "Queued…",
+      "Running…",
+      "Cancelled: user_cancelled",
+      "Cancelled: user_cancelled",
+      "Cancelled: user_cancelled",
+    ]);
+    await expect(first.getByRole("status")).toHaveText(
       "Cancelled: user_cancelled",
     );
-    await expect(first.getByRole("status")).toHaveText("Running…");
-    await first.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(first.getByRole("status")).toHaveText(
+    await expect(second.getByRole("status")).toHaveText(
       "Cancelled: user_cancelled",
     );
     await expect(
