@@ -471,7 +471,11 @@ export function Notebook({
                     openSourceRun={openSourceRun}
                   />
                   {trail ? (
-                    <TrailCell trail={trail} executions={executions} />
+                    <TrailCell
+                      trail={trail}
+                      executions={executions}
+                      openSourceRun={openSourceRun}
+                    />
                   ) : null}
                 </>
               )}

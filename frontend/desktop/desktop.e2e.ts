@@ -3063,7 +3063,37 @@ test("structured Assets reuse exact outputs through the notebook and canvas afte
       second.detail.plan.inputs.source.assetId,
       resultTrail.source.id,
     );
-    assert.equal(resultTrail.source.origin?.kind, "run_output");
+    const origin = resultTrail.source.origin;
+    assert.ok(origin?.kind === "run_output");
+    assert.equal(second.detail.plan.reusePolicy, "explicit_assets");
+    assert.deepEqual(second.detail.plan.reusedOutputs, [
+      {
+        ...origin,
+        inputName: "source",
+        assetId: resultTrail.source.id,
+        revision: resultTrail.source.revision,
+      },
+    ]);
+    assert.equal(first.detail.attempts.length, 1);
+    assert.equal(second.detail.attempts.length, 1);
+    const result = () =>
+      canvas().getByRole("region", { name: "Cell result", exact: true });
+    await result()
+      .locator("summary")
+      .filter({ hasText: "Saved Run & input evidence" })
+      .click();
+    const sourceLink = result().getByRole("button", {
+      name: `Open reused Run ${first.detail.sequence} for source`,
+      exact: true,
+    });
+    await expect(sourceLink).toBeVisible();
+    await sourceLink.scrollIntoViewIfNeeded();
+    await capture(application, "native-reused-output-evidence", false);
+    await sourceLink.click();
+    await expect(result()).toContainText("output: 5");
+    await page.getByRole("tab", { name: title, exact: true }).click();
+    await expect(result()).toContainText("output: 10");
+    assert.deepEqual(await current(page), before);
     assert.deepEqual((await accessibility(page)).violations, []);
     await capture(application, "native-structured-asset-reuse");
     await finalizeCoverage(application);

@@ -138,8 +138,16 @@ fn result_blocks_preserve_exact_attempt_origin_and_reuse_text_without_editing_ev
             .unwrap(),
         "The key."
     );
+    let admitted = manager.run_detail(&context, next.identity.id).unwrap();
+    let mut reused = origin.clone();
+    reused["inputName"] = json!("source");
+    reused["assetId"] = block["asset"]["id"].clone();
+    reused["revision"] = block["asset"]["revision"].clone();
+    assert_eq!(admitted["plan"]["reusePolicy"], "explicit_assets");
+    assert_eq!(admitted["plan"]["reusedOutputs"], json!([reused]));
+    assert!(admitted["attempts"].as_array().unwrap().is_empty());
     manager.start_attempt(&next.identity).unwrap();
-    manager
+    let reused_run = manager
         .finish_run(
             &next.identity,
             json!({"status":"completed","output":{"text":"Gur xrl."}}),
@@ -164,6 +172,23 @@ fn result_blocks_preserve_exact_attempt_origin_and_reuse_text_without_editing_ev
         &mut manager,
         json!({"kind":"revise_text","context":context,"key":Uuid::new_v4(),"block_id":copy["id"],"asset_id":copy["asset"]["id"],"expected_revision":1,"text":"An alternative"}),
     );
+    let current_copy = view(&mut manager, &context);
+    let copied_trail = current_copy["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["id"] == copy["asset"]["id"])
+        .unwrap();
+    let copied_run = complete(
+        &mut manager,
+        &context,
+        copied_trail,
+        true,
+        json!({"text":"Na nygreangvir"}),
+    );
+    assert_eq!(copied_run["plan"]["reusePolicy"], "none");
+    assert_eq!(copied_run["plan"]["reusedOutputs"], json!([]));
+    assert_eq!(reused_run["attempts"].as_array().unwrap().len(), 1);
     let before = view(&mut manager, &context);
     drop(manager);
     let mut manager = Manager::new(root).unwrap();
@@ -180,6 +205,15 @@ fn result_blocks_preserve_exact_attempt_origin_and_reuse_text_without_editing_ev
             )
             .unwrap(),
         run
+    );
+    assert_eq!(
+        manager
+            .run_detail(
+                &context,
+                serde_json::from_value(reused_run["id"].clone()).unwrap()
+            )
+            .unwrap(),
+        reused_run
     );
     assert_eq!(command(&mut manager, pin), receipt);
 }
@@ -384,4 +418,62 @@ fn result_identity_is_unique_across_fresh_intents_and_archive_never_reapplies_a_
             );
             db.close().await.unwrap();
         });
+}
+
+#[test]
+fn unused_result_asset_bindings_do_not_claim_reused_outputs_or_fabricate_attempts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut manager = Manager::new(tmp.path().join("private")).unwrap();
+    let (context, initial) = setup(&mut manager);
+    let first = complete(
+        &mut manager,
+        &context,
+        &initial["trails"][0],
+        true,
+        json!({"text":"The key."}),
+    );
+    command(&mut manager, intent(&context, &initial, &first, "output"));
+    let saved = view(&mut manager, &context);
+    let block = &saved["stage"]["blocks"][1];
+    let trail = saved["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["id"] == block["asset"]["id"])
+        .unwrap();
+    let mut definition = configuration("cipher.rot13", 1, json!({}));
+    definition["nodes"][0]["inputs"]["input"] =
+        json!({"kind":"literal","value":"An independent input"});
+    let pipeline = command(
+        &mut manager,
+        json!({"kind":"create_pipeline","workspace_id":context.workspace_id,"key":Uuid::new_v4(),"title":"Literal only","definition":definition}),
+    );
+    command(
+        &mut manager,
+        json!({"kind":"save_trail","context":context,"key":Uuid::new_v4(),"trail_id":trail["id"],"expected_revision":trail["revision"],"hypothesis":"Keep the saved output outside this path","pipeline":{"id":pipeline["pipelineId"],"revision":1},"bindings":{}}),
+    );
+    let updated = view(&mut manager, &context);
+    let trail = updated["trails"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["source"]["id"] == block["asset"]["id"])
+        .unwrap();
+    let prepared = manager
+        .prepare_run(&request(&context, trail, "cipher.rot13", true))
+        .unwrap();
+    let run = manager.run_detail(&context, prepared.identity.id).unwrap();
+    assert_eq!(run["plan"]["inputs"]["source"]["used"], false);
+    assert_eq!(run["plan"]["reusePolicy"], "none");
+    assert_eq!(run["plan"]["reusedOutputs"], json!([]));
+    assert!(run["attempts"].as_array().unwrap().is_empty());
+    assert_eq!(
+        manager
+            .run_detail(
+                &context,
+                serde_json::from_value(first["id"].clone()).unwrap()
+            )
+            .unwrap(),
+        first
+    );
 }

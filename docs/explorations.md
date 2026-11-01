@@ -287,6 +287,15 @@ output port. Structured values retain their Core semantic type, so a compatible
 operation can consume the result directly. Use **Add data** in the notebook to
 create a structured Asset yourself.
 
+When a Pipeline consumes that saved result, expand **Saved Run & input evidence**
+to inspect **Reused outputs**. **Open source Run** returns to its original
+execution. The new Run records its own actual node attempts; saving or opening
+the source never executes it again.
+
+![A Run records its saved result input and offers a link to the original execution.](assets/desktop/reused-output-evidence.png)
+
+[Open the reused-output evidence full size](assets/desktop/reused-output-evidence.png).
+
 Image results appear beside their producing cell. **Save as block** keeps a
 lossless PNG Asset linked to the original Run and named output; a later image
 operation can use it directly. **Image data** exposes the full logical raster

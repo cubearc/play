@@ -166,8 +166,9 @@ and the source link requests that exact Run within its owning context.
 Result roots reject `revise_text` with `result_read_only`; copied text variants
 have their own revisions and remain editable. Reordering/archive/restoration
 preserve the root's origin and history. Archiving a source clue does not revoke
-its retained Run or the independent result. Text results can feed a new explicit
-text Run; byte results remain inspection-only Files in this preview.
+its retained Run or the independent result. Text, byte, image and structured results can feed a compatible Pipeline with
+their exact semantic type and physical representation. Its plan records consumed
+result roots under [explicit output reuse](desktop-runs.md#save-a-selected-output).
 
 Matching intent retries return the original receipt. A fresh intent for the same
 Run/attempt/port returns its existing Block without adding content or restoring

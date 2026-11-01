@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { stringifyJson } from "../desktop/json-codec";
-import type { TrailView } from "../desktop/workspace-contract";
+import type { RunOutputOrigin, TrailView } from "../desktop/workspace-contract";
 import { InlineResult } from "./InlineResult";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -9,9 +9,11 @@ import VscodeCheckbox from "./VscodeCheckbox";
 export function TrailCell({
   trail,
   executions,
+  openSourceRun,
 }: {
   trail: TrailView;
   executions: Executions;
+  openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   const pipeline = trail.pipeline;
   const keep = useRef<HTMLInputElement>(null);
@@ -34,7 +36,11 @@ export function TrailCell({
     return (
       <>
         {cancel}
-        <InlineResult trail={trail} executions={executions} />
+        <InlineResult
+          trail={trail}
+          executions={executions}
+          openSourceRun={openSourceRun}
+        />
       </>
     );
   return (
@@ -115,7 +121,11 @@ export function TrailCell({
           </p>
         ) : null}
       </div>
-      <InlineResult trail={trail} executions={executions} />
+      <InlineResult
+        trail={trail}
+        executions={executions}
+        openSourceRun={openSourceRun}
+      />
     </div>
   );
 }

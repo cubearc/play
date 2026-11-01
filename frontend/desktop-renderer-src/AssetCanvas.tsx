@@ -230,11 +230,19 @@ export function AssetCanvas({
               className="canvas-node operation-node"
               aria-label="Pipeline node"
             >
-              <TrailCell trail={trail} executions={executions} />
+              <TrailCell
+                trail={trail}
+                executions={executions}
+                openSourceRun={openSourceRun}
+              />
             </article>
           </>
         ) : (
-          <TrailCell trail={trail} executions={executions} />
+          <TrailCell
+            trail={trail}
+            executions={executions}
+            openSourceRun={openSourceRun}
+          />
         )}
       </div>
       {page ? (

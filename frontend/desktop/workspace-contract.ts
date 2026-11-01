@@ -583,6 +583,11 @@ export interface FrozenRunInput {
   semanticType: string;
   used: boolean;
 }
+export interface OutputReuse extends RunOutputOrigin {
+  inputName: string;
+  assetId: string;
+  revision: number;
+}
 export interface RunDetail extends RunSummary {
   plan: {
     pipeline: { id: string; revision: number; definition: unknown };
@@ -598,12 +603,16 @@ export interface RunDetail extends RunSummary {
     contract: ContractSnapshotRef;
     contractDigest: string;
     targetNodes: string[];
-    reusePolicy: "none";
-    reusedOutputs: unknown[];
     inputs: { source: FrozenRunInput } & Record<string, FrozenRunInput>;
     parameters: unknown;
     limits: unknown;
-  };
+  } & (
+    | { reusePolicy: "none"; reusedOutputs: [] }
+    | {
+        reusePolicy: "explicit_assets";
+        reusedOutputs: [OutputReuse, ...OutputReuse[]];
+      }
+  );
   result: {
     status: RunStatus;
     outputs?: Record<string, JsonValue>;

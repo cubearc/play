@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { RunDetail, TrailView } from "../desktop/workspace-contract";
+import type {
+  RunDetail,
+  RunOutputOrigin,
+  TrailView,
+} from "../desktop/workspace-contract";
 import { ImagePreview } from "./AssetImage";
 import { CandidateButton } from "./Candidates";
 import { AnnotateButton } from "./EvidenceNotes";
@@ -42,9 +46,11 @@ function value(run: RunDetail): string {
 export function InlineResult({
   trail,
   executions,
+  openSourceRun,
 }: {
   trail: TrailView;
   executions: Executions;
+  openSourceRun: (origin: RunOutputOrigin) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const history = executions.history[trail.id];
@@ -230,9 +236,30 @@ export function InlineResult({
                   </div>
                 ))}
               </dd>
+              <dt>Reused outputs</dt>
+              <dd>
+                {run.plan.reusedOutputs.length
+                  ? run.plan.reusedOutputs.map((reused) => (
+                      <div className="result-origin" key={reused.inputName}>
+                        <span>
+                          {reused.inputName} ← {reused.operationName} ·{" "}
+                          {reused.port} · Run {reused.sequence}
+                        </span>
+                        <VscodeButton
+                          secondary
+                          icon="history"
+                          aria-label={`Open reused Run ${reused.sequence} for ${reused.inputName}`}
+                          onClick={() => openSourceRun(reused)}
+                        >
+                          Open source Run
+                        </VscodeButton>
+                      </div>
+                    ))
+                  : "None"}
+              </dd>
               <dt>Attempts</dt>
               <dd>
-                {run.attempts.length} actual node attempt(s) · reuse: none
+                {run.attempts.length} actual node attempt(s)
                 <ol>
                   {run.attempts.map((a) => (
                     <li key={a.id}>

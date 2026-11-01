@@ -1409,6 +1409,14 @@ fn generated_images_preview_pin_and_reuse_exact_samples_with_retained_origin() {
         second["result"]["outputs"]["output"],
         fixture["inputs"]["input"]
     );
+    assert_eq!(second["plan"]["reusePolicy"], "explicit_assets");
+    assert_eq!(second["plan"]["reusedOutputs"].as_array().unwrap().len(), 1);
+    let reuse = &second["plan"]["reusedOutputs"][0];
+    assert_eq!(reuse["runId"], first["id"]);
+    assert_eq!(reuse["attemptId"], first["attempts"][0]["id"]);
+    assert_eq!(reuse["port"], "output");
+    assert_eq!(reuse["inputName"], "source");
+    assert_eq!(reuse["assetId"], block["asset"]["id"]);
     assert_eq!(first["attempts"].as_array().unwrap().len(), 1);
     assert_eq!(second["attempts"].as_array().unwrap().len(), 1);
     let stage = call(

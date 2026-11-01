@@ -13,6 +13,30 @@ use sqlx::{Row, SqliteConnection};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OutputReuse<'a> {
+    input_name: &'a str,
+    asset_id: &'a str,
+    revision: i64,
+    #[serde(flatten)]
+    origin: &'a super::model::AssetOrigin,
+}
+fn output_reuse<'a>(
+    input_name: &'a str,
+    asset: &'a super::model::Asset,
+) -> Option<OutputReuse<'a>> {
+    match asset.origin.as_deref() {
+        Some(origin @ super::model::AssetOrigin::RunOutput { .. }) => Some(OutputReuse {
+            input_name,
+            asset_id: &asset.id,
+            revision: asset.revision,
+            origin,
+        }),
+        _ => None,
+    }
+}
+
 pub struct Plan {
     pub value: Value,
     pub invocation: PipelineInvocation,
@@ -90,6 +114,7 @@ pub async fn build(
     let mut input_data = BTreeMap::new();
     let mut refs = BTreeMap::new();
     let mut inputs = serde_json::Map::new();
+    let mut reused_outputs = Vec::new();
     for slot in &graph.inputs {
         let asset = assets.get(&slot.name).ok_or("invalid_binding")?;
         blocks::source_active(connection, context, &asset.id).await?;
@@ -110,6 +135,9 @@ pub async fn build(
             },
         );
         if used {
+            if let Some(reused) = output_reuse(&slot.name, asset) {
+                reused_outputs.push(reused);
+            }
             let data = match &asset.content {
                 Content::Text { text } | Content::Page { text } => {
                     InputValue::Text { text: text.clone() }
@@ -148,7 +176,12 @@ pub async fn build(
         .collect::<Result<Vec<_>>>()?;
     let target_plan = node_plan(target)?;
     let contracts = compact_contracts(connection, context, &mut nodes, &target_plan).await?;
-    let value = json!({"formatVersion":4,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":"none","reusedOutputs":[],"caller":caller.as_str(),"adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"activeRuns":crate::protocol::contract().active_runs,"activeRunsPerExploration":crate::protocol::contract().active_runs_per_exploration,"queuedRuns":crate::protocol::contract().queued_runs,"queuedRunsPerExploration":crate::protocol::contract().queued_runs_per_exploration,"parallelNodes":crate::protocol::contract().parallel_nodes,"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
+    let reuse_policy = if reused_outputs.is_empty() {
+        "none"
+    } else {
+        "explicit_assets"
+    };
+    let value = json!({"formatVersion":4,"trail":{"id":request.trail_id,"revision":row.get::<i64,_>("revision"),"hypothesis":row.get::<String,_>("hypothesis")},"pipeline":{"id":pipeline_id,"revision":pipeline_revision,"definition":definition},"targetNodes":[request.target_node_id],"executionOrder":schedule,"nodes":nodes,"contracts":contracts,"reusePolicy":reuse_policy,"reusedOutputs":reused_outputs,"caller":caller.as_str(),"adapterVersion":3,"contract":contract,"contractDigest":target_plan["contractDigest"],"operation":target_plan["operation"],"inputs":inputs,"parameters":target.parameters,"limits":{"activeRuns":crate::protocol::contract().active_runs,"activeRunsPerExploration":crate::protocol::contract().active_runs_per_exploration,"queuedRuns":crate::protocol::contract().queued_runs,"queuedRunsPerExploration":crate::protocol::contract().queued_runs_per_exploration,"parallelNodes":crate::protocol::contract().parallel_nodes,"runMs":crate::protocol::contract().run_ms,"cpuSeconds":crate::protocol::contract().cpu_seconds,"vmGrowthBytes":crate::protocol::contract().vm_growth_bytes,"outputBytes":crate::protocol::contract().output_bytes}});
     if value.to_string().len() > 16384 {
         return Err("output_limit");
     }

@@ -5,8 +5,8 @@ result and exact input evidence reopen in the notebook and its Trail canvas.
 The executor plans the explicitly selected target node and its ancestors in a typed graph,
 using the [Core-registered executable capabilities](desktop-pipelines.md#execution-capabilities). One sandboxed worker executes up to two dependency-ready nodes concurrently.
 UI and contextual CLI Runs use this same coordinator. Up to two Explorations can
-run concurrently, with bounded fair admission. Executor output reuse remains a
-separate delivery.
+run concurrently, with bounded fair admission. Explicitly saved result Assets
+can feed another Run while retaining links to their original node attempts.
 
 ## Accepted invocation
 
@@ -33,17 +33,17 @@ An accepted Run pins:
   bind `image.samples` from the exact authorized PNG revision, with the coordinates
   and palette-expansion choice frozen in the selected definition.
 - Core operation/schema/adapter identity, complete contract and contract digest.
-- Effective parameters, Trail hypothesis/revision, execution ceilings and the `none` reuse policy.
+- Effective parameters, Trail hypothesis/revision, execution ceilings and explicit result-Asset reuse decisions.
 
-Plan format 3 freezes the full definition once. Each compact node records its
-operation/version and `contractDigest`. The target's complete contract remains in
-`contract`; other unique contracts are stored in `contracts`, keyed by digest.
-Repeated operations share that snapshot. Parameters and connections stay in the
-frozen definition. This avoids repeated schema/configuration copies while keeping
-the existing **16384-byte** plan ceiling; an oversized plan is rejected before
-admission. Historical finished plans remain immutable in their recorded format.
-Adapter version 3 identifies registry-driven execution and complete named multiport
-outputs; earlier retained evidence remains readable without executing old dispatchers.
+Plan format 4 freezes the Pipeline definition once and records compact typed
+contract references with exact digests. Complete contracts live in immutable,
+Exploration-owned snapshots linked to that Run. Repeated operations share one
+snapshot. Parameters and connections stay in the frozen definition. The
+**16384-byte** plan ceiling and Exploration quotas apply before admission.
+Unsupported plan formats are refused; there is no inline-schema compatibility
+reader. Adapter version 3 identifies registry-driven execution and complete named
+multiport outputs. [Contract storage](desktop-storage.md#typed-structured-assets-and-contract-snapshots)
+describes the immutable ownership links.
 
 [Save and select a Pipeline revision](../explorations.md#save-and-reuse-a-pipeline)
 before executing another configuration. A Run never creates or substitutes a
@@ -197,8 +197,9 @@ conflict or acknowledgement; it never fabricates a replacement execution.
 ## Outputs and privacy
 
 **Keep result in private history** controls output retention for each Run. The
-engine snapshots Core's contract and refuses unsupported sensitive-input,
-sensitive-output or sensitive-parameter policies in this adapter slice. Inputs
+engine snapshots Core's contract. Nodes with private inputs, outputs or sensitive
+parameters require explicit **Retain private data in this workspace** consent in
+their frozen Pipeline revision; the default is refusal. Inputs
 remain references to already-authorized private Assets, rather than copied
 command text or paths. There is no automatic terminal or remote capture.
 
@@ -227,11 +228,19 @@ retained output to create its own notebook Asset and Trail. The Block keeps a
 Run/actual-attempt/port origin; opening its source selects that exact historical
 Run even after the working input changes. The immutable Run remains unchanged.
 
-Text results can bind another saved Pipeline through their own Trail. That Run still
-uses `reusePolicy: none` and records its own actual attempt, with the saved result
-Asset as input. Byte results preserve exact bytes in an inspection-only File
-representation. Saving a Block never fabricates an execution, recovers an
-unretained output or performs an implicit conversion.
+A consumed result Asset records `reusePolicy: explicit_assets` and a
+`reusedOutputs` entry with its input name, Asset/revision, original Run, actual
+attempt, node and named port. **Reused outputs** in **Saved Run & input evidence**
+opens that source Run. Inputs outside the selected dependency path do not count
+as reused outputs. Edited copies retain their copy lineage without claiming the
+original result as their current value.
+
+Every node in the new selected path still executes and records its own actual
+attempt. This is explicit input reuse, with no automatic output cache or fabricated
+successful attempt. Runs without consumed result roots record `reusePolicy: none`
+and an empty list. Text, byte, image and structured results retain their physical
+representation and declared semantic type; a receiver must accept both. Saving a
+Block never recovers an unretained output or performs an implicit conversion.
 
 ## History and limits
 
