@@ -37,7 +37,7 @@ fn main() {
                         1,
                         seccompiler::SeccompCmpArgLen::Qword,
                         seccompiler::SeccompCmpOp::Eq,
-                        libc::SECCOMP_FILTER_FLAG_TSYNC as u64,
+                        libc::SECCOMP_FILTER_FLAG_TSYNC,
                     )
                     .unwrap(),
                 ])

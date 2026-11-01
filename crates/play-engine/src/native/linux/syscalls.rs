@@ -121,7 +121,7 @@ pub(super) fn filters(terminal: bool) -> Result<[BpfProgram; 2]> {
         SYS_seccomp,
         rule(vec![
             condition(0, Op::Eq, SECCOMP_SET_MODE_FILTER as u64)?,
-            condition(1, Op::Eq, SECCOMP_FILTER_FLAG_TSYNC as u64)?,
+            condition(1, Op::Eq, SECCOMP_FILTER_FLAG_TSYNC)?,
         ])?,
     );
     if terminal {
