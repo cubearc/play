@@ -168,8 +168,12 @@ test("real Mac previews preserve evidence through install, replacement, manual r
       return { context, foreign, run: run.id, solution };
     });
     const capture = async () =>
-      page.evaluate(
-        async (saved) => ({
+      page.evaluate(async (saved) => {
+        await window.play.workspace({
+          kind: "open",
+          workspace_id: saved.context.workspace_id,
+        });
+        return {
           first: await window.play.workspace({
             kind: "open_exploration",
             ...saved.context,
@@ -189,9 +193,8 @@ test("real Mac previews preserve evidence through install, replacement, manual r
             solution_id: saved.solution,
             revision: 1,
           }),
-        }),
-        saved,
-      );
+        };
+      }, saved);
     const original = await capture();
     await application.close();
     application = undefined;
