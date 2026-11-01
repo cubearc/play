@@ -7,6 +7,7 @@ import type {
 import { ImagePreview } from "./AssetImage";
 import { CandidateButton } from "./Candidates";
 import { AnnotateButton } from "./EvidenceNotes";
+import { ExportButton } from "./ExportButton";
 import { attemptOutputType, formatResultValue } from "./ResultValue";
 import type { Executions } from "./useExecutions";
 import VscodeButton from "./VscodeButton";
@@ -142,6 +143,20 @@ export function InlineResult({
                           attempt_id: attempt.id,
                           port,
                         }}
+                      />
+                      <ExportButton
+                        context={{
+                          workspace_id: trail.workspaceId,
+                          exploration_id: trail.explorationId,
+                          stage_id: trail.stageId,
+                        }}
+                        source={{
+                          kind: "run_output",
+                          run_id: run.id,
+                          attempt_id: attempt.id,
+                          port,
+                        }}
+                        label={port}
                       />
                       <AnnotateButton
                         label={`${port} from Run ${run.sequence}`}

@@ -6,6 +6,8 @@ mod challenges;
 mod cli;
 mod contract_snapshots;
 mod copies;
+mod export_grants;
+mod exports;
 mod files;
 mod image_views;
 mod model;
@@ -47,6 +49,7 @@ pub struct Manager {
     runtime: Runtime,
     expected: storage::Schema,
     active: Option<Owned>,
+    exports: export_grants::Grants,
 }
 
 impl Manager {
@@ -65,6 +68,7 @@ impl Manager {
             runtime,
             expected,
             active: None,
+            exports: export_grants::Grants::default(),
         })
     }
 
@@ -133,6 +137,7 @@ impl Manager {
             return Err(code);
         }
         self.active = Some(next);
+        self.exports = export_grants::Grants::default();
         storage::atomic_json(&self.root.join("recent.json"), &json!({"workspace_id":id}))?;
         self.runtime
             .block_on(queries::view(
@@ -301,6 +306,34 @@ impl Manager {
                         revision,
                     ))
                     .and_then(to_value)
+            }
+            Command::PrepareExport {
+                context,
+                source,
+                format,
+            } => {
+                let store = self.active.as_mut().ok_or("workspace_closed")?;
+                let owner = store.identity.workspace_id;
+                let payload = self.runtime.block_on(async {
+                    queries::context(store.connection()?, owner, &context).await?;
+                    exports::prepare(store.connection()?, &context, &source, format).await
+                })?;
+                self.exports
+                    .issue(context, payload, std::time::Instant::now())
+            }
+            Command::ReadExport {
+                context,
+                export_id,
+                offset,
+            } => {
+                self.authorize_context(&context)?;
+                self.exports
+                    .read(&context, export_id, offset, std::time::Instant::now())
+            }
+            Command::ReleaseExport { context, export_id } => {
+                self.authorize_context(&context)?;
+                self.exports.release(&context, export_id)?;
+                Ok(json!({"released":true}))
             }
             Command::ReadImage { context, source } => {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;

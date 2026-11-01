@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Context {
     pub workspace_id: Uuid,
@@ -80,6 +80,20 @@ pub struct NoteLink {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    PrepareExport {
+        context: Context,
+        source: super::exports::Source,
+        format: super::exports::Format,
+    },
+    ReadExport {
+        context: Context,
+        export_id: Uuid,
+        offset: usize,
+    },
+    ReleaseExport {
+        context: Context,
+        export_id: Uuid,
+    },
     AnnotateEvidence {
         context: Context,
         key: Uuid,

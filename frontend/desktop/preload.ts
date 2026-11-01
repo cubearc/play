@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { attachmentIntent } from "./attachment-contract.ts";
 import type { PlayBridge } from "./bridge.ts";
 import { cliIntent } from "./cli-contract.ts";
+import { exportIntent } from "./export-contract.ts";
 import { terminalIntent } from "./terminal-contract.ts";
 import {
   cancelRun,
@@ -15,6 +16,8 @@ import {
 
 if (process.isMainFrame) {
   const bridge: PlayBridge = {
+    exportSelection: (value: unknown) =>
+      ipcRenderer.invoke("play:export", exportIntent(value)),
     location: () => ipcRenderer.invoke("play:location"),
     attachment: (value: unknown) =>
       ipcRenderer.invoke("play:attachment", attachmentIntent(value)),

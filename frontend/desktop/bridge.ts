@@ -13,6 +13,9 @@ import type {
 } from "./workspace-contract.ts";
 
 export interface PlayBridge {
+  exportSelection: (
+    value: import("./export-contract.ts").ExportIntent,
+  ) => Promise<import("./export-contract.ts").ExportReceipt | null>;
   location: () => Promise<import("./open-intent.ts").OpenIntent | null>;
   attachment: (
     value: import("./attachment-contract.ts").AttachmentIntent,

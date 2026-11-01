@@ -158,7 +158,7 @@ continuations before exposing operation choices.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **28** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **29** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -537,3 +537,17 @@ scoped to the selected Stage. The existing Note byte/revision and Block capacity
 limits apply. Running attempts return `attempt_not_finished`; invalid ownership
 or undeclared ports return `not_found`. See
 [evidence-linked annotations](desktop-storage.md#evidence-linked-annotations).
+
+## Native evidence exports
+
+Main accepts only a scoped Asset revision, retained Run port or Solution revision
+and an explicit `data`/`document` choice. The renderer never sends a destination
+path or receives an export payload. Internal `prepare_export`, `read_export` and
+`release_export` commands are excluded from renderer workspace intents. The
+engine grants at most two immutable 1 MiB snapshots for 60 seconds, read in
+16 KiB chunks within the unchanged frame ceiling. Main releases the first grant
+before opening the save dialog, then resolves the same revision and digest again.
+Context/frame changes cancel writes. A private temporary file is fsynced and
+published exclusively; existing files, directories and symlinks are never replaced.
+Application files and private storage are protected destinations. An unsupported
+filesystem refuses publication rather than falling back to an overwriting write.

@@ -26,6 +26,8 @@ import { Cli, contextCommand, dispatchCli } from "./cli.ts";
 import { cliIntent } from "./cli-contract.ts";
 import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
+import { exportIntent } from "./export-contract.ts";
+import { NativeExports } from "./exports.ts";
 import { readImport } from "./imports.ts";
 import { verifyNative } from "./integrity.ts";
 import { menuTemplate } from "./menu.ts";
@@ -92,6 +94,8 @@ async function disconnectAttachments() {
   await attachments.clear();
 }
 let engine: Engine | undefined;
+let nativeExports: NativeExports | undefined;
+const exportingWindows = new Set<number>();
 let cli: Cli | undefined;
 interface WindowState {
   window: BrowserWindow;
@@ -561,6 +565,7 @@ app
         ? fileURLToPath(new URL(files.terminal, native))
         : undefined,
     );
+    nativeExports = new NativeExports(engine, [profile, app.getAppPath()]);
     cli = new Cli(fileURLToPath(new URL(files.cli, native)), engine);
     const authorize = (event: Electron.IpcMainInvokeEvent): Engine => {
       windowFor(event);
@@ -679,6 +684,50 @@ app
     ipcMain.handle("play:cancel-run", (event, value: unknown) =>
       authorize(event).cancelRun(cancelRun(value)),
     );
+    ipcMain.handle("play:export", async (event, value: unknown) => {
+      authorize(event);
+      const state = windowFor(event);
+      const intent = exportIntent(value);
+      const frame = event.senderFrame;
+      const navigation = state.navigationEpoch,
+        document = state.documentEpoch;
+      const current = () =>
+        !quitting &&
+        !state.window.isDestroyed() &&
+        state.window.webContents.mainFrame === frame &&
+        state.navigationEpoch === navigation &&
+        state.documentEpoch === document &&
+        Boolean(state.context) &&
+        Object.entries(intent.context).every(
+          ([key, value]) => state.context?.[key as keyof Context] === value,
+        );
+      if (!current()) throw new Error("stale_context");
+      if (!nativeExports || exportingWindows.has(event.sender.id))
+        throw new Error("busy");
+      exportingWindows.add(event.sender.id);
+      try {
+        return await nativeExports.save(
+          intent,
+          async (suggestion) => {
+            const selection = await dialog.showSaveDialog(state.window, {
+              title:
+                intent.source.kind === "solution"
+                  ? "Export Solution walkthrough"
+                  : "Export selected evidence",
+              defaultPath: suggestion.fileName,
+              message:
+                "Choose a new filename. Existing files are never replaced.",
+            });
+            return selection.canceled || !selection.filePath
+              ? null
+              : selection.filePath;
+          },
+          current,
+        );
+      } finally {
+        exportingWindows.delete(event.sender.id);
+      }
+    });
     ipcMain.handle("play:import-challenge", (event, value: unknown) => {
       const engine = authorize(event);
       return importChallenge(
@@ -769,6 +818,7 @@ app.on("before-quit", (event) => {
   })().then(async (discard) => {
     if (!discard || quitting) return;
     quitting = true;
+    await nativeExports?.settle();
     for (const state of windows.values()) state.grants.revoke();
     await disconnectAttachments();
     await cli?.close();

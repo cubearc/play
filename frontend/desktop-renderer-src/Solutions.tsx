@@ -18,6 +18,7 @@ import type {
   WorkspaceRequest,
 } from "../desktop/workspace-contract";
 import { CandidateEvidence, useCandidate } from "./Candidates";
+import { ExportButton } from "./ExportButton";
 import { ContributingPath, SolutionLineage } from "./SolutionLineage";
 import { NotePicker, SavedSolutionNotes } from "./SolutionNotes";
 import { errorMessage } from "./useWorkspace";
@@ -288,6 +289,15 @@ export function SolutionsPanel() {
               </select>
             </label>
             <h3>{value.title}</h3>
+            <ExportButton
+              context={context}
+              source={{
+                kind: "solution",
+                solution_id: value.id,
+                revision: value.selectedRevision,
+              }}
+              label="walkthrough"
+            />
             <p className="solution-explanation">{value.explanation}</p>
             <p className="muted">
               Candidate r{value.snapshot.candidate.revision} · Saved evidence

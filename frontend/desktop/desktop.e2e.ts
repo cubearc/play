@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -7385,6 +7385,85 @@ test("generated image outputs render exact pixels, become Assets and preserve Ca
       })
       .catch(() => {});
     await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("native exports keep selected Asset bytes and refuse occupied destinations", {
+  timeout: 60000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-export-ui-"));
+  const destination = join(profile, "chosen.txt");
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${join(profile, "private")}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Export review");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Selected evidence");
+    await notebook(page)
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    const content = page.getByRole("dialog", {
+      name: "Add text block",
+      exact: true,
+    });
+    await content
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Original clue");
+    await content
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("Gur xrl.\nλ");
+    await content
+      .getByRole("button", { name: "Add text", exact: true })
+      .click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore Original clue", exact: true })
+      .click();
+    await application.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, destination);
+    const exportButton = page.getByRole("button", {
+      name: "Export Original clue",
+      exact: true,
+    });
+    await exportButton.click();
+    const dialog = page.getByRole("dialog", {
+      name: "Export Original clue",
+      exact: true,
+    });
+    await expect(dialog).toContainText("revision 1");
+    if (process.env.PLAY_EXPORT_SCREENSHOT) {
+      await mkdir(dirname(process.env.PLAY_EXPORT_SCREENSHOT), {
+        recursive: true,
+      });
+      await page.screenshot({ path: process.env.PLAY_EXPORT_SCREENSHOT });
+    }
+    await dialog
+      .getByRole("button", { name: "Choose destination", exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    assert.equal(await readFile(destination, "utf8"), "Gur xrl.\nλ");
+    await exportButton.click();
+    await dialog
+      .getByRole("button", { name: "Choose destination", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText("already exists");
+    assert.equal(await readFile(destination, "utf8"), "Gur xrl.\nλ");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.equal(
+      await page.evaluate(() => typeof window.play.workspace),
+      "function",
+    );
+  } finally {
+    await application.close();
     await rm(profile, { recursive: true, force: true });
   }
 });

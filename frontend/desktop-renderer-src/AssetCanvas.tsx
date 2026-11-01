@@ -5,6 +5,7 @@ import { AssetImage } from "./AssetImage";
 import { AssetOrigin } from "./AssetOrigin";
 import { CandidateButton } from "./Candidates";
 import { AnnotateButton } from "./EvidenceNotes";
+import { ExportButton } from "./ExportButton";
 import { FilePreview } from "./FilePreview";
 import { PipelineGraph } from "./PipelineGraph";
 import { StructuredPreview } from "./StructuredPreview";
@@ -91,6 +92,19 @@ export function AssetCanvas({
             asset_id: trail.source.id,
             revision: trail.source.revision,
           }}
+        />
+        <ExportButton
+          context={{
+            workspace_id: trail.workspaceId,
+            exploration_id: trail.explorationId,
+            stage_id: trail.stageId,
+          }}
+          source={{
+            kind: "asset",
+            asset_id: trail.source.id,
+            revision: trail.source.revision,
+          }}
+          label={trail.source.title}
         />
         <AnnotateButton
           label={`${trail.source.title} r${trail.source.revision}`}

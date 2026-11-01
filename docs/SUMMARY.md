@@ -10,6 +10,7 @@
   - [Image inspection](visual-lab.md)
   - [Resume saved work](persistence.md)
   - [Candidates and Solutions](solutions.md)
+  - [Export selected evidence](exports.md)
   - [Challenges and local Stages](challenges.md)
   - [Cube terminal](terminal.md)
   - [Native reference](lab-api.md)
