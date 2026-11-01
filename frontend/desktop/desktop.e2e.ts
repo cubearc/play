@@ -3201,6 +3201,11 @@ test("64-bit Assets and results stay exact through the UI, contextual CLI and re
       exact: true,
     });
     await expect(terminal.getByRole("status")).toHaveText("Connected");
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+      if (!window) throw new Error("visible_window_missing");
+      window.setSize(800, 540);
+    });
     const input = terminal.locator(".xterm-helper-textarea");
     await terminal
       .getByRole("button", { name: "Insert Asset", exact: true })
@@ -3209,10 +3214,13 @@ test("64-bit Assets and results stay exact through the UI, contextual CLI and re
     await expect(terminal.locator(".xterm-rows")).toContainText(
       `"title": "${title}"`,
     );
-    await input.press("Shift+PageUp");
-    await expect(terminal.locator(".xterm-rows")).toContainText(
-      maximum.toString(),
-    );
+    // xterm virtualizes rows; page through the response at the actual window size.
+    await expect(async () => {
+      const rows = terminal.locator(".xterm-rows");
+      if (!(await rows.textContent())?.includes(maximum.toString()))
+        await input.press("Shift+PageUp");
+      await expect(rows).toContainText(maximum.toString(), { timeout: 100 });
+    }).toPass({ timeout: 5000, intervals: [100] });
     await terminal
       .getByRole("button", { name: "Insert selected Run", exact: true })
       .click();
