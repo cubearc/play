@@ -13,6 +13,10 @@ import type {
 } from "./workspace-contract.ts";
 
 export interface PlayBridge {
+  location: () => Promise<import("./open-intent.ts").OpenIntent | null>;
+  attachment: (
+    value: import("./attachment-contract.ts").AttachmentIntent,
+  ) => Promise<import("./attachment-contract.ts").AttachmentView | null>;
   terminal: (
     value: import("./terminal-contract.ts").TerminalIntent,
   ) => Promise<import("./terminal-contract.ts").TerminalView>;

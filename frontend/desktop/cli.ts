@@ -9,6 +9,11 @@ import {
 import { contract } from "./contract.ts";
 import type { Engine } from "./engine.ts";
 
+export function contextCommand(executable: string, credential: string): string {
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  return `${quote(executable)} play --context ${quote(credential)}`;
+}
+
 const protocol = 1;
 const version = "0.18.0";
 function command(value: CliIntent): { args: string[]; action: object } {
@@ -147,7 +152,7 @@ export class Cli {
             }
             if (phase === 0 && isDeepStrictEqual(frame, expected)) {
               phase = 1;
-              void this.dispatch(value).then(
+              void dispatchCli(this.engine, value).then(
                 (result) => {
                   if (failure) return;
                   data = result;
@@ -210,32 +215,34 @@ export class Cli {
     this.active = { child, done };
     return done;
   }
-  private async dispatch(
-    value: CliIntent,
-  ): Promise<CliResponses[CliIntent["kind"]]> {
-    switch (value.kind) {
-      case "asset":
-      case "pipeline":
-        return this.engine.cliRead(value);
-      case "start":
-        return this.engine.startCliRun(value.request);
-      case "status":
-        return (await this.engine.workspace({
-          kind: "run_detail",
-          context: value.context,
-          run_id: value.run_id,
-        })) as CliResponses["status"];
-      case "cancel":
-        return this.engine.cancelRun({
-          context: value.context,
-          run_id: value.run_id,
-        });
-    }
-  }
   async close(): Promise<void> {
     this.closed = true;
     const active = this.active;
     active?.child.kill("SIGKILL");
     await active?.done.catch(() => {});
+  }
+}
+
+export async function dispatchCli(
+  engine: Engine,
+  value: CliIntent,
+): Promise<CliResponses[CliIntent["kind"]]> {
+  switch (value.kind) {
+    case "asset":
+    case "pipeline":
+      return engine.cliRead(value);
+    case "start":
+      return engine.startCliRun(value.request);
+    case "status":
+      return (await engine.workspace({
+        kind: "run_detail",
+        context: value.context,
+        run_id: value.run_id,
+      })) as CliResponses["status"];
+    case "cancel":
+      return engine.cancelRun({
+        context: value.context,
+        run_id: value.run_id,
+      });
   }
 }

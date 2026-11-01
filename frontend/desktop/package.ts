@@ -122,6 +122,9 @@ try {
     name: platform === "linux" ? "cube-play" : "Cube Play",
     executableName: "cube-play",
     appBundleId: "com.cubearc.play.preview",
+    protocols: [
+      { name: "Cube Play local Workspace", schemes: ["cube-play-open"] },
+    ],
     appVersion: metadata.version,
     electronVersion: metadata.devDependencies.electron,
     platform,

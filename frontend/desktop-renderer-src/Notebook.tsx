@@ -94,6 +94,7 @@ export function Notebook({
   const retained =
     exploration.stage.blocks.length + exploration.stage.archivedBlocks.length;
   const full = exploration.stage.blocks.length >= contract.block_limit;
+  busy = busy || exploration.stage.archived;
   const canAdd = !full && retained < contract.retained_block_limit;
   const limitMessage =
     retained >= contract.retained_block_limit
@@ -182,15 +183,17 @@ export function Notebook({
     <section className="notebook scroll-surface" aria-label="Stage notebook">
       <header className="document-heading">
         <div className="eyebrow">
-          Stage{" "}
-          {String(
-            exploration.stages.findIndex(
-              (stage) => stage.id === exploration.stage.id,
-            ) + 1,
-          ).padStart(2, "0")}{" "}
+          {exploration.stage.archived
+            ? "Archived Stage"
+            : `Stage ${String(exploration.stages.findIndex((stage) => stage.id === exploration.stage.id) + 1).padStart(2, "0")}`}{" "}
           · Local notebook
         </div>
         <h1>{exploration.stage.title}</h1>
+        <p className="muted">
+          {exploration.stage.archived ? "Archived · " : ""}Local progress:{" "}
+          {exploration.stage.progress.replaceAll("_", " ")} · Not officially
+          verified
+        </p>
         {exploration.stage.introduction ? (
           <p>{exploration.stage.introduction}</p>
         ) : null}

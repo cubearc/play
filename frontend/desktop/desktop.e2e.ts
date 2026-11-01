@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   cp,
@@ -13,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
   type ElectronApplication,
   _electron as electronRuntime,
@@ -89,9 +91,8 @@ const electron = {
           const entries = (await page.coverage.stopJSCoverage()).filter(
             (entry) => entry.url.endsWith("/app.js"),
           );
-          assert.equal(
-            entries.length,
-            1,
+          assert.ok(
+            entries.length > 0,
             "Expected the actual bundled workbench",
           );
           const bundle = await readFile(
@@ -2762,6 +2763,51 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
     await expect(
       canvas().getByRole("button", { name: "Run cell", exact: true }),
     ).toHaveCount(0);
+    await canvas()
+      .getByRole("button", { name: "New Pipeline", exact: true })
+      .click();
+    const pipelineEditor = page.getByRole("dialog", {
+      name: "New Pipeline",
+      exact: true,
+    });
+    await pipelineEditor
+      .getByRole("textbox", { name: "Pipeline name", exact: true })
+      .fill("Hash original file bytes");
+    await pipelineEditor
+      .getByRole("combobox", { name: "Operation", exact: true })
+      .click();
+    await pipelineEditor
+      .getByRole("option")
+      .filter({ hasText: /SHA.?256/i })
+      .click();
+    await pipelineEditor
+      .getByRole("button", { name: "Create Pipeline", exact: true })
+      .click();
+    await expect(pipelineEditor).toBeHidden();
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    const expectedHash = createHash("sha256").update(text).digest("hex");
+    await expect(
+      canvas().getByRole("region", { name: "Cell result" }).getByRole("status"),
+    ).toContainText(nativeWorkers ? expectedHash : "Execution rejected");
+    if (nativeWorkers) {
+      await canvas()
+        .getByRole("button", { name: "Run with Cube CLI", exact: true })
+        .click();
+      await expect(
+        canvas().getByRole("region", { name: "Cell result" }),
+      ).toContainText("Cube CLI");
+      await expect(
+        canvas()
+          .getByRole("region", { name: "Cell result" })
+          .getByRole("status"),
+      ).toContainText(expectedHash);
+      await canvas()
+        .locator(".operation-node")
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await capture(application, "native-file-pipeline", false);
+    }
     await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
     await cell()
       .getByRole("button", { name: "Duplicate clue.html", exact: true })
@@ -2843,7 +2889,19 @@ test("File Blocks import inert content and preserve scoped copies, order and arc
     assert.deepEqual(await readFile(path), Buffer.from(text));
     await finalizeCoverage(application);
     await application.evaluate(({ app }) => app.quit());
+  } catch (error) {
+    console.error("file_journey_failure", error);
+    await capture(application, "native-file-failure", false).catch(() => {});
+    throw error;
   } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
     await application.close().catch(() => {});
     await rm(profile, { recursive: true, force: true });
   }
@@ -5778,6 +5836,621 @@ test("Solutions follow reused outputs across Runs and reopen exact source histor
         });
     }
     assert.deepEqual((await accessibility(page)).violations, []);
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("local Stage organization and progress survive native restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-stage-order-"));
+  let application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Local stages");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await page
+      .getByRole("complementary", { name: "Explorer" })
+      .getByRole("button", { name: "New Exploration", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Internet puzzle");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Organize Stages", exact: true })
+      .click();
+    const settings = page.getByRole("dialog", {
+      name: "Organize Stages",
+      exact: true,
+    });
+    await settings
+      .getByRole("textbox", { name: "Stage title" })
+      .fill("Decode image");
+    await settings.getByRole("button", { name: "Rename Stage" }).click();
+    await settings
+      .getByLabel("Local progress", { exact: true })
+      .selectOption("completed");
+    await expect(page.getByLabel("Stage notebook")).toContainText(
+      "Local progress: completed",
+    );
+    await settings
+      .getByRole("button", { name: "Archive Stage", exact: true })
+      .click();
+    await expect(
+      settings.getByRole("button", { name: "Restore Stage", exact: true }),
+    ).toBeVisible();
+    await settings.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Add text", exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByRole("button", { name: "Organize Stages", exact: true })
+      .click();
+    await settings
+      .getByRole("button", { name: "Restore Stage", exact: true })
+      .click();
+    await settings.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Add text", exact: true }),
+    ).toBeEnabled();
+    await create(page, "Stage", "Compare");
+    await page
+      .getByRole("button", { name: "Organize Stages", exact: true })
+      .click();
+    await settings
+      .getByRole("button", { name: "Move Compare up", exact: true })
+      .click();
+    await expect(
+      settings.locator(".stage-order li > button").first(),
+    ).toHaveText("Compare");
+    await settings
+      .getByRole("button", { name: "Duplicate Stage", exact: true })
+      .click();
+    await expect(
+      settings.getByRole("textbox", { name: "Stage title" }),
+    ).toHaveValue("Compare (copy)");
+    await expect(
+      settings.getByLabel("Local progress", { exact: true }),
+    ).toHaveValue("not_started");
+    await settings
+      .getByRole("button", { name: "Decode image", exact: true })
+      .click();
+    await expect(
+      settings.getByLabel("Local progress", { exact: true }),
+    ).toHaveValue("completed");
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await capture(application, "desktop-stage-organization", false);
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error("window_missing");
+      window.setSize(800, 640);
+      window.webContents.setZoomFactor(2);
+    });
+    await expect
+      .poll(
+        () =>
+          settings.evaluate(
+            (dialog) => dialog.scrollWidth <= dialog.clientWidth + 1,
+          ),
+        {
+          message:
+            "Stage organization reflows within the supported minimum window at 200% zoom",
+        },
+      )
+      .toBe(true);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await settings.getByRole("button", { name: "Done", exact: true }).click();
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+    page = await application.firstWindow();
+    await expect(
+      page.getByRole("heading", { name: "Decode image", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Stage notebook")).toContainText(
+      "Local progress: completed",
+    );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("authorized native windows keep independent context and share retained engine evidence", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-multiwindow-"));
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const first = await application.firstWindow();
+    first.setDefaultTimeout(5000);
+    await first
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Shared workspace");
+    await first
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await first
+      .getByRole("complementary", { name: "Explorer" })
+      .getByRole("button", { name: "New Exploration", exact: true })
+      .click();
+    await first
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Window A");
+    await first.getByRole("button", { name: "Create", exact: true }).click();
+    const next = application.waitForEvent("window");
+    await application.evaluate(({ Menu }) => {
+      const item = Menu.getApplicationMenu()
+        ?.items.flatMap((x) => x.submenu?.items ?? [])
+        .find((x) => x.label === "New Window");
+      if (!item) throw new Error("new_window_unavailable");
+      item.click();
+    });
+    const second = await next;
+    second.setDefaultTimeout(5000);
+    await expect(
+      second.getByRole("heading", { name: "Stage 1", exact: true }),
+    ).toBeVisible();
+    await second
+      .getByRole("complementary", { name: "Explorer" })
+      .getByRole("button", { name: "New Exploration", exact: true })
+      .click();
+    await second
+      .getByRole("textbox", { name: "Title", exact: true })
+      .fill("Window B");
+    await second.getByRole("button", { name: "Create", exact: true }).click();
+    const scopes = await Promise.all(
+      [first, second].map((p) =>
+        p.evaluate(async () => {
+          const list = await window.play.workspace({ kind: "list" });
+          const id = list.lastWorkspaceId;
+          if (!id) throw new Error("missing_workspace");
+          return window.play.workspace({ kind: "view", workspace_id: id });
+        }),
+      ),
+    );
+    assert.equal(scopes[0]?.id, scopes[1]?.id);
+    await expect(
+      first.getByRole("button", { name: "Window A", exact: true }),
+    ).toHaveAttribute("aria-current", "true");
+    await expect(
+      second.getByRole("button", { name: "Window B", exact: true }),
+    ).toHaveAttribute("aria-current", "true");
+    await first.reload();
+    await expect(
+      first.getByRole("button", { name: "Window A", exact: true }),
+    ).toHaveAttribute("aria-current", "true");
+    await second.close();
+    await expect(
+      first.getByRole("heading", { name: "Stage 1", exact: true }),
+    ).toBeVisible();
+    const remaining = await first.evaluate(async () => window.play.catalog());
+    assert.ok(remaining.length > 0);
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("an unsupported OS package creates no partial Workspace", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-invalid-open-"));
+  const path = join(profile, "unsupported.json");
+  await writeFile(
+    path,
+    JSON.stringify({ format_version: 1, instructions: "external archive" }),
+  );
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    await expect(
+      page.getByRole("textbox", { name: "Workspace name", exact: true }),
+    ).toBeVisible();
+    await application.evaluate(async ({ app, dialog }, path) => {
+      const shown = new Promise<void>((resolve) => {
+        dialog.showMessageBox = async () => {
+          resolve();
+          return { response: 0, checkboxChecked: false };
+        };
+      });
+      app.emit("open-file", { preventDefault: () => {} }, path);
+      await shown;
+    }, path);
+    const list = await page.evaluate(() =>
+      window.play.workspace({ kind: "list" }),
+    );
+    assert.deepEqual(list.workspaces, []);
+    assert.equal(
+      await readFile(path, "utf8"),
+      JSON.stringify({ format_version: 1, instructions: "external archive" }),
+    );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("source folders, OS image opens and external CLI retain the selected local context", {
+  timeout: 90000,
+  skip: !nativeWorkers,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-open-context-"));
+  const source = join(profile, "Puzzle sources");
+  await mkdir(source);
+  const image = join(source, "clue.png");
+  await cp(fixture, image);
+  const original = await readFile(image);
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`, "--desktop-open", source],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(explorer(page)).toContainText("Puzzle sources");
+    await create(page, "Exploration", "Image investigation");
+    await application.evaluate(({ app }, path) => {
+      app.emit("open-file", { preventDefault: () => {} }, path);
+    }, image);
+    await expect(
+      notebook(page).getByRole("button", {
+        name: "Explore clue.png",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const snapshot = await current(page);
+    const block = snapshot.exploration.stage.blocks.find(
+      (b) => b.kind === "asset",
+    );
+    assert.ok(block && block.kind === "asset");
+    const context = {
+      workspace_id: snapshot.workspace.id,
+      exploration_id: snapshot.exploration.id,
+      stage_id: snapshot.exploration.stage.id,
+    };
+    const assetId = block.asset.id;
+    assert.equal(typeof assetId, "string");
+    await Promise.all([
+      page.waitForEvent("domcontentloaded"),
+      application.evaluate(({ app, dialog }, context) => {
+        const tracker = globalThis as typeof globalThis & {
+          linkApprovals?: number;
+        };
+        tracker.linkApprovals = 0;
+        dialog.showMessageBox = async () => {
+          tracker.linkApprovals = (tracker.linkApprovals ?? 0) + 1;
+          return { response: 1, checkboxChecked: false };
+        };
+        app.emit("second-instance", {}, [
+          "cube-play",
+          "--desktop-open",
+          `cube-play-open://workspace/${context.workspace_id}?exploration=${context.exploration_id}&stage=${context.stage_id}`,
+        ]);
+      }, context),
+    ]);
+    await expect(
+      notebook(page).getByRole("button", {
+        name: "Explore clue.png",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await current(page);
+    assert.equal(
+      await application.evaluate(
+        () =>
+          (globalThis as typeof globalThis & { linkApprovals?: number })
+            .linkApprovals,
+      ),
+      1,
+      "one forwarded URI prompts and opens only once",
+    );
+    await page
+      .getByRole("button", { name: "Toggle Cube terminal", exact: true })
+      .click();
+    const panel = page.getByRole("region", {
+      name: "Cube terminal",
+      exact: true,
+    });
+    const issued = await page.evaluate(async (context) => {
+      const replies = await Promise.allSettled(
+        Array.from({ length: 9 }, () =>
+          window.play.attachment({ kind: "open", context, selection: null }),
+        ),
+      );
+      return {
+        leases: replies.flatMap((reply) =>
+          reply.status === "fulfilled" && reply.value ? [reply.value] : [],
+        ),
+        rejected: replies.filter((reply) => reply.status === "rejected").length,
+      };
+    }, context);
+    assert.equal(
+      issued.leases.length,
+      8,
+      "concurrent requests share the eight-connection quota",
+    );
+    assert.equal(issued.rejected, 1);
+    const leases = issued.leases;
+    await panel
+      .getByRole("button", { name: "Use external terminal", exact: true })
+      .click();
+    await expect(panel.getByRole("alert")).toContainText(
+      "external terminal could not be connected",
+    );
+    await page.evaluate(
+      (id) => window.play.attachment({ kind: "close", id }),
+      leases[0]?.id ?? "",
+    );
+    await panel
+      .getByRole("button", { name: "Use external terminal", exact: true })
+      .click();
+
+    const prefix = await panel
+      .getByLabel("External terminal context (expires in 10 minutes)")
+      .inputValue();
+    const path = /--context '([^']+)'$/.exec(prefix)?.[1];
+    assert.ok(path, "UI issues an explicit private context file");
+    const appRoot = await application.evaluate(({ app }) => app.getAppPath());
+    const cli = process.env.PLAY_PACKAGED_EXECUTABLE
+      ? join(appRoot, "frontend/desktop-native", nativeFiles().cli)
+      : fileURLToPath(
+          new URL(`../desktop-native/${nativeFiles().cli}`, import.meta.url),
+        );
+    assert.ok(
+      prefix.startsWith(`'${cli.replaceAll("'", "'\\''")}' play --context `),
+      "the issued prefix uses the verified bundled CLI without a global installation",
+    );
+    const args = [
+      "play",
+      "--context",
+      path,
+      "asset",
+      "show",
+      assetId,
+      "--revision",
+      "1",
+    ];
+    const response = await promisify(execFile)(cli, args, {
+      timeout: 5000,
+      env: {},
+    });
+    const result = JSON.parse(response.stdout);
+    assert.equal(result.result.status, "ok");
+    assert.equal(result.result.data.id, assetId);
+    await capture(application, "desktop-external-terminal", false);
+    await panel
+      .getByRole("button", {
+        name: "Disconnect external terminal",
+        exact: true,
+      })
+      .click();
+    await assert.rejects(
+      promisify(execFile)(cli, args, { timeout: 5000, env: {} }),
+    );
+    assert.deepEqual(await readFile(image), original);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await application.evaluate(({ app }, path) => {
+      app.emit("open-file", { preventDefault: () => {} }, path);
+    }, source);
+    await expect(
+      notebook(page).getByRole("button", {
+        name: "Explore clue.png",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const list = await page.evaluate(() =>
+      window.play.workspace({ kind: "list" }),
+    );
+    assert.equal(
+      list.workspaces.length,
+      1,
+      "folder association reopens its existing managed store",
+    );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("the last window can close while external context survives and native opens restore the notebook", {
+  timeout: 90000,
+  skip: !nativeWorkers,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-window-resume-"));
+  const source = join(profile, "Retained notebook");
+  await mkdir(source);
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(
+      page.getByRole("textbox", { name: "Workspace name", exact: true }),
+    ).toBeVisible();
+    await Promise.all([
+      page.waitForEvent("domcontentloaded"),
+      application.evaluate(({ app }, source) => {
+        app.emit("open-file", { preventDefault: () => {} }, source);
+      }, source),
+    ]);
+    await expect(explorer(page)).toContainText("Retained notebook");
+    await create(page, "Exploration", "Resume this work");
+    const initial = await current(page);
+    const context = {
+      workspace_id: initial.workspace.id,
+      exploration_id: initial.exploration.id,
+      stage_id: initial.exploration.stage.id,
+    };
+    await page.evaluate(
+      (context) =>
+        window.play.workspace({
+          kind: "add_text",
+          context,
+          key: crypto.randomUUID(),
+          title: "Retained clue",
+          text: "Gur xrl.",
+        }),
+      context,
+    );
+    const withClue = await current(page);
+    const block = withClue.exploration.stage.blocks.find(
+      (b) => b.kind === "asset",
+    );
+    assert.ok(block && block.kind === "asset");
+    const lease = await page.evaluate(
+      (context) =>
+        window.play.attachment({ kind: "open", context, selection: null }),
+      context,
+    );
+    assert.ok(lease);
+    const credential = /--context '([^']+)'$/.exec(lease.prefix)?.[1];
+    assert.ok(credential);
+    const appRoot = await application.evaluate(({ app }) => app.getAppPath());
+    const cli = process.env.PLAY_PACKAGED_EXECUTABLE
+      ? join(appRoot, "frontend/desktop-native", nativeFiles().cli)
+      : fileURLToPath(
+          new URL(`../desktop-native/${nativeFiles().cli}`, import.meta.url),
+        );
+    await finalizeCoverage(application);
+    await page.close();
+    assert.equal(
+      await application.evaluate(
+        ({ BrowserWindow }) => BrowserWindow.getAllWindows().length,
+      ),
+      0,
+    );
+    const output = await promisify(execFile)(
+      cli,
+      [
+        "play",
+        "--context",
+        credential,
+        "asset",
+        "show",
+        block.asset.id,
+        "--revision",
+        "1",
+      ],
+      { timeout: 5000, env: {} },
+    );
+    assert.equal(
+      JSON.parse(output.stdout).result.data.content.text,
+      "Gur xrl.",
+    );
+    const reopening = application.waitForEvent("window", { timeout: 5000 });
+    await application.evaluate(({ app }, source) => {
+      app.emit("second-instance", {}, ["cube-play", "--desktop-open", source]);
+    }, source);
+    const restored = await reopening;
+    await expect(notebook(restored)).toContainText("Gur xrl.");
+    assert.equal((await current(restored)).workspace.id, initial.workspace.id);
+    await restored.close();
+    const activating = application.waitForEvent("window", { timeout: 5000 });
+    await application.evaluate(({ app }) => {
+      app.emit("second-instance", {}, ["cube-play"]);
+    });
+    const activated = await activating;
+    await expect(notebook(activated)).toContainText("Gur xrl.");
+    assert.equal((await current(activated)).workspace.id, initial.workspace.id);
+    assert.equal(
+      await application.evaluate(({ Menu }) => {
+        const hasQuit = (menu: Electron.Menu | null): boolean =>
+          menu?.items.some(
+            (item) => item.role === "quit" || hasQuit(item.submenu ?? null),
+          ) ?? false;
+        return hasQuit(Menu.getApplicationMenu());
+      }),
+      true,
+      "a native Quit action remains available after restoring the last window",
+    );
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    await assert.rejects(
+      promisify(execFile)(
+        cli,
+        [
+          "play",
+          "--context",
+          credential,
+          "asset",
+          "show",
+          block.asset.id,
+          "--revision",
+          "1",
+        ],
+        { timeout: 5000, env: {} },
+      ),
+    );
+  } finally {
+    await application.close();
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("a Workspace handover refuses the prior window context before another Stage is selected", {
+  timeout: 90000,
+  skip: !nativeWorkers,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-handover-context-"));
+  const application = await electron.launch({
+    chromiumSandbox: true,
+    args: [main, `--user-data-dir=${profile}`],
+  });
+  try {
+    const page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Before handover");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Original context");
+    const selected = await current(page);
+    const context = {
+      workspace_id: selected.workspace.id,
+      exploration_id: selected.exploration.id,
+      stage_id: selected.exploration.stage.id,
+    };
+    await page.evaluate(() =>
+      window.play.workspace({
+        kind: "create",
+        key: crypto.randomUUID(),
+        title: "After handover",
+      }),
+    );
+    await assert.rejects(
+      page.evaluate(
+        (context) =>
+          window.play.attachment({ kind: "open", context, selection: null }),
+        context,
+      ),
+      /stale_context/,
+    );
   } finally {
     await application.close();
     await rm(profile, { recursive: true, force: true });

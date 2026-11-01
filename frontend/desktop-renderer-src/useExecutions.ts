@@ -7,6 +7,7 @@ import type {
   RunRequest,
   TrailView,
 } from "../desktop/workspace-contract";
+import { assetInputType } from "../desktop/workspace-contract";
 
 import { runSelection } from "./runSelection";
 
@@ -217,13 +218,7 @@ export function useExecutions(
   }, [exploration, load]);
   const operationsFor = (trail: TrailView) =>
     operations.filter(
-      (operation) =>
-        operation.input_type ===
-        (["text", "page"].includes(trail.source.content.kind)
-          ? "text"
-          : trail.source.content.kind === "image"
-            ? "image.samples"
-            : null),
+      (operation) => operation.input_type === assetInputType(trail.source),
     );
   const operationFor = (trail: TrailView) =>
     operations.find(

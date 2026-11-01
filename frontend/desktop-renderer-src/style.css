@@ -1364,3 +1364,65 @@ label.workbench-checkbox {
   opacity: 0.6;
   cursor: default;
 }
+
+.external-terminal {
+  padding: 8px 12px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+.external-terminal-label {
+  display: block;
+  margin-bottom: 4px;
+}
+.external-terminal input {
+  box-sizing: border-box;
+  width: 100%;
+  font-family: var(--vscode-editor-font-family);
+}
+.external-terminal p {
+  margin: 4px 0;
+  color: var(--vscode-descriptionForeground);
+}
+.stage-order {
+  padding-left: 20px;
+}
+.stage-order li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.stage-order li > button {
+  min-height: 28px;
+  flex: 1;
+  text-align: left;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+.stage-order li > button[aria-current="true"] {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+.stage-order li > button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+.stage-settings > input,
+.stage-settings > select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-settings-dropdownBorder);
+  background: var(--vscode-settings-textInputBackground);
+  color: var(--vscode-settings-textInputForeground);
+  font: inherit;
+}
+.stage-settings > input {
+  margin-bottom: 8px;
+}

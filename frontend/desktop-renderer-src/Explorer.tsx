@@ -21,6 +21,7 @@ export function Explorer({
   newExploration,
   importChallenge,
   newStage,
+  organizeStages,
   chooseWorkspace,
 }: {
   hidden: boolean;
@@ -35,6 +36,7 @@ export function Explorer({
   newExploration: () => void;
   importChallenge: () => void;
   newStage: () => void;
+  organizeStages: () => void;
   chooseWorkspace: () => void;
 }) {
   return (
@@ -131,6 +133,25 @@ export function Explorer({
                         <VscodeIcon name="add" />
                         <span>New Stage</span>
                       </button>
+                      <button
+                        type="button"
+                        className="tree-row"
+                        disabled={busy}
+                        onClick={organizeStages}
+                      >
+                        <VscodeIcon name="list-ordered" />
+                        <span>Organize Stages</span>
+                      </button>
+                      {exploration.stage.archived ? (
+                        <button
+                          type="button"
+                          className="tree-row selected"
+                          onClick={organizeStages}
+                        >
+                          <VscodeIcon name="archive" />
+                          <span>{exploration.stage.title} (archived)</span>
+                        </button>
+                      ) : null}
                       {exploration.trails.some((trail) => !trail.archived) ? (
                         <div className="tree-section">Trails</div>
                       ) : null}

@@ -4,6 +4,7 @@ import type {
   PipelineDefinition,
   TrailView,
 } from "../desktop/workspace-contract";
+import { assetInputType } from "../desktop/workspace-contract";
 import { Select } from "./GraphInputs";
 export type Bindings = Record<string, AssetRevisionRef>;
 export function bindingRefs(trail: TrailView): Bindings {
@@ -55,10 +56,8 @@ export function BindingsEditor({
         until you rebind it.
       </p>
       {inputs.slice(1).map((slot) => {
-        const candidates = assets.filter((a) =>
-          slot.semanticType === "image.samples"
-            ? a.content.kind === "image"
-            : ["text", "page"].includes(a.content.kind),
+        const candidates = assets.filter(
+          (a) => assetInputType(a) === slot.semanticType,
         );
         const old = pinned[slot.name];
         const current = old && candidates.find((a) => a.id === old.id);

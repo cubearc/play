@@ -9,6 +9,7 @@ import type {
   PipelineView,
   TrailView,
 } from "../desktop/workspace-contract";
+import { assetInputType } from "../desktop/workspace-contract";
 import {
   type Bindings,
   BindingsEditor,
@@ -87,8 +88,7 @@ export function TrailEditor({
   const slots = selected && ready && loaded ? loaded.definition.inputs : [];
   const valid = ready && completeBindings(slots, bindings);
   const key = useRef(crypto.randomUUID());
-  const input =
-    trail.source.content.kind === "image" ? "image.samples" : "text";
+  const input = assetInputType(trail.source);
   const choices = pipelines.filter(
     (p) => p.inputType === input || p.id === trail.pipelineId,
   );

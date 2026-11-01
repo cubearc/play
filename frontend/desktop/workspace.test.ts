@@ -1394,6 +1394,15 @@ test("bounded Run queue isolates Explorations, queued cancellation and shutdown"
     const first = await actualRunning(() => engine.startRun(a));
     const second = await actualRunning(() => engine.startCliRun(b));
     assert.equal(second.caller, "cli");
+    const attached = await engine.workspace({
+      kind: "open",
+      workspace_id: a.context.workspace_id,
+    });
+    assert.equal(
+      attached.id,
+      a.context.workspace_id,
+      "another client can attach while accepted Runs stay supervised",
+    );
     await assert.rejects(engine.startRun(b), /idempotency_conflict/);
     const pendingA = { ...a, key: randomUUID() };
     const queuedA = await engine.startRun(pendingA);

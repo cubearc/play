@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PipelineView } from "../desktop/workspace-contract";
 import {
   type AssetBlockView,
+  assetInputType,
   type Context,
   contextOf,
   type EditableAssetView,
@@ -22,6 +23,7 @@ import { Notebook } from "./Notebook";
 import { PipelineEditor, type PipelineMode } from "./PipelineEditor";
 import { runSelection } from "./runSelection";
 import { SolutionsProvider } from "./Solutions";
+import { StageSettings } from "./StageSettings";
 import { TextAssetEditor } from "./TextAssetEditor";
 import { TrailEditor } from "./TrailEditor";
 import { useExecutions } from "./useExecutions";
@@ -46,6 +48,8 @@ export function Workbench() {
     : "";
   const [terminal, setTerminal] = useState(false);
   const [terminalEpoch, setTerminalEpoch] = useState(0);
+  const [stageDirty, setStageDirty] = useState(false);
+  const [stageSettings, setStageSettings] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [editing, setEditing] = useState<TextEdit | null>(null);
@@ -64,9 +68,9 @@ export function Workbench() {
   };
   useEffect(() => {
     void window.play
-      .dirty(state.hasUnsavedNotes || editorDirty)
+      .dirty(state.hasUnsavedNotes || editorDirty || stageDirty)
       .catch(() => {});
-  }, [state.hasUnsavedNotes, editorDirty]);
+  }, [state.hasUnsavedNotes, editorDirty, stageDirty]);
   const [tabs, setTabs] = useState<Record<string, readonly string[]>>({});
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [pendingFocus, setPendingFocus] = useState<{
@@ -245,7 +249,7 @@ export function Workbench() {
     <CandidateProvider
       key={contextKey}
       context={exploration ? contextOf(exploration) : null}
-      disabled={state.busy}
+      disabled={state.busy || Boolean(exploration?.stage.archived)}
       openRun={openSourceRun}
     >
       <SolutionsProvider
@@ -257,7 +261,7 @@ export function Workbench() {
       >
         <EvidenceNotesProvider
           context={exploration ? contextOf(exploration) : null}
-          disabled={state.busy}
+          disabled={state.busy || Boolean(exploration?.stage.archived)}
           save={state.annotateEvidence}
           openRun={openSourceRun}
           onDirty={setEditorDirty}
@@ -274,6 +278,18 @@ export function Workbench() {
           }}
         >
           <div className={`workbench ${mac ? "mac" : ""}`}>
+            <StageSettings
+              onDirty={setStageDirty}
+              open={stageSettings}
+              exploration={exploration}
+              busy={state.busy}
+              error={state.error}
+              close={() => setStageSettings(false)}
+              duplicate={state.duplicateStage}
+              edit={state.editStage}
+              move={state.moveStage}
+              select={state.selectStage}
+            />
             <header className="titlebar">
               <span className="app-name">
                 <VscodeIcon name="symbol-misc" />
@@ -355,6 +371,7 @@ export function Workbench() {
                     void state.importChallenge();
                   }}
                   newStage={() => setDialog("stage")}
+                  organizeStages={() => setStageSettings(true)}
                   chooseWorkspace={() => setWelcome(true)}
                   openNotebook={openNotebook}
                   openTrail={openTrail}
@@ -652,11 +669,7 @@ export function Workbench() {
                 }
                 pipeline={editingPipeline.pipeline}
                 operations={executions.operations}
-                inputType={
-                  editingPipeline.trail.source.content.kind === "image"
-                    ? "image.samples"
-                    : "text"
-                }
+                inputType={assetInputType(editingPipeline.trail.source)}
                 error={state.error}
                 onClose={closeConfiguration}
                 onDirty={setEditorDirty}

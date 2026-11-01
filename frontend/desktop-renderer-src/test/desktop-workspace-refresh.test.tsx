@@ -20,12 +20,15 @@ it.each(["content", "exploration"])(
       revision: 1,
       workspaceId: "workspace",
       stages: [],
+      archivedStages: [],
       trails: [],
       stage: {
         id: "stage",
         title: "Stage",
         revision: 1,
         introduction: "",
+        progress: "not_started",
+        archived: false,
         blocks: [],
         archivedBlocks: [],
       },
@@ -86,7 +89,7 @@ it.each(["content", "exploration"])(
           throw new Error(`unexpected command: ${request.kind}`);
       }
     });
-    vi.stubGlobal("play", { workspace: command });
+    vi.stubGlobal("play", { workspace: command, location: async () => null });
     const { result, unmount } = renderHook(() => useWorkspace());
     await waitFor(() => expect(result.current.exploration?.id).toBe("first"));
     running = true;

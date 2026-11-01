@@ -69,6 +69,7 @@ export function PipelineInputs({
         options={[
           { value: "text", label: "Text" },
           { value: "image.samples", label: "Image" },
+          { value: "bytes", label: "File bytes" },
         ]}
         onChange={setKind}
       />

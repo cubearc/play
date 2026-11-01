@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { OpenIntent } from "../desktop/open-intent";
 import type {
   AssetRevisionRef,
   BlockView,
@@ -8,6 +9,7 @@ import type {
   NoteView,
   PipelineRef,
   PipelineView,
+  StageProgress,
   TrailView,
   WorkspaceList,
   WorkspaceRequest,
@@ -18,9 +20,18 @@ import {
   contextOf,
   reasoningOf,
 } from "../desktop/workspace-contract";
+import { locationFor, saveLocation } from "./navigation";
 import type { PipelineDraft, PipelineMode } from "./PipelineEditor";
 
 const messages: Record<string, string> = {
+  workspace_in_use:
+    "Close the other workbench windows before switching Workspaces. Each window can independently explore the current Workspace.",
+  engine_stopped:
+    "The local engine stopped. Copy any unsaved drafts, then close and reopen Cube Play. Saved evidence is preserved.",
+  stage_archived:
+    "This Stage is archived. Restore it through Organize Stages before changing its content or running a Pipeline.",
+  invalid_stage_order:
+    "The Stage list changed. Refresh it and try the move again.",
   unsupported_package:
     "Choose a supported Cube Play Challenge package. Older manifests cannot be imported.",
   invalid_package:
@@ -159,6 +170,7 @@ export function useWorkspace() {
         epoch.current === current &&
         workspaceRef.current?.id === workspaceId
       ) {
+        saveLocation(workspaceId, data.id, data.stage.id);
         setExploration(data);
         setDrafts((previous) => {
           const notes = [
@@ -178,14 +190,37 @@ export function useWorkspace() {
     [],
   );
   const bind = useCallback(
-    async (data: WorkspaceView) => {
+    async (data: WorkspaceView, initial: OpenIntent | null = null) => {
       if (!live.current) return;
       epoch.current++;
       workspaceRef.current = data;
       setWorkspace(data);
       setExploration(null);
-      if (data.selectedExplorationId)
-        await load(data.id, data.selectedExplorationId, data.selectedStageId);
+      const local = initial?.exploration_id
+        ? { explorationId: initial.exploration_id, stageId: initial.stage_id }
+        : locationFor(data);
+      if (local || data.selectedExplorationId) {
+        try {
+          await load(
+            data.id,
+            local?.explorationId ?? data.selectedExplorationId ?? "",
+            local?.stageId ?? data.selectedStageId,
+          );
+        } catch (error) {
+          if (
+            local &&
+            error instanceof Error &&
+            error.message.includes("not_found") &&
+            data.selectedExplorationId
+          )
+            await load(
+              data.id,
+              data.selectedExplorationId,
+              data.selectedStageId,
+            );
+          else throw error;
+        }
+      }
     },
     [load],
   );
@@ -199,15 +234,20 @@ export function useWorkspace() {
   useEffect(() => {
     live.current = true;
     void execute(async () => {
-      const data = await window.play.workspace({ kind: "list" });
+      const [data, location] = await Promise.all([
+        window.play.workspace({ kind: "list" }),
+        window.play.location(),
+      ]);
       if (!live.current) return;
       setList(data);
-      if (data.lastWorkspaceId)
+      const opening = location?.workspace_id ?? data.lastWorkspaceId;
+      if (opening)
         await bind(
           await window.play.workspace({
             kind: "open",
-            workspace_id: data.lastWorkspaceId,
+            workspace_id: opening,
           }),
+          location,
         );
     });
     return () => {
@@ -282,6 +322,59 @@ export function useWorkspace() {
         title,
       });
       await load(context.workspace_id, context.exploration_id, created.stageId);
+    });
+  const duplicateStage = () =>
+    execute(async () => {
+      const current = explorationRef.current;
+      if (!current) return;
+      const copied = await window.play.workspace({
+        kind: "duplicate_stage",
+        context: contextOf(current),
+        key: crypto.randomUUID(),
+        expected_revision: current.stage.revision,
+        title: null,
+      });
+      await load(current.workspaceId, current.id, copied.stageId);
+    });
+  const editStage = (
+    title: string,
+    progress: StageProgress,
+    archived: boolean,
+  ) =>
+    execute(async () => {
+      const current = explorationRef.current;
+      if (!current) return;
+      const context = contextOf(current);
+      await window.play.workspace({
+        kind: "edit_stage",
+        context,
+        key: crypto.randomUUID(),
+        expected_revision: current.stage.revision,
+        title,
+        progress,
+        archived,
+      });
+      await refresh(context);
+    });
+  const moveStage = (id: string, direction: number) =>
+    execute(async () => {
+      const current = explorationRef.current;
+      if (!current) return;
+      const ids = current.stages.map((s) => s.id);
+      const index = ids.indexOf(id);
+      const adjacent = ids[index + direction];
+      if (index < 0 || !adjacent) return;
+      ids[index + direction] = id;
+      ids[index] = adjacent;
+      await window.play.workspace({
+        kind: "reorder_stages",
+        workspace_id: current.workspaceId,
+        exploration_id: current.id,
+        key: crypto.randomUUID(),
+        expected_revision: current.revision,
+        stage_ids: ids,
+      });
+      await refresh(contextOf(current));
     });
   const selectExploration = (id: string) =>
     execute(async () => {
@@ -787,6 +880,9 @@ export function useWorkspace() {
     createExploration,
     importChallenge,
     createStage,
+    editStage,
+    duplicateStage,
+    moveStage,
     selectExploration,
     selectStage,
     addText: (title: string, text: string, key?: string) =>

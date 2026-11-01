@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { attachmentIntent } from "./attachment-contract.ts";
 import type { PlayBridge } from "./bridge.ts";
 import { cliIntent } from "./cli-contract.ts";
 import { terminalIntent } from "./terminal-contract.ts";
@@ -14,6 +15,9 @@ import {
 
 if (process.isMainFrame) {
   const bridge: PlayBridge = {
+    location: () => ipcRenderer.invoke("play:location"),
+    attachment: (value: unknown) =>
+      ipcRenderer.invoke("play:attachment", attachmentIntent(value)),
     terminal: (value: unknown) =>
       ipcRenderer.invoke("play:terminal", terminalIntent(value)),
     cli: (value: unknown) => ipcRenderer.invoke("play:cli", cliIntent(value)),

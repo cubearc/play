@@ -110,6 +110,15 @@ export class Engine {
     return reply.operations as Operation[];
   }
 
+  workspace<
+    K extends import("./workspace-contract.ts").WorkspaceRequest["kind"],
+  >(
+    command: Extract<
+      import("./workspace-contract.ts").WorkspaceRequest,
+      { kind: K }
+    >,
+  ): Promise<import("./workspace-contract.ts").Responses[K]>;
+  workspace(command: object): Promise<unknown>;
   async workspace(command: object): Promise<unknown> {
     const reply = await this.request({ type: "workspace", command });
     if (

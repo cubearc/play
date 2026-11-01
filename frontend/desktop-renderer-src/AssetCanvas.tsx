@@ -34,44 +34,36 @@ export function AssetCanvas({
         <div className="eyebrow">Trail · Asset exploration</div>
         <h1>{trail.title}</h1>
         <p>{trail.hypothesis || "Add a hypothesis to guide this Trail."}</p>
-        {image || text || page ? (
-          <div className="trail-actions">
-            <VscodeButton
-              secondary
-              disabled={trail.archived}
-              onClick={editTrail}
-            >
-              Edit Trail
-            </VscodeButton>
-            <VscodeButton
-              secondary
-              disabled={
-                trail.archived || !executions.operationsFor(trail).length
-              }
-              onClick={() => editPipeline("create")}
-            >
-              New Pipeline
-            </VscodeButton>
-            {trail.pipeline ? (
-              <>
-                <VscodeButton
-                  secondary
-                  disabled={trail.archived || !executions.operations.length}
-                  onClick={() => editPipeline("revise")}
-                >
-                  Edit Pipeline
-                </VscodeButton>
-                <VscodeButton
-                  secondary
-                  disabled={trail.archived || !executions.operations.length}
-                  onClick={() => editPipeline("fork")}
-                >
-                  Fork Pipeline
-                </VscodeButton>
-              </>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="trail-actions">
+          <VscodeButton secondary disabled={trail.archived} onClick={editTrail}>
+            Edit Trail
+          </VscodeButton>
+          <VscodeButton
+            secondary
+            disabled={trail.archived || !executions.operationsFor(trail).length}
+            onClick={() => editPipeline("create")}
+          >
+            New Pipeline
+          </VscodeButton>
+          {trail.pipeline ? (
+            <>
+              <VscodeButton
+                secondary
+                disabled={trail.archived || !executions.operations.length}
+                onClick={() => editPipeline("revise")}
+              >
+                Edit Pipeline
+              </VscodeButton>
+              <VscodeButton
+                secondary
+                disabled={trail.archived || !executions.operations.length}
+                onClick={() => editPipeline("fork")}
+              >
+                Fork Pipeline
+              </VscodeButton>
+            </>
+          ) : null}
+        </div>
         <div className="context-chips">
           <span>
             <VscodeIcon name="link" /> {trail.source.title} @ r
@@ -198,6 +190,8 @@ export function AssetCanvas({
                 ) : asset.content.kind === "text" ||
                   asset.content.kind === "page" ? (
                   <pre>{asset.content.text}</pre>
+                ) : asset.content.kind === "file" ? (
+                  <FilePreview content={asset.content} />
                 ) : null}
               </article>
             ))}
@@ -244,8 +238,8 @@ export function AssetCanvas({
       ) : null}
       {trail.source.content.kind === "file" ? (
         <p className="canvas-note">
-          This is an inert preview of the imported bytes. File operations are
-          not available in this preview.
+          This is an inert preview. Pipelines receive the exact imported bytes,
+          including bytes outside this preview, within the Run input budget.
         </p>
       ) : null}
     </section>

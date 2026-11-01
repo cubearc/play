@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import type { AttachmentView } from "../desktop/attachment-contract";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -33,6 +34,40 @@ export function ContextTerminal({
   const insert = useRef<(value: string) => void>(() => {});
   const changed = useRef(onRun);
   changed.current = onRun;
+  const [attachment, setAttachment] = useState<AttachmentView | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [attachmentError, setAttachmentError] = useState("");
+  const attach = async () => {
+    if (attaching) return;
+    setAttaching(true);
+    setAttachmentError("");
+    try {
+      const issued = await window.play.attachment(
+        attachment
+          ? { kind: "close", id: attachment.id }
+          : {
+              kind: "open",
+              context: binding.context,
+              selection: binding.selection,
+            },
+      );
+      setAttachment(issued);
+    } catch {
+      setAttachmentError(
+        "The external terminal could not be connected. Retry from the current Stage.",
+      );
+    } finally {
+      setAttaching(false);
+    }
+  };
+  useEffect(() => {
+    if (!attachment) return;
+    const timer = setTimeout(
+      () => setAttachment(null),
+      Math.max(0, attachment.expiresMs - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [attachment]);
   const [status, setStatus] = useState("Connecting…");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -44,6 +79,7 @@ export function ContextTerminal({
     const style = getComputedStyle(document.documentElement);
     const terminal = new Terminal({
       disableStdin: true,
+      convertEol: true,
       screenReaderMode: true,
       scrollback: 500,
       fontSize: 13,
@@ -237,6 +273,15 @@ export function ContextTerminal({
         >
           Insert Asset
         </VscodeButton>
+        <VscodeButton
+          secondary
+          disabled={attaching}
+          onClick={() => void attach()}
+        >
+          {attachment
+            ? "Disconnect external terminal"
+            : "Use external terminal"}
+        </VscodeButton>
         <VscodeButton secondary onClick={onReconnect}>
           Reconnect
         </VscodeButton>
@@ -244,6 +289,30 @@ export function ContextTerminal({
           Close terminal
         </VscodeButton>
       </div>
+      {attachment ? (
+        <div className="external-terminal">
+          <label
+            className="external-terminal-label"
+            htmlFor="external-context-command"
+          >
+            External terminal context (expires in 10 minutes)
+          </label>
+          <input
+            id="external-context-command"
+            readOnly
+            value={attachment.prefix}
+          />
+          <p>
+            Append an Asset, Pipeline or Run command. This connection stays on
+            this Stage when you switch tabs; disconnect to revoke it.
+          </p>
+        </div>
+      ) : null}
+      {attachmentError ? (
+        <p role="alert" className="terminal-error">
+          {attachmentError}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="terminal-error">
           {error}

@@ -6,9 +6,10 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
-import type { Operation } from "./contract.js";
+import { contract, type Operation } from "./contract.js";
 import { Engine } from "./engine.js";
 import {
+  type Context,
   contextOf,
   type ExplorationView,
   type PipelineDefinition,
@@ -144,11 +145,37 @@ test("every discovered native executor runs its Core known answer through owned 
       ),
     ) as Fixture[];
     const report: unknown[] = [];
-    for (const operation of catalog) {
-      t.diagnostic(operation.operation);
+    let caseRoot = "";
+    const retained: {
+      workspaceId: string;
+      context: Context;
+      run: RunDetail;
+    }[] = [];
+    const verifyRestart = async () => {
+      if (!retained.length) return;
       await engine.close();
-      const caseRoot = join(root, randomUUID());
       engine = await Engine.connect(binary, worker, caseRoot);
+      for (const { workspaceId, context, run } of retained) {
+        await engine.workspace({ kind: "open", workspace_id: workspaceId });
+        assert.deepEqual(
+          await engine.workspace({
+            kind: "run_detail",
+            context,
+            run_id: run.id,
+          }),
+          run,
+        );
+      }
+      retained.length = 0;
+    };
+    for (const [index, operation] of catalog.entries()) {
+      t.diagnostic(operation.operation);
+      if (index % contract.workspace_limit === 0) {
+        await verifyRestart();
+        await engine.close();
+        caseRoot = join(root, randomUUID());
+        engine = await Engine.connect(binary, worker, caseRoot);
+      }
       const workspace = (await engine.workspace({
         kind: "create",
         key: randomUUID(),
@@ -322,13 +349,7 @@ test("every discovered native executor runs its Core known answer through owned 
       const source = run.plan.inputs.source;
       assert.ok(source && "used" in source);
       assert.equal(source.used, imagePorts.length > 0);
-      await engine.close();
-      engine = await Engine.connect(binary, worker, caseRoot);
-      await engine.workspace({ kind: "open", workspace_id: workspace.id });
-      assert.deepEqual(
-        await engine.workspace({ kind: "run_detail", context, run_id: run.id }),
-        run,
-      );
+      retained.push({ workspaceId: workspace.id, context, run });
       report.push({
         operation: operation.operation,
         operation_version: operation.operation_version,
@@ -340,6 +361,7 @@ test("every discovered native executor runs its Core known answer through owned 
         run_id: run.id,
       });
     }
+    await verifyRestart();
     assert.equal(report.length, catalog.length);
     await mkdir("playwright-report", { recursive: true });
     await writeFile(

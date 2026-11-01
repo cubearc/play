@@ -23,6 +23,17 @@ export interface AssetView {
     | { kind: "asset"; assetId: string; revision: number; title: string }
     | RunOutputOrigin;
 }
+export function assetInputType(
+  asset: Pick<AssetView, "content">,
+): "text" | "image.samples" | "bytes" {
+  const types = {
+    text: "text",
+    page: "text",
+    image: "image.samples",
+    file: "bytes",
+  } as const;
+  return types[asset.content.kind];
+}
 export interface RunOutputOrigin {
   kind: "run_output";
   runId: string;
@@ -100,7 +111,12 @@ export interface NoteBlockView {
   note: NoteView;
 }
 export type BlockView = AssetBlockView | NoteBlockView;
-export interface StageView extends Summary {
+export type StageProgress = "not_started" | "in_progress" | "completed";
+export interface StageSummary extends Summary {
+  progress: StageProgress;
+  archived: boolean;
+}
+export interface StageView extends StageSummary {
   introduction: string;
   blocks: BlockView[];
   archivedBlocks: ArchivedBlockView[];
@@ -193,7 +209,8 @@ export interface ChallengeOrigin {
 export interface ExplorationView extends Summary {
   origin?: ChallengeOrigin;
   workspaceId: string;
-  stages: Summary[];
+  stages: StageSummary[];
+  archivedStages: StageSummary[];
   stage: StageView;
   trails: TrailView[];
 }
@@ -216,6 +233,30 @@ export interface WorkspaceList {
 }
 
 export type WorkspaceRequest =
+  | {
+      kind: "duplicate_stage";
+      context: Context;
+      key: string;
+      expected_revision: number;
+      title: string | null;
+    }
+  | {
+      kind: "edit_stage";
+      context: Context;
+      key: string;
+      expected_revision: number;
+      title: string;
+      progress: StageProgress;
+      archived: boolean;
+    }
+  | {
+      kind: "reorder_stages";
+      workspace_id: string;
+      exploration_id: string;
+      key: string;
+      expected_revision: number;
+      stage_ids: string[];
+    }
   | {
       kind: "annotate_evidence";
       context: Context;
@@ -631,6 +672,9 @@ export interface Responses {
   open: WorkspaceView;
   create_exploration: { explorationId: string; stageId: string };
   open_exploration: ExplorationView;
+  duplicate_stage: { explorationId: string; stageId: string };
+  edit_stage: { stageId: string; revision: number };
+  reorder_stages: { explorationId: string; revision: number };
   create_stage: { explorationId: string; stageId: string };
   save_note: { noteId: string; revision: number };
   add_text: { blockId: string };
@@ -645,7 +689,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const bytes = (value: unknown, maximum: number): value is string =>
   typeof value === "string" &&
   new TextEncoder().encode(value).byteLength <= maximum;
-const id = (value: unknown): value is string =>
+export const isIdentity = (value: unknown): value is string =>
   typeof value === "string" && uuid.test(value);
 const revision = (value: unknown) =>
   Number.isSafeInteger(value) && typeof value === "number" && value > 0;
@@ -661,7 +705,8 @@ function keys(value: Record<string, unknown>, expected: string[]) {
 export function context(value: unknown): Context {
   const record = object(value);
   keys(record, ["workspace_id", "exploration_id", "stage_id"]);
-  if (!Object.values(record).every(id)) throw new Error("invalid_command");
+  if (!Object.values(record).every(isIdentity))
+    throw new Error("invalid_command");
   return record as unknown as Context;
 }
 export function request(value: unknown): WorkspaceRequest {
@@ -721,6 +766,22 @@ export function request(value: unknown): WorkspaceRequest {
     open: ["workspace_id"],
     create_exploration: ["workspace_id", "key", "title"],
     open_exploration: ["workspace_id", "exploration_id", "stage_id"],
+    duplicate_stage: ["context", "key", "expected_revision", "title"],
+    edit_stage: [
+      "context",
+      "key",
+      "expected_revision",
+      "title",
+      "progress",
+      "archived",
+    ],
+    reorder_stages: [
+      "workspace_id",
+      "exploration_id",
+      "key",
+      "expected_revision",
+      "stage_ids",
+    ],
     create_stage: ["workspace_id", "exploration_id", "key", "title"],
     save_note: ["context", "key", "note_id", "expected_revision", "text"],
     add_text: ["context", "key", "title", "text"],
@@ -770,7 +831,7 @@ export function request(value: unknown): WorkspaceRequest {
         const note = object(item);
         keys(note, ["note_id", "revision"]);
         if (
-          !id(note.note_id) ||
+          !isIdentity(note.note_id) ||
           !revision(note.revision) ||
           selected.has(note.note_id)
         )
@@ -783,13 +844,13 @@ export function request(value: unknown): WorkspaceRequest {
       const selected = object(value);
       if (selected.kind === "asset") {
         keys(selected, ["kind", "asset_id", "revision"]);
-        if (!id(selected.asset_id) || !revision(selected.revision))
+        if (!isIdentity(selected.asset_id) || !revision(selected.revision))
           throw new Error("invalid_command");
       } else if (selected.kind === "run_output") {
         keys(selected, ["kind", "run_id", "attempt_id", "port"]);
         if (
-          !id(selected.run_id) ||
-          !id(selected.attempt_id) ||
+          !isIdentity(selected.run_id) ||
+          !isIdentity(selected.attempt_id) ||
           typeof selected.port !== "string" ||
           !/^[a-zA-Z0-9_-]{1,64}$/.test(selected.port)
         )
@@ -812,7 +873,7 @@ export function request(value: unknown): WorkspaceRequest {
       if (value !== null) {
         const p = object(value);
         keys(p, ["id", "revision"]);
-        if (!id(p.id) || !revision(p.revision))
+        if (!isIdentity(p.id) || !revision(p.revision))
           throw new Error("invalid_command");
       }
     } else if (field === "bindings") {
@@ -843,15 +904,24 @@ export function request(value: unknown): WorkspaceRequest {
         if (source.caption !== null) assetRevision(source.caption);
       } else if (source.kind === "note") {
         keys(source, ["kind", "note_id", "revision"]);
-        if (!id(source.note_id) || !revision(source.revision))
+        if (!isIdentity(source.note_id) || !revision(source.revision))
           throw new Error("invalid_command");
       } else throw new Error("invalid_command");
-    } else if (field === "block_ids") {
-      if (!Array.isArray(value) || value.length > limits.block_limit)
+    } else if (field === "archived") {
+      if (typeof value !== "boolean") throw new Error("invalid_command");
+    } else if (field === "progress") {
+      if (!["not_started", "in_progress", "completed"].includes(String(value)))
+        throw new Error("invalid_command");
+    } else if (field === "block_ids" || field === "stage_ids") {
+      if (
+        !Array.isArray(value) ||
+        value.length >
+          (field === "stage_ids" ? limits.stage_limit : limits.block_limit)
+      )
         throw new Error("input_limit");
       if (
         !value.length ||
-        !value.every(id) ||
+        !value.every(isIdentity) ||
         new Set(value).size !== value.length
       )
         throw new Error("invalid_command");
@@ -873,6 +943,7 @@ export function request(value: unknown): WorkspaceRequest {
       if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(value))
         throw new Error("invalid_command");
     } else if (field === "title") {
+      if (kind === "duplicate_stage" && value === null) continue;
       if (!bytes(value, 120) || !value.trim())
         throw new Error("invalid_command");
     } else if (field === "explanation") {
@@ -896,20 +967,20 @@ export function request(value: unknown): WorkspaceRequest {
       value === null
     )
       continue;
-    else if (!id(value)) throw new Error("invalid_command");
+    else if (!isIdentity(value)) throw new Error("invalid_command");
   }
   return record as unknown as WorkspaceRequest;
 }
 function assetRevision(value: unknown) {
   const reference = object(value);
   keys(reference, ["asset_id", "revision"]);
-  if (!id(reference.asset_id) || !revision(reference.revision))
+  if (!isIdentity(reference.asset_id) || !revision(reference.revision))
     throw new Error("invalid_command");
 }
 export function challengeImport(value: unknown): ChallengeImport {
   const record = object(value);
   keys(record, ["workspace_id", "key"]);
-  if (!id(record.workspace_id) || !id(record.key))
+  if (!isIdentity(record.workspace_id) || !isIdentity(record.key))
     throw new Error("invalid_command");
   return record as unknown as ChallengeImport;
 }
@@ -917,7 +988,7 @@ export function imageImport(value: unknown): ImageImport {
   const record = object(value);
   keys(record, ["context", "key", "caption"]);
   context(record.context);
-  if (!id(record.key) || !bytes(record.caption, limits.text_bytes))
+  if (!isIdentity(record.key) || !bytes(record.caption, limits.text_bytes))
     throw new Error("invalid_command");
   return record as unknown as ImageImport;
 }
@@ -925,14 +996,14 @@ export function fileImport(value: unknown): FileImport {
   const record = object(value);
   keys(record, ["context", "key"]);
   context(record.context);
-  if (!id(record.key)) throw new Error("invalid_command");
+  if (!isIdentity(record.key)) throw new Error("invalid_command");
   return record as unknown as FileImport;
 }
 export function assetRead(value: unknown): AssetRead {
   const record = object(value);
   keys(record, ["context", "asset_id", "revision"]);
   context(record.context);
-  if (!id(record.asset_id) || !revision(record.revision))
+  if (!isIdentity(record.asset_id) || !revision(record.revision))
     throw new Error("invalid_command");
   return record as unknown as AssetRead;
 }
@@ -954,13 +1025,13 @@ export function runRequest(value: unknown): RunRequest {
   ]);
   context(record.context);
   if (
-    !id(record.key) ||
-    !id(record.trail_id) ||
+    !isIdentity(record.key) ||
+    !isIdentity(record.trail_id) ||
     !revision(record.trail_revision) ||
-    !id(record.target_node_id) ||
-    !id(record.pipeline_id) ||
+    !isIdentity(record.target_node_id) ||
+    !isIdentity(record.pipeline_id) ||
     !revision(record.pipeline_revision) ||
-    !id(record.source_asset_id) ||
+    !isIdentity(record.source_asset_id) ||
     !revision(record.source_revision) ||
     !bytes(record.operation, 128) ||
     !revision(record.operation_version) ||
@@ -974,7 +1045,7 @@ export function cancelRun(value: unknown): CancelRun {
   const record = object(value);
   keys(record, ["context", "run_id"]);
   context(record.context);
-  if (!id(record.run_id)) throw new Error("invalid_command");
+  if (!isIdentity(record.run_id)) throw new Error("invalid_command");
   return record as unknown as CancelRun;
 }
 export function contextOf(exploration: ExplorationView): Context {
@@ -992,7 +1063,7 @@ export function graphDefinition(value: unknown): PipelineDefinition {
     throw new Error("input_limit");
   if (
     d.formatVersion !== 4 ||
-    !id(d.output) ||
+    !isIdentity(d.output) ||
     !Array.isArray(d.inputs) ||
     d.inputs.length < 1 ||
     d.inputs.length > limits.pipeline_input_limit ||
@@ -1010,7 +1081,7 @@ export function graphDefinition(value: unknown): PipelineDefinition {
       !/^[a-z][a-z0-9_]{0,31}$/.test(input.name) ||
       (index === 0 && input.name !== "source") ||
       names.has(input.name) ||
-      !["text", "image.samples"].includes(String(input.semanticType))
+      !["text", "image.samples", "bytes"].includes(String(input.semanticType))
     )
       throw new Error("invalid_command");
     names.add(input.name);
@@ -1026,7 +1097,7 @@ export function graphDefinition(value: unknown): PipelineDefinition {
       "inputs",
     ]);
     if (
-      !id(n.id) ||
+      !isIdentity(n.id) ||
       !bytes(n.operation, 128) ||
       !n.operation ||
       !revision(n.operationVersion) ||
@@ -1058,7 +1129,11 @@ export function graphDefinition(value: unknown): PipelineDefinition {
           throw new Error("invalid_command");
       } else if (source.kind === "output") {
         keys(source, ["kind", "nodeId", "port"]);
-        if (!id(source.nodeId) || !bytes(source.port, 64) || !source.port)
+        if (
+          !isIdentity(source.nodeId) ||
+          !bytes(source.port, 64) ||
+          !source.port
+        )
           throw new Error("invalid_command");
       } else if (source.kind === "literal") {
         keys(source, ["kind", "value"]);
@@ -1075,23 +1150,23 @@ function noteTarget(value: unknown) {
   switch (target.kind) {
     case "block":
       keys(target, ["kind", "block_id"]);
-      if (!id(target.block_id)) throw new Error("invalid_command");
+      if (!isIdentity(target.block_id)) throw new Error("invalid_command");
       break;
     case "asset":
       keys(target, ["kind", "asset_id", "revision"]);
-      if (!id(target.asset_id) || !revision(target.revision))
+      if (!isIdentity(target.asset_id) || !revision(target.revision))
         throw new Error("invalid_command");
       break;
     case "attempt":
       keys(target, ["kind", "run_id", "attempt_id"]);
-      if (!id(target.run_id) || !id(target.attempt_id))
+      if (!isIdentity(target.run_id) || !isIdentity(target.attempt_id))
         throw new Error("invalid_command");
       break;
     case "run_output":
       keys(target, ["kind", "run_id", "attempt_id", "port"]);
       if (
-        !id(target.run_id) ||
-        !id(target.attempt_id) ||
+        !isIdentity(target.run_id) ||
+        !isIdentity(target.attempt_id) ||
         typeof target.port !== "string" ||
         !/^[a-zA-Z0-9_-]{1,64}$/.test(target.port)
       )
