@@ -986,6 +986,12 @@ h1 {
   max-height: 220px;
   object-fit: contain;
 }
+.result-image {
+  margin: 16px 0;
+}
+.result-image .asset-image {
+  image-rendering: pixelated;
+}
 .image-viewport .asset-image {
   max-height: none;
 }

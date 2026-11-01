@@ -29,12 +29,6 @@ fn availability(e: &core::Executable, retain_private: bool) -> Result<()> {
     if requires_private_retention(&e.contract) && !retain_private {
         return Err("retention_policy_unavailable");
     }
-    if e.outputs
-        .values()
-        .any(|r| matches!(r, Representation::ImageSamples))
-    {
-        return Err("unsupported_representation");
-    }
     Ok(())
 }
 fn executable(operation: &str) -> Result<core::Executable> {
@@ -169,7 +163,7 @@ fn raw_outputs(operation: &str, named: &Value) -> Result<Value> {
         ),
         Representation::ByteArray => Ok(json!({"bytes":v})),
         Representation::Json => Ok(json!({"value":v})),
-        Representation::ImageSamples => Err("unsupported_representation"),
+        Representation::ImageSamples => Ok(json!({"image":v})),
     }
 }
 pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
@@ -190,7 +184,9 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
                 json!(cube_core::operations::contracts::values::Bytes { data })
             }
             Representation::ByteArray => output.get("bytes").cloned().ok_or("invalid_response")?,
-            Representation::ImageSamples => return Err("unsupported_representation"),
+            Representation::ImageSamples => {
+                output.get("image").cloned().ok_or("invalid_response")?
+            }
         };
         json!({name.clone():value})
     };

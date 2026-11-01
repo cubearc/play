@@ -198,8 +198,8 @@ Stage revisions track structural membership and order. Adding text, an image, a 
 also advances this revision; editing content or saving a Note uses its own
 revision. Content is inserted before a trailing reasoning Block, otherwise at the
 end. Positions are normalized among active Blocks; archived positions cannot
-change that order. The coordinated app/engine wire protocol is **23**, with no older
-DTO fallback.
+change that order. The [coordinated app/engine wire protocol](desktop-runtime.md#versioned-private-protocol)
+has no older DTO fallback.
 
 ## Block copies and provenance
 

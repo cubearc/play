@@ -7,6 +7,7 @@ mod cli;
 mod contract_snapshots;
 mod copies;
 mod files;
+mod image_views;
 mod model;
 mod mutations;
 mod note_targets;
@@ -32,7 +33,7 @@ use model::Identity;
 pub use model::{Command, Context, RunRequest};
 pub use runs::{PreparedRun, RunIdentity};
 use serde_json::{Value, json};
-use sqlx::{Connection, Row, SqliteConnection};
+use sqlx::{Connection, SqliteConnection};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -301,14 +302,14 @@ impl Manager {
                     ))
                     .and_then(to_value)
             }
-            Command::ReadImage {
-                context,
-                asset_id,
-                revision,
-            } => {
+            Command::ReadImage { context, source } => {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;
-                self.runtime
-                    .block_on(read_image(store, &context, asset_id, revision))
+                let owner = store.identity.workspace_id;
+                let connection = store.connection()?;
+                self.runtime.block_on(async {
+                    queries::context(connection, owner, &context).await?;
+                    image_views::read(connection, &context, &source).await
+                })
             }
             command => {
                 let store = self.active.as_mut().ok_or("workspace_closed")?;
@@ -428,26 +429,4 @@ async fn initialize(directory: &Path, identity: &Identity) -> Result<()> {
         &serde_json::to_vec(identity).map_err(|_| "invalid_state")?,
     )?;
     storage::sync_directory(directory)
-}
-
-async fn read_image(
-    store: &mut Owned,
-    context: &Context,
-    asset_id: Uuid,
-    revision: i64,
-) -> Result<Value> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let owner = store.identity.workspace_id;
-    let connection = store.connection()?;
-    queries::context(connection, owner, context).await?;
-    let row=sqlx::query("SELECT r.data,r.digest FROM asset_revisions r JOIN assets a ON (a.workspace_id,a.exploration_id,a.id)=(r.workspace_id,r.exploration_id,r.asset_id) WHERE r.workspace_id=? AND r.exploration_id=? AND r.asset_id=? AND r.revision=? AND a.kind='image'")
-        .bind(owner.to_string()).bind(context.exploration_id.to_string()).bind(asset_id.to_string()).bind(revision).fetch_optional(connection).await.map_err(storage::failure)?.ok_or("not_found")?;
-    let bytes: Vec<u8> = row.get(0);
-    if cube_core::hashing::sha256(&bytes) != row.get::<String, _>(1) {
-        return Err("corrupt_store");
-    }
-    if bytes.len() > protocol::contract().image_bytes {
-        return Err("storage_quota");
-    }
-    Ok(json!({"mime":"image/png","base64":STANDARD.encode(bytes)}))
 }

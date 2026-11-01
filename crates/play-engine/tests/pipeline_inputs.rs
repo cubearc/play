@@ -1313,3 +1313,147 @@ fn exact_wide_assets_use_core_canonical_inputs_without_rewriting_the_source() {
         assert_eq!(m.run_detail(&c, id).unwrap(), completed);
     }
 }
+
+#[test]
+fn generated_images_preview_pin_and_reuse_exact_samples_with_retained_origin() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let root = tempfile::tempdir().unwrap();
+    let private = root.path().join("private");
+    let mut m = Manager::new(private.clone()).unwrap();
+    let c = context(&mut m, None, "Generated image evidence");
+    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
+    ))
+    .unwrap();
+    let encoded = fixtures
+        .iter()
+        .find(|v| v["operation"] == "image.encode")
+        .unwrap();
+    let png = STANDARD
+        .decode(encoded["outputs"]["output"]["base64"].as_str().unwrap())
+        .unwrap();
+    let initial = image_from(&mut m, &c, "", &png);
+    let d = serde_json::to_value(
+        play_engine::graph::Definition::single(
+            Uuid::new_v4(),
+            "image.invert",
+            1,
+            json!({"expand_palette":false}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let p = pipeline(&mut m, &c, &d);
+    let configure = |m: &mut Manager, t: &Value| {
+        call(
+            m,
+            json!({"kind":"save_trail","context":c,"key":Uuid::new_v4(),"trail_id":t["id"],"expected_revision":t["revision"],"hypothesis":"Inspect exact generated samples","pipeline":{"id":p["pipelineId"],"revision":p["revision"]},"bindings":{}}),
+        );
+    };
+    configure(&mut m, trail(&initial, &figure(&initial)["asset"]));
+    let v = view(&mut m, &c);
+    let first = execute(
+        &mut m,
+        &request(&c, trail(&v, &figure(&v)["asset"]), &d["nodes"][0]),
+    );
+    let fixture = fixtures
+        .iter()
+        .find(|v| v["operation"] == "image.invert")
+        .unwrap();
+    assert_eq!(first["result"]["outputs"], fixture["outputs"]);
+    let source = json!({"kind":"run_output","run_id":first["id"],"attempt_id":first["attempts"][0]["id"],"port":"output"});
+    let read = json!({"kind":"read_image","context":c,"source":source});
+    let preview = call(&mut m, read.clone());
+    assert_eq!(preview["mime"], "image/png");
+    let decoded = cube_core::operations::execution::execute(
+        "image.decode",
+        1,
+        &json!({"input":{"base64":preview["base64"]}}),
+        &json!({}),
+        Default::default(),
+    )
+    .unwrap();
+    assert_eq!(decoded["output"], fixture["outputs"]["output"]);
+    call(
+        &mut m,
+        json!({"kind":"pin_run_output","context":c,"key":Uuid::new_v4(),"expected_revision":v["stage"]["revision"],"run_id":first["id"],"attempt_id":first["attempts"][0]["id"],"port":"output"}),
+    );
+    let saved = view(&mut m, &c);
+    let block = saved["stage"]["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["asset"]["origin"]["runId"] == first["id"])
+        .unwrap();
+    assert_eq!(block["asset"]["content"]["kind"], "image");
+    assert_eq!(
+        block["asset"]["origin"]["attemptId"],
+        first["attempts"][0]["id"]
+    );
+    let asset_read = json!({"kind":"read_image","context":c,"source":{"kind":"asset","asset_id":block["asset"]["id"],"revision":1}});
+    assert_eq!(call(&mut m, asset_read.clone()), preview);
+    assert!(
+        STANDARD
+            .decode(preview["base64"].as_str().unwrap())
+            .unwrap()
+            .len()
+            <= play_engine::protocol::contract().image_bytes
+    );
+    configure(&mut m, trail(&saved, &block["asset"]));
+    let v = view(&mut m, &c);
+    let second = execute(
+        &mut m,
+        &request(&c, trail(&v, &block["asset"]), &d["nodes"][0]),
+    );
+    assert_eq!(
+        second["result"]["outputs"]["output"],
+        fixture["inputs"]["input"]
+    );
+    assert_eq!(first["attempts"].as_array().unwrap().len(), 1);
+    assert_eq!(second["attempts"].as_array().unwrap().len(), 1);
+    let stage = call(
+        &mut m,
+        json!({"kind":"create_stage","workspace_id":c.workspace_id,"exploration_id":c.exploration_id,"key":Uuid::new_v4(),"title":"Other Stage"}),
+    );
+    for reference in [&read, &asset_read] {
+        let mut denied = reference.clone();
+        denied["context"]["stage_id"] = stage["stageId"].clone();
+        assert_eq!(
+            m.handle(serde_json::from_value(denied).unwrap())
+                .unwrap_err(),
+            "not_found"
+        );
+    }
+    let mut missing_port = read.clone();
+    missing_port["source"]["port"] = json!("missing");
+    assert_eq!(
+        m.handle(serde_json::from_value(missing_port).unwrap())
+            .unwrap_err(),
+        "not_found"
+    );
+    let mut transient = request(&c, trail(&v, &block["asset"]), &d["nodes"][0]);
+    transient.retain_output = false;
+    let not_retained = execute(&mut m, &transient);
+    let unavailable = json!({"kind":"read_image","context":c,"source":{"kind":"run_output","run_id":not_retained["id"],"attempt_id":not_retained["attempts"][0]["id"],"port":"output"}});
+    assert_eq!(
+        m.handle(serde_json::from_value(unavailable).unwrap())
+            .unwrap_err(),
+        "result_not_available"
+    );
+    let foreign = context(&mut m, Some(c.workspace_id), "Unrelated exploration");
+    let mut denied = read.clone();
+    denied["context"] = serde_json::to_value(foreign).unwrap();
+    assert!(m.handle(serde_json::from_value(denied).unwrap()).is_err());
+    drop(m);
+    let mut m = Manager::new(private).unwrap();
+    call(&mut m, json!({"kind":"open","workspace_id":c.workspace_id}));
+    assert_eq!(call(&mut m, read), preview);
+    assert_eq!(call(&mut m, asset_read), preview);
+    for run in [first, second] {
+        assert_eq!(
+            m.run_detail(&c, serde_json::from_value(run["id"].clone()).unwrap())
+                .unwrap(),
+            run
+        );
+    }
+}

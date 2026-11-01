@@ -223,8 +223,12 @@ async fn output(
         .find(|p| p.name == port)
         .ok_or("not_found")?;
     let value = result["outputs"].get(port).ok_or("result_not_available")?;
+    let executable =
+        cube_core::operations::execution::describe(&contract.operation, Default::default())
+            .map_err(|_| "contract_mismatch")?;
+    let representation = executable.outputs.get(port).ok_or("contract_mismatch")?;
     Ok(
-        json!({"kind":"run_output","semanticType":definition.semantic_type,"value":value,"origin":{"runId":run,"attemptId":attempt,"nodeId":row.get::<&str,_>("node_id"),"trailId":row.get::<&str,_>("trail_id"),"pipelineId":row.get::<&str,_>("pipeline_id"),"pipelineRevision":row.get::<i64,_>("pipeline_revision"),"sequence":row.get::<i64,_>("sequence"),"operationName":node["operation"]["name"],"port":port}}),
+        json!({"kind":"run_output","semanticType":definition.semantic_type,"representation":representation,"value":value,"origin":{"runId":run,"attemptId":attempt,"nodeId":row.get::<&str,_>("node_id"),"trailId":row.get::<&str,_>("trail_id"),"pipelineId":row.get::<&str,_>("pipeline_id"),"pipelineRevision":row.get::<i64,_>("pipeline_revision"),"sequence":row.get::<i64,_>("sequence"),"operationName":node["operation"]["name"],"port":port}}),
     )
 }
 

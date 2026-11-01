@@ -119,6 +119,13 @@ Main binds them to its trusted window/current top frame and Exploration/Stage.
 Another window cannot reuse the URL. The handler returns only bounded PNG bytes
 with no-store caching. Export grants are not implemented.
 
+The closed `image` request carries `context` and a `source`: either
+`{kind: "asset", asset_id, revision}` or
+`{kind: "run_output", run_id, attempt_id, port}`. The engine verifies exact
+Stage membership, retained completed evidence and its frozen Core contract before
+issuing a preview. Generated images use the same window/frame grants as source
+images; neither request accepts raw samples, a file path or an arbitrary URL.
+
 ## Versioned private protocol
 
 [`desktop/protocol.json`](https://github.com/cubearc/play/blob/main/desktop/protocol.json)
@@ -151,7 +158,7 @@ continuations before exposing operation choices.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **27** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **28** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,

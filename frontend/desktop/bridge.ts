@@ -1,10 +1,10 @@
 import type { CliIntent, CliResponses } from "./cli-contract.ts";
 import type { Operation } from "./contract.ts";
 import type {
-  AssetRead,
   CancelRun,
   FileImport,
   ImageImport,
+  ImageRead,
   MutationResult,
   Responses,
   RunDetail,
@@ -32,7 +32,7 @@ export interface PlayBridge {
   ) => Promise<import("./workspace-contract.ts").ImportedChallenge | null>;
   importImage: (value: ImageImport) => Promise<MutationResult | null>;
   importFile: (value: FileImport) => Promise<MutationResult | null>;
-  image: (value: AssetRead) => Promise<string>;
+  image: (value: ImageRead) => Promise<string>;
   startRun: (value: RunRequest) => Promise<RunDetail>;
   cancelRun: (value: CancelRun) => Promise<RunDetail>;
   dirty: (value: boolean) => Promise<void>;

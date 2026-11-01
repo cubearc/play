@@ -258,8 +258,7 @@ fn png_caption_import_is_atomic_and_preserves_independent_asset_references() {
     assert_ne!(block["asset"]["id"], block["caption"]["id"]);
     assert_eq!(view["trails"].as_array().unwrap().len(), 2);
     assert_eq!(block["caption"]["content"]["text"], "Gur xrl.");
-    let read =
-        json!({"kind":"read_image","context":context,"asset_id":block["asset"]["id"],"revision":1});
+    let read = json!({"kind":"read_image","context":context,"source":{"kind":"asset","asset_id":block["asset"]["id"],"revision":1}});
     assert_eq!(
         command(&mut manager, read.clone())["base64"],
         STANDARD.encode(png)

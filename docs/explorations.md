@@ -281,11 +281,21 @@ the app ends the private engine session. Canvas tabs remain in memory. Saved hyp
 Runs persist. [Saved state](persistence.md)
 explains restart and interruption behavior.
 
-Choose **Save output as block** to reuse a named text, byte or structured output
+Choose **Save output as block** to reuse a named text, byte, image or structured output
 without executing it again. The new Asset keeps its source Run, node attempt and
 output port. Structured values retain their Core semantic type, so a compatible
 operation can consume the result directly. Use **Add data** in the notebook to
 create a structured Asset yourself.
+
+Image results appear beside their producing cell. **Save as block** keeps a
+lossless PNG Asset linked to the original Run and named output; a later image
+operation can use it directly. **Image data** exposes the full logical raster
+when you need to inspect samples, palette or transparency.
+
+![A generated image is reused by a second Pipeline, with its result beside the producing cell.](assets/desktop/generated-image-reuse.png)
+
+The saved image keeps its source Run while the second cell records its own
+execution. [Open the image-reuse capture full size](assets/desktop/generated-image-reuse.png).
 
 The notebook, canvas and contextual terminal preserve exact 64-bit JSON integers.
 Operations use Core's canonical wire format: an integer outside JavaScript's

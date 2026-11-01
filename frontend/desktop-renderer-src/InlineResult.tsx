@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { RunDetail, TrailView } from "../desktop/workspace-contract";
+import { ImagePreview } from "./AssetImage";
 import { CandidateButton } from "./Candidates";
 import { AnnotateButton } from "./EvidenceNotes";
 import { attemptOutputType, formatResultValue } from "./ResultValue";
@@ -66,7 +67,54 @@ export function InlineResult({
               {run.operation.operationVersion}
             </span>
           </div>
-          <pre role="status">{value(run)}</pre>
+          {run.status === "completed" && run.retainOutput
+            ? run.attempts
+                .filter(
+                  (a) =>
+                    run.plan.targetNodes.includes(a.nodeId) &&
+                    a.status === "completed",
+                )
+                .flatMap((attempt) =>
+                  run.plan.contract.outputs
+                    .filter((p) => p.representation === "image_samples")
+                    .map((port) => (
+                      <figure
+                        className="result-image"
+                        key={`${attempt.id}/${port.name}`}
+                      >
+                        <ImagePreview
+                          context={{
+                            workspace_id: trail.workspaceId,
+                            exploration_id: trail.explorationId,
+                            stage_id: trail.stageId,
+                          }}
+                          source={{
+                            kind: "run_output",
+                            run_id: run.id,
+                            attempt_id: attempt.id,
+                            port: port.name,
+                          }}
+                          title={`${run.operation.name} · ${port.name} · Run ${run.sequence}`}
+                        />
+                        <figcaption>
+                          {port.name} · Run {run.sequence}
+                        </figcaption>
+                      </figure>
+                    )),
+                )
+            : null}
+          {run.plan.contract.outputs.some(
+            (p) => p.representation === "image_samples",
+          ) &&
+          run.status === "completed" &&
+          !run.result?.replayGap ? (
+            <details>
+              <summary>Image data</summary>
+              <pre>{value(run)}</pre>
+            </details>
+          ) : (
+            <pre role="status">{value(run)}</pre>
+          )}
           {run.status === "completed" && run.retainOutput
             ? run.attempts
                 .filter(
@@ -112,9 +160,7 @@ export function InlineResult({
             ? Object.keys(run.result?.outputs ?? {})
                 .filter((port) =>
                   run.plan.contract.outputs.some(
-                    (output) =>
-                      output.name === port &&
-                      output.representation !== "image_samples",
+                    (output) => output.name === port,
                   ),
                 )
                 .map((port) => {

@@ -10,11 +10,11 @@ import { contract } from "./contract.ts";
 import type { Engine } from "./engine.ts";
 import { readImport } from "./imports.ts";
 import type {
-  AssetRead,
   ChallengeImport,
   Context,
   FileImport,
   ImageImport,
+  ImageRead,
 } from "./workspace-contract.ts";
 
 interface Grant {
@@ -60,7 +60,7 @@ export class AssetGrants {
     engine: Engine,
     owner: WebContents,
     frame: WebFrameMain,
-    value: AssetRead,
+    value: ImageRead,
   ): Promise<string> {
     if (contextKey(value.context) !== this.context)
       throw new Error("stale_context");

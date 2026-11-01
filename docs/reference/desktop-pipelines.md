@@ -28,8 +28,12 @@ saved node; capability discovery alone does not authorize retention. A CLI comma
 adapter alone grants no native execution.
 
 The host handles text, lossless Base64 bytes, byte arrays, structured JSON and
-materialized image inputs. It refuses generated image outputs until their retention
-path exists. New registrations using supported capabilities appear in operation
+materialized images. Generated image outputs render beside their producing cell
+and can be saved as image Blocks with their exact Run, node attempt and port.
+The existing Core PNG codec supplies the preview and Asset storage format;
+encoding a preview creates no Pipeline attempt. Palette, transparency and source
+sample values remain intact when the Asset feeds another operation.
+New registrations using supported capabilities appear in operation
 selection without a Play ID list, new dispatcher branch or operation-specific form.
 New representations or permissions require explicit host work. Algorithms remain
 in Core; schema/default discovery never executes them.

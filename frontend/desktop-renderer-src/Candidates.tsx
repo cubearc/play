@@ -15,7 +15,7 @@ import type {
   Context,
   WorkspaceRequest,
 } from "../desktop/workspace-contract";
-import { AssetImage } from "./AssetImage";
+import { AssetImage, ImagePreview } from "./AssetImage";
 import { FilePreview } from "./FilePreview";
 import { formatResultValue } from "./ResultValue";
 import { StructuredPreview } from "./StructuredPreview";
@@ -336,7 +336,22 @@ export function CandidateEvidence({
             {evidence.origin.operationName} · {evidence.origin.port} · Run{" "}
             {evidence.origin.sequence} · {evidence.semanticType}
           </p>
-          <pre>{formatResultValue(evidence.value, evidence.semanticType)}</pre>
+          {evidence.representation === "image_samples" ? (
+            <ImagePreview
+              context={context}
+              source={{
+                kind: "run_output",
+                run_id: evidence.origin.runId,
+                attempt_id: evidence.origin.attemptId,
+                port: evidence.origin.port,
+              }}
+              title={`${evidence.origin.operationName} · ${evidence.origin.port} · Run ${evidence.origin.sequence}`}
+            />
+          ) : (
+            <pre>
+              {formatResultValue(evidence.value, evidence.semanticType)}
+            </pre>
+          )}
           <VscodeButton secondary onClick={() => openRun(evidence.origin)}>
             Open source Run
           </VscodeButton>

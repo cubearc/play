@@ -506,6 +506,10 @@ export interface FileImport {
   context: Context;
   key: string;
 }
+export interface ImageRead {
+  context: Context;
+  source: CandidateSelection;
+}
 export interface AssetRead {
   context: Context;
   asset_id: string;
@@ -644,6 +648,7 @@ export interface CandidateView {
     | {
         kind: "run_output";
         semanticType: string;
+        representation: Representation;
         value: JsonValue;
         origin: {
           runId: string;
@@ -939,21 +944,7 @@ export function request(value: unknown): WorkspaceRequest {
     } else if (field === "target") {
       noteTarget(value);
     } else if (field === "selection") {
-      const selected = object(value);
-      if (selected.kind === "asset") {
-        keys(selected, ["kind", "asset_id", "revision"]);
-        if (!isIdentity(selected.asset_id) || !revision(selected.revision))
-          throw new Error("invalid_command");
-      } else if (selected.kind === "run_output") {
-        keys(selected, ["kind", "run_id", "attempt_id", "port"]);
-        if (
-          !isIdentity(selected.run_id) ||
-          !isIdentity(selected.attempt_id) ||
-          typeof selected.port !== "string" ||
-          !/^[a-zA-Z0-9_-]{1,64}$/.test(selected.port)
-        )
-          throw new Error("invalid_command");
-      } else throw new Error("invalid_command");
+      evidenceSelection(value);
     } else if (
       (kind === "get_candidate" || kind === "get_solution") &&
       field === "revision" &&
@@ -1103,6 +1094,30 @@ export function fileImport(value: unknown): FileImport {
   context(record.context);
   if (!isIdentity(record.key)) throw new Error("invalid_command");
   return record as unknown as FileImport;
+}
+function evidenceSelection(value: unknown): void {
+  const selected = object(value);
+  if (selected.kind === "asset") {
+    keys(selected, ["kind", "asset_id", "revision"]);
+    if (!isIdentity(selected.asset_id) || !revision(selected.revision))
+      throw new Error("invalid_command");
+  } else if (selected.kind === "run_output") {
+    keys(selected, ["kind", "run_id", "attempt_id", "port"]);
+    if (
+      !isIdentity(selected.run_id) ||
+      !isIdentity(selected.attempt_id) ||
+      typeof selected.port !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,64}$/.test(selected.port)
+    )
+      throw new Error("invalid_command");
+  } else throw new Error("invalid_command");
+}
+export function imageRead(value: unknown): ImageRead {
+  const record = object(value);
+  keys(record, ["context", "source"]);
+  context(record.context);
+  evidenceSelection(record.source);
+  return record as unknown as ImageRead;
 }
 export function assetRead(value: unknown): AssetRead {
   const record = object(value);

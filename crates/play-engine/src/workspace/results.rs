@@ -141,7 +141,7 @@ fn representation_data(
             "structured",
             super::structured::encode(semantic_type, value)?,
         )),
-        Representation::ImageSamples => Err("unsupported_output_type"),
+        Representation::ImageSamples => Ok(("image", super::image_views::encode(value)?)),
     }
 }
 

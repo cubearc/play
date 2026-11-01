@@ -160,8 +160,7 @@ fn archived_image_and_caption_remain_readable_but_not_editable_or_copyable() {
     let mut manager = Manager::new(tmp.path().join("private")).unwrap();
     let (context, before) = setup(&mut manager, true);
     let block = before["stage"]["blocks"][0].clone();
-    let read =
-        json!({"kind":"read_image","context":context,"asset_id":block["asset"]["id"],"revision":1});
+    let read = json!({"kind":"read_image","context":context,"source":{"kind":"asset","asset_id":block["asset"]["id"],"revision":1}});
     let png = command(&mut manager, read.clone());
     command(&mut manager, lifecycle(&context, &before, &block, true));
     let view = open(&mut manager, &context);

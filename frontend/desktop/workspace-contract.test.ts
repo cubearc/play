@@ -654,3 +654,32 @@ test("private retention consent is an explicit boolean on a versioned graph node
       /invalid_command/,
     );
 });
+
+test("image previews accept only exact scoped Asset or retained node-output references", async () => {
+  const { imageRead } = await import("./workspace-contract.ts");
+  const asset = {
+    context: owner,
+    source: { kind: "asset", asset_id: randomUUID(), revision: 1 },
+  };
+  const output = {
+    context: owner,
+    source: {
+      kind: "run_output",
+      run_id: randomUUID(),
+      attempt_id: randomUUID(),
+      port: "output",
+    },
+  };
+  assert.deepEqual(imageRead(asset), asset);
+  assert.deepEqual(imageRead(output), output);
+  for (const invalid of [
+    { context: owner, asset_id: randomUUID(), revision: 1 },
+    { ...asset, path: "/private" },
+    { ...asset, source: { ...asset.source, revision: 0 } },
+    { ...output, source: { ...output.source, port: "../output" } },
+    { ...output, source: { ...output.source, attempt_id: "unknown" } },
+    { ...output, source: { ...output.source, path: "/private" } },
+    { ...output, context: { ...owner, stage_id: "unknown" } },
+  ])
+    assert.throws(() => imageRead(invalid));
+});

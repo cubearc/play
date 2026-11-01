@@ -134,8 +134,7 @@ fn caption_edits_keep_the_figure_image_and_references_intact() {
     let mut manager = Manager::new(tmp.path().join("private")).unwrap();
     let (context, before) = setup(&mut manager, true);
     let block = &before["stage"]["blocks"][0];
-    let read =
-        json!({"kind":"read_image","context":context,"asset_id":block["asset"]["id"],"revision":1});
+    let read = json!({"kind":"read_image","context":context,"source":{"kind":"asset","asset_id":block["asset"]["id"],"revision":1}});
     let png = command(&mut manager, read.clone());
     let caption = &block["caption"];
     command(&mut manager, edit(&context, block, caption, ""));

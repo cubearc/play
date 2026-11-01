@@ -302,8 +302,7 @@ pub enum Command {
     },
     ReadImage {
         context: Context,
-        asset_id: Uuid,
-        revision: i64,
+        source: CandidateSelection,
     },
     ReorderBlocks {
         context: Context,

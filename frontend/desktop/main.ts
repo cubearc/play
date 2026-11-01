@@ -34,7 +34,6 @@ import { type OpenIntent, openIntent, workspaceLink } from "./open-intent.ts";
 import { SourceRoots } from "./source-roots.ts";
 import { terminalIntent } from "./terminal-contract.ts";
 import {
-  assetRead,
   type Context,
   cancelRun,
   challengeImport,
@@ -42,6 +41,7 @@ import {
   fileImport,
   type ImportedChallenge,
   imageImport,
+  imageRead,
   request,
   runRequest,
 } from "./workspace-contract.ts";
@@ -702,7 +702,7 @@ app
         engine,
         event.sender,
         event.senderFrame,
-        assetRead(value),
+        imageRead(value),
       );
     });
     ipcMain.handle("play:dirty", (event, value: unknown) => {

@@ -161,8 +161,7 @@ fn copying_an_image_keeps_its_caption_grouped_but_forks_both_asset_identities() 
             original[field]["revision"]
         );
     }
-    let read =
-        |id: &Value| json!({"kind":"read_image","context":context,"asset_id":id,"revision":1});
+    let read = |id: &Value| json!({"kind":"read_image","context":context,"source":{"kind":"asset","asset_id":id,"revision":1}});
     let original_png = command(&mut manager, read(&original["asset"]["id"]));
     let copied_png = command(&mut manager, read(&copied["asset"]["id"]));
     assert_eq!(original_png, copied_png);

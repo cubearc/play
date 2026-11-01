@@ -4,11 +4,11 @@ import type { PlayBridge } from "./bridge.ts";
 import { cliIntent } from "./cli-contract.ts";
 import { terminalIntent } from "./terminal-contract.ts";
 import {
-  assetRead,
   cancelRun,
   challengeImport,
   fileImport,
   imageImport,
+  imageRead,
   request,
   runRequest,
 } from "./workspace-contract.ts";
@@ -31,7 +31,7 @@ if (process.isMainFrame) {
     importFile: (value: unknown) =>
       ipcRenderer.invoke("play:import-file", fileImport(value)),
     image: (value: unknown) =>
-      ipcRenderer.invoke("play:image", assetRead(value)),
+      ipcRenderer.invoke("play:image", imageRead(value)),
     startRun: (value: unknown) =>
       ipcRenderer.invoke("play:start-run", runRequest(value)),
     cancelRun: (value: unknown) =>

@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import type { AssetView, Context } from "../desktop/workspace-contract";
+import { parseJson, stringifyJson } from "../desktop/json-codec";
+import {
+  type AssetView,
+  type Context,
+  type ImageRead,
+  imageRead,
+} from "../desktop/workspace-contract";
 export function AssetImage({
   asset,
   context,
@@ -7,19 +13,28 @@ export function AssetImage({
   asset: AssetView;
   context: Context;
 }) {
+  return (
+    <ImagePreview
+      context={context}
+      source={{ kind: "asset", asset_id: asset.id, revision: asset.revision }}
+      title={asset.title}
+    />
+  );
+}
+export function ImagePreview({
+  context,
+  source,
+  title,
+}: ImageRead & { title: string }) {
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
-  const { workspace_id, exploration_id, stage_id } = context;
+  const reference = stringifyJson({ context, source });
   useEffect(() => {
     let current = true;
     setUrl("");
     setFailed(false);
     void window.play
-      .image({
-        context: { workspace_id, exploration_id, stage_id },
-        asset_id: asset.id,
-        revision: asset.revision,
-      })
+      .image(imageRead(parseJson(reference)))
       .then((url) => {
         if (current) setUrl(url);
       })
@@ -29,18 +44,18 @@ export function AssetImage({
     return () => {
       current = false;
     };
-  }, [asset.id, asset.revision, workspace_id, exploration_id, stage_id]);
+  }, [reference]);
   if (failed)
     return (
       <span className="image-unavailable">
-        Image unavailable. Reopen the asset canvas to request a fresh preview.
+        Image unavailable. Reopen this view to request a fresh preview.
       </span>
     );
   return url ? (
     <img
       className="asset-image"
       src={url}
-      alt={asset.title}
+      alt={title}
       onError={() => setFailed(true)}
     />
   ) : (

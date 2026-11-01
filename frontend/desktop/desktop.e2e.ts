@@ -7082,3 +7082,189 @@ test("a Workspace handover refuses the prior window context before another Stage
     await rm(profile, { recursive: true, force: true });
   }
 });
+
+test("generated image outputs render exact pixels, become Assets and preserve Candidate evidence after restart", {
+  timeout: 90000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "play-generated-images-"));
+  const fixtures = JSON.parse(
+    await readFile(
+      new URL(
+        "../../../cube/crates/cube-core/src/operations/contracts/conformance.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as {
+    operation: string;
+    outputs: Record<string, unknown>;
+    inputs: Record<string, unknown>;
+  }[];
+  const codec = fixtures.find((f) => f.operation === "image.encode");
+  const vector = fixtures.find((f) => f.operation === "image.invert");
+  assert.ok(codec && vector);
+  const png = (codec.outputs.output as { base64: string }).base64;
+  const file = join(profile, "source.png");
+  await writeFile(file, Buffer.from(png, "base64"));
+  const launch = () =>
+    electron.launch({
+      chromiumSandbox: true,
+      args: [main, `--user-data-dir=${profile}`],
+    });
+  let application = await launch();
+  try {
+    let page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await page
+      .getByRole("textbox", { name: "Workspace name", exact: true })
+      .fill("Generated images");
+    await page
+      .getByRole("button", { name: "Create workspace", exact: true })
+      .click();
+    await create(page, "Exploration", "Keep generated evidence");
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [path],
+      });
+    }, file);
+    await notebook(page)
+      .getByRole("button", { name: "Add image", exact: true })
+      .click();
+    const add = page.getByRole("dialog", {
+      name: "Add image with caption",
+      exact: true,
+    });
+    await add
+      .getByRole("textbox", { name: "Caption", exact: true })
+      .fill("Invert both sample pixels.");
+    await add.getByRole("button", { name: "Choose PNG", exact: true }).click();
+    await notebook(page)
+      .getByRole("button", { name: "Explore source.png", exact: true })
+      .click();
+    const operation = (await page.evaluate(() => window.play.catalog())).find(
+      (o) => o.operation === "image.invert",
+    );
+    assert.ok(operation);
+    const canvas = () =>
+      page.getByRole("region", { name: "Trail canvas", exact: true });
+    const configure = async (title: string) => {
+      await canvas()
+        .getByRole("button", { name: "New Pipeline", exact: true })
+        .click();
+      const editor = page.getByRole("dialog", {
+        name: "New Pipeline",
+        exact: true,
+      });
+      await editor
+        .getByRole("textbox", { name: "Pipeline name", exact: true })
+        .fill(title);
+      await editor
+        .getByRole("combobox", { name: "Operation", exact: true })
+        .click();
+      await editor
+        .getByRole("option", { name: operation.name, exact: true })
+        .click();
+      await editor
+        .getByRole("button", { name: "Create Pipeline", exact: true })
+        .click();
+      await expect(editor).toBeHidden();
+    };
+    await configure("Invert the source");
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    const result = () =>
+      canvas().getByRole("region", { name: "Cell result", exact: true });
+    if (!nativeWorkers) {
+      await expect(result()).toContainText("Execution rejected");
+      return;
+    }
+    const preview = () =>
+      result().getByRole("img", {
+        name: new RegExp(`^${operation.name} · output · Run `),
+      });
+    await expect(preview()).toBeVisible();
+    const pixels = async () =>
+      preview().evaluate((element: HTMLImageElement) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = element.naturalWidth;
+        canvas.height = element.naturalHeight;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("canvas_unavailable");
+        context.drawImage(element, 0, 0);
+        return [
+          ...context.getImageData(0, 0, canvas.width, canvas.height).data,
+        ];
+      });
+    await expect.poll(pixels).toEqual([254, 253, 252, 255, 245, 235, 225, 255]);
+    const first = await latestRun(page, "source.png");
+    assert.deepEqual(first.detail.result?.outputs, vector.outputs);
+    await result()
+      .getByRole("button", { name: "Choose output as candidate", exact: true })
+      .click();
+    await result()
+      .getByRole("button", { name: "Save output as block", exact: true })
+      .click();
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    const candidate = () =>
+      notebook(page).getByRole("region", {
+        name: "Stage candidate",
+        exact: true,
+      });
+    await expect(candidate().getByRole("img")).toBeVisible();
+    const title = `${operation.name} · output · Run ${first.detail.sequence}`;
+    await notebook(page)
+      .getByRole("button", { name: `Explore ${title}`, exact: true })
+      .click();
+    await expect(
+      canvas().getByRole("img", { name: title, exact: true }),
+    ).toBeVisible();
+    await configure("Invert the retained result");
+    await canvas()
+      .getByRole("button", { name: "Run cell", exact: true })
+      .click();
+    await expect(preview()).toBeVisible();
+    await expect.poll(pixels).toEqual([1, 2, 3, 255, 10, 20, 30, 255]);
+    const second = await latestRun(page, title);
+    assert.deepEqual(
+      second.detail.result?.outputs?.output,
+      vector.inputs.input,
+    );
+    assert.equal(first.detail.attempts.length, 1);
+    assert.equal(second.detail.attempts.length, 1);
+    await result().scrollIntoViewIfNeeded();
+    await capture(application, "native-generated-image-reuse", false);
+    assert.deepEqual((await accessibility(page)).violations, []);
+    await page.getByRole("tab", { name: "Stage 1", exact: true }).click();
+    await expect(candidate().getByRole("img")).toBeVisible();
+    const before = await current(page);
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    page.setDefaultTimeout(5000);
+    await expect(candidate().getByRole("img")).toBeVisible();
+    assert.deepEqual(await current(page), before);
+    for (const run of [first, second])
+      assert.deepEqual(
+        await frozenRun(page, run.context, run.detail.id),
+        run.detail,
+      );
+    assert.deepEqual(await readFile(file), Buffer.from(png, "base64"));
+    await finalizeCoverage(application);
+    await application.evaluate(({ app }) => app.quit());
+  } finally {
+    await application
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      })
+      .catch(() => {});
+    await application.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
+});
