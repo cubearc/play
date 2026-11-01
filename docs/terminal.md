@@ -50,7 +50,8 @@ run cancel ID
 Replace IDs with the relevant local identities. Asset reads stay inside the
 attached Stage; Pipeline reads use exact Workspace revisions. `size` reports
 actual PTY columns and rows, including after resizing the window. `exit` or
-**Close terminal** ends the session.
+the **Close terminal** (×) control in the panel header ends the session. In a
+narrow window, scroll inside the terminal to reach the remaining actions.
 
 Ctrl+C clears the input draft. To cancel accepted work, use `run cancel ID` or the
 cell's cancellation action. Closing the terminal does not cancel a Run; the engine

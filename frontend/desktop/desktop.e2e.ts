@@ -261,6 +261,7 @@ test("native terminal connects on supported platforms and refuses unavailable po
     for (const settings of [
       { width: 800, height: 540, zoom: 1 },
       { width: 1280, height: 800, zoom: 2 },
+      { width: 800, height: 540, zoom: 2 },
     ]) {
       await application.evaluate(({ BrowserWindow }, s) => {
         const w = BrowserWindow.getAllWindows().find((w) => w.isVisible());
@@ -278,7 +279,33 @@ test("native terminal connects on supported platforms and refuses unavailable po
         .toEqual({ shell: false, panel: false });
       await expect(
         panel.getByRole("button", { name: "Close terminal", exact: true }),
-      ).toBeInViewport();
+      )
+        .toBeInViewport({ ratio: 1 })
+        .catch(async (error) => {
+          console.error(
+            "terminal_reflow",
+            await panel.evaluate((element) => {
+              const box = (node: Element | null) =>
+                node?.getBoundingClientRect().toJSON();
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                panel: box(element),
+                toolbar: box(element.querySelector(".terminal-toolbar")),
+                close: box(
+                  element.querySelector('[aria-label="Close terminal"]'),
+                ),
+              };
+            }),
+          );
+          await capture(
+            application,
+            `native-terminal-reflow-${settings.width}-${settings.zoom}`,
+            false,
+          );
+          throw error;
+        });
+      if (settings.width === 800 && settings.zoom === 2)
+        await capture(application, "native-terminal-reflow-minimum", false);
     }
     await panel.getByRole("button", { name: "Reconnect", exact: true }).click();
     await expect(panel.getByRole("status")).toHaveText("Connected");

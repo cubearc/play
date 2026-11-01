@@ -180,7 +180,7 @@ export function Notebook({
     }
   };
   return (
-    <section className="notebook scroll-surface" aria-label="Stage notebook">
+    <section className="notebook" aria-label="Stage notebook">
       <header className="document-heading">
         <div className="eyebrow">
           {exploration.stage.archived

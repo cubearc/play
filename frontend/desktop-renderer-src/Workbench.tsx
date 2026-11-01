@@ -509,65 +509,70 @@ export function Workbench() {
                         </>
                       ) : null}
                     </div>
-                    <div className="workspace-context">
-                      <VscodeIcon name="lock" />
-                      Private workspace · content and saved reasoning stay on
-                      this machine
+                    <div
+                      className="scroll-surface"
+                      key={`${contextKey}:${activeTab}`}
+                    >
+                      <div className="workspace-context">
+                        <VscodeIcon name="lock" />
+                        Private workspace · content and saved reasoning stay on
+                        this machine
+                      </div>
+                      {activeTrail ? (
+                        <AssetCanvas
+                          key={activeTrail.id}
+                          trail={activeTrail}
+                          editTrail={() => {
+                            state.clearError();
+                            setEditingTrail(activeTrail);
+                          }}
+                          editPipeline={(mode) => {
+                            state.clearError();
+                            setEditingPipeline({
+                              trail: activeTrail,
+                              mode,
+                              pipeline:
+                                mode === "revise"
+                                  ? (workspace?.pipelines.find(
+                                      (p) => p.id === activeTrail.pipelineId,
+                                    ) ?? activeTrail.pipeline)
+                                  : activeTrail.pipeline,
+                            });
+                          }}
+                          executions={executions}
+                          openSourceRun={openSourceRun}
+                        />
+                      ) : (
+                        <Notebook
+                          exploration={exploration}
+                          executions={executions}
+                          notes={{
+                            state: state.noteState,
+                            edit: state.editNote,
+                            save: state.saveNote,
+                            discard: state.discardNote,
+                          }}
+                          busy={state.busy}
+                          addText={() => setDialog("text")}
+                          addImage={() => setDialog("image")}
+                          addFile={() => void state.importFile()}
+                          addAnnotation={() => setDialog("annotation")}
+                          addPage={() => setDialog("page")}
+                          openTrail={openTrail}
+                          editText={editText}
+                          reorderBlocks={state.reorderBlocks}
+                          duplicateBlock={state.duplicateBlock}
+                          setArchived={state.setArchived}
+                          openSourceRun={openSourceRun}
+                          focusBlockId={
+                            pendingFocus?.stageId === exploration.stage.id
+                              ? pendingFocus.blockId
+                              : null
+                          }
+                          onFocusHandled={focusHandled}
+                        />
+                      )}
                     </div>
-                    {activeTrail ? (
-                      <AssetCanvas
-                        key={activeTrail.id}
-                        trail={activeTrail}
-                        editTrail={() => {
-                          state.clearError();
-                          setEditingTrail(activeTrail);
-                        }}
-                        editPipeline={(mode) => {
-                          state.clearError();
-                          setEditingPipeline({
-                            trail: activeTrail,
-                            mode,
-                            pipeline:
-                              mode === "revise"
-                                ? (workspace?.pipelines.find(
-                                    (p) => p.id === activeTrail.pipelineId,
-                                  ) ?? activeTrail.pipeline)
-                                : activeTrail.pipeline,
-                          });
-                        }}
-                        executions={executions}
-                        openSourceRun={openSourceRun}
-                      />
-                    ) : (
-                      <Notebook
-                        exploration={exploration}
-                        executions={executions}
-                        notes={{
-                          state: state.noteState,
-                          edit: state.editNote,
-                          save: state.saveNote,
-                          discard: state.discardNote,
-                        }}
-                        busy={state.busy}
-                        addText={() => setDialog("text")}
-                        addImage={() => setDialog("image")}
-                        addFile={() => void state.importFile()}
-                        addAnnotation={() => setDialog("annotation")}
-                        addPage={() => setDialog("page")}
-                        openTrail={openTrail}
-                        editText={editText}
-                        reorderBlocks={state.reorderBlocks}
-                        duplicateBlock={state.duplicateBlock}
-                        setArchived={state.setArchived}
-                        openSourceRun={openSourceRun}
-                        focusBlockId={
-                          pendingFocus?.stageId === exploration.stage.id
-                            ? pendingFocus.blockId
-                            : null
-                        }
-                        onFocusHandled={focusHandled}
-                      />
-                    )}
                   </>
                 )}
                 {terminal && exploration && !welcome ? (

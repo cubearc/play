@@ -29,7 +29,7 @@ export function AssetCanvas({
   const text = trail.source.content.kind === "text";
   const page = trail.source.content.kind === "page";
   return (
-    <section className="asset-canvas scroll-surface" aria-label="Trail canvas">
+    <section className="asset-canvas" aria-label="Trail canvas">
       <header className="document-heading">
         <div className="eyebrow">Trail · Asset exploration</div>
         <h1>{trail.title}</h1>

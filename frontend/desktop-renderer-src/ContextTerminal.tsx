@@ -251,74 +251,82 @@ export function ContextTerminal({
   }, [binding]);
   return (
     <section className="context-terminal" aria-label="Cube terminal">
-      <div className="terminal-toolbar">
+      <div className="terminal-heading">
         <strong>Terminal</strong>
         <span className="terminal-context" title={binding.title}>
           {binding.title}
         </span>
-        <span role="status">{status}</span>
         <VscodeButton
           secondary
-          disabled={!ready || !binding.selection}
-          onClick={() => insert.current("selected")}
-        >
-          Insert selected Run
-        </VscodeButton>
-        <VscodeButton
-          secondary
-          disabled={!ready || !binding.assetCommand}
-          onClick={() =>
-            binding.assetCommand && insert.current(binding.assetCommand)
-          }
-        >
-          Insert Asset
-        </VscodeButton>
-        <VscodeButton
-          secondary
-          disabled={attaching}
-          onClick={() => void attach()}
-        >
-          {attachment
-            ? "Disconnect external terminal"
-            : "Use external terminal"}
-        </VscodeButton>
-        <VscodeButton secondary onClick={onReconnect}>
-          Reconnect
-        </VscodeButton>
-        <VscodeButton secondary icon="close" onClick={onClose}>
-          Close terminal
-        </VscodeButton>
+          icon="close"
+          aria-label="Close terminal"
+          title="Close terminal"
+          onClick={onClose}
+        />
       </div>
-      {attachment ? (
-        <div className="external-terminal">
-          <label
-            className="external-terminal-label"
-            htmlFor="external-context-command"
+      <div className="terminal-content">
+        <div className="terminal-toolbar">
+          <span role="status">{status}</span>
+          <VscodeButton
+            secondary
+            disabled={!ready || !binding.selection}
+            onClick={() => insert.current("selected")}
           >
-            External terminal context (expires in 10 minutes)
-          </label>
-          <input
-            id="external-context-command"
-            readOnly
-            value={attachment.prefix}
-          />
-          <p>
-            Append an Asset, Pipeline or Run command. This connection stays on
-            this Stage when you switch tabs; disconnect to revoke it.
-          </p>
+            Insert selected Run
+          </VscodeButton>
+          <VscodeButton
+            secondary
+            disabled={!ready || !binding.assetCommand}
+            onClick={() =>
+              binding.assetCommand && insert.current(binding.assetCommand)
+            }
+          >
+            Insert Asset
+          </VscodeButton>
+          <VscodeButton
+            secondary
+            disabled={attaching}
+            onClick={() => void attach()}
+          >
+            {attachment
+              ? "Disconnect external terminal"
+              : "Use external terminal"}
+          </VscodeButton>
+          <VscodeButton secondary onClick={onReconnect}>
+            Reconnect
+          </VscodeButton>
         </div>
-      ) : null}
-      {attachmentError ? (
-        <p role="alert" className="terminal-error">
-          {attachmentError}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="terminal-error">
-          {error}
-        </p>
-      ) : null}
-      <div className="terminal-surface" ref={output} />
+        {attachment ? (
+          <div className="external-terminal">
+            <label
+              className="external-terminal-label"
+              htmlFor="external-context-command"
+            >
+              External terminal context (expires in 10 minutes)
+            </label>
+            <input
+              id="external-context-command"
+              readOnly
+              value={attachment.prefix}
+            />
+            <p>
+              Append an Asset, Pipeline or Run command. This connection stays on
+              this Stage when you switch tabs; disconnect to revoke it.
+            </p>
+          </div>
+        ) : null}
+        {attachmentError ? (
+          <p role="alert" className="terminal-error">
+            {attachmentError}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="terminal-error">
+            {error}
+          </p>
+        ) : null}
+        <div className="terminal-surface" ref={output} />
+      </div>
     </section>
   );
 }
