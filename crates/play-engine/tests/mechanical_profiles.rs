@@ -25,10 +25,17 @@ fn mechanical_profiles_preserve_exact_private_named_outputs() {
         "cipher.kryha.decode",
         "cipher.alberti.encode",
         "cipher.alberti.decode",
+        "cipher.lorenz.encode",
+        "cipher.lorenz.decode",
     ] {
         let row = rows.iter().find(|r| r["operation"] == operation).unwrap();
         let node = Uuid::new_v4();
-        let definition=Definition::parse(json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"},{"name":"settings","semanticType":"json"}],"nodes":[{"id":node,"operation":operation,"operationVersion":1,"parameters":{},"retainPrivate":true,"position":{"x":0,"y":0},"inputs":{"text":{"kind":"literal","value":row["inputs"]["text"]},"settings":{"kind":"input","name":"settings"}}}],"output":node})).unwrap_or_else(|e|panic!("{operation}: {e}"));
+        let input = if row["inputs"].get("codes").is_some() {
+            "codes"
+        } else {
+            "text"
+        };
+        let definition=Definition::parse(json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"text"},{"name":"settings","semanticType":"json"}],"nodes":[{"id":node,"operation":operation,"operationVersion":1,"parameters":{},"retainPrivate":true,"position":{"x":0,"y":0},"inputs":{(input):{"kind":"literal","value":row["inputs"][input]},"settings":{"kind":"input","name":"settings"}}}],"output":node})).unwrap_or_else(|e|panic!("{operation}: {e}"));
         let invocation = PipelineInvocation {
             definition,
             inputs: BTreeMap::from([(

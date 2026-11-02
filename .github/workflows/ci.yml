@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 0287611de514b09468c27bed9e15bbea029c66b9
+          ref: 2c2dfc832038ea639bfd1d3514856727fd917a60
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -57,7 +57,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 0287611de514b09468c27bed9e15bbea029c66b9
+          ref: 2c2dfc832038ea639bfd1d3514856727fd917a60
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -129,7 +129,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 0287611de514b09468c27bed9e15bbea029c66b9
+          ref: 2c2dfc832038ea639bfd1d3514856727fd917a60
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -184,7 +184,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 0287611de514b09468c27bed9e15bbea029c66b9
+          ref: 2c2dfc832038ea639bfd1d3514856727fd917a60
           persist-credentials: false
           path: cube
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
