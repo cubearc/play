@@ -1,4 +1,4 @@
-//! Exact Core disk/strip results through native typed graph admission and worker.
+//! Exact Core mechanical results through native typed graph admission and worker.
 use play_engine::{
     graph::Definition,
     worker::{self, InputValue, PipelineInvocation},
@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 #[test]
-fn mechanical_wheels_and_strips_preserve_exact_private_named_outputs() {
+fn mechanical_profiles_preserve_exact_private_named_outputs() {
     let rows: Vec<Value> = serde_json::from_str(include_str!(
         "../../../../cube/crates/cube-core/src/operations/contracts/conformance.json"
     ))
@@ -19,6 +19,12 @@ fn mechanical_wheels_and_strips_preserve_exact_private_named_outputs() {
         "cipher.jefferson.decode",
         "cipher.m138a.encode",
         "cipher.m138a.decode",
+        "cipher.wheatstone.encode",
+        "cipher.wheatstone.decode",
+        "cipher.kryha.encode",
+        "cipher.kryha.decode",
+        "cipher.alberti.encode",
+        "cipher.alberti.decode",
     ] {
         let row = rows.iter().find(|r| r["operation"] == operation).unwrap();
         let node = Uuid::new_v4();
