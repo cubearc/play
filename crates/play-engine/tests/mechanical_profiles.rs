@@ -33,6 +33,10 @@ fn mechanical_profiles_preserve_exact_private_named_outputs() {
         "cipher.nema.decode",
         "cipher.typex.encode",
         "cipher.typex.decode",
+        "cipher.sigaba.encode",
+        "cipher.sigaba.decode",
+        "cipher.kl7.encode",
+        "cipher.kl7.decode",
         "cipher.lorenz.encode",
         "cipher.lorenz.decode",
     ] {
