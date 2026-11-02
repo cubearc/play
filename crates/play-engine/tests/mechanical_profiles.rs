@@ -37,6 +37,12 @@ fn mechanical_profiles_preserve_exact_private_named_outputs() {
         "cipher.sigaba.decode",
         "cipher.kl7.encode",
         "cipher.kl7.decode",
+        "cipher.fialka.encode",
+        "cipher.fialka.decode",
+        "cipher.red.encode",
+        "cipher.red.decode",
+        "cipher.purple.encode",
+        "cipher.purple.decode",
         "cipher.lorenz.encode",
         "cipher.lorenz.decode",
     ] {
