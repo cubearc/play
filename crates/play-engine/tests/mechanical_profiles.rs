@@ -31,6 +31,8 @@ fn mechanical_profiles_preserve_exact_private_named_outputs() {
         "cipher.t52ab.decode",
         "cipher.nema.encode",
         "cipher.nema.decode",
+        "cipher.typex.encode",
+        "cipher.typex.decode",
         "cipher.lorenz.encode",
         "cipher.lorenz.decode",
     ] {
