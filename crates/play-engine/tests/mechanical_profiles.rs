@@ -27,6 +27,8 @@ fn mechanical_profiles_preserve_exact_private_named_outputs() {
         "cipher.alberti.decode",
         "cipher.hagelin.encode",
         "cipher.hagelin.decode",
+        "cipher.t52ab.encode",
+        "cipher.t52ab.decode",
         "cipher.lorenz.encode",
         "cipher.lorenz.decode",
     ] {
