@@ -335,12 +335,23 @@ test("cancellation acknowledgement follows actual worker reaping", {
     return JSON.parse(line.value as string) as Record<string, unknown>;
   };
   try {
-    const probeEngine = await Engine.connect(binary);
-    const brainfuck = (await probeEngine.catalog()).find(
-      (o) => o.operation === "esolang.brainfuck.execute",
+    const fixtures = JSON.parse(
+      await readFile(
+        new URL(
+          "../../../cube/crates/cube-core/src/operations/contracts/conformance.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as {
+      operation: string;
+      operation_version: number;
+      parameters: unknown;
+    }[];
+    const brainfuck = fixtures.find(
+      (fixture) => fixture.operation === "esolang.brainfuck.execute",
     );
     assert.ok(brainfuck);
-    await probeEngine.close();
     const commands = [
       {
         type: "hello",
@@ -354,7 +365,7 @@ test("cancellation acknowledgement follows actual worker reaping", {
         id: 2,
         invocation: {
           operation: "esolang.brainfuck.execute",
-          operation_version: 2,
+          operation_version: brainfuck.operation_version,
           input: "+[]",
           parameters: brainfuck.parameters,
         },
