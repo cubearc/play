@@ -20,11 +20,12 @@ authentication are not implemented.
 
 The Electron proof executes on macOS with a locally ad-hoc-signed App Sandbox
 helper and on Linux x64/ARM64 with mandatory Landlock and seccomp. Both use the
-same engine, Core registry and Run supervisor. The Windows path rejects execution
-with `native_policy_unavailable`. No path has an unrestricted or
-container fallback. This is not a release-supported desktop
-distribution. The complete application still requires the remaining shell, storage, worker and
-packaging deliveries. The interactive native PTY below supports macOS and Linux development builds.
+same engine, Core registry and Run supervisor. The Windows engine uses the
+[AppContainer worker boundary](#windows-worker-qualification); desktop/PTY
+integration is incomplete. Required policy failures return
+`native_policy_unavailable`, without an unrestricted or container fallback.
+These proofs do not establish a release-supported desktop distribution or signed
+packages. The interactive native PTY below supports macOS and Linux development builds.
 
 Graph execution discovers the data executors registered in Core. Descriptors
 supply operation names, typed ports, parameters and representations; Play has no

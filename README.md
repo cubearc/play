@@ -22,8 +22,11 @@ and open an Asset in its own Trail canvas.
 ## Try the Electron preview
 
 The Electron source preview executes operations on macOS and Linux x64/ARM64.
-The contextual terminal supports macOS and Linux; Windows workers and PTYs
-and signed installers remain incomplete. Cloud belongs to a separate milestone. See [installation](docs/installation.md).
+The contextual terminal supports macOS and Linux. The Windows engine runs Core
+workers under a native AppContainer and resource boundary; its desktop/PTY
+integration and signed installers remain incomplete. See the
+[Windows worker contract](docs/reference/desktop-runtime.md#windows-worker-qualification).
+Cloud belongs to a separate milestone. See [installation](docs/installation.md).
 
 From a trusted Play checkout with Cube beside it:
 
