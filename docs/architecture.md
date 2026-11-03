@@ -8,9 +8,6 @@ preload to reach Electron main, and sends scoped commands over private pipes to
 the Rust engine. It uses no browser server or Docker runtime in this path.
 Algorithms, operation metadata and input/output contracts belong to `cube-core`.
 
-Workbench windows start hidden and become visible on Electron's `ready-to-show`
-event, after the renderer has produced its first frame.
-
 ## Runtime ownership
 
 | Component | Responsibility |

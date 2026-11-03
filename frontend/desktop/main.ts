@@ -163,7 +163,6 @@ function createWindow(
     height: 800,
     minWidth: 800,
     minHeight: 540,
-    show: false,
     backgroundColor: "#1f1f1f",
     ...(process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset" as const }
@@ -190,7 +189,6 @@ function createWindow(
   };
   const windowId = next.webContents.id;
   windows.set(windowId, state);
-  next.once("ready-to-show", () => next.show());
   next.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   next.webContents.on("will-navigate", (event) => event.preventDefault());
   next.webContents.on("will-frame-navigate", (event) => event.preventDefault());
