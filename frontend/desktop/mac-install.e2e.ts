@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   type ElectronApplication,
   _electron as electron,
+  expect,
 } from "@playwright/test";
 import type {} from "./bridge.ts";
 import { newer } from "./update-metadata.ts";
@@ -26,11 +27,23 @@ async function launch(app: string, profile: string) {
     args: [`--user-data-dir=${profile}`],
     env: { PATH: "/usr/bin:/bin" },
   });
-  const page = await application.firstWindow();
-  await page.waitForFunction(
-    () => typeof window.play?.workspace === "function",
-  );
-  return application;
+  try {
+    const page = await application.firstWindow();
+    await page.waitForFunction(
+      () => typeof window.play?.workspace === "function",
+    );
+    await expect(
+      page.getByRole("button", { name: "Workspaces", exact: true }),
+    ).toBeEnabled();
+    return application;
+  } catch (error) {
+    console.error("install_startup", {
+      exitCode: application.process().exitCode,
+      signalCode: application.process().signalCode,
+    });
+    await application.close().catch(() => {});
+    throw error;
+  }
 }
 
 test("real Mac previews preserve evidence through install, replacement, manual rollback, removal and reinstallation", {
