@@ -25,8 +25,13 @@ impl Drop for Active {
 }
 
 impl Active {
-    pub(super) fn spawn(id: u32, worker: &Path, frame: &[u8]) -> Result<Self> {
-        let mut child = crate::native::spawn_worker(worker)?;
+    pub(super) fn spawn(
+        id: u32,
+        worker: &Path,
+        frame: &[u8],
+        spawner: &mut crate::native::Spawner,
+    ) -> Result<Self> {
+        let mut child = spawner.spawn(worker)?;
         let stdout = child.stdout.take().ok_or("worker_failed")?;
         let (sender, output) = mpsc::sync_channel(1);
         let mut active = Self {

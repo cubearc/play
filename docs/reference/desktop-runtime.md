@@ -371,9 +371,11 @@ on another OS supplies no validation evidence for that platform.
 ### Windows worker qualification
 
 The Windows engine adapter launches a fresh empty-capability AppContainer for
-one worker. The trusted executable is copied into a private execution-image
-directory; only that fresh container SID receives read/execute access there.
-Source ACLs are not modified. Only the worker input/output pipe handles are
+one worker. The trusted executable is staged in a private execution-image
+directory and reused for at most 32 launches per engine before rotation. Each
+worker gets a fresh profile, process and Job; only isolated worker SIDs receive
+read/execute access to that immutable image. No task inputs are cached there.
+Live workers retain their image until exit. Source ACLs are not modified. Only the worker input/output pipe handles are
 inherited. Its environment contains OS-resolved `SystemRoot` and `LOCALAPPDATA`
 paths, with no inherited application secrets. The AppContainer profile has its
 own OS-provided storage; Play sends no database handle or source-root authority.

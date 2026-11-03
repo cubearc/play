@@ -18,6 +18,7 @@ struct Pending {
 pub(super) struct Scheduler {
     active: Vec<Active>,
     pending: Queue<Pending>,
+    spawner: crate::native::Spawner,
 }
 
 impl Scheduler {
@@ -67,7 +68,7 @@ impl Scheduler {
         }
         let mut frame = Vec::new();
         protocol::write_frame(&mut frame, &worker::Task::Probe { invocation })?;
-        let active = Active::spawn(id, worker, &frame)?;
+        let active = Active::spawn(id, worker, &frame, &mut self.spawner)?;
         let pid = active.child.id();
         self.active.push(active);
         Ok(pid)
@@ -88,7 +89,7 @@ impl Scheduler {
             }) else {
                 break;
             };
-            match Active::spawn(pending.id, worker, &pending.frame) {
+            match Active::spawn(pending.id, worker, &pending.frame, &mut self.spawner) {
                 Ok(mut active) => {
                     active.durable = Some(pending.identity);
                     self.active.push(active);

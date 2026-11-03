@@ -253,3 +253,26 @@ fn another_live_contained_worker_cannot_keep_a_private_input_pipe_open() {
         "the independent worker stays alive"
     );
 }
+
+#[test]
+fn immutable_images_are_reused_and_rotated_without_reusing_worker_state() {
+    let mut executable = play_windows_boundary::Executable::new(&probe()).unwrap();
+    let mut first = String::new();
+    for index in 0..33 {
+        let (status, text) = output(executable.spawn(&["image"], limits()).unwrap());
+        assert!(status.success(), "{text}");
+        let path = text.trim();
+        if index == 0 {
+            first = path.to_owned();
+        }
+        if index < 32 {
+            assert_eq!(path, first);
+        } else {
+            assert_ne!(path, first);
+            assert!(
+                !std::path::Path::new(&first).exists(),
+                "retired image must be removed after its last owner exits"
+            );
+        }
+    }
+}

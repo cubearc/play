@@ -118,21 +118,46 @@ fn windows_limits() -> play_windows_boundary::Limits {
 pub(crate) type WorkerChild = play_windows_boundary::Child;
 #[cfg(not(windows))]
 pub(crate) type WorkerChild = std::process::Child;
-pub(crate) fn spawn_worker(worker: &std::path::Path) -> Result<WorkerChild> {
+#[derive(Default)]
+pub(crate) struct Spawner {
     #[cfg(windows)]
-    return WorkerChild::spawn(worker, &["--worker"], windows_limits())
-        .map_err(|_| "native_policy_unavailable");
-    #[cfg(not(windows))]
-    {
-        let mut command = std::process::Command::new(worker);
-        worker_environment(&mut command);
-        command
-            .arg("--worker")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|_| "worker_failed")
+    executable: Option<(std::path::PathBuf, play_windows_boundary::Executable)>,
+}
+impl Spawner {
+    pub(crate) fn spawn(&mut self, worker: &std::path::Path) -> Result<WorkerChild> {
+        #[cfg(windows)]
+        {
+            if self
+                .executable
+                .as_ref()
+                .is_none_or(|(source, _)| source != worker)
+            {
+                self.executable = Some((
+                    worker.to_path_buf(),
+                    play_windows_boundary::Executable::new(worker)
+                        .map_err(|_| "native_policy_unavailable")?,
+                ));
+            }
+            return self
+                .executable
+                .as_mut()
+                .ok_or("native_policy_unavailable")?
+                .1
+                .spawn(&["--worker"], windows_limits())
+                .map_err(|_| "native_policy_unavailable");
+        }
+        #[cfg(not(windows))]
+        {
+            let mut command = std::process::Command::new(worker);
+            worker_environment(&mut command);
+            command
+                .arg("--worker")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(|_| "worker_failed")
+        }
     }
 }
 

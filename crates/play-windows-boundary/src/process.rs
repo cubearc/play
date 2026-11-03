@@ -8,9 +8,10 @@ use std::{
     io,
     mem::{size_of, zeroed},
     os::windows::{io::OwnedHandle, process::ExitStatusExt},
-    path::Path,
+    path::{Path, PathBuf},
     process::ExitStatus,
     ptr,
+    sync::Arc,
 };
 use tempfile::TempDir;
 use windows_sys::Win32::{
@@ -163,6 +164,48 @@ fn command_line(executable: &Path, args: &[impl AsRef<OsStr>]) -> io::Result<Vec
     Ok(text)
 }
 
+/// An immutable staged executable, with bounded SID ACL growth and no retained task data.
+pub struct Executable {
+    source: PathBuf,
+    image: Arc<TempDir>,
+    launches: usize,
+}
+fn image(source: &Path) -> io::Result<Arc<TempDir>> {
+    if !source.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "regular executable required",
+        ));
+    }
+    let image = tempfile::Builder::new()
+        .prefix("cube-play-image-")
+        .tempdir()?;
+    std::fs::copy(source, image.path().join("play-helper.exe"))?;
+    Ok(Arc::new(image))
+}
+impl Executable {
+    pub fn new(source: &Path) -> io::Result<Self> {
+        Ok(Self {
+            source: source.to_path_buf(),
+            image: image(source)?,
+            launches: 0,
+        })
+    }
+    pub fn spawn(&mut self, args: &[impl AsRef<OsStr>], limits: Limits) -> io::Result<Child> {
+        limits.validate()?;
+        if self.launches == 32 {
+            self.image = image(&self.source)?;
+            self.launches = 0;
+        }
+        // Count failed attempts too: every attempted SID grant consumes the bounded image lifetime.
+        self.launches += 1;
+        let profile = Profile::new()?;
+        profile.read_execute(self.image.path())?;
+        profile.read_execute(&self.image.path().join("play-helper.exe"))?;
+        Child::launch(self.image.clone(), profile, args, limits)
+    }
+}
+
 pub struct Child {
     pub stdin: Option<File>,
     pub stdout: Option<File>,
@@ -171,7 +214,7 @@ pub struct Child {
     cpu_limit_100ns: u64,
     job: OwnedHandle,
     _profile: Profile,
-    _image: TempDir,
+    _image: Arc<TempDir>,
 }
 impl Child {
     pub fn spawn(
@@ -180,20 +223,15 @@ impl Child {
         limits: Limits,
     ) -> io::Result<Self> {
         limits.validate()?;
-        if !executable.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "regular executable required",
-            ));
-        }
-        let profile = Profile::new()?;
-        let image = tempfile::Builder::new()
-            .prefix("cube-play-image-")
-            .tempdir()?;
+        Executable::new(executable)?.spawn(args, limits)
+    }
+    fn launch(
+        image: Arc<TempDir>,
+        profile: Profile,
+        args: &[impl AsRef<OsStr>],
+        limits: Limits,
+    ) -> io::Result<Self> {
         let binary = image.path().join("play-helper.exe");
-        std::fs::copy(executable, &binary)?;
-        profile.read_execute(image.path())?;
-        profile.read_execute(&binary)?;
         let job = job(limits)?;
         let (input_read, input_write) = pipe()?;
         let (output_read, output_write) = pipe()?;
