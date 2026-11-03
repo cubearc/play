@@ -35,3 +35,24 @@ pub(crate) fn owned(handle: HANDLE) -> io::Result<OwnedHandle> {
 pub(crate) fn raw(handle: &OwnedHandle) -> HANDLE {
     handle.as_raw_handle()
 }
+
+pub(crate) fn duplicate(handle: &OwnedHandle) -> io::Result<OwnedHandle> {
+    use windows_sys::Win32::{
+        Foundation::{DUPLICATE_SAME_ACCESS, DuplicateHandle},
+        System::Threading::GetCurrentProcess,
+    };
+    let mut copy = std::ptr::null_mut();
+    // SAFETY: duplicate one live owned handle within this process; the copy is explicitly non-inheritable.
+    checked(unsafe {
+        DuplicateHandle(
+            GetCurrentProcess(),
+            raw(handle),
+            GetCurrentProcess(),
+            &mut copy,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    })?;
+    owned(copy)
+}

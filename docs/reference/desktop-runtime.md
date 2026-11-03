@@ -384,9 +384,12 @@ Creation starts suspended. The parent assigns a private, non-inheritable,
 kill-on-close Job before resuming the process. The Job permits one process,
 128 MiB of private committed memory and one second of user-mode CPU. The worker
 checks its container token, empty capabilities and required Job policy before
-reading private input. The supervisor also samples authoritative process user
-and kernel CPU counters and reaps the Job at the one-second total CPU budget.
-The existing two-second Run deadline and output/admission limits still apply.
+reading private input. An independent native monitor samples authoritative process user and kernel CPU
+counters and reaps the Job at the one-second total CPU budget or two-second wall
+deadline. It starts before the suspended worker resumes and remains independent
+of domain persistence. The bounded event reader can drain one complete admitted
+graph within the existing aggregate byte ceiling. Output/admission limits remain
+unchanged; the owner commits evidence before reporting success.
 
 Protocol 30 separates memory accounting in frozen Run limits. Windows records
 `privateCommitBytes: 134217728` and `vmGrowthBytes: null`; macOS/Linux record their

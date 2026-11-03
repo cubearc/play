@@ -5,14 +5,17 @@ use std::{
     path::Path,
     sync::mpsc::{self, Receiver},
     thread,
-    time::{Duration, Instant},
 };
+
+#[cfg(not(windows))]
+use std::time::{Duration, Instant};
 
 pub(super) struct Active {
     pub(super) id: u32,
     pub(super) child: crate::native::WorkerChild,
     output: Receiver<Result<Value>>,
     result: Option<Value>,
+    #[cfg(not(windows))]
     deadline: Instant,
     pub(super) durable: Option<crate::workspace::RunIdentity>,
 }
@@ -33,13 +36,16 @@ impl Active {
     ) -> Result<Self> {
         let mut child = spawner.spawn(worker)?;
         let stdout = child.stdout.take().ok_or("worker_failed")?;
-        let (sender, output) = mpsc::sync_channel(1);
+        // A complete graph has two events per admitted node and one terminal frame.
+        // The reader still bounds aggregate raw bytes by the existing frame ceiling.
+        let (sender, output) = mpsc::sync_channel(2 * protocol::contract().pipeline_node_limit + 1);
         let mut active = Self {
             id,
             child,
             output,
             result: None,
             durable: None,
+            #[cfg(not(windows))]
             deadline: Instant::now() + Duration::from_millis(protocol::contract().run_ms),
         };
         thread::spawn(move || {
@@ -78,6 +84,14 @@ impl Active {
     }
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>> {
+        #[cfg(windows)]
+        if let Some(failure) = self.child.budget_failure() {
+            return Err(match failure {
+                play_windows_boundary::BudgetFailure::Wall => "deadline_exceeded",
+                _ => "worker_failed",
+            });
+        }
+        #[cfg(not(windows))]
         if Instant::now() >= self.deadline {
             return Err("deadline_exceeded");
         }

@@ -99,6 +99,7 @@ fn limits() -> play_windows_boundary::Limits {
     play_windows_boundary::Limits {
         private_memory_bytes: l.private_commit_bytes as usize,
         cpu_seconds: l.cpu_seconds,
+        wall_ms: l.run_ms,
     }
 }
 fn probe() -> std::path::PathBuf {
@@ -213,7 +214,7 @@ fn killing_the_owner_reaps_a_worker_that_does_not_observe_stdin() {
     let pid: u32 = line(owner.0.stdout.take().unwrap()).trim().parse().unwrap();
     // Hold the exact live process handle before killing its owner, avoiding a PID-only check.
     let script = format!(
-        "$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById({pid}); $held=$p.Handle; [Console]::WriteLine('watching'); if($p.WaitForExit(5000)){{exit 0}}else{{exit 1}}"
+        "$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById({pid}); $held=$p.Handle; if($p.HasExited){{throw 'worker already exited'}}; [Console]::WriteLine('watching'); if($p.WaitForExit(5000)){{exit 0}}else{{exit 1}}"
     );
     let mut watcher = HostProcess(
         Command::new("powershell.exe")

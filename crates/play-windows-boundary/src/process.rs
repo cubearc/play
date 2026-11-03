@@ -24,11 +24,13 @@ use windows_sys::Win32::{
 pub struct Limits {
     pub private_memory_bytes: usize,
     pub cpu_seconds: u64,
+    pub wall_ms: u64,
 }
 impl Limits {
     pub(crate) fn validate(self) -> io::Result<()> {
         if !(16 * 1024 * 1024..=256 * 1024 * 1024).contains(&self.private_memory_bytes)
             || !(1..=10).contains(&self.cpu_seconds)
+            || !(100..=5000).contains(&self.wall_ms)
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -211,7 +213,7 @@ pub struct Child {
     pub stdout: Option<File>,
     process: OwnedHandle,
     pid: u32,
-    cpu_limit_100ns: u64,
+    monitor: Option<super::monitor::Monitor>,
     job: OwnedHandle,
     _profile: Profile,
     _image: Arc<TempDir>,
@@ -297,18 +299,23 @@ impl Child {
         .map_err(|e| io::Error::new(e.kind(), format!("CreateProcessW: {e}")))?;
         let process = owned(info.hProcess)?;
         let thread = owned(info.hThread)?;
-        let child = Self {
+        let mut child = Self {
             stdin: Some(File::from(input_write)),
             stdout: Some(File::from(output_read)),
             process,
             pid: info.dwProcessId,
-            cpu_limit_100ns: limits.cpu_seconds * 10_000_000,
+            monitor: None,
             job,
             _profile: profile,
             _image: image,
         };
         // SAFETY: no worker instruction executes until assignment to the required kill-on-close job.
         checked(unsafe { AssignProcessToJobObject(raw(&child.job), raw(&child.process)) })?;
+        child.monitor = Some(super::monitor::Monitor::new(
+            &child.process,
+            &child.job,
+            limits,
+        )?);
         // SAFETY: the sole primary thread belongs to the contained suspended process.
         if unsafe { ResumeThread(raw(&thread)) } == u32::MAX {
             return Err(io::Error::last_os_error());
@@ -327,41 +334,15 @@ impl Child {
         }
         result
     }
-    fn cpu_time_100ns(&self) -> io::Result<u64> {
-        let mut created = FILETIME {
-            dwLowDateTime: 0,
-            dwHighDateTime: 0,
-        };
-        let mut ended = created;
-        let mut kernel = created;
-        let mut user = created;
-        // SAFETY: the exact owned process handle has query rights; all outputs are distinct live FILETIMEs.
-        checked(unsafe {
-            GetProcessTimes(
-                raw(&self.process),
-                &mut created,
-                &mut ended,
-                &mut kernel,
-                &mut user,
-            )
-        })?;
-        let ticks =
-            |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
-        ticks(user)
-            .checked_add(ticks(kernel))
-            .ok_or_else(|| io::Error::other("invalid native CPU accounting"))
+    pub fn budget_failure(&self) -> Option<super::BudgetFailure> {
+        self.monitor
+            .as_ref()
+            .and_then(super::monitor::Monitor::failure)
     }
-    /// Poll termination and enforce total sampled CPU in addition to the kernel's periodic job check.
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         // SAFETY: the live owned process handle is waitable and never closed during the call.
         match unsafe { WaitForSingleObject(raw(&self.process), 0) } {
-            WAIT_TIMEOUT => {
-                if self.cpu_time_100ns()? >= self.cpu_limit_100ns {
-                    self.kill()?;
-                    return self.wait().map(Some);
-                }
-                Ok(None)
-            }
+            WAIT_TIMEOUT => Ok(None),
             WAIT_OBJECT_0 => self.status().map(Some),
             _ => Err(io::Error::last_os_error()),
         }
@@ -384,5 +365,7 @@ impl Drop for Child {
     fn drop(&mut self) {
         let _ = self.kill();
         let _ = self.wait();
+        // Join before profile/image destruction, releasing the monitor's process and Job handles.
+        drop(self.monitor.take());
     }
 }

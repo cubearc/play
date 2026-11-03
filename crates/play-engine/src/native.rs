@@ -112,6 +112,7 @@ fn windows_limits() -> play_windows_boundary::Limits {
     play_windows_boundary::Limits {
         private_memory_bytes: contract.private_commit_bytes as usize,
         cpu_seconds: contract.cpu_seconds,
+        wall_ms: contract.run_ms,
     }
 }
 #[cfg(windows)]

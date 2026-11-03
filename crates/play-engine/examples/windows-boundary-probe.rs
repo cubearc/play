@@ -17,6 +17,7 @@ fn main() {
             play_windows_boundary::Limits {
                 private_memory_bytes: contract.private_commit_bytes as usize,
                 cpu_seconds: contract.cpu_seconds,
+                wall_ms: 5000,
             },
         )
         .unwrap();

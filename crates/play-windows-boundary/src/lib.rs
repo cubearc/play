@@ -5,6 +5,8 @@ mod environment;
 #[cfg(windows)]
 mod handles;
 #[cfg(windows)]
+mod monitor;
+#[cfg(windows)]
 mod process;
 #[cfg(windows)]
 mod profile;
@@ -14,3 +16,6 @@ mod verify;
 pub use process::{Child, Executable, Limits};
 #[cfg(windows)]
 pub use verify::current;
+
+#[cfg(windows)]
+pub use monitor::BudgetFailure;
