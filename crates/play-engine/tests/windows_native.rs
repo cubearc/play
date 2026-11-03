@@ -8,14 +8,15 @@ use std::{
     thread,
     time::Duration,
 };
-fn execute_core(clear_environment: bool) {
+fn execute_core(clear_environment: bool, worker: &std::path::Path) {
     let binary = env!("CARGO_BIN_EXE_play-engine");
     let mut command = Command::new(binary);
     if clear_environment {
         command.env_clear();
     }
     let mut child = command
-        .args(["--ipc", "--worker", binary])
+        .args(["--ipc", "--worker"])
+        .arg(worker)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -62,11 +63,35 @@ fn execute_core(clear_environment: bool) {
 
 #[test]
 fn windows_worker_executes_the_real_core_inside_a_required_native_boundary() {
-    execute_core(false);
+    execute_core(
+        false,
+        std::path::Path::new(env!("CARGO_BIN_EXE_play-engine")),
+    );
 }
 #[test]
 fn engine_started_with_the_desktop_empty_environment_executes_without_inheriting_secrets() {
-    execute_core(true);
+    execute_core(
+        true,
+        std::path::Path::new(env!("CARGO_BIN_EXE_play-engine")),
+    );
+}
+
+#[test]
+fn worker_sources_with_spaces_unicode_and_long_paths_execute_without_changing_bytes() {
+    let root = tempfile::Builder::new()
+        .prefix("Cube Play ź ")
+        .tempdir()
+        .unwrap();
+    let mut directory = root.path().to_path_buf();
+    while directory.as_os_str().len() < 320 {
+        directory.push("clue spaces and unicode ł");
+        std::fs::create_dir(&directory).unwrap();
+    }
+    let worker = directory.join("Cube Worker ź.exe");
+    std::fs::copy(env!("CARGO_BIN_EXE_play-engine"), &worker).unwrap();
+    let before = std::fs::read(&worker).unwrap();
+    execute_core(true, &worker);
+    assert_eq!(std::fs::read(&worker).unwrap(), before);
 }
 
 fn limits() -> play_windows_boundary::Limits {
