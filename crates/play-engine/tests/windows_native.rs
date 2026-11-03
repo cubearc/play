@@ -161,11 +161,14 @@ fn appcontainer_denies_private_files_network_and_children_without_changing_sourc
     );
 }
 #[test]
-fn windows_job_rejects_excess_private_commit_and_stops_cpu_loops() {
+fn windows_job_rejects_excess_private_commit() {
     let (status, text) =
         output(play_windows_boundary::Child::spawn(&probe(), &["memory"], limits()).unwrap());
     assert!(status.success(), "{text}");
     assert_eq!(text.trim(), "true");
+}
+#[test]
+fn windows_job_stops_cpu_loops() {
     let (status, _) =
         output(play_windows_boundary::Child::spawn(&probe(), &["cpu"], limits()).unwrap());
     assert!(!status.success());
@@ -188,7 +191,7 @@ impl Drop for HostProcess {
         let _ = self.0.wait();
     }
 }
-fn line(stream: std::process::ChildStdout) -> String {
+fn line(stream: impl std::io::Read + Send + 'static) -> String {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let mut value = String::new();
@@ -226,5 +229,27 @@ fn killing_the_owner_reaps_a_worker_that_does_not_observe_stdin() {
     assert!(
         watcher.0.wait().unwrap().success(),
         "kernel job must reap an orphaned worker"
+    );
+}
+
+#[test]
+fn another_live_contained_worker_cannot_keep_a_private_input_pipe_open() {
+    let mut first = play_windows_boundary::Child::spawn(&probe(), &["echo"], limits()).unwrap();
+    let mut second = play_windows_boundary::Child::spawn(&probe(), &["idle"], limits()).unwrap();
+    let pid: u32 = line(second.stdout.take().unwrap()).trim().parse().unwrap();
+    assert!(pid > 0);
+    first
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"first private worker input")
+        .unwrap();
+    drop(first.stdin.take());
+    let (status, text) = output(first);
+    assert!(status.success());
+    assert_eq!(text, "first private worker input");
+    assert!(
+        second.try_wait().unwrap().is_none(),
+        "the independent worker stays alive"
     );
 }

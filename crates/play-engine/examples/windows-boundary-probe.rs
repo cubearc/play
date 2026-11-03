@@ -39,6 +39,15 @@ fn main() {
                 serde_json::json!({"image_readable":fs::read(&binary).is_ok(),"private_read_denied":fs::read(path).is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied),"private_write_denied":fs::write(path,b"forbidden").is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied),"network_denied":TcpStream::connect_timeout(&source,Duration::from_millis(200)).is_err(),"child_denied":Command::new(&binary).arg("child").status().is_err(),"image_directory_write_denied":fs::write(binary.parent().unwrap().join("forbidden.txt"),b"forbidden").is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied)})
             );
         }
+        [mode] if mode == "echo" => {
+            use std::io::Read;
+            let mut input = String::new();
+            std::io::stdin()
+                .take(64)
+                .read_to_string(&mut input)
+                .unwrap();
+            print!("{input}");
+        }
         [mode] if mode == "idle" => {
             use std::io::Write;
             println!("{}", std::process::id());
