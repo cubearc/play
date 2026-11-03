@@ -1,5 +1,7 @@
 //! Test-only clone: exercise the real queue UI with a controlled sandboxed worker.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { cp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { nativeFiles } from "./native-files.ts";
@@ -16,6 +18,14 @@ export async function packagedWorkerFixture(
       : dirname(executable);
   const cloned = join(temporary, basename(root));
   await cp(root, cloned, { recursive: true, verbatimSymlinks: true });
+  if (process.platform === "darwin") {
+    // Each controlled app copy owns its native application identity.
+    execFileSync("/usr/libexec/PlistBuddy", [
+      "-c",
+      `Set :CFBundleIdentifier com.cubearc.play.qualification.${randomUUID()}`,
+      join(cloned, "Contents/Info.plist"),
+    ]);
+  }
   if (process.platform === "linux") {
     // A user-owned copy cannot inherit the OS helper's root ownership.
     // Use the original configured helper without disabling Chromium's sandbox.

@@ -83,6 +83,8 @@ runtime PATH, source checkout or Docker/WSL requirement. Packaging rejects missi
 policies, mismatched native digests and occupied destinations. Check that sources,
 source maps, test probes, dependencies and private stores are absent from the app.
 The controlled queue fixture is explicitly test-only and cannot ship in a preview.
+Its macOS copy uses a distinct application identifier so the OS can distinguish
+it from the original bundle; production application identifiers remain unchanged.
 
 A local receipt or helper signature does not prove publisher signing, notarization,
 authenticated updates or installed lifecycle support. Record the exact source,
