@@ -1,6 +1,6 @@
 //! Test-only supervisor control: hold a canonical node-start event under the real policy.
 //! No operation result is fabricated, and the production worker never uses this helper.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn main() -> play_engine::Result<()> {
     use play_engine::{native, protocol, worker};
     use serde_json::json;
@@ -40,7 +40,7 @@ fn main() -> play_engine::Result<()> {
     };
     protocol::write_frame(&mut output, &result)
 }
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn main() {
     eprintln!("Native supervisor policy unavailable");
     std::process::exit(1);
