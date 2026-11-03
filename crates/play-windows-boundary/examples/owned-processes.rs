@@ -1,6 +1,6 @@
-//! Test-only process enumeration; no process mutation or production IPC surface.
+//! Test-only process enumeration/observation; no mutation or production IPC surface.
 #[cfg(windows)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn children(parent: u32) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     use std::{
         io,
         mem::size_of,
@@ -10,14 +10,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Foundation::{ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE},
         System::Diagnostics::ToolHelp::*,
     };
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if args.len() != 1 {
-        return Err(io::Error::other("one owner PID is required").into());
-    }
-    let parent = args[0].parse::<u32>()?;
-    if parent == 0 {
-        return Err(io::Error::other("invalid owner PID").into());
-    }
     // SAFETY: a read-only process snapshot; no process handles or mutation rights are requested.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
     if snapshot.is_null() || snapshot == INVALID_HANDLE_VALUE {
@@ -48,6 +40,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     children.sort_unstable();
+    Ok(children)
+}
+#[cfg(windows)]
+fn watch(pid: u32) -> Result<(), Box<dyn std::error::Error>> {
+    use std::{
+        io::{self, Write},
+        os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle},
+    };
+    use windows_sys::Win32::{
+        Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT},
+        System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject},
+    };
+    // SAFETY: request only synchronization on this known live fixture process; no mutation rights.
+    let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+    if process.is_null() {
+        return Err(io::Error::last_os_error().into());
+    }
+    // SAFETY: transfer this fresh successful owning process handle exactly once.
+    let process = unsafe { OwnedHandle::from_raw_handle(process) };
+    // SAFETY: a zero-time read-only wait validates liveness of the exact held process object.
+    if unsafe { WaitForSingleObject(process.as_raw_handle(), 0) } != WAIT_TIMEOUT {
+        return Err(io::Error::other("worker already exited").into());
+    }
+    println!("watching");
+    io::stdout().flush()?;
+    // SAFETY: bounded wait on the same owning handle; PID reuse cannot satisfy it.
+    if unsafe { WaitForSingleObject(process.as_raw_handle(), 5000) } != WAIT_OBJECT_0 {
+        return Err(io::Error::other("owned worker was not reaped").into());
+    }
+    Ok(())
+}
+#[cfg(windows)]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (observe, id) = match args.as_slice() {
+        [pid] => (false, pid),
+        [mode, pid] if mode == "watch" => (true, pid),
+        _ => return Err("expected owner PID or watch PID".into()),
+    };
+    let id = id.parse::<u32>()?;
+    if id == 0 {
+        return Err("invalid process identity".into());
+    }
+    if observe {
+        return watch(id);
+    }
+    let children = children(id)?;
     println!(
         "[{}]",
         children

@@ -213,12 +213,9 @@ fn killing_the_owner_reaps_a_worker_that_does_not_observe_stdin() {
     );
     let pid: u32 = line(owner.0.stdout.take().unwrap()).trim().parse().unwrap();
     // Hold the exact live process handle before killing its owner, avoiding a PID-only check.
-    let script = format!(
-        "$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById({pid}); $held=$p.Handle; if($p.HasExited){{throw 'worker already exited'}}; [Console]::WriteLine('watching'); if($p.WaitForExit(5000)){{exit 0}}else{{exit 1}}"
-    );
     let mut watcher = HostProcess(
-        Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        Command::new(probe().with_file_name("owned-processes.exe"))
+            .args(["watch", &pid.to_string()])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .spawn()

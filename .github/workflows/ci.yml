@@ -43,7 +43,9 @@ jobs:
       - run: cargo build --locked --manifest-path ../cube/Cargo.toml -p cube-cli
       - name: Build actual Windows boundary fixtures
         if: runner.os == 'Windows'
-        run: cargo build -p play-engine --example windows-boundary-probe --locked
+        run: |
+          cargo build -p play-engine --example windows-boundary-probe --locked
+          cargo build -p play-windows-boundary --example owned-processes --locked
       - run: cargo test --workspace --all-features --locked
         env:
           RUST_TEST_THREADS: "1"
