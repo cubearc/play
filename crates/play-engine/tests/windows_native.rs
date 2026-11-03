@@ -97,7 +97,7 @@ fn worker_sources_with_spaces_unicode_and_long_paths_execute_without_changing_by
 fn limits() -> play_windows_boundary::Limits {
     let l = play_engine::protocol::contract();
     play_windows_boundary::Limits {
-        private_memory_bytes: l.vm_growth_bytes as usize,
+        private_memory_bytes: l.private_commit_bytes as usize,
         cpu_seconds: l.cpu_seconds,
     }
 }

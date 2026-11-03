@@ -1,5 +1,5 @@
 {
-  "protocol": 29,
+  "protocol": 30,
   "engine": "0.2.0",
   "frame_bytes": 262144,
   "input_bytes": 8192,
@@ -8,6 +8,7 @@
   "run_ms": 2000,
   "cpu_seconds": 1,
   "vm_growth_bytes": 134217728,
+  "private_commit_bytes": 134217728,
   "output_bytes": 16384,
   "storage_generation": 2,
   "schema_version": 18,

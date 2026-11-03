@@ -15,7 +15,7 @@ fn main() {
             &env::current_exe().unwrap(),
             &["idle"],
             play_windows_boundary::Limits {
-                private_memory_bytes: contract.vm_growth_bytes as usize,
+                private_memory_bytes: contract.private_commit_bytes as usize,
                 cpu_seconds: contract.cpu_seconds,
             },
         )

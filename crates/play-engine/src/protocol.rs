@@ -37,6 +37,7 @@ pub struct Contract {
     pub run_ms: u64,
     pub cpu_seconds: u64,
     pub vm_growth_bytes: u64,
+    pub private_commit_bytes: u64,
     pub output_bytes: usize,
     pub storage_generation: u32,
     pub schema_version: u32,

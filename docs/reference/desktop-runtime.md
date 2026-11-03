@@ -158,7 +158,7 @@ continuations before exposing operation choices.
 | `invoke` | `invocation`: `operation`, `operation_version`, `input`, `parameters` | Unbound native capability probe only; managed engine rejects `scoped_invocation_required`. |
 | `cancel` | Session-local `run_id` | Unbound capability probe only; managed engine rejects `scoped_cancel_required`. |
 
-Protocol **29** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
+Protocol **30** uses a 262144-byte frame ceiling, including bounded Base64 PNG/file
 imports. The renderer has no literal invocation, old asset-execution alias or raw
 image/file-import bridge. File chooser intents carry only `context` and `key`;
 Main validates the trusted sender, selects and reads one bounded regular file,
@@ -356,10 +356,10 @@ The interactive Linux terminal uses the same coordinator and scoped evidence.
 
 Distribution packaging and the remaining runtime retirement are separate work in [#62](https://github.com/cubearc/play/issues/62).
 
-The release target matrix is Windows x64, macOS x64/arm64 and Linux x64. Windows
-still needs a proved filesystem/network boundary as well as resource and process
-ownership; Job Objects alone are insufficient. These worker proofs advertise no
-release-supported distribution matrix.
+The release target matrix is Windows x64, macOS x64/arm64 and Linux x64.
+Windows worker qualification below does not qualify terminal or distribution
+capabilities. Job Objects alone do not establish a filesystem/network boundary.
+These worker proofs advertise no release-supported distribution matrix.
 
 Run `npm run desktop:test --prefix frontend` for real engine/worker and adversarial
 capability checks, and `npm run desktop:smoke --prefix frontend` for actual Electron
@@ -368,11 +368,45 @@ The development probe is not reachable through the application bridge. Record
 exact OS/architecture/tool versions and observed results; a platform check skipped
 on another OS supplies no validation evidence for that platform.
 
+### Windows worker qualification
+
+The Windows engine adapter launches a fresh empty-capability AppContainer for
+one worker. The trusted executable is copied into a private execution-image
+directory; only that fresh container SID receives read/execute access there.
+Source ACLs are not modified. Only the worker input/output pipe handles are
+inherited. Its environment contains OS-resolved `SystemRoot` and `LOCALAPPDATA`
+paths, with no inherited application secrets. The AppContainer profile has its
+own OS-provided storage; Play sends no database handle or source-root authority.
+
+Creation starts suspended. The parent assigns a private, non-inheritable,
+kill-on-close Job before resuming the process. The Job permits one process,
+128 MiB of private committed memory and one second of user-mode CPU. The worker
+checks its container token, empty capabilities and required Job policy before
+reading private input. The supervisor also samples authoritative process user
+and kernel CPU counters and reaps the Job at the one-second total CPU budget.
+The existing two-second Run deadline and output/admission limits still apply.
+
+Protocol 30 separates memory accounting in frozen Run limits. Windows records
+`privateCommitBytes: 134217728` and `vmGrowthBytes: null`; macOS/Linux record their
+VM-growth allowance and `privateCommitBytes: null`. Private committed memory is
+not a virtual-address reservation or RSS ceiling. The fixed Core thread pool is
+bounded by CPU/process memory; Windows does not claim Linux's kernel thread seal.
+See [Job limit accounting](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information).
+
+Actual Windows probes cover private file/network/descendant denial, source paths
+with spaces/Unicode and more than 260 characters, private-commit exhaustion,
+supervised CPU termination, independent worker pipe closure and kernel process
+cleanup after abrupt owner death. These are engine qualification checks.
+ConPTY, external CLI attachment, packaged desktop journeys, installer/update
+lifecycle and restart cleanup of orphaned profiles/images remain unqualified;
+this boundary does not establish a supported Windows desktop distribution.
+
 ## Private data and Cloud handoff
 
 Native private stores live in per-user application data, outside authorized source
 roots. The engine has the SQLite/asset authority; workers receive minimum inputs
-and explicit output grants, with only the fixed allocator environment above.
+and explicit output grants, with only the platform-specific minimal environment
+specified above.
 Credentials belong in the OS credential facility and privileged broker, never in
 renderer state, worker environment, reusable definitions, command history or
 diagnostics. If protected credential storage is unavailable, reject persistent

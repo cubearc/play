@@ -110,7 +110,7 @@ mod tests {
 fn windows_limits() -> play_windows_boundary::Limits {
     let contract = crate::protocol::contract();
     play_windows_boundary::Limits {
-        private_memory_bytes: contract.vm_growth_bytes as usize,
+        private_memory_bytes: contract.private_commit_bytes as usize,
         cpu_seconds: contract.cpu_seconds,
     }
 }
@@ -133,5 +133,26 @@ pub(crate) fn spawn_worker(worker: &std::path::Path) -> Result<WorkerChild> {
             .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|_| "worker_failed")
+    }
+}
+
+/// Snapshot only the memory accounting enforced by the current native adapter.
+pub(crate) struct MemoryLimits {
+    pub virtual_address_growth_bytes: Option<u64>,
+    pub private_commit_bytes: Option<u64>,
+}
+pub(crate) fn memory_limits() -> MemoryLimits {
+    let limits = crate::protocol::contract();
+    MemoryLimits {
+        virtual_address_growth_bytes: if cfg!(windows) {
+            None
+        } else {
+            Some(limits.vm_growth_bytes)
+        },
+        private_commit_bytes: if cfg!(windows) {
+            Some(limits.private_commit_bytes)
+        } else {
+            None
+        },
     }
 }
