@@ -487,7 +487,9 @@ signed Terminal helper. The helper applies the native resource policy, then
 executes the bundled `cube play session` in the same PID. The CLI inherits App
 Sandbox and resource restrictions; it cannot read private/source files, connect
 to a loopback server or spawn children. The native probe tests these restrictions
-after the production exec boundary, including memory and CPU ceilings.
+after the production exec boundary, including memory and CPU ceilings. The exec
+retains the fixed allocator policy used by native workers while clearing host
+environment values; it does not enlarge the resource ceilings.
 
 On Linux, the digest-verified `play-terminal` helper links the same pinned
 `cube-cli::play` library used by the Cube executable and calls its `Session`

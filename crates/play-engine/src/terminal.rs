@@ -122,10 +122,9 @@ pub fn worker() -> Result<()> {
             .parent()
             .ok_or("terminal_unavailable")?
             .join("cube");
-        let _ = std::process::Command::new(cli)
-            .args(["play", "session"])
-            .env_clear()
-            .exec();
+        let mut command = std::process::Command::new(cli);
+        crate::native::worker_environment(&mut command);
+        let _ = command.args(["play", "session"]).exec();
         Err("terminal_unavailable")
     }
     #[cfg(target_os = "linux")]
