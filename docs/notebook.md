@@ -296,8 +296,9 @@ Closing or quitting with unsaved reasoning offers **Keep editing** or
 | Save editor or focused Note | Cmd+S | Ctrl+S |
 
 The Electron preview runs operations on macOS and Linux with the required
-native enforcement. Windows refuses operation execution even though the UI has
+native enforcement. The Windows desktop preview refuses execution even though its UI has
 keyboard bindings. The interactive terminal supports macOS and Linux.
 [Installation](installation.md) states the
-platform scope. Image replacement, permanent Block deletion and result export
-are not available in this preview.
+platform scope. Export selected Assets, retained Run outputs or a saved Solution
+revision through [Export selected evidence](exports.md). Image replacement and
+permanent Block deletion are not available in this preview.

@@ -110,9 +110,10 @@ the saved references remain intact and the missing input, contract or output
 appears as a gap. Availability
 checks do not run the pipeline again or establish that an answer is correct.
 
-## Official outcomes
+To save a chosen revision outside Play, use
+[Export a walkthrough](exports.md#export-a-walkthrough).
 
-Walkthrough export is not available in this preview.
+## Official outcomes
 
 Candidates and Solutions are private and unverified. Neither a successful Run, an integrity
 hash nor available evidence establishes that a Challenge answer is correct.

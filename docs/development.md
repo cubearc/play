@@ -30,8 +30,9 @@ opens it interactively. The macOS helpers use local ad-hoc signatures, without a
 publisher certificate or host policy changes.
 
 The Electron preview enables native execution on macOS and Linux x64/ARM64.
-Windows workers and PTYs remain unavailable. A shell preview does
-not establish release support. See [native execution](reference/desktop-runtime.md).
+The [Windows engine qualification](reference/desktop-runtime.md#windows-worker-qualification)
+covers workers; Windows desktop and PTY integration remain incomplete. A source
+preview does not establish release support.
 
 ## Validate Linux workers
 
