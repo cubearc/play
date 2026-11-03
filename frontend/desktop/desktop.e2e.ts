@@ -32,6 +32,7 @@ declare global {
 import type {} from "./bridge.ts";
 import { captureBeforeClose } from "./coverage.ts";
 import { nativeFiles } from "./native-files.ts";
+import { createWorkspace } from "./workspace-startup-fixture.ts";
 
 const coverageFinalizers = new WeakMap<
   ElectronApplication,
@@ -155,12 +156,7 @@ test("native terminal connects on supported platforms and refuses unavailable po
         errors.push(message.text());
     });
     page.on("pageerror", (error) => errors.push(error.message));
-    await page
-      .getByRole("textbox", { name: "Workspace name", exact: true })
-      .fill("Contextual terminal");
-    await page
-      .getByRole("button", { name: "Create workspace", exact: true })
-      .click();
+    await createWorkspace(application, page, "Contextual terminal");
     await create(page, "Exploration", "Follow the clue");
     await notebook(page)
       .getByRole("button", { name: "Add text", exact: true })
@@ -361,12 +357,7 @@ test("private VIC retention is explicit, revisioned and survives native executio
     let page = await application.firstWindow();
     page.setDefaultTimeout(5000);
     await page.bringToFront();
-    await page
-      .getByRole("textbox", { name: "Workspace name", exact: true })
-      .fill("Private cipher study");
-    await page
-      .getByRole("button", { name: "Create workspace", exact: true })
-      .click();
+    await createWorkspace(application, page, "Private cipher study");
     await create(page, "Exploration", "Source example");
     await notebook(page)
       .getByRole("button", { name: "Add text", exact: true })
@@ -5545,12 +5536,7 @@ test("native notebook queues another cell without disabling unrelated Trails", {
   try {
     const page = await application.firstWindow();
     page.setDefaultTimeout(5000);
-    await page
-      .getByRole("textbox", { name: "Workspace name", exact: true })
-      .fill("Concurrent clues");
-    await page
-      .getByRole("button", { name: "Create workspace", exact: true })
-      .click();
+    await createWorkspace(application, page, "Concurrent clues");
     await create(page, "Exploration", "Independent paths");
     for (const [title, text] of [
       ["First clue", "Uryyb"],
