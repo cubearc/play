@@ -138,13 +138,12 @@ impl Spawner {
                         .map_err(|_| "native_policy_unavailable")?,
                 ));
             }
-            return self
-                .executable
+            self.executable
                 .as_mut()
                 .ok_or("native_policy_unavailable")?
                 .1
                 .spawn(&["--worker"], windows_limits())
-                .map_err(|_| "native_policy_unavailable");
+                .map_err(|_| "native_policy_unavailable")
         }
         #[cfg(not(windows))]
         {
