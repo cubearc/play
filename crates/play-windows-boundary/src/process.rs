@@ -168,6 +168,7 @@ pub struct Child {
     pub stdout: Option<File>,
     process: OwnedHandle,
     pid: u32,
+    cpu_limit_100ns: u64,
     job: OwnedHandle,
     _profile: Profile,
     _image: TempDir,
@@ -263,6 +264,7 @@ impl Child {
             stdout: Some(File::from(output_read)),
             process,
             pid: info.dwProcessId,
+            cpu_limit_100ns: limits.cpu_seconds * 10_000_000,
             job,
             _profile: profile,
             _image: image,
@@ -287,10 +289,41 @@ impl Child {
         }
         result
     }
+    fn cpu_time_100ns(&self) -> io::Result<u64> {
+        let mut created = FILETIME {
+            dwLowDateTime: 0,
+            dwHighDateTime: 0,
+        };
+        let mut ended = created;
+        let mut kernel = created;
+        let mut user = created;
+        // SAFETY: the exact owned process handle has query rights; all outputs are distinct live FILETIMEs.
+        checked(unsafe {
+            GetProcessTimes(
+                raw(&self.process),
+                &mut created,
+                &mut ended,
+                &mut kernel,
+                &mut user,
+            )
+        })?;
+        let ticks =
+            |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
+        ticks(user)
+            .checked_add(ticks(kernel))
+            .ok_or_else(|| io::Error::other("invalid native CPU accounting"))
+    }
+    /// Poll termination and enforce total sampled CPU in addition to the kernel's periodic job check.
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         // SAFETY: the live owned process handle is waitable and never closed during the call.
         match unsafe { WaitForSingleObject(raw(&self.process), 0) } {
-            WAIT_TIMEOUT => Ok(None),
+            WAIT_TIMEOUT => {
+                if self.cpu_time_100ns()? >= self.cpu_limit_100ns {
+                    self.kill()?;
+                    return self.wait().map(Some);
+                }
+                Ok(None)
+            }
             WAIT_OBJECT_0 => self.status().map(Some),
             _ => Err(io::Error::last_os_error()),
         }

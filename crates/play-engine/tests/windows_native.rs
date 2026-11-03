@@ -168,7 +168,7 @@ fn windows_job_rejects_excess_private_commit() {
     assert_eq!(text.trim(), "true");
 }
 #[test]
-fn windows_job_stops_cpu_loops() {
+fn windows_supervision_stops_cpu_loops() {
     let (status, _) =
         output(play_windows_boundary::Child::spawn(&probe(), &["cpu"], limits()).unwrap());
     assert!(!status.success());
