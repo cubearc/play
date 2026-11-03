@@ -37,7 +37,7 @@ const worker =
           import.meta.url,
         ),
       )
-    : process.platform === "linux"
+    : process.platform === "linux" || process.platform === "win32"
       ? binary
       : undefined;
 
@@ -46,7 +46,9 @@ const supervisionWorker = worker
       new URL(
         process.platform === "linux"
           ? "../desktop-native/native-supervision-probe"
-          : "../desktop-native/SupervisionProbe.app/Contents/MacOS/play-engine",
+          : process.platform === "win32"
+            ? "../desktop-native/native-supervision-probe.exe"
+            : "../desktop-native/SupervisionProbe.app/Contents/MacOS/play-engine",
         import.meta.url,
       ),
     )
