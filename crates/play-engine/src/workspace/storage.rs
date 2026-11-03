@@ -51,12 +51,14 @@ pub fn regular(path: &Path) -> Result<()> {
 
 pub fn private_directory(path: &Path) -> Result<()> {
     if !path.exists() {
-        let mut builder = fs::DirBuilder::new();
+        let builder = fs::DirBuilder::new();
         #[cfg(unix)]
-        {
+        let builder = {
             use std::os::unix::fs::DirBuilderExt;
+            let mut builder = builder;
             builder.mode(0o700);
-        }
+            builder
+        };
         builder.create(path).map_err(|_| "storage_unavailable")?;
     }
     let metadata = fs::symlink_metadata(path).map_err(|_| "store_missing")?;

@@ -143,3 +143,51 @@ fn launching_a_worker_without_the_native_launcher_refuses_before_reading_input()
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("native_policy_unavailable"));
 }
+
+struct HostProcess(std::process::Child);
+impl Drop for HostProcess {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+fn line(stream: std::process::ChildStdout) -> String {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut value = String::new();
+        let result = BufReader::new(stream).read_line(&mut value);
+        let _ = tx.send(result.map(|_| value));
+    });
+    rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap()
+}
+#[test]
+fn killing_the_owner_reaps_a_worker_that_does_not_observe_stdin() {
+    let mut owner = HostProcess(
+        Command::new(probe())
+            .arg("owner")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let pid: u32 = line(owner.0.stdout.take().unwrap()).trim().parse().unwrap();
+    // Hold the exact live process handle before killing its owner, avoiding a PID-only check.
+    let script = format!(
+        "$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById({pid}); $held=$p.Handle; [Console]::WriteLine('watching'); if($p.WaitForExit(5000)){{exit 0}}else{{exit 1}}"
+    );
+    let mut watcher = HostProcess(
+        Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    assert_eq!(line(watcher.0.stdout.take().unwrap()).trim(), "watching");
+    owner.0.kill().unwrap();
+    owner.0.wait().unwrap();
+    assert!(
+        watcher.0.wait().unwrap().success(),
+        "kernel job must reap an orphaned worker"
+    );
+}

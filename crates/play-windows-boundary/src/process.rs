@@ -181,6 +181,7 @@ pub struct Child {
     pub stdin: Option<File>,
     pub stdout: Option<File>,
     process: OwnedHandle,
+    pid: u32,
     job: OwnedHandle,
     _profile: Profile,
     _image: TempDir,
@@ -274,6 +275,7 @@ impl Child {
             stdin: Some(File::from(input_write)),
             stdout: Some(File::from(output_read)),
             process,
+            pid: info.dwProcessId,
             job,
             _profile: profile,
             _image: image,
@@ -285,6 +287,9 @@ impl Child {
             return Err(io::Error::last_os_error());
         }
         Ok(child)
+    }
+    pub fn id(&self) -> u32 {
+        self.pid
     }
     pub fn kill(&mut self) -> io::Result<()> {
         // SAFETY: the private job contains only this worker; its handle never reaches untrusted code.

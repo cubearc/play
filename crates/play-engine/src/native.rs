@@ -3,6 +3,7 @@ use crate::Result;
 
 /// Fix allocator reservation policy before startup, without inheriting host settings.
 /// Per-CPU arenas can otherwise exhaust the worker's VM allowance on tiny inputs.
+#[cfg(not(windows))]
 pub(crate) fn worker_environment(command: &mut std::process::Command) {
     command.env_clear();
     #[cfg(target_os = "macos")]
