@@ -419,6 +419,14 @@ for (
           "completed",
           `${operation.operation}: ${stringifyJson(run.result)}`,
         );
+        if (process.platform === "win32") {
+          const limits = run.plan.limits as Record<string, unknown>;
+          assert.deepEqual(
+            { vmGrowthBytes: limits.vmGrowthBytes, privateCommitBytes: limits.privateCommitBytes },
+            { vmGrowthBytes: null, privateCommitBytes: contract.vm_growth_bytes },
+            "Windows must record its private-commit cap without claiming a virtual-address cap",
+          );
+        }
         assert.equal(
           run.plan.contractDigest,
           fixture.contract_sha256,
