@@ -276,3 +276,20 @@ fn immutable_images_are_reused_and_rotated_without_reusing_worker_state() {
         }
     }
 }
+
+#[test]
+fn worker_wall_budget_expires_without_polling_by_the_domain_owner() {
+    let mut child = play_windows_boundary::Child::spawn(&probe(), &["idle"], limits()).unwrap();
+    let pid: u32 = line(child.stdout.take().unwrap()).trim().parse().unwrap();
+    assert!(pid > 0);
+    // The domain owner can be committing evidence; worker timing must remain independent.
+    thread::sleep(Duration::from_millis(
+        play_engine::protocol::contract().run_ms + 200,
+    ));
+    let status = child.try_wait().unwrap();
+    assert!(
+        status.is_some(),
+        "the wall budget must be enforced before the owner resumes polling"
+    );
+    assert!(!status.unwrap().success());
+}
