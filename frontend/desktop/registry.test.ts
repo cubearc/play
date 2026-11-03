@@ -125,7 +125,7 @@ const worker =
           import.meta.url,
         ),
       )
-    : process.platform === "linux"
+    : process.platform === "linux" || process.platform === "win32"
       ? binary
       : undefined;
 

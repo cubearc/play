@@ -29,7 +29,9 @@ impl Profile {
             )
         };
         if result < 0 {
-            return Err(io::Error::from_raw_os_error(result));
+            return Err(io::Error::other(format!(
+                "CreateAppContainerProfile: HRESULT {result:#x}"
+            )));
         }
         if sid.is_null() {
             return Err(io::Error::other("missing container SID"));

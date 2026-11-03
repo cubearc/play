@@ -23,5 +23,19 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
       - run: cargo build -p play-engine --example windows-boundary-probe --locked
-      - run: cargo clippy -p play-windows-boundary --all-targets --locked -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test -p play-engine --test windows_native --locked -- --nocapture
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: play/frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: play/frontend/package-lock.json
+      - run: npm ci --prefix frontend
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: npx --prefix frontend tsc -p frontend/tsconfig.desktop.json
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path frontend/desktop-native -Force
+          Copy-Item target/debug/play-engine.exe frontend/desktop-native/play-engine.exe
+      - run: node --test --test-concurrency=1 frontend/desktop-dist/registry.test.js

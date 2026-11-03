@@ -8,10 +8,13 @@ use std::{
     thread,
     time::Duration,
 };
-#[test]
-fn windows_worker_executes_the_real_core_inside_a_required_native_boundary() {
+fn execute_core(clear_environment: bool) {
     let binary = env!("CARGO_BIN_EXE_play-engine");
-    let mut child = Command::new(binary)
+    let mut command = Command::new(binary);
+    if clear_environment {
+        command.env_clear();
+    }
+    let mut child = command
         .args(["--ipc", "--worker", binary])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -55,6 +58,15 @@ fn windows_worker_executes_the_real_core_inside_a_required_native_boundary() {
         "native execution must be available, not an unrestricted fallback: {result}"
     );
     assert_eq!(result["output"]["text"], "The key.");
+}
+
+#[test]
+fn windows_worker_executes_the_real_core_inside_a_required_native_boundary() {
+    execute_core(false);
+}
+#[test]
+fn engine_started_with_the_desktop_empty_environment_executes_without_inheriting_secrets() {
+    execute_core(true);
 }
 
 fn limits() -> play_windows_boundary::Limits {
