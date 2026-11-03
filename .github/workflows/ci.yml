@@ -7,6 +7,8 @@ jobs:
   windows-boundary:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      RUST_TEST_THREADS: "1"
     defaults:
       run:
         working-directory: play
