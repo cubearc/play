@@ -441,17 +441,20 @@ async fn initialize(directory: &Path, identity: &Identity) -> Result<()> {
             .execute(&mut connection)
             .await
             .map_err(storage::failure)?;
+        // Publish one durable baseline instead of committing each schema statement separately.
+        let mut transaction = connection.begin().await.map_err(storage::failure)?;
         sqlx::raw_sql(storage::SCHEMA)
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await
             .map_err(storage::failure)?;
         sqlx::query("INSERT INTO workspace_meta VALUES(?,?,?)")
             .bind(identity.workspace_id.to_string())
             .bind(storage::GENERATION)
             .bind(storage::SCHEMA_VERSION)
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await
             .map_err(storage::failure)?;
+        transaction.commit().await.map_err(storage::failure)?;
         Ok(())
     }
     .await;
