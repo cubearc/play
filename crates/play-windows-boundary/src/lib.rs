@@ -1,6 +1,8 @@
 //! The only owner of Win32 FFI; the engine keeps `unsafe_code = forbid`.
 //! No Core algorithm, domain storage, renderer authority or network permission lives here.
 #[cfg(windows)]
+mod environment;
+#[cfg(windows)]
 mod handles;
 #[cfg(windows)]
 mod process;

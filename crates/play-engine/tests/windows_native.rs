@@ -114,7 +114,7 @@ fn appcontainer_denies_private_files_network_and_children_without_changing_sourc
         "private_write_denied",
         "network_denied",
         "child_denied",
-        "image_write_denied",
+        "image_directory_write_denied",
     ] {
         assert_eq!(value[key], true, "{key}: {value}");
     }

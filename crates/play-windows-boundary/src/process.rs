@@ -16,9 +16,7 @@ use tempfile::TempDir;
 use windows_sys::Win32::{
     Foundation::*,
     Security::{SECURITY_ATTRIBUTES, SECURITY_CAPABILITIES},
-    System::{
-        JobObjects::*, Pipes::CreatePipe, SystemInformation::GetWindowsDirectoryW, Threading::*,
-    },
+    System::{JobObjects::*, Pipes::CreatePipe, Threading::*},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -127,18 +125,6 @@ fn job(limits: Limits) -> io::Result<OwnedHandle> {
         )
     })?;
     Ok(job)
-}
-fn environment() -> io::Result<Vec<u16>> {
-    let mut buffer = vec![0u16; 32768];
-    // SAFETY: writable UTF-16 output buffer; the OS supplies the trusted system path.
-    let length = unsafe { GetWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
-    if length == 0 || length >= buffer.len() {
-        return Err(io::Error::last_os_error());
-    }
-    let mut block = "SystemRoot=".encode_utf16().collect::<Vec<_>>();
-    block.extend_from_slice(&buffer[..length]);
-    block.extend([0, 0]);
-    Ok(block)
 }
 fn command_line(executable: &Path, args: &[impl AsRef<OsStr>]) -> io::Result<Vec<u16>> {
     let mut text = vec![34u16];
@@ -249,7 +235,7 @@ impl Child {
         let app = wide(&binary)?;
         let cwd = wide(image.path())?;
         let mut line = command_line(&binary, args)?;
-        let env = environment()?;
+        let env = super::environment::block()?;
         // SAFETY: explicit application path, bounded initialized attributes, empty-capability token,
         // exact handle list, trusted minimal environment; execution starts suspended.
         checked(unsafe {
@@ -268,7 +254,8 @@ impl Child {
                 &startup.StartupInfo,
                 &mut info,
             )
-        })?;
+        })
+        .map_err(|e| io::Error::new(e.kind(), format!("CreateProcessW: {e}")))?;
         let process = owned(info.hProcess)?;
         let thread = owned(info.hThread)?;
         let child = Self {

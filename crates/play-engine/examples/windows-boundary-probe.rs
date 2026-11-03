@@ -36,7 +36,7 @@ fn main() {
             let source: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
             println!(
                 "{}",
-                serde_json::json!({"image_readable":fs::read(&binary).is_ok(),"private_read_denied":fs::read(path).is_err(),"private_write_denied":fs::write(path,b"forbidden").is_err(),"network_denied":TcpStream::connect_timeout(&source,Duration::from_millis(200)).is_err(),"child_denied":Command::new(&binary).arg("child").status().is_err(),"image_write_denied":fs::write(binary,b"forbidden").is_err()})
+                serde_json::json!({"image_readable":fs::read(&binary).is_ok(),"private_read_denied":fs::read(path).is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied),"private_write_denied":fs::write(path,b"forbidden").is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied),"network_denied":TcpStream::connect_timeout(&source,Duration::from_millis(200)).is_err(),"child_denied":Command::new(&binary).arg("child").status().is_err(),"image_directory_write_denied":fs::write(binary.parent().unwrap().join("forbidden.txt"),b"forbidden").is_err_and(|e| e.kind()==std::io::ErrorKind::PermissionDenied)})
             );
         }
         [mode] if mode == "idle" => {
