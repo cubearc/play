@@ -21,7 +21,8 @@ mod macos;
 
 /// Platform implementation exists; enforcement must still succeed in the worker.
 pub fn available() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(windows)
+        || cfg!(target_os = "macos")
         || cfg!(all(
             target_os = "linux",
             any(target_arch = "x86_64", target_arch = "aarch64")
@@ -31,6 +32,9 @@ pub fn available() -> bool {
 /// Called only by a fresh, single-threaded helper before receiving private data.
 /// No operation runs if any required policy cannot be enforced.
 pub fn restrict() -> Result<()> {
+    #[cfg(windows)]
+    return play_windows_boundary::current(windows_limits())
+        .map_err(|_| "native_policy_unavailable");
     #[cfg(target_os = "macos")]
     return macos::restrict();
     #[cfg(all(
@@ -39,6 +43,7 @@ pub fn restrict() -> Result<()> {
     ))]
     return linux::restrict();
     #[cfg(not(any(
+        windows,
         target_os = "macos",
         all(
             target_os = "linux",
@@ -52,6 +57,9 @@ pub fn restrict() -> Result<()> {
 /// current thread set in the kernel; macOS keeps its fixed software pool under
 /// the already-applied native boundary and does not claim a kernel thread quota.
 pub fn seal_threads() -> Result<()> {
+    #[cfg(windows)]
+    return play_windows_boundary::current(windows_limits())
+        .map_err(|_| "native_policy_unavailable");
     #[cfg(all(
         target_os = "linux",
         any(target_arch = "x86_64", target_arch = "aarch64")
@@ -60,6 +68,7 @@ pub fn seal_threads() -> Result<()> {
     #[cfg(target_os = "macos")]
     return Ok(());
     #[cfg(not(any(
+        windows,
         target_os = "macos",
         all(
             target_os = "linux",
@@ -93,5 +102,35 @@ mod tests {
         assert_eq!(output.stdout, b"MallocMaxMagazines=1\n");
         #[cfg(target_os = "linux")]
         assert_eq!(output.stdout, b"MALLOC_ARENA_MAX=1\n");
+    }
+}
+
+#[cfg(windows)]
+fn windows_limits() -> play_windows_boundary::Limits {
+    let contract = crate::protocol::contract();
+    play_windows_boundary::Limits {
+        private_memory_bytes: contract.vm_growth_bytes as usize,
+        cpu_seconds: contract.cpu_seconds,
+    }
+}
+#[cfg(windows)]
+pub(crate) type WorkerChild = play_windows_boundary::Child;
+#[cfg(not(windows))]
+pub(crate) type WorkerChild = std::process::Child;
+pub(crate) fn spawn_worker(worker: &std::path::Path) -> Result<WorkerChild> {
+    #[cfg(windows)]
+    return WorkerChild::spawn(worker, &["--worker"], windows_limits())
+        .map_err(|_| "native_policy_unavailable");
+    #[cfg(not(windows))]
+    {
+        let mut command = std::process::Command::new(worker);
+        worker_environment(&mut command);
+        command
+            .arg("--worker")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|_| "worker_failed")
     }
 }

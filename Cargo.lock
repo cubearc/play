@@ -1609,6 +1609,7 @@ dependencies = [
  "landlock",
  "libc",
  "libproc",
+ "play-windows-boundary",
  "rustix",
  "seccompiler",
  "serde",
@@ -1617,6 +1618,15 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "play-windows-boundary"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "uuid",
+ "windows-sys",
 ]
 
 [[package]]

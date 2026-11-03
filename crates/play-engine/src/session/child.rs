@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use std::{
     io::{BufReader, Write},
     path::Path,
-    process::{Child, Command as Process, Stdio},
     sync::mpsc::{self, Receiver},
     thread,
     time::{Duration, Instant},
@@ -11,7 +10,7 @@ use std::{
 
 pub(super) struct Active {
     pub(super) id: u32,
-    pub(super) child: Child,
+    pub(super) child: crate::native::WorkerChild,
     output: Receiver<Result<Value>>,
     result: Option<Value>,
     deadline: Instant,
@@ -27,15 +26,7 @@ impl Drop for Active {
 
 impl Active {
     pub(super) fn spawn(id: u32, worker: &Path, frame: &[u8]) -> Result<Self> {
-        let mut command = Process::new(worker);
-        crate::native::worker_environment(&mut command);
-        let mut child = command
-            .arg("--worker")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| "worker_failed")?;
+        let mut child = crate::native::spawn_worker(worker)?;
         let stdout = child.stdout.take().ok_or("worker_failed")?;
         let (sender, output) = mpsc::sync_channel(1);
         let mut active = Self {

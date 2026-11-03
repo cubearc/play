@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/play-engine"]
+members = ["crates/play-engine", "crates/play-windows-boundary"]
 resolver = "3"
 
 [workspace.package]
