@@ -82,11 +82,14 @@ The coordinator owns up to two Run workers and four queued tasks, rotating fairl
 between Explorations and admitting only one active worker per Exploration.
 Linux x64/ARM64 Electron workers use Landlock and seccomp with the same Core
 executor and supervisor. Native-host checks validate their boundary; Electron
-journeys exercise actual dispatch and retained evidence. Windows worker enforcement
-remains incomplete; no unrestricted fallback is available.
+journeys exercise actual dispatch and retained evidence. The Windows engine
+boundary uses empty-capability AppContainers, private Jobs and an independent
+CPU/wall monitor. Its native qualification executes the complete installed Core
+fixture matrix and verifies evidence after restart. See the
+[Windows worker contract](reference/desktop-runtime.md#windows-worker-qualification).
 
-Windows workers and PTYs, publisher-signed packages and verified updates remain
-incomplete. Local build digests and
+Windows desktop/PTY integration, publisher-signed packages and verified updates
+remain incomplete. Local build digests and
 ad-hoc signing are development checks, not publisher authentication. A
 [standalone preview bundle](installation.md#build-a-standalone-preview-bundle)
 stages compiled runtime files and exact native components; its receipt records
@@ -115,5 +118,5 @@ conformance matrix and native adapter checks retain their independent roles.
 Storage initializes one current baseline. Earlier schemas and pending conversion
 markers are refused before writes; previous stores and external volumes remain
 untouched. No format converter or compatibility runtime is shipped.
-Windows execution and signed release/update requirements remain separate
+Windows desktop/PTY execution and signed release/update requirements remain
 incomplete deliveries; removing old runtimes does not establish their support.
