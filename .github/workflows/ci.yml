@@ -30,6 +30,7 @@ jobs:
           key: windows-boundary-qualification
           cache-on-failure: true
       - run: cargo build -p play-engine --example windows-boundary-probe --example native-supervision-probe --locked
+      - run: cargo build -p play-windows-boundary --example owned-processes --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test -p play-engine --test windows_native --locked -- --nocapture
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -47,10 +48,13 @@ jobs:
           New-Item -ItemType Directory -Path frontend/desktop-native -Force
           Copy-Item target/debug/play-engine.exe frontend/desktop-native/play-engine.exe
           Copy-Item target/debug/examples/native-supervision-probe.exe frontend/desktop-native/native-supervision-probe.exe
-      - run: node --test --test-concurrency=1 frontend/desktop-dist/registry.test.js
+          Copy-Item target/debug/examples/owned-processes.exe frontend/desktop-native/owned-processes.exe
+      - working-directory: play/frontend
+        run: node --test --test-concurrency=1 desktop-dist/registry.test.js
       - name: Common native Workspace and Run lifecycle scenarios
         if: ${{ !cancelled() && steps.typescript.outcome == 'success' }}
-        run: node --test --test-concurrency=1 frontend/desktop-dist/workspace.test.js
+        working-directory: play/frontend
+        run: node --test --test-concurrency=1 desktop-dist/workspace.test.js
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

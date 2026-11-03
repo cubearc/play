@@ -941,10 +941,28 @@ test("worker crash isolates sibling Runs and owner death recovers active and que
         ).data,
     );
     const children = () => {
-      const listing = spawnSync("/bin/ps", ["-axo", "pid=,ppid="], {
-        encoding: "utf8",
-      });
+      const windows = process.platform === "win32";
+      const executable = windows
+        ? fileURLToPath(
+            new URL("../desktop-native/owned-processes.exe", import.meta.url),
+          )
+        : "/bin/ps";
+      const listing = spawnSync(
+        executable,
+        windows ? [String(owner.pid)] : ["-axo", "pid=,ppid="],
+        {
+          encoding: "utf8",
+        },
+      );
       assert.equal(listing.status, 0, listing.stderr);
+      if (windows) {
+        const ids: unknown = JSON.parse(listing.stdout);
+        assert.ok(
+          Array.isArray(ids) &&
+            ids.every((id) => Number.isSafeInteger(id) && id > 0),
+        );
+        return ids as number[];
+      }
       return listing.stdout
         .trim()
         .split("\n")
