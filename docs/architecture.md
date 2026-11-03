@@ -75,6 +75,8 @@ registered by their owning Core modules, including an explicitly declared
 monotonic clock effect for profiling.
 The host negotiates representations and retention policy; it contains no operation-ID
 execution dispatcher. See [Pipeline execution capabilities](reference/desktop-pipelines.md#execution-capabilities).
+Graph nodes exchange Core's named outputs directly. Compact transport envelopes
+are produced only when emitting worker events, outside the connections between nodes.
 Independent branches execute in groups of at most two within the same sandboxed
 Run worker, sharing its CPU, VM, wall-time and output limits. Dependency-aware
 attempt admission and deterministic result collection preserve join evidence.

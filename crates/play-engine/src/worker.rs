@@ -629,15 +629,14 @@ fn execute_pipeline_with_policy(
     })
 }
 fn execute_node((node, values): (crate::graph::Node, Value)) -> Result<Value> {
-    let named = core::execute(
+    core::execute(
         &node.operation,
         node.operation_version,
         &values,
         &canonical_value(node.parameters.clone()),
         budget(),
     )
-    .map_err(failure)?;
-    raw_outputs(&node.operation, &named)
+    .map_err(failure)
 }
 fn execute_graph(
     invocation: &PipelineInvocation,
@@ -696,15 +695,14 @@ fn execute_graph(
     Ok(final_output)
 }
 
-fn bounded_output(node: &crate::graph::Node, raw: &Value, used: &mut usize) -> Result<Value> {
-    let named = named_outputs(&node.operation, raw)?;
+fn bounded_output(node: &crate::graph::Node, named: &Value, used: &mut usize) -> Result<Value> {
     *used = used
-        .checked_add(core::output_size(&node.operation, &named).map_err(failure)?)
+        .checked_add(core::output_size(&node.operation, named).map_err(failure)?)
         .ok_or("output_limit")?;
     if *used > protocol::contract().output_bytes {
         return Err("output_limit");
     }
-    Ok(named)
+    raw_outputs(&node.operation, named)
 }
 
 fn finish_wave(
@@ -718,7 +716,7 @@ fn finish_wave(
     let mut final_output = None;
     for (id, result) in results {
         let node = graph.node(id)?;
-        match result.and_then(|raw| bounded_output(node, &raw, used).map(|named| (raw, named))) {
+        match result.and_then(|named| bounded_output(node, &named, used).map(|raw| (raw, named))) {
             Ok((raw, named)) => {
                 emit(
                     json!({"type":"node_finished","nodeId":id,"status":"completed","output":raw}),
