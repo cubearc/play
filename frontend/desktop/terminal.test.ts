@@ -21,15 +21,16 @@ import type {
 const binary = (name: string) =>
   fileURLToPath(new URL(`../desktop-native/${name}`, import.meta.url));
 test("real contextual PTY resizes, resolves Assets and executes the same pinned Pipeline", {
-  skip: !["darwin", "linux"].includes(process.platform),
+  skip: !["darwin", "linux", "win32"].includes(process.platform),
   timeout: 20000,
 }, async () => {
   const root = await mkdtemp(join(tmpdir(), "play-pty-"));
+  const windows = process.platform === "win32";
   const engine = await Engine.connect(
-    binary("play-engine"),
-    binary(nativeFiles().worker ?? "unavailable"),
+    binary(windows ? "play-engine.exe" : "play-engine"),
+    binary(windows ? "play-engine.exe" : (nativeFiles().worker ?? "unavailable")),
     root,
-    binary(nativeFiles().terminal ?? "unavailable"),
+    binary(windows ? "play-engine.exe" : (nativeFiles().terminal ?? "unavailable")),
   );
   let transcript = "";
   let runId: string | null = null;

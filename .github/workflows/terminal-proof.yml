@@ -1,0 +1,65 @@
+name: Windows contextual terminal proof
+on:
+  workflow_dispatch:
+    inputs:
+      play_revision:
+        description: Exact Play candidate to build
+        default: validation/windows-terminal-nov04
+        required: true
+        type: string
+      core_revision:
+        description: Exact Core candidate to build
+        default: 447b749d7aa51ba761e1957e8e780f543513fd69
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  terminal:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    defaults:
+      run:
+        working-directory: play
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: play
+          ref: ${{ inputs.play_revision }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: cubearc/cube
+          path: cube
+          ref: ${{ inputs.core_revision }}
+          persist-credentials: false
+      - name: Record actual source identities
+        run: |
+          git rev-parse HEAD
+          git -C ../cube rev-parse HEAD
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: play -> target
+          key: windows-terminal-qualification
+          cache-on-failure: true
+      - run: cargo build --workspace --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: play/frontend/.nvmrc
+      - run: npm ci --prefix frontend
+      - run: npx --prefix frontend tsc -p frontend/tsconfig.desktop.json
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path frontend/desktop-native -Force
+          Copy-Item target/debug/play-engine.exe frontend/desktop-native/play-engine.exe
+      - name: Real contextual CLI, resize and Pipeline equivalence
+        working-directory: play/frontend
+        run: node --test --test-name-pattern="real contextual PTY resizes" desktop-dist/terminal.test.js
