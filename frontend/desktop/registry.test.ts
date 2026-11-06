@@ -144,15 +144,9 @@ assert.equal(
 const qualified: unknown[] = [];
 // Bound each independent native matrix unit by the original per-test deadline.
 // A larger catalog adds units; it never extends a worker or test deadline.
-for (
-  let batch = 0;
-  batch * contract.workspace_limit < available.length;
-  batch++
-) {
-  const catalog = available.slice(
-    batch * contract.workspace_limit,
-    (batch + 1) * contract.workspace_limit,
-  );
+const batchSize = Math.min(8, contract.workspace_limit);
+for (let batch = 0; batch * batchSize < available.length; batch++) {
+  const catalog = available.slice(batch * batchSize, (batch + 1) * batchSize);
   test(`Core native known answers and restart evidence, batch ${batch + 1}`, {
     timeout: 60000,
   }, async (t) => {
