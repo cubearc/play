@@ -118,9 +118,10 @@ jobs:
       matrix:
         os: [macos-26, macos-26-intel]
     runs-on: ${{ matrix.os }}
-    # Measured Intel cold build: 14m20s; source and packaged journeys: about 10m each.
-    # Keep enough job time for both proofs; worker and test deadlines are unchanged.
-    timeout-minutes: 45
+    # Intel preparation, native tests and source journeys took 39m52s before
+    # packaging; the installed-app proof then exhausted the old 45-minute job.
+    # Keep every journey and worker/test deadline within a full-job budget.
+    timeout-minutes: ${{ matrix.os == 'macos-26-intel' && 60 || 45 }}
     # Match the compact profile used by Core CI and the local native proof.
     # Rust debug assertions and every runtime/test deadline remain enabled.
     env:
