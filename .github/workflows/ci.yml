@@ -244,6 +244,13 @@ jobs:
     timeout-minutes: 20
     env:
       RUST_TEST_THREADS: "1"
+      # Match the successful current-Core native proof and delivered app profile.
+      # Symbols change; debug assertions, overflow checks and deadlines do not.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: "true"
+      CARGO_PROFILE_TEST_DEBUG_ASSERTIONS: "true"
+      CARGO_INCREMENTAL: "0"
     defaults:
       run:
         working-directory: play
@@ -262,12 +269,17 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           workspaces: play -> target
-          key: windows-boundary-qualification
+          key: windows-boundary-compact
           cache-on-failure: true
       - run: cargo build -p play-engine --example windows-boundary-probe --example native-supervision-probe --locked
       - run: cargo build -p play-windows-boundary --example owned-processes --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test -p play-engine --test windows_native --locked -- --nocapture
+      - name: Record qualification build size and available disk
+        shell: pwsh
+        run: |
+          Get-Item target/debug/play-engine.exe, target/debug/examples/native-supervision-probe.exe | Select-Object Name, Length
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, Used, Free
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version-file: play/frontend/.nvmrc
