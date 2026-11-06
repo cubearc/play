@@ -40,6 +40,9 @@ fn all_block_reference_answers_cross_the_native_graph_and_byte_viewer() {
         if let Some(bits) = v.get("effective_key_bits") {
             p["effective_key_bits"] = bits.clone();
         }
+        if let Some(tweak) = v.get("tweak_hex") {
+            p["tweak_hex"] = tweak.clone();
+        }
         for (operation, input, expected) in [
             (
                 "cipher.block.encrypt_blocks",
@@ -71,4 +74,35 @@ fn hex_bytes(value: &str) -> Vec<u8> {
         .iter()
         .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
         .collect()
+}
+
+#[test]
+fn xxtea_whole_word_answers_cross_private_graph_and_byte_viewer() {
+    let rows: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/xxtea/vectors.json"
+    ))
+    .unwrap();
+    for v in rows {
+        let p = json!({"key_hex":v["key_hex"]});
+        for (op, input, expected) in [
+            (
+                "cipher.xxtea.encrypt_words",
+                &v["plaintext_hex"],
+                &v["ciphertext_hex"],
+            ),
+            (
+                "cipher.xxtea.decrypt_words",
+                &v["ciphertext_hex"],
+                &v["plaintext_hex"],
+            ),
+        ] {
+            let input = json!({"base64":cube_core::encoding::base64_encode(&hex_bytes(input.as_str().unwrap()))});
+            assert!(run(op, input.clone(), p.clone(), false).is_err());
+            let output = run(op, input, p.clone(), true).unwrap();
+            assert_eq!(
+                output,
+                json!({"output":{"base64":cube_core::encoding::base64_encode(&hex_bytes(expected.as_str().unwrap()))}})
+            );
+        }
+    }
 }

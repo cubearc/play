@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 694a2f5ad54cb28cf701d9ea99116f6a05c3e31c
+          ref: 5a1d42f240f90a27be1a4aac2f4c695080d29525
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 694a2f5ad54cb28cf701d9ea99116f6a05c3e31c
+          ref: 5a1d42f240f90a27be1a4aac2f4c695080d29525
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -134,7 +134,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 694a2f5ad54cb28cf701d9ea99116f6a05c3e31c
+          ref: 5a1d42f240f90a27be1a4aac2f4c695080d29525
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -197,7 +197,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: cubearc/cube
-          ref: 694a2f5ad54cb28cf701d9ea99116f6a05c3e31c
+          ref: 5a1d42f240f90a27be1a4aac2f4c695080d29525
           persist-credentials: false
           path: cube
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -253,7 +253,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: cubearc/cube
-          ref: 694a2f5ad54cb28cf701d9ea99116f6a05c3e31c
+          ref: 5a1d42f240f90a27be1a4aac2f4c695080d29525
           path: cube
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
