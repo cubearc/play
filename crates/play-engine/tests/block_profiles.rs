@@ -158,17 +158,50 @@ fn stream_reference_answers_cross_private_graph_and_byte_viewer() {
         .min(4);
     std::thread::scope(|scope| {
         for chunk in vectors.chunks(vectors.len().div_ceil(workers)) {
-            scope.spawn(move||{
-                for v in chunk {
-                    let parameters=&v["parameters"];
-                    for (op,input,expected) in [("cipher.stream.encrypt",&v["plaintext_hex"],&v["ciphertext_hex"]),("cipher.stream.decrypt",&v["ciphertext_hex"],&v["plaintext_hex"])] {
-                        let input=json!({"base64":cube_core::encoding::base64_encode(&hex_bytes(input.as_str().unwrap()))});
-                        assert_eq!(run(op,input.clone(),parameters.clone(),false),Err("retention_policy_unavailable"));
-                        let actual=run(op,input,parameters.clone(),true).unwrap();
-                        assert_eq!(actual,json!({"output":{"base64":cube_core::encoding::base64_encode(&hex_bytes(expected.as_str().unwrap()))}}));
-                    }
+            scope.spawn(move || {
+                for vector in chunk {
+                    assert_stream_reference(vector);
                 }
             });
         }
     });
+}
+
+fn assert_stream_reference(v: &Value) {
+    let parameters = &v["parameters"];
+    let input_limit = play_engine::protocol::contract().input_bytes;
+    let limit = input_limit - serde_json::to_vec(parameters).unwrap().len();
+    for (op, input, expected) in [
+        (
+            "cipher.stream.encrypt",
+            &v["plaintext_hex"],
+            &v["ciphertext_hex"],
+        ),
+        (
+            "cipher.stream.decrypt",
+            &v["ciphertext_hex"],
+            &v["plaintext_hex"],
+        ),
+    ] {
+        let input = hex_bytes(input.as_str().unwrap());
+        let expected = hex_bytes(expected.as_str().unwrap());
+        let transport = |bytes: &[u8]| json!({"base64":cube_core::encoding::base64_encode(bytes)});
+        assert_eq!(
+            run(op, transport(&input), parameters.clone(), false),
+            Err("retention_policy_unavailable")
+        );
+        if input.len() > input_limit {
+            assert_eq!(
+                run(op, transport(&input), parameters.clone(), true),
+                Err("input_limit")
+            );
+        }
+        let n = input.len().min(limit);
+        let actual = run(op, transport(&input[..n]), parameters.clone(), true)
+            .unwrap_or_else(|e| panic!("{} {op} ({n} bytes): {e}", parameters["profile"]));
+        assert_eq!(
+            actual,
+            json!({"output":{"base64":cube_core::encoding::base64_encode(&expected[..n])}})
+        );
+    }
 }
