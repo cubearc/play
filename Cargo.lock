@@ -559,6 +559,7 @@ dependencies = [
  "data-encoding",
  "des",
  "gift-cipher",
+ "hc-256",
  "hex",
  "html5gum",
  "idea",
@@ -573,7 +574,9 @@ dependencies = [
  "num-bigint 0.5.1",
  "png",
  "quircs",
+ "rabbit",
  "rc2",
+ "rc4",
  "rc5",
  "rc6",
  "ripemd",
@@ -1017,6 +1020,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "824e001ac4f3012dd16a264bec811403a67ca9deb6c102fc5049b32c4574b35f"
 dependencies = [
  "hashbrown 0.16.1",
+]
+
+[[package]]
+name = "hc-256"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "718152a54915ae7005a7e9a2d772b2357deaa818436c7153d9af7fc0dfd0bf04"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -1849,6 +1861,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "rabbit"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7204c97584ac097d9749f4a52f2f96910d988f12303fe3e3b021628f88923f1"
+dependencies = [
+ "cipher",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1859,6 +1880,15 @@ name = "rc2"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ceda21af1ae61033b63175653a1af86cae399d79cd03ca80ba347eb3a6c4a7fe"
+dependencies = [
+ "cipher",
+]
+
+[[package]]
+name = "rc4"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "840038b674daa9f7a7957440d937951d15c0143c056e631e529141fd780e0c92"
 dependencies = [
  "cipher",
 ]

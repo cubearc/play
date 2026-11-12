@@ -135,3 +135,40 @@ fn xxtea_whole_word_answers_cross_private_graph_and_byte_viewer() {
         }
     }
 }
+
+#[test]
+fn stream_reference_answers_cross_private_graph_and_byte_viewer() {
+    let vectors: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/stream/reference/vectors.json"
+    ))
+    .unwrap();
+    let profiles: BTreeSet<_> = vectors
+        .iter()
+        .map(|v| v["parameters"]["profile"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        profiles,
+        cube_core::ciphers::stream::reference::Profile::NAMES
+            .iter()
+            .copied()
+            .collect()
+    );
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(4);
+    std::thread::scope(|scope| {
+        for chunk in vectors.chunks(vectors.len().div_ceil(workers)) {
+            scope.spawn(move||{
+                for v in chunk {
+                    let parameters=&v["parameters"];
+                    for (op,input,expected) in [("cipher.stream.encrypt",&v["plaintext_hex"],&v["ciphertext_hex"]),("cipher.stream.decrypt",&v["ciphertext_hex"],&v["plaintext_hex"])] {
+                        let input=json!({"base64":cube_core::encoding::base64_encode(&hex_bytes(input.as_str().unwrap()))});
+                        assert_eq!(run(op,input.clone(),parameters.clone(),false),Err("retention_policy_unavailable"));
+                        let actual=run(op,input,parameters.clone(),true).unwrap();
+                        assert_eq!(actual,json!({"output":{"base64":cube_core::encoding::base64_encode(&hex_bytes(expected.as_str().unwrap()))}}));
+                    }
+                }
+            });
+        }
+    });
+}
