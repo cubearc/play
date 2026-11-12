@@ -205,3 +205,75 @@ fn assert_stream_reference(v: &Value) {
         );
     }
 }
+
+#[test]
+fn authenticated_stream_detached_ports_chain_and_reject_forged_tags() {
+    let vectors: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/stream/reference/authentication/vectors.json"
+    ))
+    .unwrap();
+    for v in vectors {
+        let parameters = &v["parameters"];
+        let transport = |name: &str| json!({"base64":cube_core::encoding::base64_encode(&hex_bytes(v[name].as_str().unwrap()))});
+        let plain = transport("plaintext_hex");
+        let ciphertext = transport("ciphertext_hex");
+        let tag = transport("tag_hex");
+        assert_eq!(
+            run(
+                "cipher.stream.auth.encrypt",
+                plain.clone(),
+                parameters.clone(),
+                false
+            ),
+            Err("retention_policy_unavailable")
+        );
+        assert_eq!(
+            run(
+                "cipher.stream.auth.encrypt",
+                plain.clone(),
+                parameters.clone(),
+                true
+            )
+            .unwrap(),
+            json!({"output":ciphertext,"tag":tag})
+        );
+        let encrypt = Uuid::new_v4();
+        let decrypt = Uuid::new_v4();
+        let graph = json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"bytes"}],"nodes":[
+            {"id":encrypt,"operation":"cipher.stream.auth.encrypt","operationVersion":1,"parameters":parameters,"retainPrivate":true,"position":{"x":0,"y":0},"inputs":{"input":{"kind":"input","name":"source"}}},
+            {"id":decrypt,"operation":"cipher.stream.auth.decrypt","operationVersion":1,"parameters":parameters,"retainPrivate":true,"position":{"x":1,"y":0},"inputs":{"input":{"kind":"output","nodeId":encrypt,"port":"output"},"tag":{"kind":"output","nodeId":encrypt,"port":"tag"}}}
+        ],"output":decrypt});
+        let invoke = |graph: Value| PipelineInvocation {
+            definition: Definition::parse(graph).unwrap(),
+            inputs: BTreeMap::from([(
+                "source".into(),
+                InputValue::Bytes {
+                    base64: plain["base64"].as_str().unwrap().into(),
+                },
+            )]),
+        };
+        let invocation = invoke(graph.clone());
+        worker::validate_pipeline(&invocation).unwrap();
+        let result = worker::execute_pipeline(invocation, |_| Ok(())).unwrap();
+        assert_eq!(
+            worker::named_outputs("cipher.stream.auth.decrypt", &result).unwrap(),
+            json!({"output":plain})
+        );
+        let mut bad_tag = hex_bytes(v["tag_hex"].as_str().unwrap());
+        bad_tag[0] ^= 128;
+        let mut forged = graph.clone();
+        forged["nodes"][1]["inputs"]["tag"] = json!({"kind":"literal","value":{"base64":cube_core::encoding::base64_encode(&bad_tag)}});
+        let invocation = invoke(forged);
+        worker::validate_pipeline(&invocation).unwrap();
+        assert_eq!(
+            worker::execute_pipeline(invocation, |_| Ok(())),
+            Err("invalid_input")
+        );
+        let mut denied = graph;
+        denied["nodes"][1]["retainPrivate"] = json!(false);
+        assert_eq!(
+            Definition::parse(denied).map(|_| ()),
+            Err("retention_policy_unavailable")
+        );
+    }
+}
