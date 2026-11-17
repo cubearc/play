@@ -309,3 +309,45 @@ fn aes_byte_modes_cross_private_native_graph_and_byte_viewer() {
         }
     }
 }
+
+#[test]
+fn aes_key_wrap_and_adversarial_integrity_cases_use_private_native_bytes() {
+    for invalid in [false, true] {
+        let vectors: Vec<Value> = serde_json::from_str(if invalid {
+            include_str!(
+                "../../../../cube/crates/cube-core/src/ciphers/key_wrap/invalid_vectors.json"
+            )
+        } else {
+            include_str!("../../../../cube/crates/cube-core/src/ciphers/key_wrap/vectors.json")
+        })
+        .unwrap();
+        for v in vectors {
+            let p = &v["parameters"];
+            let wrapped =
+                cube_core::encoding::hex_decode(v["wrapped_hex"].as_str().unwrap()).unwrap();
+            let wrapped = json!({"base64":cube_core::encoding::base64_encode(&wrapped)});
+            if invalid {
+                assert_eq!(
+                    run("cipher.aes.key_wrap.unwrap", wrapped, p.clone(), true),
+                    Err("invalid_input")
+                );
+                continue;
+            }
+            let plain =
+                cube_core::encoding::hex_decode(v["plaintext_hex"].as_str().unwrap()).unwrap();
+            let plain = json!({"base64":cube_core::encoding::base64_encode(&plain)});
+            assert_eq!(
+                run("cipher.aes.key_wrap.wrap", plain.clone(), p.clone(), false),
+                Err("retention_policy_unavailable")
+            );
+            assert_eq!(
+                run("cipher.aes.key_wrap.wrap", plain.clone(), p.clone(), true).unwrap(),
+                json!({"output":wrapped})
+            );
+            assert_eq!(
+                run("cipher.aes.key_wrap.unwrap", wrapped, p.clone(), true).unwrap(),
+                json!({"output":plain})
+            );
+        }
+    }
+}
