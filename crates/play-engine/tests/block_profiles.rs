@@ -392,3 +392,41 @@ fn explicit_openssl_files_use_private_native_bytes_without_authentication_claims
         );
     }
 }
+
+#[test]
+fn age_authenticates_all_chunks_before_private_native_output() {
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/age/vectors.json"
+    ))
+    .unwrap();
+    for v in cases {
+        let input = json!({"base64":v["ciphertext_base64"]});
+        assert_eq!(
+            run(
+                "cipher.age.decrypt",
+                input.clone(),
+                v["parameters"].clone(),
+                false
+            ),
+            Err("retention_policy_unavailable")
+        );
+        let data =
+            cube_core::encoding::base64_decode(v["ciphertext_base64"].as_str().unwrap()).unwrap();
+        if data.len() > play_engine::protocol::contract().input_bytes {
+            assert_eq!(
+                run("cipher.age.decrypt", input, v["parameters"].clone(), true),
+                Err("input_limit")
+            );
+            continue;
+        }
+        let result = run("cipher.age.decrypt", input, v["parameters"].clone(), true);
+        if v["expect"] == "success" {
+            assert_eq!(
+                result.unwrap(),
+                json!({"output":{"base64":v["plaintext_base64"]}})
+            );
+        } else {
+            assert!(result.is_err(), "{}", v["case"]);
+        }
+    }
+}
