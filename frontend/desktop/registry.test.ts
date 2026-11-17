@@ -462,6 +462,7 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
           fixture.contract_sha256,
           operation.operation,
         );
+        let comparisonMode = "exact";
         if (fixture.verification) {
           const verified = spawnSync(
             conformanceVerifier,
@@ -479,10 +480,15 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
             0,
             `${operation.operation} actual native randomized result: ${verified.stderr}`,
           );
-          assert.equal(
-            (parseJson(verified.stdout) as { verified: boolean }).verified,
-            true,
+          const proof = parseJson(verified.stdout) as {
+            verified: boolean;
+            comparison: string;
+          };
+          assert.equal(proof.verified, true);
+          assert.ok(
+            ["verified-inverse", "verified-kem"].includes(proof.comparison),
           );
+          comparisonMode = proof.comparison;
         } else {
           assert.deepEqual(
             run.result?.outputs,
@@ -504,7 +510,7 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
           host_parameters: parameters,
           real_native_worker: true,
           exact_named_outputs: !fixture.verification,
-          comparison_mode: fixture.verification ? "verified-inverse" : "exact",
+          comparison_mode: comparisonMode,
           run_id: run.id,
         });
       }

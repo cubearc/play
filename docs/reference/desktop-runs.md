@@ -60,8 +60,10 @@ new intent and preserves the preceding evidence.
 node and choosing **Run node** executes that node's ancestor closure without
 saving another Pipeline revision. Both actions use the same admission and
 retention rules. Aggregate consumed text is bounded at 8192 UTF-8 bytes and raw
-PNG data at 131072 bytes across all named inputs; extra slots do not increase
-worker CPU, wall-time, memory or output budgets.
+PNG data at 131072 bytes across all named inputs. Native worker CPU,
+wall time and memory use the admission ceilings. See
+[native pipeline input and output budgets](desktop-pipelines.md) for exact
+fixed-width cryptographic File slots.
 
 Resolved conversion/join operands, including repeated values and a text separator,
 are bounded at 8192 bytes per node. UTF-8 decoding rejects malformed bytes as

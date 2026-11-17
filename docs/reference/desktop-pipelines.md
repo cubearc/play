@@ -139,11 +139,20 @@ outputs use semantic type `json`; consumers still enforce their complete value
 schemas. Integer operations use the shared exact ±9,007,199,254,740,991 range
 and reject floating representations. See [Core field composition](https://github.com/cubearc/cube/blob/main/docs/reference/structured-composition.md).
 
-Native composition inputs, including field paths, the text separator and repeated operands,
-share the existing **8192-byte** per-node input ceiling. Aggregate raw output across
-all executed nodes remains **16384 bytes**. Core's broader direct-call limits do
-not enlarge these native budgets. See [ordered Core composition](https://github.com/cubearc/cube/blob/main/docs/reference/composition.md)
-for exact empty/Unicode/binary semantics.
+Ordinary native composition uses an **8192-byte** per-node input ceiling
+and a **16384-byte** aggregate raw output budget. Field paths, separators
+and repeated operands count toward those limits. See
+[ordered Core composition](https://github.com/cubearc/cube/blob/main/docs/reference/composition.md)
+for exact empty, Unicode and binary semantics.
+
+File slots used exclusively by FrodoKEM or Classic McEliece decapsulation
+or by BFV, BGV or CKKS ciphertext addition share a separate **65544-byte**
+decoded input budget. Every node still validates the exact widths for its
+selected Core profile. The three addition operations also share a separate
+**32772-byte** aggregate ciphertext output budget. Slots shared with any
+ordinary consumer count toward the ordinary input budget. The transport
+admits the same 262144-byte frame, and the existing private-retention
+consent applies to secret inputs and outputs.
 
 A fork preserves the chosen graph and records its immutable Workspace-scoped
 origin. Revisions preserve node IDs unless the editor deliberately removes/adds

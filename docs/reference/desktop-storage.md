@@ -351,8 +351,10 @@ Values are inert data. A preview never becomes an input in place of the full val
 
 One structured value is bounded by the existing 16384-byte output ceiling. Its
 canonical document, including type metadata, consumes the Exploration byte quota.
-All consumed JSON, text and decoded byte inputs share the existing 8192-byte Run
-input ceiling. Retaining a value does not imply it fits every later receiver.
+Ordinary consumed JSON, text and decoded byte inputs share an 8192-byte Run
+input ceiling. The [native pipeline input budgets](desktop-pipelines.md)
+describe fixed-width cryptographic File slots. Retaining a value does not
+imply it fits every later receiver.
 
 Plan format 4 stores compact, typed contract references and the exact contract
 digest. Full Core contracts live in immutable `contract_snapshots` rows keyed by

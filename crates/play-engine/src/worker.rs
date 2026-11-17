@@ -19,6 +19,79 @@ fn budget() -> Budget {
         ..Budget::default()
     }
 }
+const CIPHERTEXT_BYTES: usize = cube_core::asymmetric::homomorphic::Profile::Ckks.bytes();
+const CIPHERTEXT_PAIR_BYTES: usize = 2 * CIPHERTEXT_BYTES;
+
+// Apply the extra budget only to fixed-width profiles that need it. Core
+// validates each port and the caller's explicit profile independently.
+fn large_ciphertext_output(operation: &str) -> bool {
+    use cube_core::asymmetric::homomorphic::{BFV_ADD, BGV_ADD, CKKS_ADD};
+    matches!(operation, BFV_ADD | BGV_ADD | CKKS_ADD)
+}
+
+fn large_binary_input(operation: &str) -> bool {
+    use cube_core::asymmetric::alternate_kem::{FRODO, MCELIECE};
+    large_ciphertext_output(operation) || matches!(operation, FRODO | MCELIECE)
+}
+
+fn graph_node_budget(operation: &str) -> Budget {
+    let mut limits = budget();
+    if large_binary_input(operation) {
+        limits.input_bytes =
+            CIPHERTEXT_PAIR_BYTES + cube_core::asymmetric::homomorphic::MAX_PARAMETERS;
+    }
+    if large_ciphertext_output(operation) {
+        limits.output_bytes = CIPHERTEXT_BYTES;
+    }
+    limits
+}
+
+pub(crate) fn graph_output_limit(graph: &crate::graph::Definition) -> usize {
+    let ordinary = protocol::contract().output_bytes;
+    if graph
+        .nodes
+        .iter()
+        .any(|node| large_ciphertext_output(&node.operation))
+    {
+        ordinary + CIPHERTEXT_BYTES
+    } else {
+        ordinary
+    }
+}
+
+fn large_binary_slot(graph: &crate::graph::Definition, name: &str) -> bool {
+    let mut consumers = graph.nodes.iter().filter(|node| {
+        node.inputs.values().any(
+            |source| matches!(source, crate::graph::Source::Input { name: input } if input == name),
+        )
+    });
+    // A source shared with an ordinary operation still has its ordinary bound.
+    consumers.all(|node| large_binary_input(&node.operation))
+}
+
+#[derive(Default)]
+struct GraphOutputBytes {
+    ordinary: usize,
+    ciphertext: usize,
+}
+
+impl GraphOutputBytes {
+    fn reserve(&mut self, operation: &str, bytes: usize) -> Result<()> {
+        let limit = graph_node_budget(operation).output_bytes;
+        let total = if large_ciphertext_output(operation) {
+            &mut self.ciphertext
+        } else {
+            &mut self.ordinary
+        };
+        let size = total.checked_add(bytes).ok_or("output_limit")?;
+        if size > limit {
+            return Err("output_limit");
+        }
+        *total = size;
+        Ok(())
+    }
+}
+
 fn failure(error: core::Failure) -> &'static str {
     error.0
 }
@@ -193,7 +266,9 @@ pub fn named_outputs(operation: &str, output: &Value) -> Result<Value> {
     e.contract
         .validate_outputs(&named)
         .map_err(|_| "invalid_response")?;
-    if core::output_size(operation, &named).map_err(failure)? > protocol::contract().output_bytes {
+    if core::output_size(operation, &named).map_err(failure)?
+        > graph_node_budget(operation).output_bytes
+    {
         return Err("output_limit");
     }
     Ok(named)
@@ -528,6 +603,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
         return Err("invalid_binding");
     }
     let mut input_bytes = 0usize;
+    let mut profile_bytes = 0usize;
     let mut image_bytes = 0usize;
     for (name, value) in &invocation.inputs {
         let representation = invocation.definition.input_representation(name)?;
@@ -541,14 +617,22 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                     Representation::Bytes | Representation::ByteArray
                 ) =>
             {
-                if base64.len() > protocol::contract().input_bytes.div_ceil(3) * 4 {
+                let (total, limit) = if large_binary_slot(&invocation.definition, name) {
+                    (&mut profile_bytes, CIPHERTEXT_PAIR_BYTES)
+                } else {
+                    (&mut input_bytes, protocol::contract().input_bytes)
+                };
+                if base64.len() > limit.div_ceil(3) * 4 {
                     return Err("input_limit");
                 }
                 let bytes = STANDARD.decode(base64).map_err(|_| "invalid_binding")?;
                 if STANDARD.encode(&bytes) != *base64 {
                     return Err("invalid_binding");
                 }
-                input_bytes = input_bytes.checked_add(bytes.len()).ok_or("input_limit")?;
+                *total = total.checked_add(bytes.len()).ok_or("input_limit")?;
+                if *total > limit {
+                    return Err("input_limit");
+                }
             }
             InputValue::Structured { value } if representation == Representation::Json => {
                 input_bytes = input_bytes
@@ -597,7 +681,7 @@ pub fn validate_pipeline(invocation: &PipelineInvocation) -> Result<()> {
                 node.operation_version,
                 &Value::Object(values),
                 &canonical_value(node.parameters.clone()),
-                budget(),
+                graph_node_budget(&node.operation),
             )
             .map_err(failure)?;
         }
@@ -634,7 +718,7 @@ fn execute_node((node, values): (crate::graph::Node, Value)) -> Result<Value> {
         node.operation_version,
         &values,
         &canonical_value(node.parameters.clone()),
-        budget(),
+        graph_node_budget(&node.operation),
     )
     .map_err(failure)
 }
@@ -647,7 +731,7 @@ fn execute_graph(
     validate_pipeline(invocation)?;
     let mut outputs: BTreeMap<uuid::Uuid, Value> = BTreeMap::new();
     let mut pending = invocation.definition.schedule()?;
-    let mut used = 0usize;
+    let mut used = GraphOutputBytes::default();
     let mut final_output = Value::Null;
     while !pending.is_empty() {
         let ready = pending
@@ -674,7 +758,7 @@ fn execute_graph(
                     node.operation_version,
                     &values,
                     &canonical_value(node.parameters.clone()),
-                    budget(),
+                    graph_node_budget(&node.operation),
                 )
                 .map_err(failure)?;
                 Ok((*id, (node.clone(), values)))
@@ -695,13 +779,15 @@ fn execute_graph(
     Ok(final_output)
 }
 
-fn bounded_output(node: &crate::graph::Node, named: &Value, used: &mut usize) -> Result<Value> {
-    *used = used
-        .checked_add(core::output_size(&node.operation, named).map_err(failure)?)
-        .ok_or("output_limit")?;
-    if *used > protocol::contract().output_bytes {
-        return Err("output_limit");
-    }
+fn bounded_output(
+    node: &crate::graph::Node,
+    named: &Value,
+    used: &mut GraphOutputBytes,
+) -> Result<Value> {
+    used.reserve(
+        &node.operation,
+        core::output_size(&node.operation, named).map_err(failure)?,
+    )?;
     raw_outputs(&node.operation, named)
 }
 
@@ -709,7 +795,7 @@ fn finish_wave(
     graph: &crate::graph::Definition,
     results: impl Iterator<Item = (uuid::Uuid, Result<Value>)>,
     outputs: &mut std::collections::BTreeMap<uuid::Uuid, Value>,
-    used: &mut usize,
+    used: &mut GraphOutputBytes,
     emit: &mut impl FnMut(Value) -> Result<()>,
 ) -> Result<Option<Value>> {
     let mut failed = None;
