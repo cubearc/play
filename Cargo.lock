@@ -975,6 +975,7 @@ dependencies = [
  "gift-cipher",
  "hc-256",
  "hex",
+ "hmac 0.13.0",
  "html5gum",
  "idea",
  "image",
