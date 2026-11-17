@@ -351,3 +351,44 @@ fn aes_key_wrap_and_adversarial_integrity_cases_use_private_native_bytes() {
         }
     }
 }
+#[test]
+fn explicit_openssl_files_use_private_native_bytes_without_authentication_claims() {
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/openssl/vectors.json"
+    ))
+    .unwrap();
+    for v in cases {
+        let data = cube_core::encoding::hex_decode(v["ciphertext_hex"].as_str().unwrap()).unwrap();
+        let plain = cube_core::encoding::hex_decode(v["plaintext_hex"].as_str().unwrap()).unwrap();
+        let input = json!({"base64":cube_core::encoding::base64_encode(&data)});
+        assert_eq!(
+            run(
+                "cipher.openssl.decrypt",
+                input.clone(),
+                v["parameters"].clone(),
+                false
+            ),
+            Err("retention_policy_unavailable")
+        );
+        assert_eq!(
+            run(
+                "cipher.openssl.decrypt",
+                input,
+                v["parameters"].clone(),
+                true
+            )
+            .unwrap(),
+            json!({"output":{"base64":cube_core::encoding::base64_encode(&plain)}})
+        );
+        let truncated = json!({"base64":cube_core::encoding::base64_encode(&data[..data.len()-1])});
+        assert_eq!(
+            run(
+                "cipher.openssl.decrypt",
+                truncated,
+                v["parameters"].clone(),
+                true
+            ),
+            Err("invalid_input")
+        );
+    }
+}
