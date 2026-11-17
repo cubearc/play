@@ -1009,6 +1009,8 @@ dependencies = [
  "sha1",
  "sha2 0.11.1",
  "sha3 0.12.0",
+ "sm2",
+ "sm3",
  "sm4",
  "speck-cipher",
  "twofish",
@@ -1029,7 +1031,7 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "curve25519-dalek-derive",
- "fiat-crypto",
+ "fiat-crypto 0.2.9",
  "rustc_version",
  "subtle",
  "zeroize",
@@ -1348,6 +1350,12 @@ name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-crate"
@@ -2903,7 +2911,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c9f42978c78a00e3d68f69fc03e57a234debae69da4020a4fb588fcdcd07b06"
 dependencies = [
  "elliptic-curve 0.14.3",
+ "once_cell",
  "primefield",
+ "serdect",
  "wnaf",
 ]
 
@@ -3536,6 +3546,30 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "sm2"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a9d91aad47b30a5a5011032bed8d4b4192d7d5174ab3ed3e4dd22341ba8a5ac"
+dependencies = [
+ "der 0.8.3",
+ "elliptic-curve 0.14.3",
+ "fiat-crypto 0.3.0",
+ "primefield",
+ "primeorder 0.14.0",
+ "rand_core 0.10.1",
+ "sm3",
+]
+
+[[package]]
+name = "sm3"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da6a89ba31723d185fd7413b98c576a575f356d9b84729d8ecb6ead60000a5b6"
+dependencies = [
+ "digest 0.11.3",
+]
 
 [[package]]
 name = "sm4"
