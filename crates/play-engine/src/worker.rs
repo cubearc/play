@@ -220,11 +220,12 @@ pub fn validate(invocation: &Invocation) -> Result<()> {
     )
     .map_err(failure)
 }
-// Worker transport keeps compact single values and complete named maps for
-// multiple outputs. This choice depends only on representation and port count.
+// Worker transport keeps legacy single values and named maps for multiple
+// ports. Large ciphertexts use the named Base64 form to fit the frame parser's
+// JSON node budget.
 fn raw_outputs(operation: &str, named: &Value) -> Result<Value> {
     let e = supported(operation)?;
-    if e.outputs.len() != 1 {
+    if e.outputs.len() != 1 || large_ciphertext_output(operation) {
         return Ok(json!({"ports":named}));
     }
     let (name, representation) = e.outputs.first_key_value().ok_or("contract_mismatch")?;

@@ -150,8 +150,8 @@ or by BFV, BGV or CKKS ciphertext addition share a separate **65544-byte**
 decoded input budget. Every node still validates the exact widths for its
 selected Core profile. The three addition operations also share a separate
 **32772-byte** aggregate ciphertext output budget. Slots shared with any
-ordinary consumer count toward the ordinary input budget. The transport
-admits the same 262144-byte frame, and the existing private-retention
+ordinary consumer count toward the ordinary input budget. Ciphertext output
+uses Base64 named ports within the 262144-byte frame. Private-retention
 consent applies to secret inputs and outputs.
 
 A fork preserves the chosen graph and records its immutable Workspace-scoped

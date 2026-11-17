@@ -43,7 +43,13 @@ fn invoke(
     }))?;
     let invocation = PipelineInvocation { definition, inputs };
     worker::validate_pipeline(&invocation)?;
-    let frame = |value| play_engine::protocol::write_frame(&mut std::io::sink(), &value);
+    let frame = |value| {
+        let mut frame = Vec::new();
+        play_engine::protocol::write_frame(&mut frame, &value)?;
+        let text = std::str::from_utf8(&frame).map_err(|_| "invalid_frame")?;
+        cube_core::pipeline::json::parse(text).map_err(|_| "invalid_frame")?;
+        Ok(())
+    };
     let output = worker::execute_pipeline(invocation, frame)?;
     frame(json!({"status":"completed","output":output}))?;
     worker::named_outputs(operation, &output)
