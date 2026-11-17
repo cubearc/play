@@ -1,0 +1,66 @@
+//! Exact raw group encryption profiles pass through private native graphs.
+use play_engine::{
+    graph::Definition,
+    worker::{self, InputValue, PipelineInvocation},
+};
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
+use uuid::Uuid;
+fn invoke(v: &Value, operation: &str, retain: bool) -> Result<Value, &'static str> {
+    let node = Uuid::new_v4();
+    let definition = Definition::parse(
+        json!({"formatVersion":4,"inputs":[{"name":"source","semanticType":"bytes"},{"name":"secret","semanticType":"bytes"}],"nodes":[{"id":node,"operation":operation,"operationVersion":1,"parameters":v["parameters"],"retainPrivate":retain,"position":{"x":0,"y":0},"inputs":{"input":{"kind":"input","name":"source"},"key":{"kind":"input","name":"secret"}}}],"output":node}),
+    )?;
+    let byte = |name: &str| InputValue::Bytes {
+        base64: cube_core::encoding::base64_encode(
+            &cube_core::encoding::hex_decode(v[name].as_str().unwrap()).unwrap(),
+        ),
+    };
+    let invocation = PipelineInvocation {
+        definition,
+        inputs: BTreeMap::from([
+            ("source".into(), byte("input_hex")),
+            ("secret".into(), byte("key_hex")),
+        ]),
+    };
+    worker::validate_pipeline(&invocation)?;
+    worker::named_outputs(
+        operation,
+        &worker::execute_pipeline(invocation, |_| Ok(()))?,
+    )
+}
+#[test]
+fn external_raw_group_answers_and_fresh_ciphertexts_require_explicit_retention() {
+    let vectors: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/asymmetric/group_encryption/vectors.json"
+    ))
+    .unwrap();
+    for v in vectors {
+        let family = v["scheme"].as_str().unwrap();
+        let decrypt = format!("cipher.{family}.decrypt");
+        let encrypt = format!("cipher.{family}.encrypt");
+        let mut case = json!({"parameters":v["parameters"],"input_hex":v["ciphertext_hex"],"key_hex":v["private_key_hex"]});
+        assert_eq!(
+            invoke(&case, &decrypt, false),
+            Err("retention_policy_unavailable")
+        );
+        let expected =
+            cube_core::encoding::hex_decode(v["plaintext_hex"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            invoke(&case, &decrypt, true).unwrap(),
+            json!({"output":{"base64":cube_core::encoding::base64_encode(&expected)}})
+        );
+        case["input_hex"] = v["plaintext_hex"].clone();
+        case["key_hex"] = v["public_key_hex"].clone();
+        let encrypted = invoke(&case, &encrypt, true).unwrap();
+        case["input_hex"] = json!(cube_core::encoding::hex_encode(
+            &cube_core::encoding::base64_decode(encrypted["output"]["base64"].as_str().unwrap())
+                .unwrap()
+        ));
+        case["key_hex"] = v["private_key_hex"].clone();
+        assert_eq!(
+            invoke(&case, &decrypt, true).unwrap(),
+            json!({"output":{"base64":cube_core::encoding::base64_encode(&expected)}})
+        );
+    }
+}
