@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
@@ -25,6 +26,7 @@ type Fixture = {
   inputs: Record<string, JsonValue>;
   parameters: Record<string, JsonValue>;
   outputs: Record<string, JsonValue>;
+  verification?: unknown;
 };
 // Substitute only canonical defaults with the host's effective defaults. This
 // keeps interpreter ceilings bounded; every explicit fixture choice is retained.
@@ -140,6 +142,34 @@ assert.ok(available.length > 0);
 assert.equal(
   new Set(discovered.map((entry) => entry.operation)).size,
   discovered.length,
+);
+const coreRoot = fileURLToPath(new URL("../../../cube/", import.meta.url));
+const buildVerifier = spawnSync(
+  "cargo",
+  [
+    "build",
+    "--locked",
+    "--manifest-path",
+    join(coreRoot, "Cargo.toml"),
+    "-p",
+    "cube-core",
+    "--example",
+    "verify_randomized_conformance",
+  ],
+  { cwd: coreRoot, encoding: "utf8", windowsHide: true },
+);
+assert.equal(
+  buildVerifier.status,
+  0,
+  `Build the reviewed test-only Core inverse verifier: ${buildVerifier.stderr}`,
+);
+const conformanceVerifier = join(
+  resolve(coreRoot, process.env.CARGO_TARGET_DIR ?? "target"),
+  "debug",
+  "examples",
+  process.platform === "win32"
+    ? "verify_randomized_conformance.exe"
+    : "verify_randomized_conformance",
 );
 const qualified: unknown[] = [];
 // Bound each independent native matrix unit by the original per-test deadline.
@@ -432,13 +462,36 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
           fixture.contract_sha256,
           operation.operation,
         );
-        assert.deepEqual(
-          run.result?.outputs,
-          fixture.outputs,
-          operation.operation,
-        );
+        if (fixture.verification) {
+          const verified = spawnSync(
+            conformanceVerifier,
+            [operation.operation],
+            {
+              input: stringifyJson(run.result?.outputs),
+              encoding: "utf8",
+              maxBuffer: 1024 * 1024,
+              timeout: 5000,
+              windowsHide: true,
+            },
+          );
+          assert.equal(
+            verified.status,
+            0,
+            `${operation.operation} actual native randomized result: ${verified.stderr}`,
+          );
+          assert.equal(
+            (parseJson(verified.stdout) as { verified: boolean }).verified,
+            true,
+          );
+        } else {
+          assert.deepEqual(
+            run.result?.outputs,
+            fixture.outputs,
+            operation.operation,
+          );
+        }
         assert.equal(run.attempts.length, 1);
-        assert.deepEqual(run.attempts[0]?.result?.outputs, fixture.outputs);
+        assert.deepEqual(run.attempts[0]?.result?.outputs, run.result?.outputs);
         const source = run.plan.inputs.source;
         assert.ok(source && "used" in source);
         assert.equal(source.used, assetPorts.length > 0);
@@ -450,7 +503,8 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
           fixture_parameters: fixture.parameters,
           host_parameters: parameters,
           real_native_worker: true,
-          exact_named_outputs: true,
+          exact_named_outputs: !fixture.verification,
+          comparison_mode: fixture.verification ? "verified-inverse" : "exact",
           run_id: run.id,
         });
       }
