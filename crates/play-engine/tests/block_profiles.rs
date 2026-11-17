@@ -277,3 +277,35 @@ fn authenticated_stream_detached_ports_chain_and_reject_forged_tags() {
         );
     }
 }
+
+#[test]
+fn aes_byte_modes_cross_private_native_graph_and_byte_viewer() {
+    let vectors: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../cube/crates/cube-core/src/ciphers/aes_modes/vectors.json"
+    ))
+    .unwrap();
+    for v in vectors {
+        for (operation, input, expected) in [
+            (
+                "cipher.aes.mode.encrypt",
+                &v["plaintext_hex"],
+                &v["ciphertext_hex"],
+            ),
+            (
+                "cipher.aes.mode.decrypt",
+                &v["ciphertext_hex"],
+                &v["plaintext_hex"],
+            ),
+        ] {
+            let bytes = cube_core::encoding::hex_decode(input.as_str().unwrap()).unwrap();
+            let input = json!({"base64":cube_core::encoding::base64_encode(&bytes)});
+            assert!(run(operation, input.clone(), v["parameters"].clone(), false).is_err());
+            let result = run(operation, input, v["parameters"].clone(), true).unwrap();
+            let expected = cube_core::encoding::hex_decode(expected.as_str().unwrap()).unwrap();
+            assert_eq!(
+                result,
+                json!({"output":{"base64":cube_core::encoding::base64_encode(&expected)}})
+            );
+        }
+    }
+}
