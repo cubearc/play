@@ -730,6 +730,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cts"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6ae47d18aa4f3701bc9b644cf9a74a45e6eace39feabeab15864728aa1e45a9"
+dependencies = [
+ "cipher 0.5.2",
+]
+
+[[package]]
 name = "ctutils"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -778,6 +787,7 @@ dependencies = [
  "crc32fast",
  "csv-core",
  "ctr 0.10.1",
+ "cts",
  "data-encoding",
  "deoxys",
  "des",
@@ -822,6 +832,7 @@ dependencies = [
  "unicode-general-category",
  "unicode-normalization",
  "xtea",
+ "xts-mode",
  "zeroize",
 ]
 
@@ -3143,6 +3154,15 @@ name = "xtea"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f6d155751793947b57642656b5578b150f3f417696ce3cd8e9eaf62cb0d0362"
+dependencies = [
+ "cipher 0.5.2",
+]
+
+[[package]]
+name = "xts-mode"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2acb658219ff8afdcedc1ea506709b2b32812719eb6ac36f47ae43f50404157"
 dependencies = [
  "cipher 0.5.2",
 ]
