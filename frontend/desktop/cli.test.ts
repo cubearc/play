@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Cli } from "./cli.ts";
+import { contract } from "./contract.ts";
 import { Engine } from "./engine.ts";
 import type {
   ExplorationView,
@@ -111,7 +112,7 @@ test("real Cube CLI scopes reads and shares idempotent Run admission and cancell
         context,
         run_id: started.id,
       });
-      const deadline = Date.now() + 1500;
+      const deadline = Date.now() + contract.run_ms;
       while (status.status === "queued" && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 20));
         status = await cli.execute({
@@ -120,7 +121,11 @@ test("real Cube CLI scopes reads and shares idempotent Run admission and cancell
           run_id: started.id,
         });
       }
-      assert.equal(status.status, "running");
+      assert.equal(
+        status.status,
+        "running",
+        "the native worker must start before the CLI cancels its Run",
+      );
       const cancelled = await cli.execute({
         kind: "cancel",
         context,
