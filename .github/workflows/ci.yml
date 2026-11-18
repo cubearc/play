@@ -243,7 +243,8 @@ jobs:
 
   windows-engine:
     runs-on: windows-latest
-    timeout-minutes: 20
+    # The full native catalog matrix takes over 16 minutes after building.
+    timeout-minutes: 30
     env:
       RUST_TEST_THREADS: "1"
       # Match the successful current-Core native proof and delivered app profile.
