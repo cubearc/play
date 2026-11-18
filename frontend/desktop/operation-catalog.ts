@@ -14,7 +14,7 @@ export async function loadCatalog(
       page.offset !== operations.length ||
       !Number.isSafeInteger(page.total) ||
       Number(page.total) < 0 ||
-      Number(page.total) > 512 ||
+      Number(page.total) > 1024 ||
       (expected !== undefined && page.total !== expected) ||
       !Array.isArray(page.operations) ||
       page.operations.length > 8 ||

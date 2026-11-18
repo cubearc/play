@@ -32,6 +32,24 @@ test("catalog pages preserve exact identities and explicit unavailable capabilit
   assert.equal(result[1]?.availability.state, "unavailable");
 });
 
+test("catalog collection accepts the expanded Core catalog in bounded pages", async () => {
+  const total = 525;
+  const result = await loadCatalog(async (offset) => {
+    const length = Math.min(8, total - offset);
+    const next = offset + length;
+    return page(
+      offset,
+      next < total ? next : null,
+      Array.from({ length }, (_, index) =>
+        entry(`operation.${offset + index}`),
+      ),
+      total,
+    );
+  });
+  assert.equal(result.length, total);
+  assert.equal(result.at(-1)?.operation, "operation.524");
+});
+
 test("catalog collection rejects partial, looping, duplicate, changing and oversized metadata", async () => {
   for (const invalid of [
     page(0, null, [entry("one")]),
@@ -39,7 +57,7 @@ test("catalog collection rejects partial, looping, duplicate, changing and overs
     page(1, null, [entry("one")]),
     page(0, 1, []),
     page(0, null, [entry("one"), entry("one")]),
-    page(0, null, [], 513),
+    page(0, 1, [entry("one")], 1025),
     page(0, null, [entry("one")], 0),
     page(0, null, [entry("one")], -1),
     page(0, null, [{ operation: "one", operation_version: 1 }], 1),
