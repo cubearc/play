@@ -130,8 +130,12 @@ persistence or execution. The Pipeline editor labels that choice and explains
 that keys, inputs and results will remain in the local Workspace. Consent is
 frozen with the Pipeline revision and Run plan; a later revision cannot authorize
 an earlier result. Output promotion and Candidate evidence verify that exact
-frozen node. Direct probes keep refusing private operations. Ephemeral per-run
-secrets and prohibited fingerprints remain unsupported; do not log private data.
+frozen node. Direct probes keep refusing private operations. A Core port marked
+`x-cube-secret`, such as the SipHash-2-4 key, must come from an authorized local
+input Asset. The saved definition and Run evidence refer to that Asset revision.
+Secret values cannot be entered as saved literals or supplied by an upstream
+result. Ephemeral per-run secrets and prohibited fingerprints remain unsupported.
+Private data is excluded from logs.
 Private output retention is an explicit choice. User-authored notes
 and explanations remain private local content until a chosen submission or
 publication enumerates what will leave the machine.

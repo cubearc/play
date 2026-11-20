@@ -1096,6 +1096,7 @@ dependencies = [
  "frodo-kem",
  "getrandom 0.2.17",
  "gift-cipher",
+ "hashcrew",
  "hc-256",
  "hex",
  "hkdf 0.13.0",
@@ -1149,11 +1150,13 @@ dependencies = [
  "sha1",
  "sha2 0.11.1",
  "sha3 0.12.0",
+ "siphasher",
  "sm2",
  "sm3",
  "sm4",
  "speck-cipher",
  "twofish",
+ "twox-hash",
  "unicode-general-category",
  "unicode-normalization",
  "unicode-segmentation",
@@ -1898,6 +1901,12 @@ dependencies = [
  "equivalent",
  "foldhash",
 ]
+
+[[package]]
+name = "hashcrew"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f73782af6df9e45939f4e6206b646f3cbab68c2cc5c0c375dab045800cafb018"
 
 [[package]]
 name = "hashlink"

@@ -383,6 +383,29 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
             /retention_policy_unavailable/,
           );
         }
+        const secret = operation.contract.inputs.find(
+          (port) =>
+            (port.schema as Record<string, unknown>)["x-cube-secret"] === true,
+        );
+        if (secret) {
+          const literal = structuredClone(definition);
+          const privateNode = literal.nodes[0];
+          assert.ok(privateNode?.retainPrivate);
+          privateNode.inputs[secret.name] = {
+            kind: "literal",
+            value: fixture.inputs[secret.name] as JsonValue,
+          };
+          await assert.rejects(
+            engine.workspace({
+              kind: "create_pipeline",
+              workspace_id: workspace.id,
+              key: randomUUID(),
+              title: operation.name,
+              definition: literal,
+            }),
+            /retention_policy_unavailable/,
+          );
+        }
         phase = "create Pipeline definition";
         const pipeline = (await engine.workspace({
           kind: "create_pipeline",
@@ -495,6 +518,14 @@ for (let batch = 0; batch * batchSize < available.length; batch++) {
             fixture.outputs,
             operation.operation,
           );
+        }
+        if (secret) {
+          const key = fixture.inputs[secret.name] as { base64: string };
+          assert.ok(!stringifyJson(run.plan).includes(key.base64));
+          const asset = assets.get(secret.name);
+          assert.ok(asset);
+          const slot = assetSlots.get(secret.name);
+          assert.ok(slot && run.plan.inputs[slot]?.used);
         }
         assert.equal(run.attempts.length, 1);
         assert.deepEqual(run.attempts[0]?.result?.outputs, run.result?.outputs);

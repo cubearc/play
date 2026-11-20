@@ -208,6 +208,11 @@ impl Definition {
             }
             for port in &c.inputs {
                 let source = n.inputs.get(&port.name).ok_or("invalid_connection")?;
+                if port.schema.as_value()["x-cube-secret"] == Value::Bool(true)
+                    && !matches!(source, Source::Input { .. })
+                {
+                    return Err("retention_policy_unavailable");
+                }
                 match source {
                     Source::Input { name } => {
                         if self.input(name)?.semantic_type != port.semantic_type {

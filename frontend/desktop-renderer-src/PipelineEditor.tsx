@@ -18,7 +18,12 @@ import {
   completeBindings,
   selectedBindings,
 } from "./BindingsEditor";
-import { GraphInputs, initialInputs, Select } from "./GraphInputs";
+import {
+  GraphInputs,
+  initialInputs,
+  Select,
+  secretInputsBound,
+} from "./GraphInputs";
 import { operationLabel } from "./operationLabel";
 import { ParameterFields, parameterTypesValid } from "./ParameterFields";
 import { PipelineGraph } from "./PipelineGraph";
@@ -156,6 +161,7 @@ export function PipelineEditor({
       return (
         op &&
         (!op.requires_private_retention || n.retainPrivate === true) &&
+        secretInputsBound(op, n, definition.inputs) &&
         parameterTypesValid(op, n.parameters)
       );
     }) &&

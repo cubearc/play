@@ -85,6 +85,33 @@ function emptyLiteral(
       ? []
       : "";
 }
+function secretPort(schema: unknown): boolean {
+  return (
+    schema !== null &&
+    typeof schema === "object" &&
+    "x-cube-secret" in schema &&
+    schema["x-cube-secret"] === true
+  );
+}
+
+export function secretInputsBound(
+  operation: Operation,
+  node: GraphNode,
+  slots: PipelineDefinition["inputs"],
+): boolean {
+  return operation.contract.inputs.every((port) => {
+    if (!secretPort(port.schema)) return true;
+    const source = node.inputs[port.name];
+    return (
+      source?.kind === "input" &&
+      slots.some(
+        (slot) =>
+          slot.name === source.name && slot.semanticType === port.semantic_type,
+      )
+    );
+  });
+}
+
 export function initialInputs(
   operation: Operation,
   slots: PipelineDefinition["inputs"],
@@ -93,6 +120,7 @@ export function initialInputs(
     operation.contract.inputs.map((p) => {
       const representation = operation.execution.inputs[p.name];
       if (!representation) throw new Error("catalog_unavailable");
+      if (secretPort(p.schema)) return [p.name, { kind: "input", name: "" }];
       return [
         p.name,
         slots.some((s) => s.semanticType === p.semantic_type)
@@ -163,24 +191,39 @@ export function GraphInputs({
               This input representation is unavailable.
             </p>
           );
+        const secret = secretPort(port.schema);
         const source = node.inputs[port.name];
+        const assetSlots = definition.inputs.filter(
+          (s) => s.semanticType === port.semantic_type,
+        );
         const value =
-          source?.kind === "output"
-            ? `${source.nodeId}:${source.port}`
-            : source?.kind === "input"
-              ? `input:${source.name}`
-              : "literal";
+          secret &&
+          (source?.kind !== "input" ||
+            !assetSlots.some((slot) => slot.name === source.name))
+            ? ""
+            : source?.kind === "output"
+              ? `${source.nodeId}:${source.port}`
+              : source?.kind === "input"
+                ? `input:${source.name}`
+                : "literal";
         const choices = [
-          ...definition.inputs
-            .filter((s) => s.semanticType === port.semantic_type)
-            .map((s) => ({
-              value: `input:${s.name}`,
-              label: `${s.name} · ${s.semanticType}`,
-            })),
-          ...(representation !== "image_samples"
+          ...assetSlots.map((s) => ({
+            value: `input:${s.name}`,
+            label: `${s.name} · ${s.semanticType}`,
+          })),
+          ...(secret
+            ? [
+                {
+                  value: "",
+                  label: "Choose a local Asset input",
+                  disabled: true,
+                },
+              ]
+            : []),
+          ...(!secret && representation !== "image_samples"
             ? [{ value: "literal", label: `Literal · ${port.semantic_type}` }]
             : []),
-          ...definition.nodes
+          ...(secret ? [] : definition.nodes)
             .filter((n) => n.id !== node.id)
             .flatMap(
               (n) =>
@@ -208,18 +251,24 @@ export function GraphInputs({
               onChange={(v) => {
                 if (v.startsWith("input:"))
                   update({ kind: "input", name: v.slice(6) });
-                else if (v === "literal")
+                else if (!secret && v === "literal")
                   update({
                     kind: "literal",
                     value: emptyLiteral(representation, port.schema),
                   });
-                else {
+                else if (!secret) {
                   const [nodeId, port] = v.split(":");
                   if (nodeId && port) update({ kind: "output", nodeId, port });
                 }
               }}
             />
-            {source?.kind === "literal" ? (
+            {secret && assetSlots.length === 0 ? (
+              <p>
+                Add a {port.semantic_type} input for this key and bind a local
+                Asset.
+              </p>
+            ) : null}
+            {!secret && source?.kind === "literal" ? (
               <LiteralValue
                 key={literalKey(node, port.name)}
                 draft={drafts[literalKey(node, port.name)]}
