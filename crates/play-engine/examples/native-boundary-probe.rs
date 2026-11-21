@@ -3,6 +3,11 @@ use std::{env, fs, io::ErrorKind, net::TcpStream, process::Command};
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
+    #[cfg(target_os = "macos")]
+    if args == ["--terminal-worker"] {
+        play_engine::terminal::worker().expect("native terminal policy required");
+        return;
+    }
     let args = if args == ["play", "session"] {
         // This fixture was exec'd by the production terminal helper. Test the
         // inherited policy without applying it a second time in this process.

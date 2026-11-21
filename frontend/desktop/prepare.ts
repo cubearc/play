@@ -92,11 +92,17 @@ if (process.platform === "darwin") {
     "com.cubearc.play.context-terminal",
     join(output, files.cli),
   );
+  const boundaryProbe = join(
+    root,
+    "target/debug/examples/native-boundary-probe",
+  );
+  // Matching images on both sides of exec give the inherited Darwin VM limit
+  // the same baseline. The probe calls the production terminal helper.
   bundle(
     "TerminalProbe",
-    join(root, "target/debug/play-engine"),
+    boundaryProbe,
     "com.cubearc.play.terminal-probe",
-    join(root, "target/debug/examples/native-boundary-probe"),
+    boundaryProbe,
   );
   bundle(
     "Worker",
@@ -108,11 +114,7 @@ if (process.platform === "darwin") {
     join(root, "target/debug/examples/native-supervision-probe"),
     "com.cubearc.play.supervision-probe",
   );
-  bundle(
-    "Probe",
-    join(root, "target/debug/examples/native-boundary-probe"),
-    "com.cubearc.play.boundary-probe",
-  );
+  bundle("Probe", boundaryProbe, "com.cubearc.play.boundary-probe");
 }
 if (process.platform === "linux" && files.worker && files.terminal) {
   cpSync(join(output, files.engine), join(output, files.terminal));

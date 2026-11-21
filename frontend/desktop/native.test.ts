@@ -407,7 +407,7 @@ test("terminal exec inherits file, network, child and resource restrictions", {
   );
   const invoke = (args: string[]) =>
     spawnSync(helper, ["--terminal-worker"], {
-      env: {},
+      env: { MallocMaxMagazines: "1" },
       input: `${JSON.stringify(args)}\n`,
       encoding: "utf8",
       timeout: 4000,
