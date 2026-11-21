@@ -102,6 +102,7 @@ export function secretInputsBound(
   return operation.contract.inputs.every((port) => {
     if (!secretPort(port.schema)) return true;
     const source = node.inputs[port.name];
+    if (port.required === false && !source) return true;
     return (
       source?.kind === "input" &&
       slots.some(
@@ -117,25 +118,32 @@ export function initialInputs(
   slots: PipelineDefinition["inputs"],
 ): GraphNode["inputs"] {
   return Object.fromEntries(
-    operation.contract.inputs.map((p) => {
-      const representation = operation.execution.inputs[p.name];
-      if (!representation) throw new Error("catalog_unavailable");
-      if (secretPort(p.schema)) return [p.name, { kind: "input", name: "" }];
-      return [
-        p.name,
-        slots.some((s) => s.semanticType === p.semantic_type)
-          ? {
-              kind: "input",
-              name:
-                slots.find((s) => s.semanticType === p.semantic_type)?.name ??
-                "source",
-            }
-          : {
-              kind: "literal",
-              value: emptyLiteral(representation, p.schema),
-            },
-      ];
-    }),
+    operation.contract.inputs
+      .filter(
+        (port, index) =>
+          port.required !== false ||
+          (index === 0 &&
+            slots.some((slot) => slot.semanticType === port.semantic_type)),
+      )
+      .map((p) => {
+        const representation = operation.execution.inputs[p.name];
+        if (!representation) throw new Error("catalog_unavailable");
+        if (secretPort(p.schema)) return [p.name, { kind: "input", name: "" }];
+        return [
+          p.name,
+          slots.some((s) => s.semanticType === p.semantic_type)
+            ? {
+                kind: "input",
+                name:
+                  slots.find((s) => s.semanticType === p.semantic_type)?.name ??
+                  "source",
+              }
+            : {
+                kind: "literal",
+                value: emptyLiteral(representation, p.schema),
+              },
+        ];
+      }),
   );
 }
 export function GraphInputs({
@@ -193,20 +201,26 @@ export function GraphInputs({
           );
         const secret = secretPort(port.schema);
         const source = node.inputs[port.name];
+        const optional = port.required === false;
         const assetSlots = definition.inputs.filter(
           (s) => s.semanticType === port.semantic_type,
         );
         const value =
-          secret &&
-          (source?.kind !== "input" ||
-            !assetSlots.some((slot) => slot.name === source.name))
-            ? ""
-            : source?.kind === "output"
-              ? `${source.nodeId}:${source.port}`
-              : source?.kind === "input"
-                ? `input:${source.name}`
-                : "literal";
+          optional && !source
+            ? "omit"
+            : secret &&
+                (source?.kind !== "input" ||
+                  !assetSlots.some((slot) => slot.name === source.name))
+              ? ""
+              : source?.kind === "output"
+                ? `${source.nodeId}:${source.port}`
+                : source?.kind === "input"
+                  ? `input:${source.name}`
+                  : "literal";
         const choices = [
+          ...(optional
+            ? [{ value: "omit", label: "Omit optional input" }]
+            : []),
           ...assetSlots.map((s) => ({
             value: `input:${s.name}`,
             label: `${s.name} · ${s.semanticType}`,
@@ -249,7 +263,11 @@ export function GraphInputs({
               disabled={disabled}
               options={choices}
               onChange={(v) => {
-                if (v.startsWith("input:"))
+                if (optional && v === "omit") {
+                  const inputs = { ...node.inputs };
+                  delete inputs[port.name];
+                  onChange(inputs);
+                } else if (v.startsWith("input:"))
                   update({ kind: "input", name: v.slice(6) });
                 else if (!secret && v === "literal")
                   update({

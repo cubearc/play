@@ -203,11 +203,19 @@ impl Definition {
                 return Err("invalid_pipeline");
             }
             let c = n.contract()?;
-            if n.inputs.len() != c.inputs.len() {
+            if n.inputs
+                .keys()
+                .any(|name| !c.inputs.iter().any(|port| port.name == *name))
+            {
                 return Err("invalid_connection");
             }
             for port in &c.inputs {
-                let source = n.inputs.get(&port.name).ok_or("invalid_connection")?;
+                let Some(source) = n.inputs.get(&port.name) else {
+                    if port.required {
+                        return Err("invalid_connection");
+                    }
+                    continue;
+                };
                 if port.schema.as_value()["x-cube-secret"] == Value::Bool(true)
                     && !matches!(source, Source::Input { .. })
                 {
@@ -306,12 +314,17 @@ impl Definition {
                 name: "source".into(),
             },
         )]);
-        for (name, representation) in executable.inputs {
-            if let std::collections::btree_map::Entry::Vacant(entry) = inputs.entry(name) {
-                entry.insert(Source::Literal {
+        for port in c.inputs.iter().skip(1).filter(|port| port.required) {
+            let representation = *executable
+                .inputs
+                .get(&port.name)
+                .ok_or("contract_mismatch")?;
+            inputs.insert(
+                port.name.clone(),
+                Source::Literal {
                     value: worker::empty_value(representation)?,
-                });
-            }
+                },
+            );
         }
         let d = Self {
             format_version: 4,

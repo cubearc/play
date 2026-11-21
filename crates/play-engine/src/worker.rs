@@ -185,8 +185,10 @@ pub fn named_inputs(invocation: &Invocation) -> Result<Value> {
                 }
                 _ => return Err("contract_mismatch"),
             }
-        } else {
+        } else if port.required {
             empty_value(representation)?
+        } else {
+            continue;
         };
         inputs.insert(port.name.clone(), value);
     }

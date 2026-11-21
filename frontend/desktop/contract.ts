@@ -27,7 +27,12 @@ export interface Operation {
     | { state: "available" }
     | { state: "unavailable"; reason: string };
   contract: {
-    inputs: { name: string; semantic_type: string; schema: unknown }[];
+    inputs: {
+      name: string;
+      semantic_type: string;
+      schema: unknown;
+      required?: boolean;
+    }[];
     outputs: { name: string; semantic_type: string; schema: unknown }[];
     parameters: unknown;
   };

@@ -109,10 +109,16 @@ array and the selected `output` node UUID. Each node has a stable `id`,
 - `{kind: "output", nodeId, port}` for another node's named output.
 - `{kind: "literal", value}` for an explicit Core-compatible value.
 
-The engine rejects duplicate/missing node IDs, missing/extra ports, cycles,
+The engine rejects duplicate or missing node IDs, missing required ports,
+undeclared ports, cycles,
 unknown source slots, incompatible semantic types and unsupported versions before
 saving. Consumers validate resolved values against their full Core schema before
 execution. Matching semantic types do not bypass stricter value constraints.
+
+Use **Omit optional input** in a port's connection menu when the profile allows
+it. For instance, connect exact bytes or explicit segments to the QR encoder.
+Omitted ports have no binding or placeholder value in the saved revision.
+
 There is no implicit connection conversion: a `bytes.array` input accepts an
 explicit numeric byte-array literal or a File Asset viewed as that declared type.
 Pixel and Brainfuck byte outputs use Core `bytes` objects; connecting those output

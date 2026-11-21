@@ -1,6 +1,44 @@
 use play_engine::workspace::{Context, Manager};
 use serde_json::{Value, json};
 use uuid::Uuid;
+
+#[test]
+fn typed_graphs_preserve_omitted_optional_ports_and_reject_unknown_connections() {
+    use play_engine::{
+        graph::Definition,
+        worker::{self, PipelineInvocation},
+    };
+
+    let id = Uuid::new_v4();
+    let parameters = json!({"ecc":"L","version":1,"mask":0});
+    let mut graph = json!({
+        "formatVersion":4,
+        "inputs":[{"name":"source","semanticType":"text"}],
+        "nodes":[{
+            "id":id,"operation":"image.qr.encode","operationVersion":1,
+            "parameters":parameters,"position":{"x":80,"y":120},
+            "inputs":{"data":{"kind":"literal","value":{"base64":"AP8="}}}
+        }],
+        "output":id
+    });
+    let definition = Definition::parse(graph.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&definition).unwrap(), graph);
+    let result = worker::execute_pipeline(
+        PipelineInvocation {
+            definition,
+            inputs: Default::default(),
+        },
+        |_| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(result["ports"]["report"]["size"], 21);
+    assert!(result["ports"].get("raster").is_none());
+    let simple = Definition::single(id, "image.qr.encode", 1, parameters).unwrap();
+    assert_eq!(simple.nodes[0].inputs.keys().collect::<Vec<_>>(), ["data"]);
+    graph["nodes"][0]["inputs"]["unknown"] = json!({"kind":"literal","value":"text"});
+    assert_eq!(Definition::parse(graph).unwrap_err(), "invalid_connection");
+}
+
 fn call(m: &mut Manager, v: Value) -> Value {
     m.handle(serde_json::from_value(v).unwrap()).unwrap()
 }
