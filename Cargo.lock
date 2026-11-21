@@ -1038,6 +1038,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cube-bzip2-backend"
+version = "0.2.7"
+
+[[package]]
 name = "cube-cli"
 version = "0.18.0"
 dependencies = [
@@ -1087,6 +1091,7 @@ dependencies = [
  "csv-core",
  "ctr 0.10.1",
  "cts",
+ "cube-bzip2-backend",
  "data-encoding",
  "deoxys",
  "des",
@@ -1112,12 +1117,14 @@ dependencies = [
  "kuznyechik",
  "libcrux-ml-kem",
  "lofty",
+ "lz4_flex",
  "lzma-rust2",
  "magma",
  "md-5",
  "md4",
  "num-bigint 0.5.1",
  "num-integer",
+ "object",
  "ocb3",
  "ofb",
  "oqs-native-bike",
@@ -2698,6 +2705,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "lz4_flex"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56455fff36934a9500d69062aec1c77037179b6f0669e4d5d6b72b84722d6a3"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "lzma-rust2"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2946,6 +2962,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "object"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11dbdb66876026054e4ffc8d757d862bdf5df5aebd5c0b95a41f17832a94f7d2"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
